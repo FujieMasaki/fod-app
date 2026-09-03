@@ -1,0 +1,31 @@
+.root {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--fod-text-secondary);
+  border-radius: var(--fod-radius-full);
+  font-size: 24px;
+  transition:
+    transform var(--fod-dur-fast) var(--fod-ease-standard),
+    color var(--fod-dur-fast) var(--fod-ease-standard);
+}
+
+.root:hover {
+  color: var(--fod-text-primary);
+}
+
+.root:active {
+  transform: scale(0.96);
+}
+
+.root:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root:active {
+    transform: none;
+  }
+}

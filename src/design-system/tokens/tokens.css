@@ -1,0 +1,111 @@
+/*
+ * Focus on Dot — Design Tokens (Single Source of Truth)
+ * Design System v1.0 準拠。画面・Feature 内で色/余白/影を直接定義しない。
+ * すべて var(--fod-*) 経由で参照する。
+ */
+
+:root {
+  /* ── Brand — Blue Gray ─────────────────────────── */
+  --fod-brand-50: #eef3f6;
+  --fod-brand-100: #dce6ec;
+  --fod-brand-500: #527d99; /* primary  */
+  --fod-brand-600: #446a82; /* hover    */
+  --fod-brand-700: #375568; /* pressed  */
+  --fod-brand-900: #2c4657; /* cta / ink */
+
+  /* ── Background / Surface ──────────────────────── */
+  --fod-bg-base: #e7edf1;
+  --fod-bg-raised: #f6f9fb;
+  --fod-surface-card: #ffffff;
+  --fod-surface-muted: #f6f9fb;
+
+  /* ── Text ──────────────────────────────────────── */
+  --fod-text-primary: #33434f;
+  --fod-text-secondary: #5a6975; /* WCAG AA 本文 (対bg 4.79 / 対card 5.66) */
+  --fod-text-tertiary: #68767f; /* AA大文字/UI 3:1〜 (対bg 3.96 / 対card 4.68) */
+  --fod-text-inverse: #ffffff;
+
+  /* ── Border ────────────────────────────────────── */
+  --fod-border-hairline: rgba(51, 67, 79, 0.07);
+  --fod-border-default: rgba(51, 67, 79, 0.12);
+
+  /* ── Semantic (低彩度・機能のみ) ──────────────── */
+  --fod-success: #5e9b86;
+  --fod-warning: #c29a5b;
+  --fod-danger: #be7f79;
+  --fod-info: #527d99;
+
+  /* ── MicButton gradient (Design System 例) ─────── */
+  --fod-mic-gradient: radial-gradient(circle at 42% 36%, #6592ad, #527d99 62%, #476e86);
+
+  /* ── Spacing — 8pt grid（4px は半ステップ例外）── */
+  --fod-space-0: 0px;
+  --fod-space-1: 4px;
+  --fod-space-2: 8px;
+  --fod-space-3: 12px;
+  --fod-space-4: 16px;
+  --fod-space-5: 24px;
+  --fod-space-6: 32px;
+  --fod-space-7: 40px;
+  --fod-space-8: 48px;
+  --fod-space-9: 56px;
+  --fod-space-10: 64px;
+  --fod-screen-padding: 30px; /* 画面パディング 28–34 */
+
+  /* ── Radius ────────────────────────────────────── */
+  --fod-radius-sm: 7px; /* 停止 / 小要素 */
+  --fod-radius-md: 12px; /* チップ / 入力 */
+  --fod-radius-lg: 18px; /* パネル */
+  --fod-radius-xl: 26px; /* カード */
+  --fod-radius-2xl: 32px; /* ピルボタン */
+  --fod-radius-full: 9999px; /* Dot / 円形 */
+
+  /* ── Shadow — 静かな光 ─────────────────────────── */
+  --fod-shadow-soft: 0 10px 24px -14px rgba(51, 67, 79, 0.4);
+  --fod-shadow-card: 0 20px 48px -30px rgba(51, 67, 79, 0.35);
+  --fod-shadow-float: 0 22px 60px -30px rgba(51, 67, 79, 0.28);
+  --fod-shadow-brand: 0 14px 30px -12px rgba(82, 125, 153, 0.6);
+
+  /* ── Typography ────────────────────────────────── */
+  --fod-font-sans: var(--font-sans), "Hiragino Kaku Gothic ProN", sans-serif;
+  --fod-font-serif: var(--font-serif), "Hiragino Mincho ProN", serif;
+
+  --fod-weight-light: 300;
+  --fod-weight-regular: 400;
+  --fod-weight-medium: 500;
+  --fod-weight-bold: 700;
+
+  /* size / line-height（Phase 1 仕様 §3 Typography） */
+  --fod-type-display-size: 32px;
+  --fod-type-display-lh: 1.35;
+  --fod-type-sentence-size: 23px;
+  --fod-type-sentence-lh: 2;
+  --fod-type-title-size: 21px;
+  --fod-type-title-lh: 1.7;
+  --fod-type-letter-size: 16.5px;
+  --fod-type-letter-lh: 2.3;
+  --fod-type-body-size: 15px;
+  --fod-type-body-lh: 2;
+  --fod-type-small-size: 13px;
+  --fod-type-small-lh: 1.7;
+  --fod-type-caption-size: 11px;
+  --fod-type-caption-lh: 1.5;
+
+  /* letter spacing */
+  --fod-tracking-normal: 0.02em;
+  --fod-tracking-wide: 0.06em;
+  --fod-tracking-label: 0.16em;
+  --fod-tracking-eyebrow: 0.28em;
+  --fod-tracking-sentence: 0.04em;
+
+  /* ── Motion ────────────────────────────────────── */
+  --fod-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --fod-ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --fod-dur-fast: 160ms;
+  --fod-dur-base: 240ms;
+  --fod-dur-slow: 400ms;
+
+  /* ── z-index ───────────────────────────────────── */
+  --fod-z-statusbar: 20;
+  --fod-z-tabbar: 20;
+}

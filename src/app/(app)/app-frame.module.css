@@ -1,0 +1,20 @@
+.frame {
+  width: 100%;
+  max-width: 480px;
+  height: 100dvh;
+  margin-inline: auto;
+  background: var(--fod-bg-base);
+  position: relative;
+  overflow: hidden;
+}
+
+/* デスクトップ幅では端末のように浮かせる */
+@media (min-width: 520px) {
+  .frame {
+    box-shadow: var(--fod-shadow-float);
+  }
+}
+
+.transition {
+  height: 100%;
+}

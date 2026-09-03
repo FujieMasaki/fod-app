@@ -1,0 +1,15 @@
+.root {
+  flex: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: var(--fod-space-2) var(--fod-screen-padding);
+}
+
+.back {
+  position: absolute;
+  left: calc(var(--fod-screen-padding) - var(--fod-space-2));
+  color: var(--fod-text-secondary);
+}

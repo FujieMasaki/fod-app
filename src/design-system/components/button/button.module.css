@@ -1,0 +1,57 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px; /* タッチターゲット ≥44pt */
+  padding: 0 var(--fod-space-7);
+  border-radius: var(--fod-radius-2xl);
+  font-family: var(--fod-font-sans);
+  font-weight: var(--fod-weight-medium);
+  font-size: var(--fod-type-body-size);
+  letter-spacing: var(--fod-tracking-wide);
+  transition:
+    transform var(--fod-dur-fast) var(--fod-ease-standard),
+    background-color var(--fod-dur-fast) var(--fod-ease-standard);
+}
+
+.root:active {
+  transform: scale(0.98);
+}
+
+.fullWidth {
+  width: 100%;
+}
+
+/* ── variants ── */
+.primary {
+  background: var(--fod-brand-900);
+  color: var(--fod-text-inverse);
+  box-shadow: var(--fod-shadow-soft);
+}
+.primary:hover {
+  background: var(--fod-brand-700);
+}
+
+.secondary {
+  background: var(--fod-surface-card);
+  color: var(--fod-text-primary);
+  box-shadow: var(--fod-shadow-soft);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--fod-text-secondary);
+  min-height: auto;
+  padding: var(--fod-space-2) var(--fod-space-3);
+}
+
+.root:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .root:active {
+    transform: none;
+  }
+}

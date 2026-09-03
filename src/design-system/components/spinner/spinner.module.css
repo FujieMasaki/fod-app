@@ -1,0 +1,7 @@
+.root {
+  width: var(--spinner-size, 28px);
+  height: var(--spinner-size, 28px);
+  border-radius: var(--fod-radius-full);
+  border: 2px solid var(--fod-border-default);
+  border-top-color: var(--fod-brand-500);
+}

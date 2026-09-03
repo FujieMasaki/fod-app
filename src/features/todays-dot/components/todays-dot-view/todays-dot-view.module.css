@@ -1,0 +1,30 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: var(--fod-space-6);
+}
+
+.eyebrow {
+  flex: none;
+  text-align: center;
+  padding-top: var(--fod-space-4);
+}
+
+.center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--fod-space-5);
+}
+
+.done {
+  text-align: center;
+}
+
+.footer {
+  flex: none;
+  padding-bottom: var(--fod-space-4);
+}

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "focus-on-dot",
+      "runtimeExecutable": "/Users/fujiemasaki/.nodebrew/node/v22.23.1/bin/node",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev", "--port", "3210"],
+      "port": 3210
+    }
+  ]
+}

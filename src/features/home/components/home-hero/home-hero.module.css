@@ -1,0 +1,19 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.stage {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  /* 波紋がはみ出せるよう余白を確保 */
+  overflow: visible;
+}
+
+.hint {
+  flex: none;
+  text-align: center;
+  padding-bottom: var(--fod-space-6);
+}

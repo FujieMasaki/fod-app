@@ -1,0 +1,31 @@
+.wrap {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+.button {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  border-radius: var(--fod-radius-full);
+  background: var(--fod-mic-gradient);
+  color: var(--fod-text-inverse);
+  box-shadow: var(--fod-shadow-brand);
+  transition: transform var(--fod-dur-fast) var(--fod-ease-standard);
+}
+
+.button:active {
+  transform: scale(0.97);
+}
+
+.icon {
+  font-size: 32px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button:active {
+    transform: none;
+  }
+}

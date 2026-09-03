@@ -1,0 +1,26 @@
+.sentence {
+  display: block;
+}
+
+.line {
+  display: block;
+}
+
+.footer {
+  margin-top: var(--fod-space-5);
+}
+
+.messageRow {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fod-space-3);
+  padding-top: var(--fod-space-4);
+  color: var(--fod-text-secondary);
+}
+
+.chevron {
+  font-size: 18px;
+  color: var(--fod-text-tertiary);
+}

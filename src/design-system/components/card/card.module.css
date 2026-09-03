@@ -1,0 +1,6 @@
+.root {
+  background: var(--fod-surface-card);
+  border-radius: var(--fod-radius-xl);
+  box-shadow: var(--fod-shadow-card);
+  padding: var(--fod-space-6); /* カード内 32 */
+}

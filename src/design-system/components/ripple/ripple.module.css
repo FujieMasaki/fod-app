@@ -1,0 +1,13 @@
+.root {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.ring {
+  position: absolute;
+  border-radius: var(--fod-radius-full);
+  background: var(--fod-brand-500);
+}

@@ -1,0 +1,72 @@
+.root {
+  margin: 0;
+  color: var(--tone, var(--fod-text-primary));
+  text-align: var(--align, start);
+  white-space: pre-line; /* 手紙組み：改行を尊重する */
+}
+
+/* ── variants（size / line-height / font / weight / tracking）── */
+.display {
+  font-family: var(--fod-font-serif);
+  font-weight: var(--fod-weight-regular);
+  font-size: var(--fod-type-display-size);
+  line-height: var(--fod-type-display-lh);
+  letter-spacing: var(--fod-tracking-normal);
+}
+
+.sentence {
+  font-family: var(--fod-font-serif);
+  font-weight: var(--fod-weight-regular);
+  font-size: var(--fod-type-sentence-size);
+  line-height: var(--fod-type-sentence-lh);
+  letter-spacing: var(--fod-tracking-sentence);
+}
+
+.title {
+  font-family: var(--fod-font-sans);
+  font-weight: var(--fod-weight-medium);
+  font-size: var(--fod-type-title-size);
+  line-height: var(--fod-type-title-lh);
+  letter-spacing: var(--fod-tracking-normal);
+}
+
+.letter {
+  font-family: var(--fod-font-serif);
+  font-weight: var(--fod-weight-regular);
+  font-size: var(--fod-type-letter-size);
+  line-height: var(--fod-type-letter-lh);
+  letter-spacing: var(--fod-tracking-normal);
+}
+
+.body {
+  font-family: var(--fod-font-sans);
+  font-weight: var(--fod-weight-light);
+  font-size: var(--fod-type-body-size);
+  line-height: var(--fod-type-body-lh);
+  letter-spacing: var(--fod-tracking-normal);
+}
+
+.small {
+  font-family: var(--fod-font-sans);
+  font-weight: var(--fod-weight-light);
+  font-size: var(--fod-type-small-size);
+  line-height: var(--fod-type-small-lh);
+  letter-spacing: var(--fod-tracking-normal);
+}
+
+.caption {
+  font-family: var(--fod-font-sans);
+  font-weight: var(--fod-weight-regular);
+  font-size: var(--fod-type-caption-size);
+  line-height: var(--fod-type-caption-lh);
+  letter-spacing: var(--fod-tracking-normal);
+}
+
+.eyebrow {
+  font-family: var(--fod-font-sans);
+  font-weight: var(--fod-weight-regular);
+  font-size: var(--fod-type-caption-size);
+  line-height: var(--fod-type-caption-lh);
+  letter-spacing: var(--fod-tracking-eyebrow);
+  text-transform: none;
+}

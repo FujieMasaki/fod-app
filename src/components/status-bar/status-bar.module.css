@@ -1,0 +1,22 @@
+.root {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 44px;
+  padding: 0 var(--fod-space-5);
+  padding-top: env(safe-area-inset-top);
+  box-sizing: content-box;
+  color: var(--fod-text-primary);
+  font-family: var(--fod-font-sans);
+  font-weight: var(--fod-weight-medium);
+  font-size: 15px;
+  letter-spacing: var(--fod-tracking-normal);
+}
+
+.icons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fod-text-primary);
+}

@@ -1,0 +1,17 @@
+.root {
+  display: grid;
+  place-items: center;
+  border-radius: var(--fod-radius-full);
+  aspect-ratio: 1;
+}
+
+.solid {
+  background: var(--fod-brand-500);
+  color: var(--fod-text-inverse);
+}
+
+.gradient {
+  background: var(--fod-mic-gradient);
+  color: var(--fod-text-inverse);
+  box-shadow: var(--fod-shadow-brand);
+}
