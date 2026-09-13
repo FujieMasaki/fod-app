@@ -13,7 +13,7 @@
     "lint": "eslint",
     "check": "pnpm lint",
     "type-check": "next typegen && tsc --noEmit --incremental false",
-    "test": "vitest run",
+    "test": "vitest run && node --test scripts/*.test.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {
