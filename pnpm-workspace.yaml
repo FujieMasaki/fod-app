@@ -1,6 +1,6 @@
 # pnpm dev 実行前の依存チェックを無効化（ERR_PNPM_IGNORED_BUILDS で止まるのを防ぐ）
 verifyDepsBeforeRun: false
-# sharp（next/image 用・未使用）/ unrs-resolver（ESLint 解決用）は実行時に不要なためスキップ確定
-ignoredBuiltDependencies:
-  - sharp
-  - unrs-resolver
+# pnpm 11 の形式で、既存方針どおり依存のビルドスクリプトを明示的にスキップする
+allowBuilds:
+  sharp: false
+  unrs-resolver: false
