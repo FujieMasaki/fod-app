@@ -2,5 +2,6 @@
 verifyDepsBeforeRun: false
 # pnpm 11 の形式で、既存方針どおり依存のビルドスクリプトを明示的にスキップする
 allowBuilds:
+  lefthook: true
   sharp: false
   unrs-resolver: false

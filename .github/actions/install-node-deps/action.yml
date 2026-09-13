@@ -10,4 +10,6 @@ runs:
         node-version-file: package.json
         cache: pnpm
     - shell: bash
+      env:
+        LEFTHOOK: "0"
       run: pnpm install --frozen-lockfile
