@@ -51,16 +51,13 @@ After pushing these files and running CI once, configure the `main` branch prote
 
 The shared CI install action sets `LEFTHOOK=0` to avoid installing local hooks on runners.
 
-## Automated AI review
+## Local AI review
 
-After merging this workflow into the default branch, add an OpenAI API key as the repository Actions secret `OPENAI_API_KEY` (Settings → Secrets and variables → Actions). The workflow then runs automatically when you open, reopen, or update a PR from a branch in this repository that you own.
+Copy `.env.local.example` to `.env.local` and set `OPENAI_API_KEY`. `.env.local` is ignored by Git. Run `pnpm ai:review` whenever you want a review.
 
-The workflow sends the textual PR diff to OpenAI using `gpt-5.4-mini-2026-03-17`. It does not send the entire repository, execute PR code, install PR dependencies, or give the model tools. Images and binary contents cannot be reviewed through this textual diff. Review is advisory, with no approval/request-changes action and no required status check. Failures appear as warnings in the workflow and its summary. Add only the four normal CI checks to branch protection. PRs from forks and branches not owned by the repository owner are skipped to prevent untrusted contributors from consuming API budget.
+The command compares the working tree with `main`, so it includes committed, staged, and unstaged changes but not untracked files. Set `AI_REVIEW_BASE` in `.env.local` when another comparison base is needed. It sends that textual diff to OpenAI using `gpt-5.4-mini-2026-03-17`, then writes the review to the terminal; it neither creates a PR comment nor needs a GitHub token. It does not execute application code, install dependencies, or give the model tools. Images and binary contents cannot be reviewed through this textual diff.
 
-Each invocation makes at most one OpenAI request, with low reasoning effort, at most 4,096 output tokens (including reasoning), and `store: false`. Diffs larger than 60,000 UTF-8 bytes are rejected before sending; split the PR to review them. No automatic retries are made. Incomplete responses and results for a PR updated during review are not posted, but the API request can still be billed. Successful reviews report token usage in the comment and workflow summary.
-
-At the [published GPT-5.4 mini prices](https://developers.openai.com/api/docs/models/gpt-5.4-mini), 10,000 input tokens plus 2,000 output tokens cost approximately $0.0165 per run ($1.65 per 100 runs). This is an example, not a fixed fee or monthly cap; actual usage and prices vary. GitHub Actions usage is separate. API authentication and paid live review must be verified after the secret is configured; local tests mock both APIs and incur no API charges.
-
+Review is advisory. Each run makes at most one OpenAI request, with low reasoning effort, at most 4,096 output tokens (including reasoning), and `store: false`. Diffs larger than 60,000 UTF-8 bytes are rejected before sending; split the work to review it. No automatic retries are made. At the [published GPT-5.4 mini prices](https://developers.openai.com/api/docs/models/gpt-5.4-mini), 10,000 input tokens plus 2,000 output tokens cost approximately $0.0165 per run ($1.65 per 100 runs). This is an example, not a fixed fee or monthly cap; actual usage and prices vary.
 
 ## Learn More
 
