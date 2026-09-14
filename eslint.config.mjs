@@ -1,23 +1,20 @@
+import js from "@eslint/js";
 import { defineConfig, globalIgnores } from "eslint/config";
-import typescriptEslint from "@typescript-eslint/eslint-plugin";
-import nextVitals from "eslint-config-next/core-web-vitals";
-import nextTs from "eslint-config-next/typescript";
+import globals from "globals";
+import typescriptEslint from "typescript-eslint";
 
 const eslintConfig = defineConfig([
-  ...nextVitals,
-  ...nextTs,
-  // Override default ignores of eslint-config-next.
+  js.configs.recommended,
+  ...typescriptEslint.configs.recommended,
   globalIgnores([
-    // Default ignores of eslint-config-next:
     ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
+    "dist/**",
+    "coverage/**",
   ]),
   {
     files: ["**/*.{ts,tsx}"],
-    plugins: {
-      "@typescript-eslint": typescriptEslint,
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
     },
     rules: {
       // PascalCase is reserved for types and React components. Values and
@@ -47,6 +44,12 @@ const eslintConfig = defineConfig([
           leadingUnderscore: "allow",
         },
       ],
+    },
+  },
+  {
+    files: ["scripts/**/*.mjs", "*.config.{js,mjs,ts}"],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
     },
   },
 ]);

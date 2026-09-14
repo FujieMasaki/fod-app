@@ -52,11 +52,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // マウント時に外部ストア(localStorage)と同期する正当な用途のため、当該ルールを局所的に無効化する。
   useEffect(() => {
     const persisted = loadPersisted();
-    /* eslint-disable react-hooks/set-state-in-effect */
     setRecordedDurationSec(persisted.recordedDurationSec);
     setDotSessionState(persisted.dotSession);
     setHydrated(true);
-    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   const persist = useCallback((next: Persisted) => {

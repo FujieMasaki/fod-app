@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "@tanstack/react-router";
 import { Dot, Ripple, Text, Waveform, StopIcon } from "@/design-system";
 import { useSession } from "@/features/session";
 import { formatDuration } from "@/utils/format-duration";
@@ -12,7 +10,7 @@ const CIRCLE_SIZE = 176;
 
 /** 録音中の主要ブロック。マウントで録音開始、停止で Processing へ委ねる。 */
 export function RecordingStage() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { setRecordedDuration } = useSession();
   const { elapsedSec, isRecording, getAmplitude, start, stop } = useRecorder();
   const [stopping, setStopping] = useState(false);
@@ -29,7 +27,7 @@ export function RecordingStage() {
     setStopping(true);
     const { durationSec } = await stop();
     setRecordedDuration(durationSec || elapsedSec);
-    router.push("/processing");
+    navigate({ to: "/processing" });
   };
 
   return (

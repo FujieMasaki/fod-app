@@ -1,6 +1,4 @@
-"use client";
-
-import { useRouter } from "next/navigation";
+import { useNavigate } from "@tanstack/react-router";
 import { MicButton, Text } from "@/design-system";
 import { generateGreeting } from "@/utils/generate-greeting";
 import { GreetingHeader } from "../greeting-header/greeting-header";
@@ -10,7 +8,7 @@ const TAP_LABEL = "タップして話す";
 
 /** 入口。「ここなら安心して話せそう」。呼吸するマイクへ自然に視線が向かう。 */
 export function HomeHero() {
-  const router = useRouter();
+  const navigate = useNavigate();
   // 挨拶は時刻依存。クライアントの時刻で確定し、hydration 差分は抑制する。
   const greeting = generateGreeting();
 
@@ -19,7 +17,7 @@ export function HomeHero() {
       <GreetingHeader greeting={greeting} />
 
       <div className={styles.stage}>
-        <MicButton onStart={() => router.push("/record")} label={TAP_LABEL} />
+        <MicButton onStart={() => navigate({ to: "/record" })} label={TAP_LABEL} />
       </div>
 
       <div className={styles.hint}>

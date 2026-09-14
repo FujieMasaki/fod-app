@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Link } from "@tanstack/react-router";
 import {
   Text,
   HomeIcon,
@@ -53,7 +53,7 @@ export function BottomNavigation({ active }: { active: TabKey }) {
         return (
           <Link
             key={key}
-            href={href!}
+            to={href!}
             className={className}
             aria-current={isActive ? "page" : undefined}
           >

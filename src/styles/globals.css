@@ -1,4 +1,11 @@
+@import url("https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@300;400;500&family=Zen+Old+Mincho:wght@400;500&display=swap");
+
 /* Reset + base。値は必ず Design Token を参照する（ハードコード禁止）。 */
+
+:root {
+  --font-sans: "Zen Kaku Gothic New";
+  --font-serif: "Zen Old Mincho";
+}
 
 *,
 *::before,
@@ -6,6 +13,12 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
 }
 
 html {
@@ -44,14 +57,12 @@ svg {
   display: block;
 }
 
-/* キーボード操作時のみフォーカスリングを表示 */
 :focus-visible {
   outline: 2px solid var(--fod-brand-500);
   outline-offset: 3px;
   border-radius: var(--fod-radius-sm);
 }
 
-/* スクリーンリーダー専用テキスト */
 .fod-visually-hidden {
   position: absolute;
   width: 1px;

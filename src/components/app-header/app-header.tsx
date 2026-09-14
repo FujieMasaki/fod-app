@@ -1,6 +1,4 @@
-"use client";
-
-import { useRouter } from "next/navigation";
+import { useRouter } from "@tanstack/react-router";
 import { Text } from "@/design-system";
 import { IconButton } from "@/design-system";
 import { ChevronLeftIcon } from "@/design-system";
@@ -17,7 +15,7 @@ type AppHeaderProps = {
 /** 画面上部の見出し。戻る導線は任意。ビジネスロジックは持たない。 */
 export function AppHeader({ title, variant = "title", showBack = false, onBack }: AppHeaderProps) {
   const router = useRouter();
-  const handleBack = onBack ?? (() => router.back());
+  const handleBack = onBack ?? (() => router.history.back());
 
   return (
     <header className={styles.root}>

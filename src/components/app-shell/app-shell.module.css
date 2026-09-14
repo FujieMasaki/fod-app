@@ -8,7 +8,6 @@
   overflow: hidden;
 }
 
-/* デスクトップ幅では端末のように浮かせる */
 @media (min-width: 520px) {
   .frame {
     box-shadow: var(--fod-shadow-float);
