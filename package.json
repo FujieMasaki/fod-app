@@ -2,12 +2,19 @@
   "name": "focus-on-dot",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.16.0",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
-    "test": "vitest run",
+    "lint": "eslint && pnpm lint:naming",
+    "lint:naming": "node scripts/check-naming.mjs",
+    "check": "pnpm lint",
+    "type-check": "next typegen && tsc --noEmit --incremental false",
+    "test": "vitest run && node --test scripts/*.test.mjs",
     "test:watch": "vitest"
   },
   "dependencies": {
@@ -26,10 +33,12 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@typescript-eslint/eslint-plugin": "^8.63.0",
     "@vitejs/plugin-react": "^6.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "jsdom": "^29.1.1",
+    "lefthook": "2.1.12",
     "typescript": "^5",
     "vitest": "^4.1.10"
   }
