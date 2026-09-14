@@ -21,7 +21,7 @@
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
     "framer-motion": "^12.42.2",
-    "next": "16.2.10",
+    "next": "16.3.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "zod": "^4.4.3"
@@ -37,7 +37,7 @@
     "@typescript-eslint/eslint-plugin": "^8.63.0",
     "@vitejs/plugin-react": "^6.0.3",
     "eslint": "^9",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "16.3.4",
     "jsdom": "^29.1.1",
     "lefthook": "2.1.12",
     "typescript": "^5",
