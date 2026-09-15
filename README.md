@@ -1,50 +1,125 @@
 # Focus on Dot
 
-音声で今日を振り返る、クライアント中心のジャーナリングアプリです。フロントエンドは Vite + React + TanStack Router で構成しています。
+「自分の声を聴き、自分に戻る時間をつくる」をテーマにした、音声ジャーナリングアプリです。
+
+現在、個人開発として設計・開発を進めています。
+
+## About
+
+日々考えていることや感じていることを音声で話し、振り返ることで、自分の状態や考えを整理できるサービスを目指しています。
+
+文章を書くジャーナリングよりも気軽に、自分の言葉をそのまま残せる体験をつくることを目的としています。
+
+現在はMVP開発段階で、まずは以下の基本的な体験を中心に開発しています。
+
+- 音声で振り返りを残す
+- 振り返った内容をDotとして蓄積する
+- 過去のDotを見返す
+
+## このプロジェクトで取り組んでいること
+
+Focus on Dotでは、実装だけではなく、個人プロダクトとして以下を一貫して行っています。
+
+- プロダクトコンセプトの整理
+- MVPの要件整理
+- ユーザーフロー・画面構成の検討
+- 技術選定
+- フロントエンド設計・実装
+- テスト・CIなどの開発環境整備
+
+まだ開発途中のため、仕様や設計についても検証しながら継続的に改善しています。
+
+## Tech Stack
+
+### Frontend
+
+- TypeScript
+- React
+- Vite
+- TanStack Router
+- TanStack Query
+- Zod
+
+### Development
+
+- pnpm
+- Vitest
+- ESLint
+- Lefthook
+- GitHub Actions
+
+## Architecture
+
+クライアント側の体験を中心にした、Vite + React + TanStack Router構成のアプリケーションです。
+
+ブラウザ上での音声録音や画面遷移など、クライアント側の体験がプロダクトの中心となるため、SPAをベースにしています。
+
+ブラウザ側の状態はSession ProviderとTanStack Queryで管理しています。ルーティングは `src/router.tsx` で定義しています。
+
+## API
+
+`VITE_DOT_API_URL` が設定されている場合、UIから独立したAPIの `dot` エンドポイントを呼び出します。
+
+APIはまだ実装途中のため、環境変数を設定しない場合はローカルのモックレスポンスを使用します。
+
+将来的には、以下をクライアントアプリから分離して管理できる構成を想定しています。
+
+- APIキー
+- 音声ファイル
+- データの永続化
 
 ## Getting Started
 
-Use Node.js 22 and pnpm 11.16.0 (specified in `package.json`). Install dependencies with `pnpm install --frozen-lockfile`.
+Node.js 22 / pnpm 11.16.0を使用します。
 
-First, run the development server:
+依存関係をインストールします。
+
+```bash
+pnpm install --frozen-lockfile
+```
+
+開発サーバーを起動します。
 
 ```bash
 pnpm dev
 ```
 
-Open the URL shown by Vite (normally [http://localhost:5173](http://localhost:5173)).
-
-Routes are defined in `src/router.tsx`; browser-only state is managed by the session provider and React Query.
-
-## API
-
-The UI calls a standalone API at the `dot` path below `VITE_DOT_API_URL` when that variable is set. Configure it as an absolute API base URL, such as `https://api.example.com` or `https://api.example.com/api`; a trailing slash is accepted. Until the API is implemented, omit that variable to use the existing delayed mock response locally. This keeps API keys, audio uploads, and persistence outside the SPA boundary.
+Viteで表示されたURL（通常は `http://localhost:5173`）をブラウザで開きます。
 
 ## CI
 
-GitHub Actions runs four independent jobs on pull requests, pushes to `main`, and manual dispatch:
+GitHub Actionsでは、Pull Request・`main` へのPush・手動実行時に以下をチェックします。
 
-| Status check | Local command | Purpose |
+| Check | Command | 内容 |
 | --- | --- | --- |
-| Check | `pnpm check` | ESLint |
-| TypeScript | `pnpm type-check` | Type-check the Vite application |
-| Tests | `pnpm test` | Run Vitest once (jsdom; no browser installation needed) |
-| Build | `pnpm build` | Compile the production SPA |
+| ESLint | `pnpm check` | 静的解析 |
+| TypeScript | `pnpm type-check` | 型チェック |
+| Tests | `pnpm test` | Vitestによるテスト |
+| Build | `pnpm build` | Production Build |
 
-The production build does not download fonts. The browser loads the existing Zen font families from Google Fonts.
+Node.js / pnpmのバージョンは `package.json` から取得し、pnpm storeをキャッシュした上で `--frozen-lockfile` を使用して依存関係をインストールしています。
 
-The shared `.github/actions/install-node-deps` action reads Node.js and pnpm versions from `package.json`, caches the pnpm store, and installs with `--frozen-lockfile`. Each job has a timeout, and newer runs cancel older runs on the same PR or branch. The workflow uses read-only repository permissions and requires no secrets.
+Dependabotによるnpm / pnpmおよびGitHub Actionsの依存関係更新も設定しています。
 
-External actions are pinned to commit SHAs. Dependabot checks for GitHub Actions updates weekly, including the shared composite action. It also checks npm/pnpm dependencies every Monday (Asia/Tokyo), with at most five open version-update PRs. React and its types are grouped; other minor/patch updates are grouped and other major updates stay separate. Updates are reviewed and merged manually.
+## Local Git Hooks
 
-After pushing these files and running CI once, configure the `main` branch protection/ruleset to require **Check**, **TypeScript**, **Tests**, and **Build**. Committing the workflow alone does not make these checks mandatory for merging. Dependabot becomes active once its configuration is on the default branch.
+Lefthookを利用してローカルでもチェックを行っています。
 
-## Local Git hooks
+### Before commit
 
-`pnpm install --frozen-lockfile` installs Lefthook's Git hooks automatically. Run `pnpm exec lefthook install` to reinstall them in an existing checkout.
+ステージされたJavaScript / TypeScriptファイルに対してESLintを実行します。
 
-- Before commit: ESLint checks staged JavaScript/TypeScript file paths without automatically changing or staging files.
-- Before push: type-check and tests run in parallel.
-- Production builds run in CI to keep local pushes fast. CI remains the final check even when local hooks are skipped.
+### Before push
 
-The shared CI install action sets `LEFTHOOK=0` to avoid installing local hooks on runners.
+以下を並列で実行します。
+
+- TypeScript type check
+- Vitest
+
+Production BuildはローカルでのPushを遅くしないため、CI側で実行しています。
+
+## Status
+
+現在MVPを開発中です。
+
+今後、音声入力からDotの生成・保存・振り返りまでの一連の体験を実装しながら、実際に利用してもらい、フィードバックをもとに改善していく予定です。
