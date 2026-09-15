@@ -10,3 +10,7 @@ UIを実装・変更する前に、必ず `docs/design-system.md` を読み、�
 - 不要なCard、shadow、gradient、border、icon、大きなroundedを追加しない。
 - 情報階層は余白とタイポグラフィで表現し、一般的なAI SaaS風UIを避け、静けさと可読性を優先する。
 - HomeとDot一覧は同文書の画面別仕様に従う。
+
+## AI review
+
+ユーザーが「レビューして」「AIレビューして」など、コードレビューを依頼したら、変更内容を確認したうえで `pnpm ai:review` を実行する。`OPENAI_API_KEY` が未設定で実行できない場合は、その旨を伝え、キーを表示・要求しない。

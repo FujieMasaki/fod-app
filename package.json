@@ -16,7 +16,8 @@
     "check": "pnpm lint",
     "type-check": "tsc --noEmit --incremental false",
     "test": "vitest run && node --test scripts/*.test.mjs",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "ai:review": "node --env-file-if-exists=.env.local scripts/ai-review-local.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.2",
