@@ -2,7 +2,7 @@ import type { DotSession } from "@/features/session";
 
 /**
  * Phase 1 のダミーデータ（Phase 1 仕様 §6）。
- * 外部 API 未接続時、/api/dot がこれを返す。
+ * 外部 API 未接続時にクライアントのモックが返す。
  */
 export const sampleSession: DotSession = {
   id: "sess_2026_0708",

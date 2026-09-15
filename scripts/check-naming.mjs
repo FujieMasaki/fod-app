@@ -6,19 +6,7 @@ import { fileURLToPath } from "node:url";
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceDir = path.join(rootDir, "src");
 const sourceExtensions = new Set([".ts", ".tsx", ".css"]);
-const nextFileNames = new Set([
-  "default",
-  "error",
-  "global-error",
-  "globals",
-  "index",
-  "layout",
-  "loading",
-  "not-found",
-  "page",
-  "route",
-  "template",
-]);
+const structuralFileNames = new Set(["index"]);
 const kebabCase = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
 const camelCase = /^[a-z][a-zA-Z0-9]*$/;
 
@@ -37,11 +25,12 @@ export function isAllowedFileName(fileName) {
   if (!sourceExtensions.has(extension)) return true;
 
   let stem = fileName.slice(0, -extension.length);
+  if (stem.endsWith(".d")) stem = stem.slice(0, -".d".length);
   if (stem.endsWith(".module")) stem = stem.slice(0, -".module".length);
   if (stem.endsWith(".test")) stem = stem.slice(0, -".test".length);
   if (stem.endsWith(".spec")) stem = stem.slice(0, -".spec".length);
 
-  return nextFileNames.has(stem) || kebabCase.test(stem);
+  return structuralFileNames.has(stem) || kebabCase.test(stem);
 }
 
 export function findCssNamingErrors(source, relativePath) {

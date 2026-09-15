@@ -1,7 +1,5 @@
-"use client";
-
 import { motion, useReducedMotion } from "framer-motion";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "@tanstack/react-router";
 import { Button, SentenceCard, Text } from "@/design-system";
 import type { DotSession } from "@/features/session";
 import styles from "./todays-dot-view.module.css";
@@ -11,9 +9,9 @@ import styles from "./todays-dot-view.module.css";
  * その後、「今日のDotを整理しました。」という自然なメッセージを添える。
  */
 export function TodaysDotView({ session }: { session: DotSession }) {
-  const router = useRouter();
+  const navigate = useNavigate();
   const reduce = useReducedMotion();
-  const openReflection = () => router.push("/reflection");
+  const openReflection = () => navigate({ to: "/reflection" });
 
   return (
     <div className={styles.root}>

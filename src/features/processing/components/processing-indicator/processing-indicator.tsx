@@ -1,7 +1,5 @@
-"use client";
-
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "@tanstack/react-router";
 import { Spinner, Text } from "@/design-system";
 import { ErrorState } from "@/components/error-state/error-state";
 import { useSession } from "@/features/session";
@@ -16,7 +14,7 @@ import styles from "./processing-indicator.module.css";
  * （StrictMode の二重マウント下でも確実に発火させるため）
  */
 export function ProcessingIndicator() {
-  const router = useRouter();
+  const navigate = useNavigate();
   const { setDotSession } = useSession();
   const { mutate, status, data } = useCreateDot();
 
@@ -29,9 +27,9 @@ export function ProcessingIndicator() {
   useEffect(() => {
     if (status === "success" && data) {
       setDotSession(data);
-      router.replace("/dot");
+      navigate({ to: "/dot", replace: true });
     }
-  }, [status, data, setDotSession, router]);
+  }, [status, data, setDotSession, navigate]);
 
   if (status === "error") {
     return <ErrorState onRetry={() => mutate()} />;

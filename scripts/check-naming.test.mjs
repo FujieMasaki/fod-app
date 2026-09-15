@@ -3,12 +3,10 @@ import test from "node:test";
 
 import { findCssNamingErrors, isAllowedFileName, isAllowedPathSegment } from "./check-naming.mjs";
 
-test("allows kebab-case source paths and Next.js structural names", () => {
+test("allows kebab-case source paths and Vite declaration names", () => {
   assert.equal(isAllowedPathSegment("recording-stage"), true);
-  assert.equal(isAllowedPathSegment("(app)"), true);
-  assert.equal(isAllowedPathSegment("[sessionId]"), true);
   assert.equal(isAllowedFileName("use-recorder.ts"), true);
-  assert.equal(isAllowedFileName("page.tsx"), true);
+  assert.equal(isAllowedFileName("vite-env.d.ts"), true);
   assert.equal(isAllowedFileName("recording-stage.module.css"), true);
 });
 
