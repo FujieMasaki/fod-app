@@ -1,5 +1,3 @@
-@import url("https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@300;400;500&family=Zen+Old+Mincho:wght@400;500&display=swap");
-
 /* Reset + base。値は必ず Design Token を参照する（ハードコード禁止）。 */
 
 :root {

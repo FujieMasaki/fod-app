@@ -18,7 +18,7 @@ Routes are defined in `src/router.tsx`; browser-only state is managed by the ses
 
 ## API
 
-The UI calls a standalone API at `VITE_DOT_API_URL/dot` when `VITE_DOT_API_URL` is set. Until the API is implemented, omit that variable to use the existing delayed mock response locally. This keeps API keys, audio uploads, and persistence outside the SPA boundary.
+The UI calls a standalone API at the `dot` path below `VITE_DOT_API_URL` when that variable is set. Configure it as an absolute API base URL, such as `https://api.example.com` or `https://api.example.com/api`; a trailing slash is accepted. Until the API is implemented, omit that variable to use the existing delayed mock response locally. This keeps API keys, audio uploads, and persistence outside the SPA boundary.
 
 ## CI
 
@@ -58,4 +58,3 @@ The workflow sends the textual PR diff to OpenAI using `gpt-5.4-mini-2026-03-17`
 Each invocation makes at most one OpenAI request, with low reasoning effort, at most 4,096 output tokens (including reasoning), and `store: false`. Diffs larger than 60,000 UTF-8 bytes are rejected before sending; split the PR to review them. No automatic retries are made. Incomplete responses and results for a PR updated during review are not posted, but the API request can still be billed. Successful reviews report token usage in the comment and workflow summary.
 
 At the [published GPT-5.4 mini prices](https://developers.openai.com/api/docs/models/gpt-5.4-mini), 10,000 input tokens plus 2,000 output tokens cost approximately $0.0165 per run ($1.65 per 100 runs). This is an example, not a fixed fee or monthly cap; actual usage and prices vary. GitHub Actions usage is separate. API authentication and paid live review must be verified after the secret is configured; local tests mock both APIs and incur no API charges.
-

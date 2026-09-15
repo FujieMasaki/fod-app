@@ -13,7 +13,8 @@ export async function createDot(): Promise<DotSession> {
     return dotSessionSchema.parse(sampleSession);
   }
 
-  const res = await fetch(`${dotApiUrl}/dot`, { method: "POST" });
+  const endpoint = new URL("dot", `${dotApiUrl.replace(/\/+$/, "")}/`);
+  const res = await fetch(endpoint, { method: "POST" });
   if (!res.ok) {
     throw new Error("dot_creation_failed");
   }
