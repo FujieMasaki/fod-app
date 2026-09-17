@@ -4,7 +4,7 @@ pre-commit:
       glob: "*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}"
       run: pnpm exec eslint -- {staged_files}
     naming:
-      glob: "src/**/*.{ts,tsx,css}"
+      glob: "apps/web/src/**/*.{ts,tsx,css}"
       run: pnpm lint:naming
 
 pre-push:

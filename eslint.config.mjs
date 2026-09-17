@@ -8,8 +8,9 @@ const eslintConfig = defineConfig([
   ...typescriptEslint.configs.recommended,
   globalIgnores([
     ".next/**",
-    "dist/**",
-    "coverage/**",
+    ".worktrees/**",
+    "**/dist/**",
+    "**/coverage/**",
   ]),
   {
     files: ["**/*.{ts,tsx}"],

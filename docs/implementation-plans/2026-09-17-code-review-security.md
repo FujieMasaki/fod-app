@@ -16,8 +16,8 @@
 
 ## 3. Current State
 
-- `src/features/session/session-context.tsx` はセッション情報を `localStorage` に保存する。
-- `src/libs/audio/recorder.ts` と `src/features/recording/` はマイク入力を扱う。
+- `apps/web/src/features/session/session-context.tsx` はセッション情報を `localStorage` に保存する。
+- `apps/web/src/libs/audio/recorder.ts` と `apps/web/src/features/recording/` はマイク入力を扱う。
 - 現時点でサーバー実装・認証実装・環境変数利用はない。
 
 ## 4. Proposed Approach

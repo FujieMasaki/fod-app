@@ -33,8 +33,8 @@ Focus on Dot のフロントエンドコードレビューにおける運用ル�
 | 変更内容 | 最低限確認する観点 |
 | --- | --- |
 | すべての変更 | `security.md` |
-| `src/features/recording/**`, `src/libs/audio/**` | 権限要求、録音データの保存・送信・破棄 |
-| `src/features/session/**` | `localStorage` の保存対象、スキーマ検証、リセット |
+| `apps/web/src/features/recording/**`, `apps/web/src/libs/audio/**` | 権限要求、録音データの保存・送信・破棄 |
+| `apps/web/src/features/session/**` | `localStorage` の保存対象、スキーマ検証、リセット |
 | API、fetch、外部SDKの追加 | 認証・認可、レスポンスの最小化、エラー、URL検証 |
 | `.env*`、設定、依存、CI変更 | 秘密情報、公開設定、サプライチェーン、権限 |
 | UIでのHTML・URL表示 | XSS、危険なスキーム、open redirect |
@@ -45,7 +45,7 @@ Focus on Dot のフロントエンドコードレビューにおける運用ル�
 
 ```text
 🔴 [タイトル]
-場所: src/path/file.ts:12
+場所: apps/web/src/path/file.ts:12
 問題: なぜ危険または不正確か。
 修正案: 実装可能な修正方法。
 確信度: 高 / 中 / 低（低い場合は確認すべき前提も書く）

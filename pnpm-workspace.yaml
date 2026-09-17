@@ -1,5 +1,7 @@
 # pnpm dev 実行前の依存チェックを無効化（ERR_PNPM_IGNORED_BUILDS で止まるのを防ぐ）
 verifyDepsBeforeRun: false
+packages:
+  - "apps/web"
 # pnpm 11 の形式で、既存方針どおり依存のビルドスクリプトを明示的にスキップする
 allowBuilds:
   lefthook: true
