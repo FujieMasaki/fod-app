@@ -10,14 +10,16 @@ AIは実装の代行者ではなく、設計・実装・レビューを支援す
 
 ## Code Review
 
-「レビューして」などのコードレビュー依頼では、必ず
-[`docs/code-review/README.md`](docs/code-review/README.md) を起点に、変更内容に
-対応する観点ファイルを確認すること。レビューは差分を中心にしつつ、判断に
-必要な関連実装も確認する。
+「レビューして」などのフロントエンドのコードレビュー依頼では、必ず
+[`docs/code-review/frontend/README.md`](docs/code-review/frontend/README.md) を起点に、
+変更内容に対応する観点ファイルを確認すること。レビューは差分を中心にしつつ、
+判断に必要な関連実装も確認する。バックエンドのレビュー指針は、将来
+`docs/code-review/backend/` に分離して管理する。
 
-- セキュリティは最重要観点とし、[`security.md`](docs/code-review/security.md) を
-  必ず確認する。秘密情報のクライアント露出、認証・認可、API レスポンス、録音・
-  localStorage 等のブラウザ保存、外部入力・URL・HTML 描画を対象とする。
+- セキュリティは最重要観点とし、
+  [`security.md`](docs/code-review/frontend/security.md) を必ず確認する。秘密情報の
+  クライアント露出、認証・認可、API レスポンス、録音・localStorage 等のブラウザ保存、
+  外部入力・URL・HTML 描画を対象とする。
 - 指摘には重大度（🔴 / 🟠 / 🟡 / 🔵）、該当ファイルと行、修正案を添える。
   根拠が不足する場合は推測であることを明示する。
 - セキュリティ上の問題、または問題の疑いがある場合は、対応前に「LGTM」と

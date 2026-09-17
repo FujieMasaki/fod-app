@@ -22,8 +22,8 @@
 
 ## 4. Proposed Approach
 
-1. `docs/code-review/README.md` に運用、重大度、対象範囲、レビュー出力の規約を定義する。
-2. `docs/code-review/security.md` に、現在の Vite SPA と将来の API 追加にも適用できる
+1. `docs/code-review/frontend/README.md` に運用、重大度、対象範囲、レビュー出力の規約を定義する。
+2. `docs/code-review/frontend/security.md` に、現在の Vite SPA と将来の API 追加にも適用できる
    セキュリティチェックリストを定義する。
 3. `AGENTS.md` から README を必須の起点として参照し、セキュリティ確認と指摘形式を
    明文化する。
@@ -41,7 +41,7 @@ Code review request
 ↓
 Changed-file diff and related code
 ↓
-docs/code-review/README.md + security.md
+docs/code-review/frontend/README.md + security.md
 ↓
 Findings with severity, location, and remediation
 ↓
@@ -53,8 +53,8 @@ Chat review response
 ## 7. Files to Change
 
 - 変更: `AGENTS.md` — レビュー時に従う必須ルールを追加する。
-- 新規: `docs/code-review/README.md` — レビュー運用と重大度を定義する。
-- 新規: `docs/code-review/security.md` — セキュリティチェックリストを定義する。
+- 新規: `docs/code-review/frontend/README.md` — フロントエンドのレビュー運用と重大度を定義する。
+- 新規: `docs/code-review/frontend/security.md` — フロントエンドのセキュリティチェックリストを定義する。
 
 ## 8. Libraries / APIs
 
@@ -69,8 +69,8 @@ Chat review response
 
 ## 10. Risks / Things to Watch
 
-- 将来サーバー、認証、または外部APIを導入したら、`security.md` の認証・認可・
-  レスポンス項目を実装構成に合わせて具体化する。
+- 将来のバックエンド実装では、`docs/code-review/backend/` に専用の指針を追加し、
+  認証・認可・レスポンス項目を実装構成に合わせて具体化する。
 - チェックリストを一般論で終わらせず、見落としや誤検知があれば更新する。
 
 ## 11. Verification
