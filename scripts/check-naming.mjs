@@ -4,7 +4,7 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const sourceDir = path.join(rootDir, "src");
+const sourceDir = path.join(rootDir, "apps", "web", "src");
 const sourceExtensions = new Set([".ts", ".tsx", ".css"]);
 const structuralFileNames = new Set(["index"]);
 const kebabCase = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;

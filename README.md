@@ -54,7 +54,15 @@ Focus on Dotでは、実装だけではなく、個人プロダクトとして�
 
 ブラウザ上での音声録音や画面遷移など、クライアント側の体験がプロダクトの中心となるため、SPAをベースにしています。
 
-ブラウザ側の状態はSession ProviderとTanStack Queryで管理しています。ルーティングは `src/router.tsx` で定義しています。
+ブラウザ側の状態はSession ProviderとTanStack Queryで管理しています。ルーティングは `apps/web/src/router.tsx` で定義しています。
+
+```text
+apps/
+├── web/  # 現在稼働しているVite + Reactアプリ
+└── api/  # 将来Rails APIを配置する場所（現在はREADMEのみ）
+```
+
+Frontendと将来のBackendを同じrepositoryで管理します。実装済み・決定済み・未決定の区別は [`docs/architecture.md`](docs/architecture.md) を参照してください。
 
 ## API
 
@@ -94,7 +102,7 @@ GitHub Actionsでは、Pull Request・`main` へのPush・手動実行時に以�
 | --- | --- | --- |
 | ESLint | `pnpm check` | 静的解析 |
 | TypeScript | `pnpm type-check` | 型チェック |
-| Tests | `pnpm test` | Vitestによるテスト |
+| Tests | `pnpm test` | 命名チェッカー自身のtestとVitest |
 | Build | `pnpm build` | Production Build |
 
 Node.js / pnpmのバージョンは `package.json` から取得し、pnpm storeをキャッシュした上で `--frozen-lockfile` を使用して依存関係をインストールしています。
@@ -107,7 +115,7 @@ Lefthookを利用してローカルでもチェックを行っています。
 
 ### Before commit
 
-ステージされたJavaScript / TypeScriptファイルに対してESLintを実行します。
+ステージされたJavaScript / TypeScriptファイルに対してESLintを実行し、`apps/web/src` の対象ファイルがある場合は命名チェックも実行します。
 
 ### Before push
 

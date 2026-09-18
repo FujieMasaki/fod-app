@@ -51,7 +51,7 @@ Focus on Dot は現時点で Vite によるクライアントSPAである。し�
 
 ## 6. 現在の構成での補足
 
-- `src/features/session/session-context.tsx` の `fod.session.v1` は、セッション復元のための
+- `apps/web/src/features/session/session-context.tsx` の `fod.session.v1` は、セッション復元のための
   クライアント保存であり、セキュリティ境界ではない。保存項目を増やすレビューでは、
   個人性・機密性・削除要件を必ず確認する。
 - まだバックエンド実装は存在しない。バックエンドの認証・認可・CSRF・CORS・
