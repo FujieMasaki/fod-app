@@ -13,6 +13,10 @@ node_modules/
 # testing
 coverage/
 
+# Rails testing
+apps/api/coverage/
+apps/api/.rspec_status
+
 # production
 /build
 dist/
@@ -30,6 +34,14 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+
+# Rails runtime files and local secrets
+apps/api/.bundle/
+apps/api/log/*
+apps/api/tmp/*
+apps/api/storage/*
+apps/api/config/master.key
+apps/api/config/credentials/*.key
 
 # vercel
 .vercel
