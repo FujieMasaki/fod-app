@@ -9,6 +9,11 @@ CIまでです。User、認証、Dot、音声、AI処理などのプロダクト
 repository全体の構成と、実装済み・決定済み・未決定の区別は
 [`docs/architecture.md`](../../docs/architecture.md) を参照してください。
 
+実装時の責務・境界は[`docs/development/backend.md`](../../docs/development/backend.md)、レビュー時の
+確認方法は[`docs/code-review/backend/README.md`](../../docs/code-review/backend/README.md)を参照してください。
+最初のプロダクトAPIをWebから利用する変更で契約管理を始めます。OpenAPIはその時点の推奨候補ですが、
+今回の基盤には導入していません。
+
 ## Requirements
 
 - Ruby 3.4.10

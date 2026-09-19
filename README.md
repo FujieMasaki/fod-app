@@ -48,6 +48,12 @@ Focus on Dotでは、実装だけではなく、個人プロダクトとして�
 - Lefthook
 - GitHub Actions
 
+### Backend
+
+- Ruby on Rails API-only
+- PostgreSQL
+- RSpec
+
 ## Architecture
 
 クライアント側の体験を中心にした、Vite + React + TanStack Router構成のアプリケーションです。
@@ -59,22 +65,37 @@ Focus on Dotでは、実装だけではなく、個人プロダクトとして�
 ```text
 apps/
 ├── web/  # 現在稼働しているVite + Reactアプリ
-└── api/  # 将来Rails APIを配置する場所（現在はREADMEのみ）
+└── api/  # Rails API基盤（プロダクトAPIは未実装）
 ```
 
 Frontendと将来のBackendを同じrepositoryで管理します。実装済み・決定済み・未決定の区別は [`docs/architecture.md`](docs/architecture.md) を参照してください。
 
 ## API
 
-`VITE_DOT_API_URL` が設定されている場合、UIから独立したAPIの `dot` エンドポイントを呼び出します。
+`VITE_DOT_API_URL` が設定されている場合、UIは`${VITE_DOT_API_URL}/dot`へ本文なしのPOSTを行います。
+これは体験確認用の暫定接続点であり、RailsのプロダクトAPI、音声送信、認証、保存の仕様ではありません。
 
-APIはまだ実装途中のため、環境変数を設定しない場合はローカルのモックレスポンスを使用します。
+環境変数を設定しない場合は、ローカルのモックレスポンスを使用します。Railsには現在`GET /up`だけがあり、
+User、認証、Dot、音声、AI処理のプロダクトAPIは未実装です。
 
 将来的には、以下をクライアントアプリから分離して管理できる構成を想定しています。
 
-- APIキー
-- 音声ファイル
-- データの永続化
+- 認証と利用者単位の保存
+- 音声ファイルの送信・保持
+- AI処理とデータの永続化
+
+## Documentation
+
+| 文書 | 役割 |
+| --- | --- |
+| [`docs/product.md`](docs/product.md) | MVPの目的、範囲、作らないこと、未決定事項 |
+| [`docs/journaling.md`](docs/journaling.md) | 録音から振り返りまでの現行仕様とMVP受け入れ条件 |
+| [`docs/architecture.md`](docs/architecture.md) | 現在の構成と継続する設計判断 |
+| [`docs/development/`](docs/development/) | frontend / backend実装時の判断基準 |
+| [`docs/code-review/`](docs/code-review/) | frontend / backendレビューの確認・報告方法 |
+| [`docs/implementation-plans/`](docs/implementation-plans/) | 変更単位の判断と検証履歴 |
+
+AI作業時の必読順と更新ルールは[`AGENTS.md`](AGENTS.md)を参照してください。
 
 ## Getting Started
 
