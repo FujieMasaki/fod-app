@@ -28,14 +28,17 @@
 - アプリケーション機能としてのAI処理はBackend側に置く。
 - 開発支援AIに関する指示・文書・workflowはroot、`docs/`、`.github/` 側で管理する。
 - User、認証、Dot、音声、AI処理は将来の変更で実装する。
+- 最初のプロダクトAPIをWebから利用する変更で、API契約の管理を始める。その時点ではOpenAPIを
+  推奨候補とするが、型生成・生成物の管理・契約検証toolは別の判断とする。
+- API、Web、契約は同じPRで更新する。同一PRでもWebとAPIのデプロイ時差があり得るため、
+  request / responseの互換性と段階的な配布を考慮する。
 
 ## 未決定
 
 - プロダクト機能を追加する際のRails内部architectureとdirectory構成
 - 認証方式
 - background job基盤
-- API contractの管理方法
-- OpenAPIを導入するかどうか
+- API契約でOpenAPIを採用するか、採用時の型生成・生成物管理・検証方法
 - AI providerとその実装方法
 
-これらは、参考プロジェクトの確認と個別の設計判断を経て、後続の変更で決定・実装する。
+これらは、関連仕様と個別のImplementation Planで選択肢・影響を確認した上で、後続の変更で決定・実装する。
