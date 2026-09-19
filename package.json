@@ -15,7 +15,8 @@
     "lint:naming": "node scripts/check-naming.mjs",
     "check": "pnpm lint",
     "type-check": "pnpm --filter @focus-on-dot/web type-check",
-    "test": "pnpm test:naming && pnpm --filter @focus-on-dot/web test",
+    "test": "pnpm test:scripts && pnpm --filter @focus-on-dot/web test",
+    "test:scripts": "node --test scripts/*.test.mjs",
     "test:naming": "node --test scripts/check-naming.test.mjs",
     "test:watch": "pnpm --filter @focus-on-dot/web test:watch"
   },
