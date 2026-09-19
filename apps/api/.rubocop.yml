@@ -1,0 +1,26 @@
+plugins:
+  - rubocop-rails
+  - rubocop-rspec
+  - rubocop-rspec_rails
+
+AllCops:
+  CacheRootDirectory: tmp/rubocop
+  NewCops: enable
+  SuggestExtensions: false
+  TargetRubyVersion: 3.4
+  Exclude:
+    - db/schema.rb
+
+# Rails 8.1 generators omit this magic comment; keep generated files aligned
+# with the framework's standard output.
+Style/FrozenStringLiteralComment:
+  Enabled: false
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Rails:
+  Enabled: true
+
+RSpec:
+  Enabled: true
