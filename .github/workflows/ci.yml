@@ -14,8 +14,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      web: ${{ steps.pr-targets.outputs.web || steps.all-targets.outputs.web }}
+      api: ${{ steps.pr-targets.outputs.api || steps.all-targets.outputs.api }}
+    steps:
+      - name: Run all checks outside pull requests
+        id: all-targets
+        if: github.event_name != 'pull_request'
+        run: |
+          echo 'web=true' >> "$GITHUB_OUTPUT"
+          echo 'api=true' >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: github.event_name == 'pull_request'
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Detect pull request changes
+        id: pr-targets
+        if: github.event_name == 'pull_request'
+        run: |
+          git diff --name-only -z --no-renames 'HEAD^1...HEAD^2' > "$RUNNER_TEMP/ci-paths"
+          node scripts/ci-changes.mjs "$RUNNER_TEMP/ci-paths"
+
   build:
     name: Build
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.web != 'false') }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -27,6 +55,8 @@ jobs:
 
   lint:
     name: Check
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.web != 'false') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -38,6 +68,8 @@ jobs:
 
   types:
     name: TypeScript
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.web != 'false') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -49,6 +81,8 @@ jobs:
 
   tests:
     name: Tests
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.web != 'false') }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -60,6 +94,8 @@ jobs:
 
   rails:
     name: Rails
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.api != 'false') }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
     defaults:
@@ -102,3 +138,25 @@ jobs:
         run: bin/rails db:prepare
       - name: Run RSpec
         run: bundle exec rspec
+
+  gate:
+    name: CI Gate
+    needs: [changes, build, lint, types, tests, rails]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CHANGES_RESULT: ${{ needs.changes.result }}
+      WEB_TARGET: ${{ needs.changes.outputs.web }}
+      API_TARGET: ${{ needs.changes.outputs.api }}
+      BUILD_RESULT: ${{ needs.build.result }}
+      LINT_RESULT: ${{ needs.lint.result }}
+      TYPES_RESULT: ${{ needs.types.result }}
+      TESTS_RESULT: ${{ needs.tests.result }}
+      RAILS_RESULT: ${{ needs.rails.result }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify required checks
+        run: node scripts/ci-gate.mjs
