@@ -54,5 +54,6 @@ Focus on Dot は現時点で Vite によるクライアントSPAである。し�
 - `apps/web/src/features/session/session-context.tsx` の `fod.session.v1` は、セッション復元のための
   クライアント保存であり、セキュリティ境界ではない。保存項目を増やすレビューでは、
   個人性・機密性・削除要件を必ず確認する。
-- まだバックエンド実装は存在しない。バックエンドの認証・認可・CSRF・CORS・
-  レート制限は、実装追加時に `docs/code-review/backend/` の指針として管理する。
+- Rails API基盤は存在するが、プロダクトAPI、認証、外部AI連携は未実装である。backendの
+  認証・認可・CSRF・CORS・レート制限は、実装変更時に
+  [`../backend/security.md`](../backend/security.md)の観点と実際の認証・配信構成に沿って確認する。

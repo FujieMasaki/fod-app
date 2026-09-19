@@ -2,113 +2,85 @@
 
 ## AI Development Workflow
 
-AIは実装の代行者ではなく、設計・実装・レビューを支援するパートナーとして使う。最終的な仕様・設計・技術判断は、人間が内容を理解した上で決定すること。理解できないコードや設計を、そのまま完了扱いにしない。
+AIは実装の代行者ではなく、設計・実装・レビューを支援するパートナーとして使う。最終的な仕様・
+設計・技術判断は、人間が内容を理解した上で決定すること。理解できないコードや設計を、そのまま
+完了扱いにしない。
+
+同じディレクトリまたは個人環境で提供される`personal-conventions.md`が存在する場合は、作業前に
+必ず読む。Railsを読む・書く場合は、その規約が指す`rails-conventions.md`も読む。
 
 - 実装前に、要件・変更範囲・既存実装への影響・実装方針を整理する。
 - 新機能や設計判断を伴う変更では、必要に応じて別のAIにPlanレビューまたはコードレビューを依頼する。
 - 実装後は必ずdiffと変更内容を確認し、要件どおりか、不要な変更がないか、人間が説明できるかを確認する。
 
+### 作業前に読む文書
+
+| 作業 | 必読文書 |
+| --- | --- |
+| すべての実装 | 関連する[`docs/product.md`](docs/product.md) / 機能仕様、[`docs/architecture.md`](docs/architecture.md)、対象変更の既存Implementation Plan |
+| frontend実装 | [`docs/development/frontend.md`](docs/development/frontend.md)。UI変更なら加えて[`docs/design-system.md`](docs/design-system.md) |
+| backend実装 | [`docs/development/backend.md`](docs/development/backend.md) |
+| frontend / backendをまたぐ実装 | frontend・backend両方の実装規約、関連機能仕様、architecture |
+| frontendレビュー | [`docs/code-review/frontend/README.md`](docs/code-review/frontend/README.md)、[`security.md`](docs/code-review/frontend/security.md)、関連仕様・frontend実装規約 |
+| backendレビュー | [`docs/code-review/backend/README.md`](docs/code-review/backend/README.md)、[`security.md`](docs/code-review/backend/security.md)、関連仕様・backend実装規約 |
+| 横断レビュー | 両方のレビュー入口・security観点・実装規約・関連仕様 |
+
+## 文書の役割と更新
+
+- `README.md`: プロジェクト概要、起動方法、文書への入口。
+- `docs/product.md`: MVPの目的、範囲、作らないこと、保留事項。
+- `docs/<feature>.md`: 独立した振る舞い、データの正本、受け入れ条件、未決定事項。
+- `docs/architecture.md`: 構成、責務、継続する設計判断と理由。
+- `docs/development/`: 実装時の境界・制約・判断基準。
+- `docs/code-review/`: 差分を検証し、根拠と重大度を報告する方法。
+- `docs/implementation-plans/`: 変更単位の背景、方針、判断、実装差異、検証結果。
+
+コードまたは仕様を変える変更では、関連する現行文書を同じ変更で更新する。変更のない文書を
+形式的に更新しない。画面やComponentごとに仕様文書を機械的に増やさず、独立した振る舞い・判断が
+増えたときだけ追加する。
+
+## Implementation Plan
+
+新機能、複数ファイル変更、データフロー / state / API / storageの変更、新しいlibrary、設計判断、
+影響範囲の大きい変更では、実装前に
+[`docs/implementation-plans/TEMPLATE.md`](docs/implementation-plans/TEMPLATE.md)を基にPlanを作成する。
+Planには何をするかだけでなく、なぜその方法を選ぶか、対象外、参照文書、更新する現行文書、検証を
+記載する。重大な設計判断または複数の有力案がある場合だけ、Plan後に人間の判断を求める。
+
+過去のPlanのCurrent Stateは当時の記録である。現在の状態へ書き換えず、現行仕様・architectureで
+別に管理する。
+
 ## Code Review
 
-「レビューして」などのフロントエンドのコードレビュー依頼では、必ず
-[`docs/code-review/frontend/README.md`](docs/code-review/frontend/README.md) を起点に、
-変更内容に対応する観点ファイルを確認すること。レビューは差分を中心にしつつ、
-判断に必要な関連実装も確認する。バックエンドのレビュー指針は、将来
-`docs/code-review/backend/` に分離して管理する。
+レビューは該当するレビュー入口を起点に、差分と判断に必要な関連実装・test・設定を確認する。
+securityは必ず確認し、仕様・受け入れ条件、責務と依存、認証・認可、秘密情報・個人データ、録音・
+生成結果の保存/送信/削除、状態不整合・異常系・再試行、API契約・互換性、test不足を確認する。
 
-- セキュリティは最重要観点とし、
-  [`security.md`](docs/code-review/frontend/security.md) を必ず確認する。秘密情報の
-  クライアント露出、認証・認可、API レスポンス、録音・localStorage 等のブラウザ保存、
-  外部入力・URL・HTML 描画を対象とする。
-- 指摘には重大度（🔴 / 🟠 / 🟡 / 🔵）、該当ファイルと行、修正案を添える。
-  根拠が不足する場合は推測であることを明示する。
-- セキュリティ上の問題、または問題の疑いがある場合は、対応前に「LGTM」と
-  判断しない。ローカルで依頼されたレビュー結果は、既定でチャットに出力し、
-  外部サービスへ投稿しない。
-- 見落としや継続的な誤検知を発見した場合は、該当する観点ファイルを更新し、
-  指針を改善する。
+- 指摘には重大度（🔴 / 🟠 / 🟡 / 🔵）、ファイル・行、根拠、影響、修正案、確信度を付ける。
+- 事実と推測、修正が必要な問題と任意の改善を区別する。根拠が不足するものは要確認として前提を示す。
+- security上の問題または疑いがある場合は、対応前に`LGTM`と判断しない。
+- ローカルレビューの結果はチャットに出力し、明示的な依頼なしに外部サービスへ投稿・承認しない。
+- 見落としや継続的な誤検知を発見した場合は、該当するレビュー指針を改善する。
 
-### Implementation Plan
+## Change Explanation
 
-次の変更では、原則として実装前に `docs/implementation-plans/TEMPLATE.md` を基にImplementation Planを作成する。Planには「何をするか」だけでなく、「なぜその方法を選ぶか」を含めること。
+ユーザーから今回の実装の説明を求められた場合は、次の6項目で回答する。
 
-- 新機能追加
-- 複数ファイルにまたがる変更
-- データフローまたはState管理の変更
-- API / Storageの追加・変更
-- 新しいライブラリの導入
-- アーキテクチャや設計判断を伴う変更
-- 既存機能への影響範囲が大きい変更
-
-以下は原則としてPlan不要とする。
-
-- 文言変更
-- 小さなスタイル調整
-- 明らかな軽微バグ修正
-- 設計判断をほぼ伴わない変更
-
-Plan作成後、重大な設計判断がある場合または複数の有力な実装案がある場合に限り、ユーザー確認で止まる。それ以外はPlanを作成した上で実装を続けてよい。
-
-### Change Explanation
-
-ユーザーから「この変更を説明して」「変更内容を説明して」など、今回の実装について説明を求められた場合は、必ず次の6項目で回答する。
-
-#### 1. 何を変更したか
-
-- ユーザーから見た変更
-- コード上の主な変更
-- 変更した主要ファイル
-
-#### 2. なぜこの設計にしたか
-
-- 要件との関係、この設計を採用した理由、メリットを説明する。
-- 必要なら代替案と採用しなかった理由も説明する。
-- 「一般的だから」「ベストプラクティスだから」だけで済ませず、Focus on Dotの現在の構成でこの判断をした理由を説明する。
-
-#### 3. データがどう流れるか
-
-可能なら、次の形式で説明する。
-
-```text
-User Action
-↓
-Component
-↓
-Hook / State
-↓
-API / Storage
-↓
-State Update
-↓
-UI Update
-```
-
-データフローがない変更では、その旨を明記する。
-
-#### 4. 重要なライブラリ / API
-
-今回の変更に関係するものだけを対象に、何を使っているか、どこで使っているか、なぜ必要なのかを説明する。
-
-#### 5. 将来変更するときに注意する箇所
-
-今回関係する依存関係、State管理、API仕様、データ構造、ブラウザAPI、エラーハンドリング、パフォーマンス、後方互換性を説明する。特に壊れやすい箇所と影響範囲が広がりやすい箇所を優先する。
-
-#### 6. 私が理解しておくべきコード3箇所
-
-実装を理解するために、人間が最低限読むべきコードを最大3箇所選び、各箇所について次を示す。重要箇所が3つ未満なら、無理に3つ出さない。可能なら行番号またはコード範囲も示す。
-
-1. ファイルパス
-2. 関数 / Component / Hook名
-3. 役割
-4. なぜ理解しておくべきか
+1. 何を変更したか: ユーザーから見た変更、主なコード変更、主要ファイル。
+2. なぜこの設計にしたか: 要件との関係、採用理由、必要なら代替案を採用しなかった理由。
+3. データがどう流れるか: `User Action → Component → Hook / State → API / Storage → State Update → UI Update`。データフローがない変更では、その旨を明記する。
+4. 重要なライブラリ / API: 関係するものだけについて、用途、使用箇所、必要な理由。
+5. 将来変更するときに注意する箇所: 依存、state、API、データ構造、Browser API、エラー処理、性能、後方互換性のうち壊れやすい点。
+6. 私が理解しておくべきコード3箇所: 最大3箇所について、path、関数 / Component / Hook、役割、読む理由、可能なら行番号を示す。
 
 ## UI / Design
 
-UIを実装・変更する前に、必ず `docs/design-system.md` を読み、その基準に従うこと。
+UIを実装・変更する前に、必ず[`docs/design-system.md`](docs/design-system.md)を読む。同文書の
+Tailwind CSS v4、既存Design Token、shadcn/ui、静けさ・可読性、画面別UI原則に従う。スタイルの
+規約本文をこのファイルや実装規約に複製しない。
 
-- Tailwind CSS v4を標準とし、CSS Modulesは原則として新規採用しない。既存実装の移行方針は同文書に従う。
-- CSS Variablesによる既存Design Tokenを優先し、任意の色・余白・装飾を増やさない。
-- shadcn/uiは必要なPrimitiveのみ利用し、デフォルトデザインをそのまま使わない。
-- 不要なCard、shadow、gradient、border、icon、大きなroundedを追加しない。
-- 情報階層は余白とタイポグラフィで表現し、一般的なAI SaaS風UIを避け、静けさと可読性を優先する。
-- HomeとDot一覧は同文書の画面別仕様に従う。
+## 完了前
+
+- 実装前に要件、変更範囲、既存実装への影響、方針を整理したか。
+- 必要なtestと手動確認を実行し、結果をPlanへ記録したか。
+- diffを確認し、要件どおりで不要な変更・秘密情報がなく、人間が説明できるか確認したか。
