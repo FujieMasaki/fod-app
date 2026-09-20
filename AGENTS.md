@@ -21,9 +21,9 @@ AIは実装の代行者ではなく、設計・実装・レビューを支援す
 | frontend実装 | [`docs/development/frontend.md`](docs/development/frontend.md)。UI変更なら加えて[`docs/design-system.md`](docs/design-system.md) |
 | backend実装 | [`docs/development/backend.md`](docs/development/backend.md) |
 | frontend / backendをまたぐ実装 | frontend・backend両方の実装規約、関連機能仕様、architecture |
-| frontendレビュー | [`docs/code-review/frontend/README.md`](docs/code-review/frontend/README.md)、[`security.md`](docs/code-review/frontend/security.md)、関連仕様・frontend実装規約 |
-| backendレビュー | [`docs/code-review/backend/README.md`](docs/code-review/backend/README.md)、[`security.md`](docs/code-review/backend/security.md)、関連仕様・backend実装規約 |
-| 横断レビュー | 両方のレビュー入口・security観点・実装規約・関連仕様 |
+| frontendレビュー | [`docs/code-review/README.md`](docs/code-review/README.md)、[`frontend/README.md`](docs/code-review/frontend/README.md)、[`frontend/security.md`](docs/code-review/frontend/security.md)、関連仕様・frontend実装規約。UI変更はdesign-systemも読む。 |
+| backendレビュー | [`docs/code-review/README.md`](docs/code-review/README.md)、[`backend/README.md`](docs/code-review/backend/README.md)、[`backend/security.md`](docs/code-review/backend/security.md)、関連仕様・backend実装規約。Railsを読む場合は個人規約が指すrails-conventionsも読む。 |
+| 横断レビュー | 共通入口、両方の領域別入口・security観点・実装規約、関連仕様・architecture。API契約、認証、共有データは片側の差分でも反対側を確認する。 |
 
 ## 文書の役割と更新
 
@@ -59,7 +59,7 @@ Planには何をするかだけでなく、なぜその方法を選ぶか、対�
 
 ## Code Review
 
-レビューは該当するレビュー入口を起点に、差分と判断に必要な関連実装・test・設定を確認する。
+レビューは[`docs/code-review/README.md`](docs/code-review/README.md)を起点に、該当する領域別文書、差分と判断に必要な関連実装・test・設定を確認する。
 securityは必ず確認し、仕様・受け入れ条件、責務と依存、認証・認可、秘密情報・個人データ、録音・
 生成結果の保存/送信/削除、状態不整合・異常系・再試行、API契約・互換性、test不足を確認する。
 
@@ -68,6 +68,7 @@ securityは必ず確認し、仕様・受け入れ条件、責務と依存、認
 - security上の問題または疑いがある場合は、対応前に`LGTM`と判断しない。
 - ローカルレビューの結果はチャットに出力し、明示的な依頼なしに外部サービスへ投稿・承認しない。
 - 見落としや継続的な誤検知を発見した場合は、該当するレビュー指針を改善する。
+- 別セッションへの依頼には[`docs/code-review/review-prompt.md`](docs/code-review/review-prompt.md)を使う。
 
 ## Change Explanation
 

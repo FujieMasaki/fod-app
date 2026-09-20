@@ -92,7 +92,10 @@ User、認証、Dot、音声、AI処理のプロダクトAPIは未実装です�
 | [`docs/journaling.md`](docs/journaling.md) | 録音から振り返りまでの現行仕様とMVP受け入れ条件 |
 | [`docs/architecture.md`](docs/architecture.md) | 現在の構成と継続する設計判断 |
 | [`docs/development/`](docs/development/) | frontend / backend実装時の判断基準 |
-| [`docs/code-review/`](docs/code-review/) | frontend / backendレビューの確認・報告方法 |
+| [`docs/code-review/README.md`](docs/code-review/README.md) | ローカルAIレビューの共通手順・重大度・出力・改善方法 |
+| [`docs/code-review/review-prompt.md`](docs/code-review/review-prompt.md) | 別セッションで使うレビュー依頼プロンプト |
+| [`docs/code-review/frontend/`](docs/code-review/frontend/) | frontend固有の確認観点とsecurity |
+| [`docs/code-review/backend/`](docs/code-review/backend/) | backend固有の確認観点とsecurity |
 | [`docs/implementation-plans/`](docs/implementation-plans/) | 変更単位の判断と検証履歴 |
 
 AI作業時の必読順と更新ルールは[`AGENTS.md`](AGENTS.md)を参照してください。
