@@ -1,7 +1,8 @@
 # Journaling Specification
 
 この文書は、録音からDotの振り返りまでの機能仕様である。現在の実装、実サービスのMVPで満たすべき
-振る舞い、未決定事項を区別する。MVP全体の範囲は[`product.md`](./product.md)を参照する。
+振る舞い、未決定事項を区別する。MVP全体の範囲は[`product.md`](./product.md)、複数Dotの履歴体験は
+[`dot-history.md`](./dot-history.md)を参照する。
 
 ## 1. 現在実装されているflow
 
@@ -62,13 +63,15 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 - API request / response / errorがWeb、API、契約文書で一致し、responseはschema検証される。
 - 音声原本、文字起こし、生成結果、ログについて、正本、保持場所、保持期間、削除主体が決まっている。
 - 再送・retry・Job再実行で二重のDotや外部AI処理が起きない、または利用者に結果が明確に示される。
+- 複数のDotを利用者ごとに保存し、本人が一覧から過去のDotを選んで振り返れる。
 
 ## 5. 未決定事項
 
 - 録音Blobを実サービスへ送るか、送る場合の形式・サイズ制限・upload経路・保持期間
 - AI provider、prompt、文字起こしの有無、同期/非同期生成、失敗時の再試行と冪等性
 - 認証方式、利用者の削除要求、Dotと音声・生成結果の削除連鎖
-- 1件だけでなく履歴を保存・表示する段階と、検索・カテゴリ・期間フィルタの仕様
+- 同日の複数録音をDot履歴にどう反映するか、履歴の日付境界と並び順
+- 将来候補である検索・カテゴリ・期間フィルタの仕様と導入段階
 
 これらは、最初のプロダクトAPIとWeb接続を設計するImplementation Planで選択肢、脅威、運用コストを
 比較して決める。現行のモックやdesign-system記載だけから確定しない。
