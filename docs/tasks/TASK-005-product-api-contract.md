@@ -46,3 +46,7 @@
 ## 関連Implementation Plan
 
 未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+
+### 上流の検討資料
+
+[TASK-001 認証設計比較Plan](../implementation-plans/2026-09-21-task-001-identity-design.md)の「23. TASK-005と関連タスクへの引継ぎ」を参照。認証開始・終了・状態確認、Cookie/CSRF、所有者scope、失効・再試行・cache等の契約化論点を整理している。2026-09-21時点では未承認の推奨案であり、正式なAPI契約でも本タスクのPlanでもない。上流の判断確定までBlockedを維持する。
