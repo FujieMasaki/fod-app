@@ -35,7 +35,8 @@ MVPの完成は、少なくとも次を満たす状態とする。
 | MVP対象 | 音声による振り返り、Dotの生成、利用者ごとの安全な保存、今日のDotを見るDay表示、複数Dotの一覧から過去のDotを選ぶ体験。一覧ではDotを丸で表す。実サービスの送信・保存方法は`journaling.md`、一覧の受け入れ条件は`dot-history.md`で扱う。 |
 | 検証候補 | DayからWeek / Monthへ視点を引く表示とアニメーション、週次・月次のAI振り返り。プロトタイプと利用者テストを経て採用を判断し、現時点のMVP完成条件には含めない。 |
 | 将来候補 | Homeでの最近のDot表示、検索、カテゴリ、期間フィルタ、Dot同士のつながりや長期的な傾向の表現。`design-system.md`に画面原則があっても、MVP確定とは扱わない。 |
-| 未決定 | 認証方式、AI provider、音声原本の保存要否と場所、文字起こしの有無、生成の同期/非同期、削除・保持期間、同日に複数回話した場合の扱い、記録のない日の表現、通知・共有。 |
+| 設計採用・未実装 | AWS東京のALB + ECS Fargate + RDS PostgreSQL、Rails + Deviseのメール＋パスワード・確認メール・パスワード再設定、OmniAuthのGoogleログイン、Rails CookieStore・HttpOnly Cookie・CSRF・Dot所有者認可。初期はECS 1タスク・RDS Single-AZ・同一origin。詳細はarchitectureを参照。 |
+| 未決定 | Cookie期限・再認証・確認/再設定・Google同一メール衝突時の細部、AI provider、音声原本の保存要否と具体的な保存先、文字起こしの有無、生成の同期/非同期、削除・保持期間、同日に複数回話した場合の扱い、記録のない日の表現、通知・共有。 |
 
 ## 4. MVP対象外と実装前に決めること
 
@@ -44,16 +45,31 @@ MVPの完成は、少なくとも次を満たす状態とする。
 - 検索、カテゴリ、期間フィルタ、共有・通知、Homeでの最近のDot表示
 - DayからWeek / Monthへのズーム表示とアニメーション、週次・月次のAI振り返り
 - 音声Blobまたは文字起こしのbrowser永続化
+- MFA、passkey、運営者の手動アカウント復旧、メールOTP
+- 端末別session失効・全端末logout用DB session、Googleとメールの明示的アカウント連携
+- 国内限定の法的・契約上の保証、厳密なD2の個別例外管理
 
-認証方式、AI provider、音声の送信・保持方法、API契約tooling、background job基盤は、MVPを
-実装する過程で必要に応じて決める設計事項であり、対象外の機能ではない。既存のdesign-system上の
+認証方式と公開基盤は[architecture](./architecture.md)のとおり採用した。認証の残る細部、AI provider、
+音声の送信・保持方法、API契約tooling、background job基盤は、MVPを実装する過程で必要に応じて
+決める設計事項であり、対象外の機能ではない。既存のdesign-system上の
 表現や技術的な実装可能性だけを理由に、候補機能の優先度を確定しない。
+
+Deviseでメール＋パスワード、確認メール、パスワード再設定を扱い、GoogleログインをOmniAuthで
+提供する。Railsがpassword・メール配送・不正利用対策の運用を担う。email一致のみでアカウントを
+統合せず、本人所有のDotだけを操作できる。通常認証はRails CookieStoreであり、logoutによる
+コピー済みCookieの即時失効・全端末logoutは保証しない。具体期限等は後続で確定する。
+日記内容・音声・AI入力は原則東京とするが、国内限定を利用者へ約束しない。Cookieは利用者端末に
+保存され、Google・メール・AIの処理地域は別に確認する。厳密な所在地方針は将来論点に残す。
+
+基盤費は月5,000円を目標とし、安全な公開運用のため月1万円前後を許容する。音声保存・文字起こし・
+AI・通信量は別従量予算。ECS複数タスク・RDS Multi-AZ・CloudFront等は、負荷・障害状況・費用を
+見て追加する。公開前にPricing Calculator・AWS Budgets・Cost Anomaly Detectionを整える。
 
 ## 5. 保留事項と再検討条件
 
 | 保留事項 | 再検討する条件 | 主な選択肢 |
 | --- | --- | --- |
-| 認証と利用者単位の保存 | 最初の永続Dot APIをWebから利用する変更 | Cookie / session、token、外部identity providerなどを脅威・配信構成と共に比較 |
+| 認証の利用開始・終了・失効の細部 | 最初の永続Dot APIをWebから利用する変更 | 採用済みのDevise + OmniAuth + CookieStoreを前提に、録音前ログイン、具体期限、再認証、確認/再設定、Google同一メール衝突時の扱いを確定 |
 | 音声の扱い | 音声を実サービスへ送る必要が決まる変更 | browser内で破棄、直接upload、backend経由、保持しない文字起こしなどを保持・削除要件と比較 |
 | AI生成の実行方式 | providerと応答時間・失敗時UXが決まる変更 | 同期request、Job、非同期polling / 通知を冪等性と再試行で比較 |
 | Dot履歴の表示 | 複数Dotの一覧を実装する変更 | 同日の複数録音、記録のない日、日付境界と表示順を比較・決定 |

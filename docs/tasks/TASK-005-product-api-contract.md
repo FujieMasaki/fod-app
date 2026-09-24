@@ -46,3 +46,15 @@
 ## 関連Implementation Plan
 
 未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+
+### 上流の採用決定と残る論点（2026-09-24 Devise切替）
+
+[TASK-001 Plan](../implementation-plans/2026-09-21-task-001-identity-design.md)の§45–49と[architecture](../architecture.md)を参照。過去のCognito/DB session案を正式契約へ転記しない。本タスクのPlanと正式契約は未作成。
+
+- 採用済み: Rails + Deviseのメール＋パスワード・確認メール・パスワード再設定、OmniAuthのGoogleログイン。通常認証はRails CookieStore、HttpOnly/Secure/SameSite=Lax、同一origin、CSRF、current_userによる本人のDotの一覧/取得/更新/削除。
+- 基盤はAWS東京ALB + ECS Fargate + RDS PostgreSQL、初期1タスク・Single-AZ、React同梱。国内限定を約束しない。保持・削除・AIの具体条件は別途確定。
+- 利用者はDevise/WardenとDBから確定する。Googleは検証済みprovider/uidで対応し、email一致の自動統合をしない。衝突時UXとGoogle確認情報の扱いは未確定。Google専用Userへreset経由で無条件にpassword認証を追加しない。
+- 契約対象: 登録・確認/再送・password login/reset・Google開始/callback・状態確認・logout・CSRFのmethod/path/request/response/error。確認待ち・期限切れ・不正callback・メール配送失敗・衝突時の挙動、個人APIのno-storeも定義する。
+- CookieStoreのlogoutはブラウザCookieの消去であり、コピー済みCookieの即時失効を保証しない。期限検証とUserの有効性確認を区別する。端末別失効・全端末logout用DB session、MFA/passkey/手動復旧、明示的アカウント連携は今回の契約へ追加しない。
+- TASK-001の残判断: 録音前ログイン、有効/idle/絶対期限・remember_me、再認証、確認/再設定token期限・再送、reset後の既存Cookie、password方針・濫用防止の具体値、Google同一メール衝突時のUX。過去の提案値を確定扱いにしない。
+- TASK-002/003/004の保持・削除・生成/再試行・履歴の決定成果物は未提供。認証方式の変更だけではBlockedを解除しない。

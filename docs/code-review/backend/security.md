@@ -1,7 +1,8 @@
 # 観点: バックエンドセキュリティ 🔴
 
 この文書は、Rails APIのsecurity reviewで必ず確認する観点である。現在はRails基盤と`GET /up`のみで、
-プロダクトAPI、認証方式、AI provider、配信構成は未決定である。未決定の仕組みを前提に断定せず、
+プロダクトAPI・認証・配信は未実装である。認証方式と公開配信構成は[architecture](../../architecture.md)
+で採用済み、AI providerやsession期限等の細部は未決定。採用決定と実装・実機検証を区別し、
 実装される変更で適切な確認を行う。
 
 ## 1. 認証・認可とresource所有権 🔴
@@ -37,7 +38,15 @@
 - [ ] rate limit、upload制限、timeout、error responseを、外部公開と処理コストが生じるendpointで検討したか。
 - [ ] migration、backup、削除処理、管理操作が個人データの保持・復旧・アクセス範囲を広げていないか。
 
-## 5. 現在の構成での補足
+## 5. 採用した認証設計の検証
+
+- [ ] Deviseのメール確認・password再設定、OmniAuthのGoogle開始POST/CSRF/state検証が、API-onlyの
+  middleware/Controller構成でも働くか。Google/email一致の自動統合やreset経由の無条件な連携をしていないか。
+- [ ] CookieStoreのlogoutとコピー済みCookieの失効を区別し、未採用のDB session相当の保証をしていないか。
+  有効期限、User削除/停止、password再設定後のCookie、Google専用Userの扱いを採用versionで確認したか。
+- [ ] password、確認/再設定token、Google code/token、Cookieがproxy・メール導線・監視を含むログへ漏れないか。
+
+## 6. 現在の構成での補足
 
 - RailsはAPI-onlyで、`GET /up`以外のプロダクトrouteはない。`/up`への変更でも不要な内部情報を
   responseへ追加しない。

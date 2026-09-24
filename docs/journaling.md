@@ -60,16 +60,29 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 - 録音の成功、権限拒否、停止、中断、送信失敗、生成失敗、保存失敗、再試行の各結果が、実際の
   データ状態と矛盾しない。
 - 保存されたDotは認証済み利用者本人だけが取得・更新・削除できる。
+- 認証はRails + Deviseのメール＋パスワード・確認メール・パスワード再設定と、OmniAuthのGoogle
+  ログインを採用する。Rails CookieStore、HttpOnly/Secure/SameSite=LaxのCookie、同一origin、
+  RailsのCSRFとcurrent_userの所有者scopeを使う。email一致の自動統合、MFA、passkey、手動復旧、
+  メールOTPは採用しない。通常logoutでコピー済みCookieの即時失効を保証せず、DB sessionによる
+  端末別失効・全端末logoutは将来要件とする。localStorageを本人性の根拠にしない。
 - API request / response / errorがWeb、API、契約文書で一致し、responseはschema検証される。
 - 音声原本、文字起こし、生成結果、ログについて、正本、保持場所、保持期間、削除主体が決まっている。
 - 再送・retry・Job再実行で二重のDotや外部AI処理が起きない、または利用者に結果が明確に示される。
 - 複数のDotを利用者ごとに保存し、本人が一覧から過去のDotを選んで振り返れる。
 
+2026-09-24に採用した公開基盤はAWS東京のALB + ECS Fargate + RDS PostgreSQLで、初期は
+ECS 1タスク・RDS Single-AZ。構成と費用方針は[architecture](./architecture.md)を参照する。
+日記内容・音声・AI入力は原則として東京に置くが、国内限定の法的・契約上の約束はまだ行わない。
+音声原本を保存するか、送信経路・保持期間・AI providerは引き続き未決定。この設計採用によって
+§1–3の現行mock・localStorage・未実装の状態が変わったとは扱わない。
+
 ## 5. 未決定事項
 
 - 録音Blobを実サービスへ送るか、送る場合の形式・サイズ制限・upload経路・保持期間
 - AI provider、prompt、文字起こしの有無、同期/非同期生成、失敗時の再試行と冪等性
-- 認証方式、利用者の削除要求、Dotと音声・生成結果の削除連鎖
+- 録音前ログイン、Cookieの有効/idle/絶対期限・remember_me、再認証、password再設定後のCookieの扱い
+- 確認/再設定メールの期限・再送・導線、Googleの確認情報と同一メール衝突時のUX
+- 利用者の削除要求、Dotと音声・生成結果の削除連鎖
 - 同日の複数録音をDot履歴にどう反映するか、履歴の日付境界と並び順
 - 将来候補である検索・カテゴリ・期間フィルタの仕様と導入段階
 
