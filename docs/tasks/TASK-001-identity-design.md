@@ -17,8 +17,8 @@
 
 - [ ] 認証方式と利用者識別の正本、認証の開始・終了・失効時の振る舞いが決まり、人間が選択理由を確認している。
 - [x] Cookie / session、token、外部identity providerなどの適用可能な選択肢を、配信構成・脅威・運用負荷で比較している。
-- [ ] 採用方式で必要なWeb/API間の資格情報の受け渡し、CSRF / CORS等の対策、本人のDotに限定する認可境界が明文化されている。
-- [ ] 決定をproduct / journalingとarchitectureの該当箇所へ反映し、API契約で確定すべき項目をTASK-005へ渡している。
+- [x] 採用方式で必要なWeb/API間の資格情報の受け渡し、CSRF / CORS等の対策、本人のDotに限定する認可境界が明文化されている。
+- [x] 決定をproduct / journalingとarchitectureの該当箇所へ反映し、API契約で確定すべき項目をTASK-005へ渡している。
 
 ## 依存するタスクID
 
@@ -37,18 +37,17 @@
 
 ## 関連Implementation Plan
 
-[認証と利用者識別の設計比較Plan](../implementation-plans/2026-09-21-task-001-identity-design.md)。比較、推奨案、経路図、2人・未認証・失効の机上検証、契約への引継ぎ論点を整理済み。具体的なhosting/IdP比較はPlan §25以降、国内保管要件を踏まえた最新の条件別推奨は§33–39を参照。詳細な採用条件は未確定であり、決定済み仕様ではない。
+[認証と利用者識別の設計比較Plan](../implementation-plans/2026-09-21-task-001-identity-design.md)。最新の採用条件は**§45–48**、検証・完了条件は**§49**。§16–44は過去の比較記録であり、現在の採用条件にしない。構成の正本は[architecture](../architecture.md)。
 
-## 進捗と残る判断（2026-09-21）
+## 採用済み事項と残作業（2026-09-24 Devise切替）
 
-推奨は同一origin配信、管理型IdPのOIDC、RailsのDB sessionとHttpOnly Cookie、アプリ内部User UUIDの組み合わせ。採用方式、実配信・providerの条件、録音前ログインと期限・失効範囲はPlanの「24. 人間に判断を求める項目」を参照。
+- Rails + Deviseでメールアドレス＋パスワード、確認メール、パスワード再設定。GoogleログインはOmniAuth。メールOTPとCognito固有の認証経路・利用者対応は採用しない。
+- 通常認証はRails標準CookieStore。HttpOnly・Secure・SameSite=Lax、同一originとRailsのCSRFを維持する。DB sessionによる端末別失効・全端末logoutは将来要件。コピー済みCookieをlogoutだけで即時失効できるとは保証しない。
+- 内部Userを所有者として、current_userのDotだけを一覧・取得・更新・削除する。clientのowner指定やGoogle/email一致の自動統合は認めない。明示的連携は将来対応。
+- MFA、passkey、運営者による手動アカウント復旧はMVP対象外。復旧はDeviseのpassword再設定とGoogleの標準機能の範囲とし、Google専用Userへのreset経由の無条件なpassword追加はしない。
+- AWS東京のALB + ECS Fargate + RDS PostgreSQL、初期1タスク・Single-AZ、React成果物のRails同梱・同一originを維持。日記・音声・AI入力は原則東京だが国内限定を約束しない。
+- 基盤費は月5,000円目標・月1万円前後許容、音声保存・文字起こし・AI・通信量は別予算。Calculator/Budgets/Cost Anomaly Detectionは公開前の設定対象。
 
-完了条件ごとの結果・検証証跡はPlan §16へ記録した。未承認のためproduct / journaling / architectureは変更せず、TASK-005へは未確定の検討資料として渡した。採用判断・現行仕様への反映・確定条件の引継ぎが未了なのでIn progressを維持する。認証コードは実装していない。
+残判断は録音前ログイン、Cookieの有効/idle/絶対期限・remember_me、再認証、確認/再設定メールの詳細、password方針・濫用対策、Google確認情報・同一メール衝突時のUX。以前の30分/12時間等は承認済みとしない。**開始・終了・失効の細部が未確定のためIn progressを維持する。**
 
-## 追加検討（2026-09-22）
-
-ユーザーと、外部IdPの本人確認 + Railsのserver-side session + RailsのDot認可を第一候補として進める方向を共有した。配信先・ログイン手段は未決定。Plan §26–31で同一origin配信3案、IdP 3候補、ログイン/MFAの優先順位、開発環境、第一推奨と前提を比較した。
-
-具体的なhosting/IdP、MFA必須化、期限・失効範囲は未承認でありIn progressを維持する。これはTASK-001の設計提案で、TASK-002の削除仕様やTASK-005のAPI契約を先に確定するものではない。検証記録はPlan §32を参照。
-
-日本向け運用を踏まえ、Plan §33–39で国内保管の必須範囲を3案に分けて比較した。対象を明示した国内必須案ではAWS東京 + Cognito東京を第一候補、Auth0日本テナントを対抗案とする。海外保存を許容する場合のみRender + Auth0日本を維持する。全案でメール・監視・backup・削除・障害・将来の音声/AI処理を対象にし、日本regionの選択だけでは全データの国内限定を保証できない点を記録した。国内要件・例外の採否は未承認で、関連タスクを解除していない。
+TASK-005へ現在の境界と残判断を引き継ぐ。TASK-005/006/007はBlockedを維持し、TASK-002/003/004の独立した設計検討は引き続き可能。機能実装・AWS作成・実機検証を完了扱いにしない。過去の進捗と比較はPlanの折り畳み履歴を参照する。

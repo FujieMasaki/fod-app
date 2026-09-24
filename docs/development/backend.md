@@ -33,8 +33,9 @@
 - finder、interactor、use case、serializerの一律導入、repository層、専用Gemは行わない。同じ複雑さが
   複数endpointに反復し、Rails標準だけでは認可・response・transactionの境界を読み取れないときに、
   導入候補と既存コードへの影響をImplementation Planで比較する。
-- 認証方式、AI provider、background job基盤、音声storageは未決定である。これらを文書上の例だけで
-  採用済みにしない。
+- 認証・公開基盤は[architecture](../architecture.md)の採用方針に従うが、実装は未追加である。
+  session期限等の細部、AI provider、background job基盤、音声storageの具体方式は未決定であり、
+  文書上の例だけで採用済みにしない。
 
 ### 例外
 

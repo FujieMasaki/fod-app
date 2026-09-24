@@ -2,15 +2,19 @@
 
 ## 1. Status
 
-実施中（2026-09-22更新）。外部IdPの本人確認 + Railsのserver-side session + RailsのDot認可を第一候補として進める方向はユーザーと共有済み。配信先・IdP・ログイン手段・期限等は未確定で、認証コードは実装していない。§16–24は2026-09-21時点、§25–32は国内保管要件の追加整理前の比較記録。最新の所在地要件・条件別推奨は§33–39を参照。国内保管の必須化自体も未承認であり、詳細案は現行仕様として未確定。
+実施中（2026-09-24、Devise切替）。ユーザーはRails + Deviseのメールアドレス＋パスワード、確認メール、パスワード再設定、OmniAuthによるGoogleログイン、Rails標準CookieStoreを採用した。**最新の採用条件は§45–48、検証・残作業は§49**。公開基盤はAWS東京のALB + ECS Fargate + RDS PostgreSQL、初期1タスク・Single-AZ・React同梱の同一originを維持する。
+
+Cognito、Cognito用OIDC callback/token検証/利用者対応、メールOTP、通常認証用DB sessionは現行設計から外す。MFA・passkey・手動本人確認による復旧・明示的アカウント連携はMVP対象外。端末別失効・全端末logout用DB sessionは将来要件。国内限定を約束しない。
+
+§4は開始当時の記録、§16–44は過去の比較・変更途中の記録として折り畳んで保存する。過去の推奨・採用表・失効保証・完了記録を現行仕様に適用しない。セッション期限等が未確定のためTASK-001はIn progress。機能実装・実機検証は未実施。
 
 ## 2. Goal
 
-配信構成、本人限定アクセス、認証の開始・終了・失効、運用負荷を比較し、最初の永続Dot APIの認証方針を判断できる資料を用意する。未承認の案を決定済み仕様にしない。
+承認されたDevise + CookieStoreへの変更を現行仕様と既存PR #27へ反映し、本人確認・session・所有者認可の責務、CookieStoreの失効限界、未決定事項を説明可能にする。
 
 ## 3. Background
 
-TASK-001に上流の依存タスクはない。product §5とjournaling §4–5は認証方式を未決定とし、保存されたDotへの本人限定アクセスを要求する。既存のbrowser stateでは本人性や複数端末での所有権を保証できない。
+ユーザーは個人MVPの認証をRails側へ集約し、メール＋パスワードとGoogleを採用した。管理型IdPやDB sessionを前提とした過去案とは運用責務・失効特性が異なるため、単なる名称置換ではなく認証フローと後続契約の条件を更新する。TASK-001に依存タスクはない。TASK-002/003はTodo・Plan未作成で、保持/削除やAI/Jobの決定・実証を補完したとは扱わない。
 
 ## 4. Current State
 
@@ -24,91 +28,63 @@ TASK-001に上流の依存タスクはない。product §5とjournaling §4–5�
 
 ## 5. Scope and Non-goals
 
-対象は認証方式、利用者識別、配信構成、脅威と対策、運用責務、開始・終了・失効と本人限定アクセスの設計比較。コード、依存、環境、配信設定は変更しない。
+既存の認証Plan、TASK-001/005、architecture、product、journaling、backend規約/securityと既存PR #27を更新する。開始時の未コミット8文書の変更を土台に、公開基盤・予算等の承認済み内容を維持する。未追跡`.worktrees/`には触れない。既存branchへの追加commit/pushとPR本文更新のみ行い、新規branch/PR、認証コード、Gem追加、AWS作成、外部登録は行わない。
 
-TASK-002の保持期間・削除手段、TASK-003の生成・Job方式、TASK-004の履歴、TASK-005の正式endpoint/schemaは確定しない。これらへ渡す認証境界だけを整理する。providerの契約・登録・課金も行わない。
+TASK-002の保持期間、TASK-003のAI/Job、TASK-004の履歴、TASK-005の正式API契約を先に確定しない。参考サービスの固有情報は記録しない。
 
 ## 6. References and Documents to Update
 
-- 規約: `AGENTS.md`、`/Users/fujiemasaki/.codex/personal-conventions.md`、同directoryの`rails-conventions.md`、frontend/backend実装規約・レビュー入口・security指針。
-- 仕様: [product §5](../product.md#5-保留事項と再検討条件)、[journaling §4–5](../journaling.md#4-実サービスのmvp受け入れ条件)、[architecture](../architecture.md)、[Dot履歴 §2](../dot-history.md#2-mvpで必要な履歴体験)。
-- 関連Plan: [Rails基盤](2026-09-18-rails-api-foundation.md)、[タスク整理とID統一](2026-09-20-mvp-task-inventory.md)。
-- 対象コード: `apps/api/config/{application,routes}.rb`、`apps/api/config/environments/production.rb`、`apps/api/app/controllers/application_controller.rb`、`apps/api/config/initializers/filter_parameter_logging.rb`、`apps/api/Gemfile`、`apps/api/spec/requests/health_spec.rb`、`apps/web/vite.config.ts`、`apps/web/src/{router,providers}.tsx`、`apps/web/src/features/session/session-context.tsx`、`apps/web/src/features/processing/create-dot.ts`。
-- 更新: TASK-001、本Plan。比較資料は本Planに集約し、TASK-005へ未承認の引継ぎ項目をリンクする。仕様に決定を反映するのは承認後。承認待ちの段階でproduct/journaling/architectureの現行仕様は変更しない。
+- 規約: AGENTS.md、個人規約とRails規約、両領域の実装規約・レビュー入口・security、PR template。
+- 仕様: [product](../product.md)、[journaling](../journaling.md)、[architecture](../architecture.md)。
+- タスク: [TASK-001](../tasks/TASK-001-identity-design.md)、[TASK-002](../tasks/TASK-002-data-lifecycle-design.md)、[TASK-003](../tasks/TASK-003-generation-design.md)、[TASK-005](../tasks/TASK-005-product-api-contract.md)。
+- 関連記録: [Rails基盤Plan](2026-09-18-rails-api-foundation.md)、[タスク整理Plan](2026-09-20-mvp-task-inventory.md)。
+- 対象コード: apps/apiのGemfile、ApplicationController、application/routes/production設定、apps/webのVite設定・Session Provider・createDot。認証・Dot API未実装を確認し、変更しない。
+- 更新する現行文書: §5の8文書。PR #27の本文・タイトルも最終構成に揃える。
 
 ## 7. Proposed Approach
 
-1. 開始状態、依存、仕様と対象コードを照合する。
-2. 一次資料でCookie、CSRF/CORS、OIDC、失効の制約を確認する。
-3. 認証手段とアプリsessionを区別し、配信別の成立条件・利用者識別・運用負荷を比較する。
-4. 推奨構成の図、状態遷移、2人・未認証・失効の操作表、脅威対策と契約への引継ぎを作る。
-5. 差分・リンク・完了条件を検証し、人間へ選択を求める。未承認ならIn progressを維持する。
+1. branch、差分、remote main/PR先端を確認し、既存変更を保護する。
+2. Devise/OmniAuth/Railsの一次資料で、認証・CSRF・CookieStoreの特性を確認する。
+3. §45–48で採用条件・理由・経路・未決定事項を整理してから現行文書へ反映する。
+4. A/Bの所有者境界、Cookieコピー、メール/Google障害、確認/再設定、失敗・再試行を机上検証する。
+5. 差分・リンク・状態・秘密情報を確認し、§49へ記録。文書のみを既存PRへ反映する。
 
 ## 8. Why This Approach
 
-IdPの本人確認とアプリのsession保持は併用できる。別々の選択軸として整理すると、現在のSPAとRailsを保ちながら、browserに持たせる資格情報とサーバーの所有権判断を説明できる。配信・providerが未確定であることも判断条件として明示する。
+今回の人間の選択を正本へ反映し、本人確認をRailsで管理する利点と、パスワード・メール運用を引き受ける負担を同時に示す。CookieStoreの簡素さを採用しつつ、DB session相当の失効を保証しない。
 
 ## 9. Data Flow
 
-現行データフローは変更しない。以下は**未承認の推奨案**。`app.example.com`は説明用で、実ドメインではない。
-
-```mermaid
-flowchart TD
-  B[Browser: SPA / 認証状態とDotの一時cache]
-  E[HTTPS app.example.com: TLS終端 / reverse proxy]
-  W[Vite buildの静的配信]
-  R[Rails: 認証callback / session検証 / 本人scope]
-  I[外部IdP: 本人確認 / 資格情報の管理]
-  D[(PostgreSQL: User / 外部identity対応 / session / Dot)]
-  B -->|同一origin fetch: HttpOnly Cookie自動送信・変更時CSRF header| E
-  E -->|静的ファイルのみcache可| W
-  E -->|API・認証経路はcacheしない| R
-  R -->|requestごとに有効sessionと所有権を確認| D
-  R -->|Set-Cookie: 推測不能なsession識別子| E
-  E -->|Secure / HttpOnly / SameSite=Lax| B
-  B -->|top-level認証redirect: state / nonce / PKCE challenge| I
-  I -->|top-level GET callback: 一回限りのcode / state| E
-  R -->|HTTPS back-channel: code / PKCE verifier / client認証| I
-  I -->|ID token等: Railsのみで検証・使用| R
-```
-
-- User Action → Component → 認証Hook/状態確認 → Railsのsession確認 → 最小の利用者情報 → Webの認証state → UI。Webのstateは表示用で、認証の正本はRailsが検証するDB session。
-- Dot操作は認証済みUser → そのUserのDot scope → DB → response → 利用者別Query cache → UI。外部identityはIdPで検証し、内部User UUIDとの対応とDot所有権はアプリDBを正本にする。
-- CookieはbrowserのCookie領域だけに置き、JSへsession識別子を返さない。CSRF tokenは同一originの保護した応答から取得しmemoryで保持する。localStorage / sessionStorage / IndexedDBへ認証資格情報を保存しない。
-- OIDC取引のstate・nonce・PKCE verifierはRails側に短期保存し、一回限りの取引をbrowserのHttpOnly Cookieに結び付ける。codeはcallback URLを一時通過するため、Rails/proxy/監視のquery記録を抑止し、処理後は秘密を含まないURLへredirectする。
-- client secretはサーバー側のsecret管理へ置く。IdP tokenをWebへ渡さず、ログイン検証後は保持しない案。外部API操作は不要なのでrefresh tokenやoffline accessを要求しない。IdPにはDot・音声・文字起こしを送らない。
+[architecture](../architecture.md)の図と§46を正本として参照する。メール＋パスワードまたはGoogle → Devise/Warden → 暗号化Cookie session → requestごとにUser取得 → 本人のDot scope → DB。UIの認証stateは表示用で、既存localStorageを本人性の根拠にしない。
 
 ## 10. Files to Change
 
-- 新規: 本Plan（比較・理由・図・検証証跡）。
-- 変更: [TASK-001](../tasks/TASK-001-identity-design.md)（In progress、Plan参照、完了条件別の進捗）。
-- 変更: [TASK-005](../tasks/TASK-005-product-api-contract.md)（認証契約への引継ぎ資料参照。状態や契約自体は変更しない）。
+本Plan、TASK-001/005、product、journaling、architecture、docs/development/backend.md、docs/code-review/backend/security.md。機能コード・設定・lockfileは変更しない。過去のCurrent Stateは保持する。
 
 ## 11. Libraries / APIs
 
-新規dependencyなし。OIDCとWeb標準を資料として調べる。Gem・SDKの具体的な採用とRails API-onlyへの組込みはTASK-006のPlanで検証する。
+設計採用はDevise、OmniAuthとGoogle用strategy、Rails CookieStore/CSRF。具体的なGem versionとAPI-onlyへの統合はTASK-006で検証する。devise_token_auth、JWTによる通常API認証、DB session、Cognito SDKは追加しない。
 
 ## 12. Alternatives Considered
 
-§17–19に認証・session・配信の各案を記載する。
+過去比較は§17–39。今回の比較と採用理由は§45。外部IdP + DB sessionの再採用や、明示的アカウント連携は今回実装しない。
 
 ## 13. Risks / Things to Watch
 
-未承認案の仕様化、同一siteと同一originの混同、IdP失効とアプリsession失効の混同、利用者切替時の旧データ表示、他人のDot IDによるアクセス、logout失敗・遅延response・再試行を確認する。現行mockの未認証動作を実サービスの安全性と混同しない。
+CookieStoreのコピー済みCookie再利用、パスワード再設定を使ったGoogle専用Userへの認証手段追加、email一致の自動統合、確認前のDot利用、API-onlyでのCSRF欠落、tokenのログ漏えい、旧利用者のbrowser cacheを重点確認する。未決定の仕様や未実証の安全性を確定扱いにしない。
 
 ## 14. Verification
 
-### Manual
-
-2人・未認証・失効の保存/一覧/詳細/更新/削除を机上確認する。図の資格情報の保存・送信経路と脅威対策を照合する。採用未決定・未実装・未検証の境界を確認する。
-
-### Automated
-
-Markdown相対リンク、TASK IDとファイルの維持、差分範囲、空白エラーを確認する。文書のみのためアプリtest/buildや実認証試験は行わず、その理由を記録する。
+文書の経路と状態をA/B/未認証/期限切れ・コピー済みCookie・認証失敗で机上確認する。相対リンク、旧方式の現行文書への残存、TASK ID/状態、過去Current State、変更範囲、空白を検証する。文書のみのため認証実機試験/buildは行わない。既存pre-push規約の型検査・testは実行する。認証の実機検証はTASK-006/007/015へ渡す。
 
 ## 15. Definition of Done
 
-TASK-001の4完了条件と必要な検証が揃うこと。比較資料作成だけではDoneにしない。人間の採用判断、現行仕様への反映、契約への確定引継ぎが未了なら残す。
+この文書更新は採用方針とPRの整合、差分/リンク/机上検証までを対象とする。TASK-001全体は4完了条件と必要な判断が揃うまでDoneにしない。具体期限、確認・復旧の細部、衝突時UX等は§48へ残す。
+
+<details>
+<summary>過去の比較・作業記録（§16–44。現行設計には適用しない）</summary>
+
+§40–44はDevise切替前のローカル更新途中の記録。§44のPR更新・検証は当時未完了であり、今回の実施結果は§49を参照する。
 
 ## 16. Completion Record
 
@@ -136,6 +112,8 @@ TASK-001の4完了条件と必要な検証が揃うこと。比較資料作成�
 TASK-001をDoneにしていない。必要な検証2項目（主体の説明、経路図と脅威レビュー）は提案に対する机上確認として実施し、採用承認や稼働試験の代替にはしていない。
 
 ## 17. 認証手段と利用者識別の比較（未承認）
+
+以下の§17–39は2026-09-21〜22の検討履歴。現在の採用条件は§40以降を優先する。
 
 「CookieかIdPか」は二者択一ではない。本人確認の手段、ログイン後の資格情報、配信構成を別々に選ぶ。以下の負荷は現行のSPA/Rails/PostgreSQLを前提とする設計評価で、providerの見積りや実測ではない。
 
@@ -287,7 +265,7 @@ IdP停止時は新規ログインを止め、localStorageや仮Userで代替し�
 
 TASK-005へは確定契約ではなく、この比較資料と論点を渡す。TASK-001の承認とTASK-002〜004の決定が揃うまでTASK-005のBlockedを解除しない。TASK-006/007も着手条件未充足。
 
-## 24. 人間に判断を求める項目
+## 24. 人間に判断を求めた項目（過去の記録）
 
 1. **構成の選択**: 推奨の「管理型IdP + Rails DB session + 同一origin」を軸に進めるか。メール配送・復旧を自主管理したい場合は「Railsのmagic link/OTP + 同じDB session」を有力代替とする。
 2. **配信・IdPの成立条件**: 使いたい配信先/domain、利用者に許容するログイン手段、IdPの費用・復旧・データ取扱いの条件。未提示なのでproviderや契約を決めない。既存social account必須にするなら対象者への影響も判断する。
@@ -306,7 +284,7 @@ TASK-005へは確定契約ではなく、この比較資料と論点を渡す。
 
 ## 26. 具体的な同一origin配信の3案
 
-所在地要件を追加した後の評価は§33–39を優先する。以下のH1「第一推奨」は海外保存を認める場合に限る。国内保管を必須にする場合はRenderを外し、§35のAWS東京構成を比較する。
+この比較時点の評価は§33–39へ進み、2026-09-24に§40のAWS東京構成を採用した。以下のH1「第一推奨」は過去の案であり、現行MVPには適用しない。
 
 以下は2026-09-22時点の公式資料に基づく設計提案で、deploy済み構成ではない。各案ともbrowserの入口を`https://app.example.com`に揃える。IdPのログイン画面は別originでよく、top-level redirectで利用する。「同一origin」はReactとRails APIの間の話である。
 
@@ -367,6 +345,8 @@ MAUは月間active利用者。金額は2026-09-22確認のUSD表示で、税・�
 そのため、後述のメールOTP + TOTPを同じ体験で必須にする案をCognitoへそのまま移せない。採用するなら、ローカル利用者はpassword + TOTPまたは条件を満たすpasskey等へ変更し、social利用者にも必要な強度をどう保証するかを先に決める。
 
 ## 28. ログイン手段とMFAの優先順位
+
+この節は過去の提案。現在はGoogle + メールOTPを提供し、MFAを必須にせず、passkey・運営者の手動本人確認をMVPへ含めない（§40）。
 
 第一推奨は**メールで始められる入口を用意し、継続利用にはpasskeyを勧め、Googleを併設する**。Appleは対象者がiPhone中心と分かれば初回へ繰り上げる。入口を3つ一度に実装することは必須にしない。
 
@@ -441,7 +421,7 @@ IdP自身のhosted loginを通すためlocalのRailsにパスワードやpasskey
 
 ## 31. 第一推奨の組合せと採用前提
 
-これは国内保管要件を整理する前の推奨記録。最新の推奨は§38に分岐させた。国内保管を必須にする場合、以下のRender推奨は適用しない。Auth0は日本テナントを作成可能であり、海外アプリ配信とIdPの保存地域は別々に選べる（§35–36）。
+これは国内保管要件を整理する前の推奨記録。現行MVPには§40のAWS東京 + Cognitoを採用し、以下のRender/Auth0・必須MFA案は適用しない。Auth0は日本テナントを作成可能であり、海外アプリ配信とIdPの保存地域は別々に選べる（§35–36）。
 
 **H1（RenderにReact成果物を同梱したRails + 有料Postgres）+ I1（Auth0 Essentialsを基準に評価）**を第一推奨とする。ログインはメールOTP + passkey登録を優先し、Googleを併設候補、Appleは利用者層に応じて追加する。公開MVPのMFAは§28のTOTP追加案を比較の基準とする。
 
@@ -495,6 +475,8 @@ IdP自身のhosted loginを通すためlocalのRailsにパスワードやpasskey
 | 契約・管理主体 | 委託先・再委託先、適用契約、削除・例外の保証 | 外資系の東京regionと、国内企業による国内運用は同義ではない |
 
 ## 34. 国内必須の範囲を決める3案
+
+この分類とD2推奨は過去の比較。現在は東京を基本配置とするが、国内限定の法的・契約上の約束や厳密なD2例外管理をMVPの採用条件にしない（§40）。D1/D2の採用済み扱いにも、D3を理由とした無制限の国外送信にも変更しない。
 
 | 方針 | 必須にする範囲 | 利点・負担 | 評価 |
 | --- | --- | --- | --- |
@@ -586,7 +568,9 @@ AI根拠: [Bedrock cross-region推論](https://docs.aws.amazon.com/bedrock/lates
 
 共通の異常系: IdP停止では新規login/再認証は不可、有効なRails sessionは期限を延ばさず利用継続可能。Rails DB停止では認証/認可を省略しない。削除API停止は「削除済み」にせず、ローカル利用停止を維持して再試行。東京region停止で海外への切替をしない場合の停止時間を説明する。復旧時には削除済みデータの復活、重複生成、他Userへの再関連付けを防ぐ。具体的な実装契約は未確定。
 
-## 38. 最新の推奨と人間が判断する項目
+## 38. 国内保管比較時の推奨と判断項目（過去の記録）
+
+以下は2026-09-22の判断材料であり、現在の採用内容は§40で更新した。
 
 **推奨はD2（対象を明示した国内必須）+ J1（AWS東京 + Cognito東京）を第一候補にすること**。内容を国内に留め、IdP・メール・監視の地域設定を同じ運用体系で追跡しやすい点を重視する。以前のRender第一推奨はD3の場合だけ維持する。この順位変更はユーザーが国内必須化を承認したという意味ではない。
 
@@ -610,3 +594,208 @@ AI根拠: [Bedrock cross-region推論](https://docs.aws.amazon.com/bedrock/lates
 - 未実施: サービス契約/登録、providerへの照会、認証フロー/削除/復旧/所在地の実機試験、音声/AI品質試験、実料金見積り、アプリtest/build。設計提案の範囲なので未実施を成功扱いにしない。
 - 完了条件: 選択肢比較は充足。人間による採用決定、開始/終了/期限/失効の確定、採用方式の正本文書反映、TASK-005への確定引継ぎは引き続き未完了。国内要件と例外も未承認。TASK-001はIn progress。
 - 次のタスク: 新たなBlocked解除なし。TASK-002/003はこの所在地条件を候補として保持/削除と生成の比較に着手可能、TASK-004も従来どおり独立検討可能。今回それらの仕様・完了条件・状態は変更しない。
+
+## 40. 公開MVPの採用決定（2026-09-24）
+
+ユーザーの「既存PR #27の設計文書とPR本文をこの決定に合わせて更新」の依頼に基づく。以下は採用済みの設計で、実装・AWS作成・稼働確認の記録ではない。過去の比較で有力だった案を再承認待ちに戻さない。
+
+| 項目 | 採用内容 |
+| --- | --- |
+| 公開基盤 | AWS東京のALB + ECS Fargate + RDS PostgreSQL。初期はECS serviceの定常desired countを1、RDSをSingle-AZとする |
+| Web/API | Reactのbuild成果物をRails releaseへ同梱し、ALBの同一HTTPS originから静的ファイル・API・認証callbackを配信する。CloudFrontは初期導入しない |
+| IdPとログイン | 東京のCognito Essentials。GoogleログインとメールOTPを初回公開から両方提供。Googleのみへ縮小しない。メール配送にはSES東京を設定する |
+| アプリ認証・認可 | RailsのDB session、HttpOnly Cookie、CSRF対策、Dot所有者認可。User/identity対応・session・DotはアプリDBで管理する |
+| MFA・復旧 | 利用者のMFAは必須にしない。TOTP紛失時の運営者復旧・予備passkeyをMVP採用条件にしない。復旧はIdP/上流サービスの標準機能へ案内し、運営者による手動本人確認やemail一致での旧Dot移管はしない |
+| データ所在地 | 日記内容・音声・AI入力は原則として東京に置き、文字起こし・AI処理も東京で利用できる構成を優先する。国内限定を法的・契約上の約束にはしない。厳密なD2の個別例外管理は将来論点 |
+| 予算 | 基盤費は月5,000円を目標とし、安全な公開MVP運用のため月1万円前後を許容。音声保存・文字起こし・AI・通信量は別従量予算。DB backup・監視・認証メール等は基盤見積もりに含める |
+| 拡張条件 | 負荷・障害状況・費用を見てECS複数タスク、RDS Multi-AZ、CloudFront等を追加判断する。初期の過剰な冗長化はしない |
+| 費用管理 | AWS Budgets、Cost Anomaly Detection、AWS Pricing Calculatorを公開前の初期設定対象とする。今回は設定しない |
+
+選択理由は、公開基盤と認証をAWSへまとめ、DBの保守・backupをRDSへ任せつつ、Railsでsessionと所有権を管理できること。1タスク・Single-AZには停止リスクが残るが、必要な負荷と費用が判明してから段階的に冗長化する。安価なLightsail同居DBより、公開時のDB運用負担を減らす選択をユーザーが行った。
+
+Auth0日本テナント、Render、Lightsailは今回採用しない。App Runnerは[2026-04-30以降の新規顧客受付終了](https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html)もあり新規基盤の候補にしない。以前の必須MFA案を外したため、Cognitoの「メールOTP + 必須TOTP」の成立性はMVPの採用条件ではない。[Cognitoメール設定](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-email.html)ではメールOTPにEssentials以上とSES設定が必要。GoogleはCognitoの標準social providerを使い、RailsとGoogleを直接接続する別経路を増やさない。
+
+## 41. 採用構成の具体化と安全境界
+
+構成の正本と経路図は[architectureの公開MVP節](../architecture.md)を参照。次はその実装・公開時に確認する条件であり、実機検証済みではない。
+
+- ALBでACM証明書によるHTTPSを終端する。ALBの配置には複数AZのsubnetが必要だが、これをECS複数タスクやRDS Multi-AZの採用とは混同しない。
+- 初期ネットワーク案は、public subnet上のFargateに公開IPv4を付け、Internet GatewayでCognito等へ外向き通信する方式。アプリportの受信元はALBのSecurity Groupだけに限定し、RDSは非公開にしてECSからのみ接続する。RDS接続はTLSを使う。NAT Gatewayは初期案に含めない。構築前にSecurity Groupと経路を検証し、この案が成立しなければ費用を再見積もりする。[ECS外向き通信](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/networking-outbound.html)
+- `desired count=1`は定常時の台数。deployment時の一時的な新旧タスク併存と課金はあり得る。タスク交換中の停止、RDS保守・AZ障害時の停止を許容する初期構成であり、無停止を保証しない。永続データ・sessionはRDSへ置き、ECSのローカルdiskを正本にしない。
+- React buildのhash付きassetとSPA画面のGETだけを静的配信する。API・認証経路へSPA fallbackを適用せず、個人responseは`no-store`。CloudFront、Redis等の別sessionサービスは初期に追加しない。
+- Cognito Managed loginからのAuthorization Code + PKCEをRailsで検証し、`state`・`nonce`・署名・issuer・audience・期限を確認してからUserとDB sessionを確定する。GoogleとメールOTPは同じメールでも別identityになり得る。検証済み`(issuer, sub)`から内部Userへ対応し、メール一致だけで自動統合しない。
+- MFA登録待ち・TOTP確認待ちを通常session発行の条件にしない。ログイン途中のstate/nonce/PKCE用取引は引き続き必要で、MFA enrollment管理とは別である。IdP側の一次認証を省略するという意味ではない。
+- browserへはopaque session IDだけを`Secure; HttpOnly; SameSite=Lax`のhost-only Cookieで渡し、認証成功時にIDを更新する。tokenをlocalStorageへ置かず、RailsのDB照合・CSRF検証・所有者scopeを必須にする。同一originのWeb/API間にcredentials付きCORSを追加しない。開発proxyの案は§30を参照する。
+- ログイン失敗ではsessionを発行しない。logoutはRails DBで失効してから成功を返す。失効済みCookieではDotを取得できず、通信失敗とlogout成功を区別する。IdPのlogout/停止/標準復旧が既存Rails sessionを即時失効するとは保証しない。具体的な失効範囲・再認証・期限は§43で判断する。
+- ALB access logはcallback URLのcode等を記録し得るため、初期案では有効化せず、ALB metricsと機密を除外したRailsログを利用する。必要時は認証情報を保存しない経路・記録方法を先に設計する。Rails parameter filterだけでALB側のqueryまで消せると仮定しない。[ALB access logのrequest field](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html)
+- RDS暗号化、自動backup、保持期間の明示、復元試験、秘密情報のサーバー側管理、障害/容量/費用の監視は公開前の確認対象。backup保持・削除記録の再適用はTASK-002、認証・別User拒否はTASK-006/015で検証する。MFAを必須にしない方針をAWS運用管理accountの保護緩和に流用しない。
+
+日記内容、文字起こし、音声、AI入出力をIdP属性・認証メール・通常ログへ含めない。東京を基本配置とする方針は、外部AIやGoogle・メール事業者の処理まで国内であるという保証ではない。TASK-002/003で送信先・目的・保持・削除と利用者への説明を決め、国内限定保証のないことを無制限な送信の許可にしない。
+
+## 42. 基盤費の目標と見積もり・費用管理
+
+月5,000円は目標であり、この構成が同額に収まるという見積もりではない。月1万円前後の許容も固定料金や厳密な上限保証ではない。公開前にPricing Calculatorで実構成を再見積もりし、超過が大きければサイズ・構成・予算を再判断する。必要な認可・暗号化・backupを省いて金額を合わせない。
+
+比較時に確認した2026-09-23のAWS東京公開単価による例。月730時間、Linux/x86 Fargate 0.25 vCPU / 1 GB・1タスク、RDS PostgreSQL db.t4g.micro・Single-AZ・gp3 20 GB、ALB 1台、NATなし。これらのサイズは費用例で、Railsの負荷・memory確認前に採用サイズを確定しない。期限付き無料期間やcreditは含めない。
+
+| 内訳 | 計算 | USD/月 |
+| --- | --- | --- |
+| ALB時間料金 | 0.0243 × 730 | 17.74 |
+| Fargate | (0.05056 × 0.25 + 0.00553 × 1) × 730 | 13.26 |
+| RDS compute + storage | 0.025 × 730 + 0.138 × 20 | 21.01 |
+| 公開IPv4 | 0.005 × 730 × 3（ALB最低2、task 1） | 10.95 |
+| 固定相当の小計 | ALB容量課金等の追加前 | **62.96** |
+
+仮の換算条件を1ドル150円・消費税10%とすると約10,390円。ALB容量課金（0.008 USD/LCU時）、ECR、CloudWatch、backup超過、secret管理、SES、domain等が追加され、1万円を超え得る。短期の複数task併存・31日の月・為替・負荷による増強も増額要因。通信量は別予算だが、ALBの容量課金やNATの時間料金まで通信費扱いにして基盤小計から隠さない。
+
+東京単価の一次資料: [ALB](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AWSELB/current/ap-northeast-1/index.json)、[Fargate](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonECS/current/ap-northeast-1/index.json)、[RDS](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonRDS/current/ap-northeast-1/index.json)、[公開IPv4](https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/AmazonVPC/current/ap-northeast-1/index.json)。URLは現行価格へ更新されるため、再見積もり時の確認日も残す。
+
+[Cognito Essentials](https://aws.amazon.com/cognito/pricing/)のdirect/social合計10,000 MAU無料枠を使える初期規模では認証compute費を抑えられるが、組織内の枠消費と超過料金を確認する。[SES](https://aws.amazon.com/ses/pricing/)は別課金で、新規向けEssentialsの例では0.16 USD/1,000通。OTP連打・送信量増加も監視する。NATを追加すると東京の時間料金だけで約45.26 USD/月、公開IPv4や処理量は別になり、この初期予算には大きく影響する。
+
+| 公開前の初期設定対象 | 設定・確認する内容 |
+| --- | --- |
+| [AWS Pricing Calculator](https://calculator.aws/) | 東京・実サイズ・通常/増量時の見積もり。基盤と音声保存/文字起こし/AI/通信を区分し、IPv4・backup・監視・SES・一時増設も含める。税・為替を別途確認 |
+| [AWS Budgets](https://aws.amazon.com/aws-cost-management/aws-budgets/pricing/) | 基盤と別従量予算を分け、5,000円目標・1万円前後の許容をUSD換算等で管理。実績/予測の通知先と超過時の対応を設定。基盤外の従量予算額は別途決定 |
+| [Cost Anomaly Detection](https://aws.amazon.com/aws-cost-management/aws-cost-anomaly-detection/faqs/) | サービス別の異常増加を通知。小規模予算に合う閾値を設定し、初期は請求確認も併用 |
+
+Budgetsの監視・通知は無料だが、予算額で即時に請求を止める機能ではない。異常検知にも請求データの遅延がある。今回はCalculatorの保存見積もり、Budget、monitorを作成しておらず、通知の到達確認も未実施。
+
+## 43. 未決定事項・将来論点・後続への引継ぎ
+
+採用決定と未決定を混ぜない。以下の細部が残るため、TASK-001はIn progressのままにする。
+
+- TASK-001で残す判断: 録音開始前にログインを求める時点、sessionのidle/絶対期限、logoutの対象範囲、共有端末での入り直し・account選択、IdPの停止/復旧後のアプリsessionの扱い。§20の30分/12時間/取引5分や`max_age=0`は過去の提案値であり、今回承認されたと扱わない。
+- TASK-005へ確定条件として渡すもの: Cognito Google + メールOTP、同一origin、Rails DB session/HttpOnly Cookie/CSRF、serverでの所有者確定、未認証・失効後のDot拒否、Google/メール間の自動統合なし、MFA必須化・手動本人確認なし。endpoint・error schema・具体期限はまだ契約化しない。
+- TASK-002/003: 日記・音声・AI入力の東京基本配置と別従量予算を前提に、送信・保持・削除・AI provider/model・同期/非同期を決める。国内限定の法的保証やD2の厳密な例外台帳を追加の着手条件にはしない。
+- TASK-006/007/015: 実providerでGoogleとメールOTPの両方、callback検証、Cookie/CSRF、logout/期限切れ、利用者A/Bの分離、切替時の旧cache、ログへの秘密混入を検証する。認証library選定・API-onlyへの組込みも未実施。
+- 公開準備: 実domain、task/DBサイズ、SG/経路、backup保持・復元目標、通知先、SES本番送信設定、費用計測を具体化する。採用構成の承認を、AWS作成や課金開始の許可とは扱わない。
+- 将来論点: 必須MFA・TOTP紛失時の運営者復旧・予備passkey、厳密なD2、ECS複数タスク・RDS Multi-AZ・CloudFront。前者は本人確認/復旧/所在地の要求が変わった時、後者は負荷・障害・費用から必要性を確認した時に再検討する。MVPにMFA完了待ち状態機械を先行実装しない。
+
+TASK-002/003/004はTodo・Plan未作成で、完了した設計成果物や検証結果はまだない。TASK-005/006/007の依存を満たしたとは扱わずBlockedを維持する。既存のTASK ID・ファイルパス・依存関係は変更しない。
+
+## 44. 採用決定反映の検証・完了記録
+
+- 開始確認（2026-09-24）: 現在のbranchは`codex/identity-data-residency-design`、HEADとPR #27の先端は`27b4a6cf4dc0a4bcc876890389fcc79660b0f9bb`。リモートmainは`4b5365b17437df07f52620edd0ecb98cbe0eaf47`でローカルmainと一致。追跡済み差分なし、未追跡`.worktrees/`には触れない。
+- 規約・根拠: AGENTS、個人規約とRails規約、PR template、task索引・TASK-001全文・関連Plan、product/journaling/architecture、TASK-002〜007、両領域の実装規約/securityを確認。Rails API-only、`GET /up`のみ、未設定のVite proxyを読み、設計採用を実装済みとしないことを確認した。
+- 更新範囲: 本Plan、TASK-001/005、product/journaling/architecture、backend規約/security冒頭の古い記述、および既存PR #27の本文。過去のCurrent Stateと当時の検証記録は維持。既存branchへの文書追加commitで反映し、新規branch・PRは作成しない。
+- 検証: 差分・リンク・認証シナリオ・変更範囲の確認結果を更新完了時に追記する。
+- 未実施: 認証/配信の実装、AWS作成、provider登録、実料金・負荷・障害・backup復元試験、アプリtest/build。今回は文書の採用決定反映なので実施せず、稼働成功として扱わない。
+
+| TASK-001の完了条件 | 今回の結果 | 残作業 / 証跡 |
+| --- | --- | --- |
+| 認証方式・正本・開始/終了/失効の決定と理由の確認 | 一部完了 | 配信/IdP/ログイン手段/session方式のユーザー決定を§40へ記録。具体期限・利用開始・終了/失効の細部は§43に残る |
+| 選択肢を配信・脅威・運用負荷で比較 | 完了 | §17–39の過去比較と§40–42の採用理由・初期制約・費用 |
+| 採用方式の資格情報・CSRF/CORS・認可境界を明文化 | 完了 | architectureの経路図と責務、§41。実機試験完了を意味しない |
+| 正本文書への決定反映とTASK-005への引継ぎ | 完了 | product/journaling/architectureへ採用済み範囲を反映。TASK-005では未決定項目と区別 |
+
+TASK-001はIn progress、TASK-005/006/007はBlockedを維持する。TASK-002/003/004の独立した設計検討は引き続き着手可能。後続の機能実装を新たに着手可能とする変更ではない。
+
+</details>
+
+## 45. DeviseとCookieStoreへの採用変更（2026-09-24）
+
+ユーザーの明示的な決定に基づく。これは設計採用で、実装・稼働確認ではない。
+
+| 項目 | 現在の採用内容 |
+| --- | --- |
+| 本人確認 | Rails + Deviseでメールアドレス＋パスワード、確認メール（Confirmable）、パスワード再設定（Recoverable）。GoogleはOmniAuth連携 |
+| session | Rails標準CookieStore。暗号化・改ざん検知されたCookieに必要最小限の認証状態を保持。通常認証用Sessionテーブルを作らない |
+| Cookie/CSRF | HttpOnly・Secure・SameSite=Lax、Domainなしを基本とし、同一origin・RailsのCSRF保護を維持 |
+| 利用者と認可 | 内部User UUIDをDotの所有者にする。Devise/Wardenが確定したcurrent_userのscopeで一覧・詳細・更新・削除。作成時のownerもサーバーが設定 |
+| Google | 検証済みprovider/uidを内部Userへ一意に対応。email一致のみの自動統合は禁止。明示的連携は将来対応 |
+| 対象外 | メールOTP、MFA、passkey、運営者の手動復旧。端末別失効・全端末logout用DB sessionは保留 |
+| 維持 | ALB + ECS Fargate + RDS PostgreSQL東京、初期1タスク・Single-AZ、React同梱・同一origin、東京基本配置、国内限定を約束しない方針、既存予算と費用監視 |
+
+Cognito用OIDC callback、Cognito token検証、Cognito固有identity対応は現行設計から削除する。Google認証からRailsへ戻る**OmniAuth callbackは引き続き必要**。旧Cognito callbackを流用する決定でも、Googleの認証検証を省略する決定でもない。
+
+理由と代償: DeviseでRailsに本人確認を集約し、CookieStoreにより認証session専用DBの管理を省く。一方、password hash、確認/再設定メール、濫用防止、依存更新、鍵保護を自分で運用する。Deviseが導入されれば全要件を満たすとは扱わない。管理型IdPやDB sessionの比較は履歴に残すが、現行MVPの依存条件にしない。
+
+## 46. 認証・session・認可の処理と限界
+
+### メールとGoogle
+
+- メール登録ではDeviseの確認メールを使う。確認前のDot操作を許可しない。確認リンクの期限・再送・期限切れ・変更時の再確認・確認後のログイン導線はTASK-001/005で具体化する。
+- ログイン成功時はsessionを更新し、固定された認証前sessionを引き継がない。失敗時は認証済みにしない。password平文や確認/再設定tokenをDBログ・access log・responseに出さない。
+- Google認証開始はCSRF保護したPOSTを基本にする。OmniAuth/strategyでstateと認証応答を検証し、失敗・キャンセル・不正callbackはログインさせない。認証callbackだけの外部redirect経路と通常の変更APIを区別し、アプリ全体のCSRFを無効化しない。redirect先は許可したアプリ内pathに限定する。
+- GoogleのUser検索にemailを本人識別のキーとして使わない。未連携のGoogleと既存メールUserが衝突しても旧Dotへ接続しない。重複登録を拒否するか等のUXは未決定。DB一意制約と同時callback時の整合をTASK-006で検証する。
+- Google専用Userへパスワード再設定を通じて無条件にパスワード認証を追加しない。追加は将来の明示的連携の設計対象。Googleのemail確認情報をConfirmableでどう扱うか、GoogleのみのUserのpassword属性の扱いも未決定とし、sampleのskip_confirmation!やemail検索をそのまま採用しない。
+
+### CookieStore
+
+- Cookie内に必要最小限の認証状態を置き、Railsが復号/改ざん検知、Devise/WardenによるUserの復元と有効性を確認する。CookieにDot本文・音声・Google token・passwordを格納せず、JS/localStorageへ認証情報を返さない。暗号化鍵はサーバーの秘密情報として保護する。
+- CookieはDB session IDだけを運ぶものではない。User/Dotは引き続きRDSにあり、CookieStore採用はDB照合や所有者認可の省略ではない。DB障害時にCookieだけで個人APIを許可しない。
+- logoutはCSRF保護した変更操作でDeviseのsign_out/session resetとブラウザCookieの消去を行う。通信失敗を完了扱いせず、端末側state/cacheを消去し、利用者切替時に古いresponseを適用しない。
+- **コピー済みの有効なCookieをlogoutだけでサーバー側から即時失効できるとは保証しない。** 端末別失効・全端末logoutは提供しない。別端末のCookieは別に残り得る。侵害時の対応は、通常logoutと区別して設計する。
+- cookie期限・idle/絶対期限・remember_me・共有端末での再認証は未決定。ブラウザを閉じることやクライアントCookieの削除だけを期限管理の保証にしない。期限をサーバーで検証し、古いCookieの再送も含めて実機試験する。Cookie内timestampのみのidle管理には古いCookie再送の限界がある。
+- Deviseのsession復元にはUserキーとauthenticatable_saltの照合がある。password変更によるsalt不一致は失効要因になり得るが、任意の端末の即時失効機能ではない。再設定後の既存Cookie・Google専用User・削除/停止Userの扱いは採用version/設定で検証し、DB sessionの保証を転記しない。
+
+### 本人限定とWeb境界
+
+- 一覧はcurrent_user.dots、詳細・更新・削除はcurrent_user.dots.find相当で統一。所有者はserver決定、入力user_idで変更不可。Controllerは認証・認可、Modelは関連/制約、複数データや外部処理はServiceに分担する。Pundit等の追加は今回決めない。
+- 音声・生成処理ID・結果取得にも所有者境界を適用。Job採用時は受理時のUserを固定し、別Userへ再関連付けしない。logoutは受理済みJob取消しではない。削除との競合はTASK-002/003で決める。
+- Rails API-onlyへCookie/session/CSRFとDevise/Wardenを明示的に組み込む。Webは同一originの変更requestへCSRF headerを付ける。Origin検証とproxyの公開Host/HTTPS情報を一致させる。CORSやSameSiteだけを認証/CSRF対策としない。
+- 開発はViteからRailsへの同一origin proxyを候補にし、固定URL・開発用Google client・local HTTPSを優先。API/認証はno-store、SPA fallbackは画面GET/HEADに限定する。開発でもCSRFを無効化しない。
+
+## 47. 運用・所在地・一次資料
+
+- Rails側で確認/再設定メール、password管理、login/登録/再送のrate limitと列挙対策を運用する。配送はSES東京を候補とし、送信domain・本番送信枠・bounce・配送失敗時の再送、確認/再設定token期限を具体化する。Google停止時はGoogleの新規認証に影響するが、既存Cookieの有効性はRailsで判定する。未連携のメール方式を復旧用に自動接続しない。
+- Userのpassword hash、Google識別子、確認/再設定関連データはRDS東京。Cookie sessionは**利用者のブラウザに保存される**ため、session情報を東京のDBだけで管理するという説明を外す。ログ/backupも保持・削除対象。Google・メール受信先・外部AIの地域は別に確認し、国内限定を約束しない。
+- ALB/Fargate/RDS、NATなしのネットワーク初期案、backup・監視、月5,000円目標/月1万円前後許容は維持。過去§42の基盤固定相当試算は参考だが、Cognito料金・OTPメールの見積項目を現行見積もりへ持ち込まない。確認/再設定メール、保守・監視費を含め再見積もりする。Budgets/Cost Anomaly Detection/Calculatorは公開前の設定対象で、今回は設定しない。
+- ALB等のaccess logにはGoogle callbackのcodeやメールリンクtokenが入り得る。初期のALB access log無効案を維持し、必要なmetricsと秘密を除いたRailsログで観測する。メールリンク到達ページの第三者送信・Referrer・cacheも確認し、Rails parameter filterだけで防げたと扱わない。
+
+一次資料（2026-09-24確認。機能説明と本アプリの設計判断を区別。version固定・実機検証は後続）:
+
+- [Devise公式](https://github.com/heartcombo/devise): DatabaseAuthenticatable/Confirmable/Recoverable/Omniauthable、API mode。認証機能の採用根拠。全moduleや標準の退会routeを無条件に有効化しない。
+- [Devise session復元](https://github.com/heartcombo/devise/blob/main/lib/devise/models/authenticatable.rb)、[password由来salt](https://github.com/heartcombo/devise/blob/main/lib/devise/models/database_authenticatable.rb): CookieからのUser復元とpassword変更時の照合の根拠。
+- [Rails Security Guide](https://guides.rubyonrails.org/security.html#session-storage): CookieStoreの暗号化、保存・replay・期限の制約。
+- [Rails API-only Guide](https://guides.rubyonrails.org/api_app.html#using-session-middlewares): Cookie/session middlewareの組込みが必要。
+- [OmniAuth](https://github.com/omniauth/omniauth)、[Rails CSRF protection](https://github.com/cookpad/omniauth-rails_csrf_protection)、[request phaseのCSRF対策](https://github.com/omniauth/omniauth/wiki/Resolving-CVE-2015-9284): 開始POST・CSRF保護を検証する根拠。
+- [Google strategy](https://github.com/zquestz/omniauth-google-oauth2): provider連携候補。READMEのUser作成例は本アプリの自動統合・確認仕様として採用しない。
+
+## 48. 未決定事項と後続への引継ぎ
+
+| 対象 | 残判断・検証 |
+| --- | --- |
+| TASK-001 | 録音前ログイン、Cookieの有効/idle/絶対期限、remember_me、再認証、確認/再設定token期限・再送・ログイン導線、password方針・濫用対策の具体値、Google確認情報・メール衝突時UX |
+| TASK-002 | password hash/確認・再設定情報/Google識別子の保持・削除、旧localStorageの消去、User削除とCookie再送・backup復元の整合。Google account自体の削除とは別 |
+| TASK-003 | 受理時Userを維持する生成/再試行/Job、削除との競合。認証方式変更でAI provider・Jobを先に確定しない |
+| TASK-005 | 登録・確認/再送・password login/reset・Google開始/callback・認証状態・logoutのmethod/path/error、Cookie/CSRF、メール衝突/確認待ち/期限切れ、所有者境界、client cacheの契約 |
+| TASK-006/007/015 | 採用Gem versionとAPI-only適合、2人の拒否、確認・再設定、Google失敗/state不正・同時callback、Cookieコピー再送・期限・logoutの限界、Google専用Userへのreset迂回防止、ログ/メール/共有端末を実証 |
+| 将来 | DB sessionによる端末別失効・全端末logout、明示的アカウント連携、MFA/passkey・手動復旧。要件が生じてから再判断 |
+
+依存先の決定成果物は未提供。TASK-001はIn progress、TASK-005/006/007はBlockedを維持。TASK-002/003/004の独立検討は引き続き可能。今回の承認を、具体期限・画面・schema・AWS作成の承認に拡張しない。
+
+## 49. Devise切替の検証・完了記録
+
+- 開始状態: branchはcodex/identity-data-residency-design、HEAD/remote PR先端は27b4a6c、mainは4b5365b。読み取り専用ls-remoteで確認。既存の未コミット8文書を保護し、.worktrees/は未変更。
+- 計画: §45–48を先に整理し、現行文書を同じ変更で更新。認証実装・AWS作成・新規branch/PRなし。
+- 機械検証: 変更8文書の相対リンク/見出しリンク35件に欠落なし。過去§4 Current Stateが作業前と一致、16タスクのID/パス/状態を維持、変更はdocsの8 Markdownだけ。git diff --check通過。
+- 机上検証: 下表と§46の経路を照合。current_userの所有者境界、確認前の拒否、Google自動統合禁止、CookieStoreのlogout限界と復旧・再試行の未決定項目を確認した。稼働試験ではない。
+- 自己レビュー: 差分と一次資料を照合。Cognito固有経路・メールOTP・DB sessionの失効保証が現行仕様に残らず、Google callback保護は残ることを確認。秘密情報・実利用者データ・参考サービスの固有情報なし。既存のAWS/予算の決定を維持。
+- 既存チェック: pnpm type-check成功、pnpm test成功（script 15件、Web 16件/5ファイル）。pre-pushの必須チェックに合わせて実行したもので、未実装のDeviseの安全性を検証した結果ではない。
+- 未実施: アプリbuild・Rails test、実Google/メール送信、Cookie/CSRF/Devise実動作、AWS負荷/復元/料金の実測。文書のみの変更であり成功扱いにしない。
+
+| TASK-001完了条件 | 結果 |
+| --- | --- |
+| 方式・正本・開始/終了/失効の決定 | 一部完了。方式変更は承認済み。期限・確認/復旧の細部等は§48に残る |
+| 選択肢比較 | 完了。旧比較を履歴に保持し、§45–47でDevise/CookieStoreの理由と代償を整理 |
+| 採用方式の資格情報/CSRF/認可境界 | §46で明文化。実機検証は後続 |
+| 正本文書への反映とTASK-005への引継ぎ | 完了。product/journaling/architectureとTASK-005を§45–48に照合し、確定条件と残判断を分離 |
+
+TASK-001はDoneにしない。PR更新の完了と設計タスク全体の完了は区別する。
+
+### 現行設計の机上シナリオ
+
+| 主体・操作 | 設計上の結果 / 未確認範囲 |
+| --- | --- |
+| A/Bが自分のDotを一覧・取得・更新・削除 | 各current_userのscopeのみ。作成ownerはserverが設定 |
+| AがBのDot ID/ownerを送信 | Bのデータを返さず変更しない。関連音声・生成結果も同じ境界 |
+| 未認証・メール確認前・改ざんCookie | 保護APIを拒否。localStorageからログイン扱いにしない |
+| 期限切れCookie | 採用する期限をserverで検証し拒否。期限値・実装・古いCookie再送試験は未決定/未実施 |
+| 通常logout / 事前コピーしたCookieの再送 | 操作したブラウザの認証状態を解除。コピーの即時失効は保証しない。DB session案の拒否保証を適用しない |
+| 同一メールのGoogleが未連携 | emailだけで既存User/旧Dotへ接続しない。衝突時UXは未確定 |
+| 再設定メール失敗・期限切れ・再利用 / Google専用Userへのreset | 成功と偽らず無条件な認証手段追加をしない。再送・token更新と使用済み拒否は後続契約/実機試験で確認 |
+| Google callback失敗・state不一致・再送 | 認証成功扱いにしない。認証開始から再試行。採用strategyでの検証は後続 |
+| Aの生成受理後にlogoutしBへ切替 | 受理済み処理のUserはAのまま、Bへの結果表示・関連付けを禁止。取消し/削除競合はTASK-002/003 |
+
+既存PR #27への反映対象はこの8文書とPR本文・タイトル。反映の成否はpushとPR先端の照合後に報告する。
