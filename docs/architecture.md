@@ -59,9 +59,9 @@ Browser
 
 - Rails + Deviseがメールアドレス＋パスワード、Confirmableの確認メール、Recoverableの
   パスワード再設定を担当する。GoogleはOmniAuthで連携する。確認前のメールUserにDot操作を
-  許可しない。Googleの確認情報の扱い・再設定の詳細は後続で決める。
+  許可しない。確認/再設定の期限は下記「認証詳細」、Googleの確認情報の扱いはTASK-006で決める。
 - 内部User UUIDを所有権の正本とし、Googleは検証済みprovider/uidから一意に対応付ける。
-  email一致だけでアカウントを統合しない。衝突時の案内・登録可否は未決定で、明示的連携は将来対応。
+  email一致だけでアカウントを統合しない。衝突時は重複登録せず下記「認証詳細」のとおり案内し、明示的連携は将来対応。
   Google専用Userにpassword resetを通じて無条件に別のログイン手段を追加しない。
 - 通常認証はRails標準の**CookieStore**を使う。認証状態は暗号化・改ざん検知されたCookieに
   必要最小限だけ保持し、Rails/Devise/WardenがrequestごとにUserを取得・有効性を確認する。
@@ -74,7 +74,7 @@ Browser
   API/認証responseはno-store、SPA fallbackは画面GET/HEADのみ。Google秘密情報をWebへ渡さない。
 - logoutはCSRF保護した操作でsign_out/session resetとブラウザCookieの消去を行う。
   **CookieStoreではコピー済みCookieの即時失効をlogoutだけでは保証しない。** 端末ごとの失効・
-  全端末logout用DB sessionは将来要件。具体的な有効/idle/絶対期限・remember_me・再認証は未決定。
+  全端末logout用DB sessionは将来要件。期限・再認証は下記「認証詳細」のとおり。
   password再設定後の既存Cookieの扱いはDeviseのversion/設定で検証し、一括失効済みと推定しない。
 - Railsは常に認証済みcurrent_userを基準とする。一覧はcurrent_user.dots、詳細・更新・削除は
   current_user.dots.find相当で統一し、保存時の所有者もserverが決める。clientのuser_idや
@@ -111,14 +111,31 @@ ALB/Fargate/RDS/公開IPv4の小規模例でも、1ドル150円・消費税10%�
 実構成・実負荷で再見積もりする。通知は請求額の強制上限ではない。
 
 選択理由・比較履歴・費用の計算と一次資料・残判断は
-[TASK-001 Plan §45–49](implementation-plans/2026-09-21-task-001-identity-design.md)を参照。
+[TASK-001 Plan §45–57](implementation-plans/2026-09-21-task-001-identity-design.md)を参照。
 認証・配信の実装、AWS作成、実機検証は今回行っていない。
+
+### 認証詳細（2026-09-25採用、未実装）
+
+[TASK-001 Plan §50–54・§56](implementation-plans/2026-09-21-task-001-identity-design.md)で採用した。
+実装済みの設定ではない。
+
+- 自分専用端末では認証成功から7日の絶対期限。通常操作で延長せず、server側で検証する。
+  Rememberableの自動再ログインと別のidle期限は使わない。共有端末向け短期モードはMVP外。
+- 録音前と音声送信時に認証を確認する。別Userへの入り直し後に元の録音を送信しない。
+- メール確認24時間、password再設定6時間、使用後の再利用拒否。確認後・再設定後はログイン画面へ戻す。
+  再送は確認/reset合算で宛先60秒に1回・1時間5回、IPごと1時間20回、RDSの共有counterで制限し共通応答。
+  Devise 5.0.4の確認期限は標準では無期限なので変更が必要。導入版は未確定。
+- Google同一メール衝突時は自動統合も重複User作成もしない。Googleが確認済みとしたメールに限り
+  登録方法を案内する。将来の連携は既存Userへのログイン/再認証と追加手段の確認後に限定。
+- メール/password変更・退会はcurrent password、Google専用UserはGoogle再認証を要求する。
+- 端末一覧・遠隔logoutはMVP外。全端末logoutのみならUser世代番号の照合でも構成可能で、
+  DB session移行が必須とはしない。既存Cookieが期限まで残るリスクと追加コストはPlan §54。
 
 ## 未決定
 
 - プロダクト機能を追加する際のRails内部architectureとdirectory構成
-- Cookieの有効/idle/絶対期限・remember_me、録音前ログイン、共有端末の再認証、password再設定後のCookieの扱い
-- 確認/再設定メールの期限・再送、password方針・濫用防止の具体値、Googleの確認情報・同一メール衝突時のUX
+- password方針・ログイン試行制限の具体値、Googleの確認情報とConfirmableの関係、Google再認証の有効時間（TASK-006で決定）
+- password再設定後の既存Cookieの実動作（実機検証）
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
 - background job基盤
 - API契約でOpenAPIを採用するか、採用時の型生成・生成物管理・検証方法
