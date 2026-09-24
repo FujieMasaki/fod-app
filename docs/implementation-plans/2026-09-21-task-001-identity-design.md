@@ -2,15 +2,15 @@
 
 ## 1. Status
 
-実施中（2026-09-24、Devise切替）。ユーザーはRails + Deviseのメールアドレス＋パスワード、確認メール、パスワード再設定、OmniAuthによるGoogleログイン、Rails標準CookieStoreを採用した。**最新の採用条件は§45–48、検証・残作業は§49**。公開基盤はAWS東京のALB + ECS Fargate + RDS PostgreSQL、初期1タスク・Single-AZ・React同梱の同一originを維持する。
+完了（2026-09-25、MVPの認証詳細を採用し、残る実装依存の判断をTASK-006へ移管）。ユーザーはRails + Deviseのメールアドレス＋パスワード、確認メール、パスワード再設定、OmniAuthによるGoogleログイン、Rails標準CookieStoreを採用した。**採用済みの基礎方針は§45–48、認証詳細は§50–54（§56で採用・一部変更）、残作業は§57**。§49・§55は前回までの検証記録。公開基盤はAWS東京のALB + ECS Fargate + RDS PostgreSQL、初期1タスク・Single-AZ・React同梱の同一originを維持する。
 
 Cognito、Cognito用OIDC callback/token検証/利用者対応、メールOTP、通常認証用DB sessionは現行設計から外す。MFA・passkey・手動本人確認による復旧・明示的アカウント連携はMVP対象外。端末別失効・全端末logout用DB sessionは将来要件。国内限定を約束しない。
 
-§4は開始当時の記録、§16–44は過去の比較・変更途中の記録として折り畳んで保存する。過去の推奨・採用表・失効保証・完了記録を現行仕様に適用しない。セッション期限等が未確定のためTASK-001はIn progress。機能実装・実機検証は未実施。
+§4は開始当時の記録、§16–44は過去の比較・変更途中の記録として折り畳んで保存する。過去の推奨・採用表・失効保証・完了記録を現行仕様に適用しない。password方針・ログイン試行制限等はTASK-006へ移し、TASK-001はDone（§57）。機能実装・実機検証は未実施。
 
 ## 2. Goal
 
-承認されたDevise + CookieStoreへの変更を現行仕様と既存PR #27へ反映し、本人確認・session・所有者認可の責務、CookieStoreの失効限界、未決定事項を説明可能にする。
+Devise + CookieStoreの採用済み方針を維持し、7日固定期限、録音前ログイン、確認/再設定メール、将来のアカウント連携と端末管理を判断できる初期案にする。Devise標準値・提案・要実機検証を区別する。
 
 ## 3. Background
 
@@ -28,7 +28,7 @@ Cognito、Cognito用OIDC callback/token検証/利用者対応、メールOTP、�
 
 ## 5. Scope and Non-goals
 
-既存の認証Plan、TASK-001/005、architecture、product、journaling、backend規約/securityと既存PR #27を更新する。開始時の未コミット8文書の変更を土台に、公開基盤・予算等の承認済み内容を維持する。未追跡`.worktrees/`には触れない。既存branchへの追加commit/pushとPR本文更新のみ行い、新規branch/PR、認証コード、Gem追加、AWS作成、外部登録は行わない。
+本Plan、TASK-001/005、architecture、product、journalingの6文書を更新する。PR #27はマージ済みで、現在のbranchはcodex/task-001-auth-details。未追跡.worktrees/を保護する。今回の内容は初期案であり、承認済み仕様や実装済みの挙動にはしない。コード・設定・Gem/lockfile、AWS、外部登録、branch、commit、push、PRは変更・作成しない。
 
 TASK-002の保持期間、TASK-003のAI/Job、TASK-004の履歴、TASK-005の正式API契約を先に確定しない。参考サービスの固有情報は記録しない。
 
@@ -39,15 +39,15 @@ TASK-002の保持期間、TASK-003のAI/Job、TASK-004の履歴、TASK-005の正
 - タスク: [TASK-001](../tasks/TASK-001-identity-design.md)、[TASK-002](../tasks/TASK-002-data-lifecycle-design.md)、[TASK-003](../tasks/TASK-003-generation-design.md)、[TASK-005](../tasks/TASK-005-product-api-contract.md)。
 - 関連記録: [Rails基盤Plan](2026-09-18-rails-api-foundation.md)、[タスク整理Plan](2026-09-20-mvp-task-inventory.md)。
 - 対象コード: apps/apiのGemfile、ApplicationController、application/routes/production設定、apps/webのVite設定・Session Provider・createDot。認証・Dot API未実装を確認し、変更しない。
-- 更新する現行文書: §5の8文書。PR #27の本文・タイトルも最終構成に揃える。
+- 更新する現行文書: §5の6文書。今回の一次資料は§52、初期案の導線と残判断を正本文書から参照する。
 
 ## 7. Proposed Approach
 
-1. branch、差分、remote main/PR先端を確認し、既存変更を保護する。
-2. Devise/OmniAuth/Railsの一次資料で、認証・CSRF・CookieStoreの特性を確認する。
-3. §45–48で採用条件・理由・経路・未決定事項を整理してから現行文書へ反映する。
-4. A/Bの所有者境界、Cookieコピー、メール/Google障害、確認/再設定、失敗・再試行を机上検証する。
-5. 差分・リンク・状態・秘密情報を確認し、§49へ記録。文書のみを既存PRへ反映する。
+1. branch・差分・マージ済み仕様・規約・タスク全文と関連実装を確認する。
+2. 現行Devise releaseとversion固定sourceを確認し、未導入の本repoと区別する。
+3. §50–54に初期案、利用者/実装への影響、代替案を整理してから現行文書の未決定欄へ参照を追加する。
+4. A/B/未認証/期限切れ、メール再送・使用済み・衝突・端末管理を机上検証する。
+5. 差分・リンク・過去記録・task状態を確認し§55へ記録する。初期案への判断が残るためDoneにしない。
 
 ## 8. Why This Approach
 
@@ -59,7 +59,7 @@ TASK-002の保持期間、TASK-003のAI/Job、TASK-004の履歴、TASK-005の正
 
 ## 10. Files to Change
 
-本Plan、TASK-001/005、product、journaling、architecture、docs/development/backend.md、docs/code-review/backend/security.md。機能コード・設定・lockfileは変更しない。過去のCurrent Stateは保持する。
+本Plan、TASK-001/005、product、journaling、architecture。機能コード・設定・lockfileは変更しない。過去のCurrent Stateは保持する。
 
 ## 11. Libraries / APIs
 
@@ -75,11 +75,11 @@ CookieStoreのコピー済みCookie再利用、パスワード再設定を使っ
 
 ## 14. Verification
 
-文書の経路と状態をA/B/未認証/期限切れ・コピー済みCookie・認証失敗で机上確認する。相対リンク、旧方式の現行文書への残存、TASK ID/状態、過去Current State、変更範囲、空白を検証する。文書のみのため認証実機試験/buildは行わない。既存pre-push規約の型検査・testは実行する。認証の実機検証はTASK-006/007/015へ渡す。
+文書の経路と状態をA/B/未認証/期限切れ・コピー済みCookie・認証失敗で机上確認する。相対リンク、旧方式の現行文書への残存、TASK ID/状態、過去Current State、変更範囲、空白を検証する。文書のみのため認証実機試験/buildは行わない。今回はpushせず、アプリコードに変更がないため型検査・アプリtestは再実行しない。認証の実機検証はTASK-006/007/015へ渡す。
 
 ## 15. Definition of Done
 
-この文書更新は採用方針とPRの整合、差分/リンク/机上検証までを対象とする。TASK-001全体は4完了条件と必要な判断が揃うまでDoneにしない。具体期限、確認・復旧の細部、衝突時UX等は§48へ残す。
+この文書更新は初期案と既存仕様の境界、一次資料、差分/リンク/机上検証までを対象とする。TASK-001全体は4完了条件と必要な判断が揃うまでDoneにしない。具体期限、確認・復旧の細部、衝突時UX等は§48へ残す。
 
 <details>
 <summary>過去の比較・作業記録（§16–44。現行設計には適用しない）</summary>
@@ -799,3 +799,138 @@ TASK-001はDoneにしない。PR更新の完了と設計タスク全体の完了
 | Aの生成受理後にlogoutしBへ切替 | 受理済み処理のUserはAのまま、Bへの結果表示・関連付けを禁止。取消し/削除競合はTASK-002/003 |
 
 既存PR #27への反映対象はこの8文書とPR本文・タイトル。反映の成否はpushとPR先端の照合後に報告する。
+
+
+## 50. MVPの初期案と判断範囲（2026-09-25）
+
+以下はユーザーが指定した方向を具体化した初期案で、**2026-09-25にユーザーが採用した（§56）。未実装**。§53の衝突時案内は§56の判断で変更した。§45のDevise/OmniAuth/CookieStore、本人所有者認可、同一origin・CSRF、AWS東京と予算方針は変えない。§48の残判断を具体化するもので、承認後に現行仕様の受け入れ条件へ移す。
+
+| 項目 | 初期案 | 利用者への影響 | 実装・運用への影響 |
+| --- | --- | --- | --- |
+| 自分専用端末のsession | 認証成功から7日（168時間）の絶対期限。操作による延長なし | 毎日使っていても7日後には入り直す。ブラウザ再起動後も期限内は利用可能 | serverが固定の期限を毎requestで検証。Cookie期限だけに依存しない |
+| 利用開始 | 録音前にログイン・利用可能状態を確認 | 初回は登録・メール確認が先。録音後にログインを要求して音声を失う場面を減らす | /record直アクセスもguardし、マイク開始前にserverへ確認。音声/生成APIにも認証必須 |
+| 確認/再設定メール | 確認24時間、再設定6時間、使用後は再利用不可。送信制限と共通応答 | 期限切れは再送、連打では届かない。登録有無は画面から判別できない | §52の標準からの差分と送信制限を追加。メール配送/失敗監視が必要 |
+| Googleとメール | email一致で統合しない。連携は既存Userへのログイン後に双方を確認 | 同じメールでもGoogleから既存Dotへは入れない。連携UIは将来対応 | provider/uidの一意対応、衝突拒否、resetによる迂回防止。§53参照 |
+| 端末管理 | 一覧・端末別失効・全端末logoutはMVPから外す案を維持 | 紛失端末を画面から切断できない。既存Cookieは元の期限まで残る | session台帳/UIを省ける。全端末logoutのみならUser世代番号という追加案もある（§54） |
+
+## 51. 7日固定期限と録音前ログイン
+
+- メール＋passwordまたは検証済みGoogle認証で通常sessionを新規発行した時刻を起点とし、暗号化Cookie内の認証期限を固定する。期限以上、期限欠落、不正Cookie、削除/停止Userでは保護APIを拒否する。Cookieを再発行しても元の期限を引き継ぎ、通常操作・polling・CSRF更新で7日を再計算しない。明示的なログイン成功でのみ新しい期限を設定する。
+- CookieはHttpOnly/Secure/SameSite=Lax・host-onlyを維持する。Railsのexpire_afterだけで「自動延長なし」が成立したとは扱わず、サーバー期限とブラウザExpires/Max-Ageを揃えて検証する。7日はDeviseの標準値ではない。
+- Rememberableによる別Cookieからの自動再ログインと、Timeoutableによる別のidle期限は初期案では使わない。Deviseのremember_forやtimeout_inを7日に変えるだけでは絶対期限の代替にならない。自分専用端末を前提として7日保持をログイン画面で説明し、共有端末の短期モードは別判断とする。ブラウザを閉じるだけでlogoutすると説明しない。
+- 期限切れ時はWebの個人表示/cacheを解除してログインへ戻す。通常logoutはCSRF保護したsign_out/session reset。Cookieコピーの即時失効は引き続き保証しない。期限が延びないためコピーの利用可能期間も元の認証から最大7日だが、漏えい対策の代替ではない。Google側のsessionや端末内の保存passwordは別で、端末を奪われた相手が新たにログインできる場合の被害を7日に限定する保証ではない。Googleからの入り直しで必ずpassword入力を求めるとも保証しない。
+
+```text
+録音開始操作 / /record直アクセス
+  → RailsでUser・メール確認状態・固定期限を確認
+  → 未認証/期限切れ: ログイン（メール登録直後は確認メール → ログイン）
+  → 確認成功: 録音の説明 → マイク許可 → 録音
+  → 送信時にもRailsで再確認 → current_userを所有者に固定 → 生成/保存
+```
+
+clientの期限表示は案内用で、serverの拒否を優先する。録音中の期限切れや別タブlogoutでも認証を迂回してuploadしない。再ログインが別Userなら、前の録音を送信・関連付けしない。同一Userへの復帰時にmemory内音声を再利用するか・破棄するかはTASK-002/003/010で整合させる。音声のlocalStorage保存や「保存済み」という表示を先に追加しない。受理済み処理の所有者は元のUserのままで、logoutをJob取消しとしない。
+
+## 52. Devise標準値、メールの初期案と確認事項
+
+### versionと一次資料で確認した事実
+
+2026-09-25確認時の[RubyGems公開版](https://rubygems.org/gems/devise)と[公式release](https://github.com/heartcombo/devise/releases/tag/v5.0.4)は**5.0.4（2026-05-08）**。本repoのGemfile/lockfileにはDeviseもOmniAuthもなく、導入versionは未確定。以下は5.0.4の確認結果であり、インストール済み設定ではない。TASK-006で採用時のrelease、Rails 8.1.3.1との組合せ、initializerとUserでの上書きを確認して固定する。
+
+| 設定 / 機能 | v5.0.4の標準 | 初期案 / 理由 |
+| --- | --- | --- |
+| confirm_within | nil（期限なし） | **24時間を明示設定**。期限付きという要求を満たすため変更 |
+| allow_unconfirmed_access_for | 0日 | 維持。メール確認前は通常sessionによるDot利用を許可しない |
+| reset_password_within | 6時間 | **6時間を維持**。期限内でも成功後は再利用不可 |
+| paranoid | false | **true**を候補にし、APIのstatus/bodyも統一。設定だけで全列挙対策が完了したとしない |
+| sign_in_after_reset_password | true | **false**を提案。再設定後はログイン画面へ戻し、7日起点を通常ログインに揃える |
+| remember_for / extend_remember_period | 2週間 / false（Rememberable使用時） | module自体を初期案で使わない。通常CookieStoreの期限とは別 |
+| timeout_in | 30分（Timeoutable使用時の無操作期限） | 初期案で使わない。7日の絶対期限は別に検証 |
+| 確認/再設定メールの再送間隔・回数 | 下記標準controller/modelには回数・間隔による送信制限なし | アプリ側で制限。Lockableのログイン失敗回数制限とは別 |
+
+根拠: [v5.0.4設定本体](https://github.com/heartcombo/devise/blob/v5.0.4/lib/devise.rb)、[生成initializer](https://github.com/heartcombo/devise/blob/v5.0.4/lib/generators/templates/devise.rb)、[ConfirmationsController](https://github.com/heartcombo/devise/blob/v5.0.4/app/controllers/devise/confirmations_controller.rb)、[PasswordsController](https://github.com/heartcombo/devise/blob/v5.0.4/app/controllers/devise/passwords_controller.rb)、[共通successfully_sent?](https://github.com/heartcombo/devise/blob/v5.0.4/app/controllers/devise_controller.rb)。initializerのコメント例を有効な設定とみなさない。paranoidは新規登録全体を自動で秘匿しない。
+
+### tokenの使用・再送
+
+[Confirmable](https://github.com/heartcombo/devise/blob/v5.0.4/lib/devise/models/confirmable.rb)は確認済み状態の再確認を拒否し、期限内の再送では同じtokenを再利用する。**再送のたびに古い確認リンクが失効する方式ではない**。初期案はこの挙動を許容し、生成から24時間を延長せず、期限切れ後の再送は新tokenとする。確認リンクの訪問だけで通常ログインさせず、確認完了後にpasswordでログインする。
+
+[Recoverable](https://github.com/heartcombo/devise/blob/v5.0.4/lib/devise/models/recoverable.rb)は再送で新tokenに置き換え、password更新に伴いreset tokenを消去する。初期案は「最新メールのリンクを使用」と案内する。期限内・使用後・再送前の古いtoken、同時送信と同時消費、配送順の逆転を実機検証する。**一度限りは成功した処理の再利用を拒否する要件**であり、URLを一回表示するだけでreset済みにしない。標準source確認だけで並行requestの単一成功を保証せず、必要ならtransaction/lockで消費を直列化する設計をTASK-006で確認する。
+
+tokenをaccess log・監視・Referrer・第三者scriptへ送らず、リンク到達ページはno-storeとする。確認tokenとreset tokenでDB保存形式が同じだと推定しない。メールscannerのリンク先訪問が確認状態を変える影響も受け入れ試験に含める。
+
+### 再送制限とアカウント列挙防止（数値は提案）
+
+- 確認/再設定を合算し、**宛先ごと60秒に1回・1時間に5回、送信元IPごと1時間に20回**を初期候補とする。新規登録からの確認メールも迂回経路にしない。IP共有による不便とメール攻撃の実測で調整する。ログイン試行の制限値は別の残判断。
+- 宛先keyは登録時と同じ正規化を行い、秘密鍵付きdigest等を使って生メールをログへ出さない。存在/非存在・確認済み・Google専用を問わず同じ制限経路を通す。未知メールの制限記録も個人データとして短期保持/掃除を設計する。
+- 宛先単位の送信可否は公開せず「該当するアカウントがある場合、手続きのメールを送ります」という同じstatus/bodyの受付応答にする。IP全体制限の429案はアカウント存在と無関係に適用し、具体schemaはTASK-005で決める。配送成功を保証する文言にしない。
+- paranoidに加え、独自JSON応答、新規登録の重複、Google専用へのreset、送信エラーと応答時間の差も確認する。標準設定だけでこれらが揃うとは説明しない。配送処理の分離が必要ならTASK-003と整合させ、今回Job基盤を決定しない。
+- 制限はブラウザのボタン無効化だけではなくserverで実施する。ECS再起動・複数worker・deployment中の新旧taskでも合算できる共有保存先が必要。**既存RDSの原子的なcounter更新を第一候補**にし、専用Redis等の追加インフラは前提にしない。DB負荷、期限切れ掃除、制限基盤の異常時はメール送信を止める扱いを確認する。運用費ゼロとは見積もらない。
+
+## 53. Googleとメールの衝突・将来の連携
+
+初期案では、未連携Googleと既存Userのメールが一致しても新しい認証手段を付けず、既存UserやDotを返さない。同じメールの重複User作成も拒否する。案内は§56で採用した内容とし、Googleが確認済みと返したメールに限り「このメールアドレスはメール＋パスワードで登録済みです。メールでログインしてください」と登録方法を示す。確認済みでないメールでは登録有無を断定せず「ログインできませんでした。普段のログイン方法でやり直してください」と共通案内する。通常ログイン成功後の画面で、連携がMVP対象外であることを説明する。GoogleのみのUserへpassword resetを使ってpasswordを追加しない。
+
+将来の明示的連携は、**既存アカウントへログイン → 既存手段で再認証 → 追加するGoogle/メール手段の確認 → 利用者が連携を確定**の順とする案。CSRF/state、連携の意図・開始User・期限を結び付け、別Userに付いているprovider/uidの奪取を拒否する。メール手段の追加でも確認メールとpassword設定を要する。既に別々に存在するUserのDot統合はこの連携とは別設計にする。
+
+既存の「連携UI/実装は将来対応」を維持し、今回の依頼では安全な方針のみ示す。Google認証情報でConfirmableをどう満たすか、採用strategy/version、Google専用Userのpassword属性と拒否応答は引き続き要判断・要実機検証。
+
+## 54. 端末管理の必要性と追加コスト
+
+以下は設計上の相対評価で、工数/請求額の実測ではない。CookieStoreを維持しても全端末logoutを追加する方法はあり、「必ずDB sessionへ移行が必要」とはしない。
+
+| 選択肢 | 利点・利用者への影響 | 追加実装/運用コスト | 判断案 |
+| --- | --- | --- | --- |
+| 一覧・遠隔logoutなし | 操作が少ないが、紛失端末やコピーCookieを自分で即時切断できない | 最小。期限/通常logout/再設定の検証は必要 | **自分専用端末の小規模MVPでは第一候補**。既存Cookieが期限まで残るリスクを受け入れる判断が必要 |
+| 全端末logoutのみ | 不審な利用時に一括切断。自分も再ログインが必要 | 小〜中。Userの認証世代番号とCookie値を毎requestで照合し、更新時に旧世代を拒否。UI/CSRF/再認証/競合試験を追加 | 即時切断を公開要件にするなら優先追加。端末台帳なしでも可能、今回は保留 |
+| 端末一覧＋個別/全端末logout | 紛失した端末を選べる。ただし表示名/IPだけでは物理端末を断定できない | 中〜大。DB session台帳、最終利用時刻・失効・期限掃除、一覧UI、IP等の保持、並行操作の検証 | MVPでは不要。複数端末の管理需要が確認されてから |
+
+後二案も既存RDS内で構成でき、追加の固定AWSサービス費を必須としない。ただしDB保存/更新・backup・監視負荷と保守工数は増え、金額・人日は実装見積もり前には断定しない。Deviseのsign_out_all_scopesは認証scopeの処理であり、全端末logout機能と解釈しない。password再設定後のsalt変更による既存Cookie拒否は別途実証し、Google専用Userの遠隔失効手段として代用しない。
+
+## 55. 今回の検証と残作業
+
+- 開始状態: codex/task-001-auth-details、HEAD fd328ea（PR #27マージ済み）。追跡済み差分なし、未追跡.worktrees/を保護。Devise未導入をGemfile/lockfileで確認。
+- 対象は6文書の初期案。§4 Current State、折り畳み履歴、§45–49がHEADと一致することをPythonで検証した。6文書の相対リンク34件に欠落なし、16タスクのID/状態は不変。git diff --check通過。
+- 机上検証: A/Bの一覧・詳細・更新・削除は引き続きcurrent_userで限定。未認証は録音前に止め、失効時は録音済みでも送信を拒否。Aの録音をBへ再送しない条件と受理済み処理の所有者維持を確認。元の期限を引き継ぐCookie再発行、期限前後、確認再送でのtoken再利用、reset再送での置換、使用済み拒否、Google衝突の各経路を§51–53と照合した。並行消費と実際の失効は未実証として残した。
+- 差分レビュー: 変更は文書6件のみ。採用済み条件と初期案を区別し、秘密情報・実利用者データ、他人のDotへ接続する経路、実装/AWS作成の混入がないことを確認。tokenのログ/Referrer漏えいと再送・中断時の未確認点を明示した。commit/push/PR操作なし。
+- 未実施: 認証コード、Gem導入、設定、実Google/メール送信、期限・token並行消費・Cookie/CSRF・再送制限のruntime試験、AWS作成。文書のみのためアプリtest/buildは再実行せず、過去の成功結果を今回の認証実証に転用しない。
+
+| TASK-001完了条件 | 今回の結果 / 残作業 |
+| --- | --- |
+| 方式・正本・開始/終了/失効の決定と人間の確認 | 一部完了。§50–54で初期案を具体化したが未承認。password方針/ログイン濫用対策、Googleの確認情報、共有端末/重要操作時の再認証をなお判断する |
+| 選択肢比較 | 完了。既存比較に固定期限/自動延長、メールの標準差分、端末管理3案を追加 |
+| 資格情報/CSRF/認可境界 | 明文化済み。録音前と送信時の確認、別Userへの再送禁止、Cookieコピーの限界を補足 |
+| 正本文書への反映とTASK-005への引継ぎ | 初期案として参照を追加。承認後に確定条件へ移す。正式API契約は未作成 |
+
+TASK-001はIn progressを維持する。TASK-002/003/004はTodo・Plan未作成で、保持/生成/履歴の成果物・検証結果はまだない。TASK-005/006/007のBlockedを解除しない。TASK-002/003/004の独立検討は引き続き可能だが、今回新たに着手可能となる実装タスクはない。
+
+## 56. 人間の判断と採用内容（2026-09-25）
+
+§50–54の初期案をレビューし（§57）、ユーザーが以下を判断した。設計採用であり、実装・実機検証ではない。
+
+| 項目 | 採用内容 | 利用者への影響 | 実装・運用への影響 |
+| --- | --- | --- | --- |
+| session | §51の7日固定・自動延長なし。Rememberable/Timeoutableを使わない | §50のとおり | §51のとおり |
+| 録音前ログイン | §51のとおり録音前と送信時に確認 | §50のとおり | §51のとおり |
+| 確認/再設定メール | 確認24時間、再設定6時間、成功後の再利用拒否、確認後・再設定後はログイン画面へ戻す | §50のとおり | §52のDevise標準からの差分を設定 |
+| 再送制限 | 確認/再設定合算で宛先60秒に1回・1時間5回、IPごと1時間20回。共通受付応答 | 連打・大量送信は届かない。登録有無は画面から判別できない | §52のとおりRDSの共有counterでserver側に実装 |
+| Google同一メール衝突 | 統合も重複作成もしない。**Googleが確認済みと返したメールに限り**、メール＋パスワードで登録済みであることとメールでのログインを案内。未確認メールでは共通の失敗案内 | 登録方法を忘れた本人が迷わず戻れる | Googleの確認済み判定を採用strategyで検証。sessionを発行せず、既存Userの情報は登録方法以外返さない |
+| 再認証 | メール変更・password変更・退会では現在のpasswordを要求。Google専用Userには直近のGoogle再ログインを要求。共有端末向け短期モードはMVP外とし、ログイン画面で自分専用端末向け・7日保持と共有端末では使用後にlogoutすることを明示 | 重要操作だけ入力が増える。共有端末では自分でlogoutが必要 | password確認はDeviseのupdate_with_password相当。Google再認証の要求方法と「直近」の有効時間はTASK-006でstrategyの対応と合わせて確定。対象操作の有無はTASK-002の退会等に従う |
+| 端末管理 | 一覧・個別/全端末logoutはMVP外。紛失端末を即時切断できない制約を受け入れる | 7日の期限、または動作確認後のpassword変更で切れる見込み | §54のとおり。将来は全端末logoutのみUser世代番号で追加可能 |
+
+Google衝突時の案内を変えた理由: Googleが確認済みとしたメールであれば、画面を見ているのはそのmailboxの管理者であり、第三者によるアカウント列挙の経路にはなりにくい。一方、共通の失敗案内だけでは衝突の大半を占める本人が復帰できない。確認済みでないメールや、確認済み判定の取得に失敗した場合は共通案内に戻す。
+
+## 57. Claude Codeへの引継ぎ後のレビューと検証（2026-09-25）
+
+- 開始状態: branchはcodex/task-001-auth-details、HEADはfd328ea。§55までの6文書の未コミット差分をAstraから引き継ぎ、未追跡.worktrees/は変更していない。
+- 一次資料の再確認: RubyGems APIの最新版が5.0.4であること、v5.0.4の`lib/devise.rb`でconfirm_within=nil、reset_password_within=6時間、paranoid=false、sign_in_after_reset_password=true、allow_unconfirmed_access_for=0日、remember_for=2週間、timeout_in=30分であることを確認した。`confirmable.rb`で期限内の再送時に既存tokenを再利用することも確認した。§52の記載と一致。
+- レビュー指摘: (1) 衝突時の共通案内では本人が復帰できない → §56で変更。(2) 再認証の初期案がない → §56で採用。(3) Railsの`rate_limit`は共有されるcache storeが必要だが、現行production設定ではcache_storeが未設定のためタスク間でcounterを共有できない。§52のRDS counter方針を維持し、Solid Cache（RDS）+ `rate_limit`も実装候補としてTASK-006で比較する。security上の修正必須指摘なし。
+- 反映: 採用内容を本Plan、TASK-001/005、product、journaling、architectureへ移した。
+- 未実施: 認証コード、Gem導入、設定、実Google/メール送信、期限・token並行消費・Cookie/CSRF・再送制限・再認証のruntime試験、AWS作成。文書のみのためアプリtest/buildは実行しない。
+
+| TASK-001完了条件 | 結果 / 残作業 |
+| --- | --- |
+| 方式・正本・開始/終了/失効の決定と人間の確認 | 完了。session期限・録音前ログイン・メール・衝突時案内・再認証・端末管理を§56で採用。password方針（長さ等）とログイン試行制限の具体値、Googleの確認情報でConfirmableを満たすか、Google再認証の有効時間はTASK-006へ移管 |
+| 選択肢比較 | 完了 |
+| 資格情報/CSRF/認可境界 | 明文化済み。実機検証はTASK-006/007/015 |
+| 正本文書への反映とTASK-005への引継ぎ | 完了。正式API契約はTASK-005で作成 |
+
+残りの3点は採用Gem versionとstrategyの挙動に依存するため、ユーザーの判断で[TASK-006](../tasks/TASK-006-backend-identity.md)の実装Planへ移した（再送counterの実装手段の比較を含む）。これによりTASK-001はDoneとする。TASK-005はTASK-002/003/004の成果物待ちでBlockedを維持し、TASK-006/007もTASK-005待ちのためBlockedのまま。

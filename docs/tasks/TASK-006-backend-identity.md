@@ -42,3 +42,12 @@
 ## 関連Implementation Plan
 
 未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+
+## TASK-001から移管した判断（2026-09-25）
+
+採用Gem versionとstrategyの挙動に依存するため、次の判断を本タスクの実装Planで行う。採用済みの認証詳細は[TASK-001 Plan §50–54・§56](../implementation-plans/2026-09-21-task-001-identity-design.md)を前提にし、変更する場合は人間の判断を得る。
+
+- password方針（最小・最大長等）とログイン試行制限の具体値。Lockableの採否と、確認/再設定メールの再送制限との関係を含める。
+- Googleが確認済みとしたメールでConfirmableを満たすか。Google専用Userのpassword属性と拒否応答も合わせて決める。
+- Google専用Userの再認証を「直近」とみなす有効時間と、採用strategyで再認証を要求する方法。
+- 再送制限の共有counterをRDSの原子的更新で作るか、Solid Cache（RDS）+ Railsの`rate_limit`で作るか。
