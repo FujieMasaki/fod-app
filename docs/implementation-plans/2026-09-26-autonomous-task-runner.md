@@ -119,8 +119,9 @@ Claudeがターンを終えようとするたびに実行する。
    実行する。`build`と`bundler-audit --update`は時間とnetworkの都合でCIに任せる。
 4. 失敗したら終了をblockし、失敗したcommandと出力の末尾をreasonとしてClaudeに返す。
 5. 連続失敗の回数をgit dir内の状態ファイルに記録する。5回目の失敗では「修正上限に達した。
-   失敗内容をPlanとPR本文に記録し、PRを作成して終える」とblockし、その次は終了を許可する。
-   成功したら回数をリセットする。
+   失敗内容をPlanに記録してローカルでコミットし、push・PR作成はせずに人間へ報告して止まる」と
+   blockし、その次は終了を許可する。成功したら回数をリセットする。pre-pushが同じ検査を実行するため、
+   失敗したままではpushもPR作成もできないことによる（PR #29のレビューで修正）。
 
 PATHの先頭に`~/.nodebrew/current/bin`を加え、hookでもNode 22を使う。
 
@@ -282,7 +283,7 @@ self-review → push → PR作成 → URL出力 → 停止
 ## 15. Definition of Done
 
 - 対象外のタスクでは理由を示して止まり、対象のタスクではPR作成まで止まらず進む。
-- testの失敗では終了せず修正に戻り、上限に達したら失敗内容を記録したPRで止まる。
+- testの失敗では終了せず修正に戻り、上限に達したら失敗内容をPlanに記録し、PRを作らずに人間へ引き継いで止まる。
 - 危険な操作が拒否される。
 - 追加したscriptのtestと`pnpm check` / `pnpm test`が通る。
 - 関連する現行文書が更新され、実装内容を人間が説明できる。
@@ -297,13 +298,22 @@ self-review → push → PR作成 → URL出力 → 停止
     終わることを防ぐため。
   - blockはexit code 2 + stderrで返す。公式文書でStop hookのJSON出力形式の記述が揺れているため、
     文書が一致して示す方式を選んだ。止めずに情報だけ返すときは`systemMessage`を出す。
-  - 連続失敗の上限に達したときは、失敗内容をPlanとPR本文に記録してPRを作るよう指示してblockし、次の終了を
-    許可する（`gaveUp`）。
+  - 連続失敗の上限に達したときは、失敗内容をPlanに記録してローカルでコミットし、push・PR作成はせずに人間へ
+    報告するよう指示してblockし、次の終了を許可する（`gaveUp`）。当初は失敗内容を書いたPRを作る指示だったが、
+    pre-pushが同じ検査を実行するためpushできず、指示どおりに終えられないとPR #29のレビューで指摘を受けて
+    変更した。
+  - guardは、引用符の中身を消してから文字列を照合する方式から、シェルの引用符・escapeを解釈して単語に分ける
+    方式に変えた。`git push origin "HEAD:main"`や`LEFTHOOK="0"`が検査をすり抜けるとPR #29のレビューで
+    指摘されたため。コミットメッセージなど値を取るoptionの次の単語だけを検査対象から外す。
+  - main保護は、refspecの文字列に加えて、refspecの省略や`HEAD` / `@`でpushする場合に、実行先（`cd` /
+    `git -C`を反映）の現在ブランチを確かめる。main上での`git push origin HEAD`がmainに送られるとPR #29の
+    レビューで指摘されたため。`--all` / `--mirror`も拒否する。
   - worktreeは`EnterWorktree`の`name`ではなく、`git worktree add`で作って`path`で入る。hookを有効にする
     ブランチ名`claude/task-*`を固定するため。
   - `.claude/worktrees/**`をESLintの対象から外した。main側の`eslint .`がworktreeの中まで検査しないようにするため。
 - 検証結果:
-  - `pnpm test:scripts`: 63件pass（task-status 8、quality-gate 11、guard 26、lint-edited 3と既存test）。
+  - `pnpm test:scripts`: 91件pass（task-status 8、quality-gate 11、guard 54、lint-edited 3と既存test）。PR #29の
+    レビュー対応後の値。
   - `pnpm exec eslint scripts/`、`pnpm lint:naming`: pass。
   - `node scripts/task-status.mjs`を実タスクで実行: TASK-002は設計判断、TASK-008 / TASK-016は依存未完了
     として`runnable: false`になり、理由が示された。
@@ -313,6 +323,8 @@ self-review → push → PR作成 → URL出力 → 停止
     許可され、`--reset`で状態ファイルが消えた。`gh pr view`はPRのないブランチで`none`を返した。確認後に
     一時ブランチとtestは削除した。
   - このセッションで`git push --dry-run --no-verify ...`を実行し、PreToolUse hookが拒否した。
+  - mainをcheckoutした一時worktreeを`cwd`にしてguardを実行し、`git push origin HEAD`と`git push`が拒否され、
+    `git push -u origin claude/task-008-x`は許可されることを確認した。
   - 未実施: 実際のタスクで`/run-task`をPR作成まで通す確認、自然文「TASK-XXXを進めて」でのSkill起動確認、
     PostToolUse lintのセッション内での確認。現在は実行可能な実装タスクがなく、新しいセッションでの確認が
     必要なため。PRの「確認すること」に入れる。
