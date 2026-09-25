@@ -24,6 +24,9 @@ dist/
 
 # misc
 .DS_Store
+
+# Claude Code task worktrees
+.claude/worktrees/
 *.pem
 
 # debug

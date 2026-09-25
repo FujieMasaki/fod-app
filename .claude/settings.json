@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(pnpm install --frozen-lockfile)",
+      "Bash(pnpm check)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm type-check)",
+      "Bash(pnpm test)",
+      "Bash(pnpm test:*)",
+      "Bash(pnpm build)",
+      "Bash(pnpm exec eslint *)",
+      "Bash(bundle install)",
+      "Bash(bundle exec rspec *)",
+      "Bash(bundle exec rspec)",
+      "Bash(bundle exec rubocop *)",
+      "Bash(bundle exec rubocop)",
+      "Bash(bundle exec brakeman *)",
+      "Bash(bin/rails db:prepare)",
+      "Bash(bin/rails generate *)",
+      "Bash(node scripts/task-status.mjs *)",
+      "Bash(scripts/claude-hook.sh *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git show *)",
+      "Bash(git fetch *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git switch *)",
+      "Bash(git worktree add *)",
+      "Bash(git worktree list *)",
+      "Bash(git merge-base *)",
+      "Bash(git rev-parse *)",
+      "Bash(gh pr create *)",
+      "Bash(gh pr view *)"
+    ],
+    "deny": [
+      "Read(./.env*)",
+      "Read(./**/.env*)",
+      "Read(./apps/api/config/master.key)",
+      "Read(./apps/api/config/credentials/*.key)",
+      "Bash(gh pr merge *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/claude-hook.sh claude-guard.mjs",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/claude-hook.sh claude-lint-edited.mjs",
+            "timeout": 90
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/scripts/claude-hook.sh claude-quality-gate.mjs",
+            "timeout": 1800
+          }
+        ]
+      }
+    ]
+  }
+}
