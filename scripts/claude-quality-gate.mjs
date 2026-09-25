@@ -96,7 +96,14 @@ export function evaluateStop(deps) {
   if (worktree.dirty) {
     return finish(block("Checks passed, but there are uncommitted changes. Commit them by concern and continue."));
   }
-  if (worktree.unpushed) return finish(block("Checks passed, but commits are not pushed. Push and continue."));
+  if (worktree.unpushed) {
+    return finish(
+      block(
+        "Checks passed, but commits are not pushed. Push with an explicit destination " +
+          "(`git push -u origin HEAD:<this branch>`) and continue.",
+      ),
+    );
+  }
 
   const pullRequest = deps.pullRequest();
   if (pullRequest.status === "error") {

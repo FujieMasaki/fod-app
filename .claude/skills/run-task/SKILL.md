@@ -96,10 +96,12 @@ AGENTS.mdの「重大な設計判断または複数の有力案がある場合�
 ### 7. pushしてPRを作る
 
 ```bash
-git push -u origin HEAD
+git push -u origin HEAD:claude/task-008-<slug>
 gh pr create --base main --title "<日本語のタイトル>" --body "<本文>"
 ```
 
+- pushは送信先のブランチを必ず明示する。`git push` や `git push origin HEAD` のように送信先を省略する形は、
+  実行時のブランチや設定でmainに送られうるためhookで拒否される。
 - 本文は [.github/pull_request_template.md](../../../.github/pull_request_template.md) の見出し順に
   日本語で書く。テンプレートのコメント・プレースホルダーを残さない。
 - 「確認すること」は、人間が確認する操作・画面・仕様上の判断と期待結果のTODOリストにする。
