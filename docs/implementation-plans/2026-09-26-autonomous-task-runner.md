@@ -305,15 +305,23 @@ self-review → push → PR作成 → URL出力 → 停止
   - guardは、引用符の中身を消してから文字列を照合する方式から、シェルの引用符・escapeを解釈して単語に分ける
     方式に変えた。`git push origin "HEAD:main"`や`LEFTHOOK="0"`が検査をすり抜けるとPR #29のレビューで
     指摘されたため。コミットメッセージなど値を取るoptionの次の単語だけを検査対象から外す。
-  - main保護は、refspecの文字列に加えて、refspecの省略や`HEAD` / `@`でpushする場合に、実行先（`cd` /
-    `git -C`を反映）の現在ブランチを確かめる。main上での`git push origin HEAD`がmainに送られるとPR #29の
-    レビューで指摘されたため。`--all` / `--mirror`も拒否する。
+  - main保護は、送信先を`HEAD:<branch>`のように明示したpushだけを許可し、送信先がmainなら拒否する。
+    refspecの省略、`HEAD` / `@`、`:`のないbranch名は拒否する。PR #29の1回目のレビューで、main上での
+    `git push origin HEAD`がmainに送られると指摘され、一度は実行先の現在ブランチで判定した。しかし2回目の
+    レビューで、`git switch main && git push origin HEAD`（判定時点ではまだタスクブランチ）や
+    `push.default=upstream`でupstreamがmainの場合にすり抜けると指摘された。実行時の状態に依存する判定は
+    防げないため、送信先の明示を必須にした。`--all` / `--mirror`も拒否する。
+  - 短縮optionの連結（`-nm"msg"`、`-uf`）は、gitと同じく左から読み、値を取るflagまでを検査する。
+    `-nm"wip: hook check"`のように値に空白や記号を含むと検査を飛ばしていたと、2回目のレビューで指摘されたため。
+  - tokenizerはリダイレクト（`2>&1`、`>>log`、`&>log`、`<<'EOF'`）のfd番号と対象を引数から除く。`2>&1`の`&`を
+    区切りとして扱い、`2>`をrefspecと誤認して正しいpushを拒否していたため（対応中に自分のpushで発見）。
+    heredocの本文はコマンドとして検査する。`sh <<EOF`のように実行されうるため、誤検知を許して安全側に倒す。
   - worktreeは`EnterWorktree`の`name`ではなく、`git worktree add`で作って`path`で入る。hookを有効にする
     ブランチ名`claude/task-*`を固定するため。
   - `.claude/worktrees/**`をESLintの対象から外した。main側の`eslint .`がworktreeの中まで検査しないようにするため。
 - 検証結果:
-  - `pnpm test:scripts`: 91件pass（task-status 8、quality-gate 11、guard 54、lint-edited 3と既存test）。PR #29の
-    レビュー対応後の値。
+  - `pnpm test:scripts`: 107件pass（task-status 8、quality-gate 11、guard 70、lint-edited 3と既存test）。PR #29の
+    2回目のレビュー対応後の値。
   - `pnpm exec eslint scripts/`、`pnpm lint:naming`: pass。
   - `node scripts/task-status.mjs`を実タスクで実行: TASK-002は設計判断、TASK-008 / TASK-016は依存未完了
     として`runnable: false`になり、理由が示された。
@@ -323,8 +331,8 @@ self-review → push → PR作成 → URL出力 → 停止
     許可され、`--reset`で状態ファイルが消えた。`gh pr view`はPRのないブランチで`none`を返した。確認後に
     一時ブランチとtestは削除した。
   - このセッションで`git push --dry-run --no-verify ...`を実行し、PreToolUse hookが拒否した。
-  - mainをcheckoutした一時worktreeを`cwd`にしてguardを実行し、`git push origin HEAD`と`git push`が拒否され、
-    `git push -u origin claude/task-008-x`は許可されることを確認した。
+  - 実際のgitで、pre-commitが必ず失敗する一時repositoryを作り、`git commit -nm"wip: hook check"`がhookを
+    回避して成功すること（guardが防ぐべき挙動）と、guardがこのcommandを拒否することを確認した。
   - 未実施: 実際のタスクで`/run-task`をPR作成まで通す確認、自然文「TASK-XXXを進めて」でのSkill起動確認、
     PostToolUse lintのセッション内での確認。現在は実行可能な実装タスクがなく、新しいセッションでの確認が
     必要なため。PRの「確認すること」に入れる。
