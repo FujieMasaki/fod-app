@@ -60,17 +60,22 @@ test("blocks with the failing output and stops at the first failure", () => {
   assert.equal(state().blocks, 1);
 });
 
-test("asks for a PR with the failure recorded at the limit, then lets Claude stop", () => {
+test("at the limit, hands over locally without a PR, then lets Claude stop", () => {
   const { deps, state } = fakeDeps({
     run: failing("pnpm test"),
+    pullRequest: () => ({ status: "none" }),
     state: { branch: "claude/task-008-dot-history", consecutiveFailures: MAX_CONSECUTIVE_FAILURES - 1, blocks: 4 },
   });
   const decision = evaluateStop(deps);
   assert.equal(decision.block, true);
   assert.match(decision.reason, /fix limit is reached/);
+  // pre-push runs the same checks, so asking for a push or PR would be impossible.
+  assert.match(decision.reason, /do not push or create a PR/);
   assert.equal(state().gaveUp, true);
 
-  assert.equal(evaluateStop(deps).block, false);
+  const next = evaluateStop(deps);
+  assert.equal(next.block, false);
+  assert.match(next.message, /without a PR/);
 });
 
 test("resets the failure count once checks pass", () => {

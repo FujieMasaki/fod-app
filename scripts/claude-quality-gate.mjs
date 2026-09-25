@@ -58,7 +58,9 @@ export function evaluateStop(deps) {
   };
 
   if (state.paused) return finish(allow(`/run-task paused: ${state.paused}`));
-  if (state.gaveUp) return finish(allow("/run-task stopped after repeated check failures"));
+  if (state.gaveUp) {
+    return finish(allow("/run-task stopped after repeated check failures; handed over without a PR"));
+  }
   if (state.blocks >= MAX_BLOCKS) {
     return finish(allow(`/run-task reached ${MAX_BLOCKS} continuations; stopping for a human`));
   }
@@ -72,12 +74,15 @@ export function evaluateStop(deps) {
     const header = `Quality gate failed: \`${label}\` in ${check.cwd} (${state.consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}).`;
 
     if (state.consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      // pre-push runs the same checks, so a failing branch cannot be pushed.
+      // Hand over locally instead of asking for a PR that cannot be created.
       state.gaveUp = true;
       return finish(
         block(
-          `${header}\nThe fix limit is reached. Do not weaken or skip tests. Record the failing check and ` +
-            `what you tried in the Plan's Completion Record and in the PR body, commit, push, create the PR, ` +
-            `print its URL, and then stop.\n\n${tail(result.output)}`,
+          `${header}\nThe fix limit is reached. Do not weaken or skip tests, and do not push or create a PR. ` +
+            `Record the failing check, what you tried, and your best guess at the cause in the Plan's ` +
+            `Completion Record, and commit it locally if the pre-commit hook allows. Then report the same ` +
+            `to the human in chat and stop.\n\n${tail(result.output)}`,
         ),
       );
     }
