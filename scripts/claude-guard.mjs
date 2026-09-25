@@ -1,6 +1,4 @@
-import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,13 +15,19 @@ export function tokenize(command) {
   let words = [];
   let word = "";
   let inWord = false;
+  // The word after a redirection operator is its target, not an argument.
+  let redirectTarget = false;
   const endWord = () => {
-    if (inWord) words.push(word);
+    if (inWord) {
+      if (redirectTarget) redirectTarget = false;
+      else words.push(word);
+    }
     word = "";
     inWord = false;
   };
   const endSegment = () => {
     endWord();
+    redirectTarget = false;
     if (words.length) segments.push(words);
     words = [];
   };
@@ -47,6 +51,15 @@ export function tokenize(command) {
         word += command[index] ?? "";
         inWord = true;
       }
+    } else if (char === ">" || char === "<" || (char === "&" && command[index + 1] === ">")) {
+      // `2>&1`, `>>log`, `&>log`, `<<'EOF'`: drop the fd number and the target.
+      if (/^\d+$/.test(word)) {
+        word = "";
+        inWord = false;
+      }
+      endWord();
+      while (/[<>&|-]/.test(command[index + 1] ?? "")) index += 1;
+      redirectTarget = true;
     } else if (char === "#" && !inWord) {
       const end = command.indexOf("\n", index);
       index = end === -1 ? command.length : end - 1;
@@ -77,15 +90,25 @@ function splitAssignments(words) {
   return { assignments, rest: words.slice(index) };
 }
 
-function parseGit(words, cwd) {
-  let dir = cwd;
+function parseGit(words) {
   let index = 1;
-  while (words[index]?.startsWith("-")) {
-    if (words[index] === "-C") dir = path.resolve(dir, words[index + 1] ?? ".");
-    index += ["-C", "-c"].includes(words[index]) ? 2 : 1;
-  }
-  return { name: words[index], args: words.slice(index + 1), dir };
+  while (words[index]?.startsWith("-")) index += ["-C", "-c"].includes(words[index]) ? 2 : 1;
+  return { name: words[index], args: words.slice(index + 1) };
 }
+
+// Reads a short option cluster such as `-nm"msg"` or `-uf` from the left, as
+// git does: flags up to the first one that takes a value, whose value is the
+// rest of the word or, if nothing is left, the next word.
+function shortCluster(arg, valueFlags) {
+  const flags = [];
+  for (let index = 1; index < arg.length; index += 1) {
+    flags.push(arg[index]);
+    if (valueFlags.has(arg[index])) return { flags, takesNext: index === arg.length - 1 };
+  }
+  return { flags, takesNext: false };
+}
+
+const isShortCluster = (arg) => arg.length > 1 && arg.startsWith("-") && !arg.startsWith("--");
 
 // Options whose next word is a value (a message or path), not a flag.
 const commitValueOptions = new Set([
@@ -111,61 +134,60 @@ function commitBypassesHooks(args) {
     if (arg === "--no-verify") return true;
     if (commitValueOptions.has(arg)) {
       index += 1;
-    } else if (/^-[a-zA-Z]+$/.test(arg)) {
-      // A short cluster such as -nm: stop at the first flag that takes a value.
-      for (const flag of arg.slice(1)) {
-        if (flag === "n") return true;
-        if (commitShortValueFlags.has(flag)) {
-          if (flag === arg.at(-1)) index += 1;
-          break;
-        }
-      }
+    } else if (isShortCluster(arg)) {
+      const { flags, takesNext } = shortCluster(arg, commitShortValueFlags);
+      if (flags.includes("n")) return true;
+      if (takesNext) index += 1;
     }
   }
   return false;
 }
 
-const pushValueOptions = new Set(["--repo", "-o", "--push-option", "--receive-pack", "--exec"]);
+const pushValueOptions = new Set(["--repo", "--push-option", "--receive-pack", "--exec"]);
+const pushShortValueFlags = new Set(["o"]);
 
-function pushDenyReason(args, currentBranch) {
+const explicitPushReason =
+  "Name the destination branch explicitly, e.g. `git push -u origin HEAD:claude/task-008-<slug>`. " +
+  "Pushes without an explicit destination are denied because where they land depends on the current " +
+  "branch and push config at run time.";
+
+// Only pushes whose every destination is spelled out are allowed, so the
+// check never depends on which branch is checked out when the push runs.
+function pushDenyReason(args) {
   const positional = [];
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--no-verify") return "Do not bypass Lefthook. Fix the failing check instead.";
-    if (arg === "--force" || /^-[a-zA-Z]*f[a-zA-Z]*$/.test(arg)) return "Use --force-with-lease instead of --force.";
-    if (arg === "--all" || arg === "--mirror" || arg === "--branches") {
-      return "Push only the task branch, not every branch.";
+    if (arg === "--force") return "Use --force-with-lease instead of --force.";
+    if (["--all", "--mirror", "--branches"].includes(arg)) return "Push only the task branch, not every branch.";
+    if (pushValueOptions.has(arg)) {
+      index += 1;
+    } else if (isShortCluster(arg)) {
+      const { flags, takesNext } = shortCluster(arg, pushShortValueFlags);
+      if (flags.includes("f")) return "Use --force-with-lease instead of --force.";
+      if (takesNext) index += 1;
+    } else if (!arg.startsWith("-")) {
+      positional.push(arg);
     }
-    if (pushValueOptions.has(arg)) index += 1;
-    else if (!arg.startsWith("-")) positional.push(arg);
   }
 
   const refspecs = positional.slice(1);
-  // Without a refspec, git pushes the current branch to its namesake.
-  const destinations = refspecs.length ? [] : [currentBranch()];
+  if (refspecs.length === 0) return explicitPushReason;
   for (const refspec of refspecs) {
     if (refspec.startsWith("+")) return "Use --force-with-lease instead of a +refspec.";
-    const [source, destination = source] = refspec.split(":");
-    destinations.push(["HEAD", "@"].includes(destination) ? currentBranch() : destination);
-  }
-
-  if (destinations.some((destination) => destination?.replace(/^refs\/heads\//, "") === "main")) {
-    return "Do not push to main. Push the task branch and open a PR.";
+    const separator = refspec.lastIndexOf(":");
+    const destination = separator === -1 ? "" : refspec.slice(separator + 1).replace(/^refs\/heads\//, "");
+    if (destination === "main") return "Do not push to main. Push the task branch and open a PR.";
+    if (!destination || ["HEAD", "@"].includes(destination)) return explicitPushReason;
   }
   return undefined;
 }
 
-function gitCurrentBranch(dir) {
-  const result = spawnSync("git", ["branch", "--show-current"], { cwd: dir, encoding: "utf8" });
-  return result.status === 0 ? result.stdout.trim() : undefined;
-}
-
-export function denyReason(command, { cwd = process.cwd(), currentBranch = gitCurrentBranch } = {}) {
+export function denyReason(command) {
   if (/co-authored-by:/i.test(command) && /\bgit\b[\s\S]*\bcommit\b/.test(command)) {
     return "Do not add Co-Authored-By or other attribution trailers to commits.";
   }
 
-  let dir = cwd;
   for (const words of tokenize(command)) {
     const { assignments, rest } = splitAssignments(words);
     const exported = rest[0] === "export" ? rest.slice(1) : [];
@@ -174,10 +196,6 @@ export function denyReason(command, { cwd = process.cwd(), currentBranch = gitCu
     }
 
     const [program, ...args] = rest;
-    if (program === "cd") {
-      dir = path.resolve(dir, (args[0] ?? homedir()).replace(/^~(?=$|\/)/, homedir()));
-      continue;
-    }
 
     if (program === "gh") {
       const prIndex = args.indexOf("pr");
@@ -185,12 +203,12 @@ export function denyReason(command, { cwd = process.cwd(), currentBranch = gitCu
     }
 
     if (program !== "git") continue;
-    const git = parseGit(rest, dir);
+    const git = parseGit(rest);
     if (git.name === "commit" && commitBypassesHooks(git.args)) {
       return "Do not bypass Lefthook (--no-verify / -n skips hooks). Fix the failing check instead.";
     }
     if (git.name === "push") {
-      const reason = pushDenyReason(git.args, () => currentBranch(git.dir));
+      const reason = pushDenyReason(git.args);
       if (reason) return reason;
     } else if (git.name !== "commit" && git.args.includes("--no-verify")) {
       return "Do not bypass Lefthook. Fix the failing check instead.";
@@ -206,7 +224,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   } catch {
     // Not a hook payload; nothing to check.
   }
-  const reason = denyReason(input.tool_input?.command ?? "", { cwd: input.cwd ?? process.cwd() });
+  const reason = denyReason(input.tool_input?.command ?? "");
   if (reason) {
     process.stderr.write(`${reason}\n`);
     process.exitCode = 2;
