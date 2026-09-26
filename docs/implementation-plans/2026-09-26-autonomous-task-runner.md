@@ -251,7 +251,9 @@ self-review → push → PR作成 → URL出力 → 停止
   self-reviewとPRの「確認すること」でtest差分を確認対象にする。
 - **guardの抜け道**: 文字列検査は完全ではない（別名・scriptの経由など）。permissionとLefthookと
   併用する安全網として扱い、唯一の防御にしない。mainの保護はGitHubのruleset（PR必須・force push禁止・
-  CI Gate必須）が最終的に担う。
+  CI Gate必須）が最終的に担う。alias、script file、変数展開、`xargs`などの動的な引数、シェルの細かな構文に
+  よる回避は受け入れる。これらで回避されるのは手元のLefthookとguardだけで、同じ検査はCI Gateで必ず走る。
+  ただしCIはmainへの取り込み条件を保証するもので、手元のhookが実行されたことは保証しない。
 - **Stop hookの実行時間**: RSpecやVitestが長くなると毎ターンの終了が遅くなる。変更範囲で絞り、
   必要ならtimeoutを設定する。
 - **worktreeの依存**: 新しいworktreeには`node_modules`とbundleがない。Skillの準備手順で入れる。
@@ -328,11 +330,21 @@ self-review → push → PR作成 → URL出力 → 停止
   - GitHubのruleset「main: CI必須」がmainへのPR必須・force push禁止・削除禁止・CI Gate必須を強制して
     おり、bypass actorもいないことを確認した。mainへの直接pushとLefthook回避の最終的な防御はこのrulesetと
     CIが担い、guardは手元で早く止めるための多重防御と位置づける。
+  - PR #29の4回目のレビュー（いずれもMedium）で、次の2件を直した。
+    - コマンド置換の終端を探すとき、引用符とheredoc本文の中の括弧を数えない。
+      `git commit -m "$(cat <<'EOF' ... EOF)"`のようにheredocで渡すメッセージに`)`があると、正常なcommitを
+      拒否していたため。これはClaude Codeが通常使うcommitの形で、`/run-task`の作業そのものを止める。
+    - `command` / `exec` / `env`などの前置きは、自身のoptionと`--`を読み飛ばしてから内側のコマンドを検査する。
+      `command -- git commit -n`でpre-commitを回避できたため。
+  - guardの強化はここで打ち切る（2026-09-26、人間と合意）。4回のレビューで指摘は毎回、前回分の解消と
+    新しい細かな抜け道の組み合わせだった。文字列でシェルを解釈する方式では抜け道が残り続け、すべてを
+    塞ぐことはguardの役割（手元で早く止める多重防御）に見合わない。mainへの取り込みはrulesetが、
+    検査の実施はCI Gateが保証する。残るリスクは13章に記載した。
   - worktreeは`EnterWorktree`の`name`ではなく、`git worktree add`で作って`path`で入る。hookを有効にする
     ブランチ名`claude/task-*`を固定するため。
   - `.claude/worktrees/**`をESLintの対象から外した。main側の`eslint .`がworktreeの中まで検査しないようにするため。
 - 検証結果:
-  - `pnpm test:scripts`: 131件pass（task-status 8、quality-gate 11、guard 94、lint-edited 3と既存test）。PR #29の
+  - `pnpm test:scripts`: 142件pass（task-status 8、quality-gate 11、guard 105、lint-edited 3と既存test）。PR #29の
     2回目のレビュー対応後の値。
   - `pnpm exec eslint scripts/`、`pnpm lint:naming`: pass。
   - `node scripts/task-status.mjs`を実タスクで実行: TASK-002は設計判断、TASK-008 / TASK-016は依存未完了
@@ -348,6 +360,8 @@ self-review → push → PR作成 → URL出力 → 停止
   - 3回目のレビューの3件も実際のgitで再現した。wildcard refspecのdry-runで`main -> main`が含まれること、
     `git commit 2>&- -n`が失敗するpre-commitを回避すること。guardは3件とも拒否し、
     `git push -u origin HEAD:claude/task-999-x 2>&1`は許可した。
+  - 4回目のレビューの2件も実際のgitで確認した。`)`を含むheredocのメッセージを置換で渡すcommitは成功し、
+    guardも許可した。`command -- git commit -n`は失敗するpre-commitを回避してcommitでき、guardは拒否した。
   - 未実施: 実際のタスクで`/run-task`をPR作成まで通す確認、自然文「TASK-XXXを進めて」でのSkill起動確認、
     PostToolUse lintのセッション内での確認。現在は実行可能な実装タスクがなく、新しいセッションでの確認が
     必要なため。PRの「確認すること」に入れる。
