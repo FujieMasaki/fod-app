@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { taskBranchPattern } from "./claude-quality-gate.mjs";
 
-// Claude Code PostToolUse hook for Edit / Write on claude/task-* branches.
+// Claude Code PostToolUse hook for Edit / Write on <type>/task-* branches.
 // Lints only the edited file and hands problems back to Claude as context.
 // It never blocks: the Stop hook quality gate is the enforcing check.
 

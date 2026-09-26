@@ -301,7 +301,7 @@ const pushValueOptions = new Set(["--repo", "--push-option", "--receive-pack", "
 const pushShortValueFlags = new Set(["o"]);
 
 const explicitPushReason =
-  "Name the destination branch explicitly, e.g. `git push -u origin HEAD:claude/task-008-<slug>`. " +
+  "Name the destination branch explicitly, e.g. `git push -u origin HEAD:feat/task-008-<slug>`. " +
   "Pushes without an explicit destination are denied because where they land depends on the current " +
   "branch and push config at run time.";
 
