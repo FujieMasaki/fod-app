@@ -9,7 +9,7 @@ argument-hint: "TASK-XXX"
 対象タスク `$ARGUMENTS` を、PRを作成してURLを出力するまで進める。途中で完了報告や確認のために
 止まらない。止まってよいのは「止まる条件」に当たったときだけ。
 
-`claude/task-*` ブランチでは、Stop hook（`scripts/claude-quality-gate.mjs`）が終了のたびに
+`<type>/task-*` ブランチでは、Stop hook（`scripts/claude-quality-gate.mjs`）が終了のたびに
 CI相当の検査・コミット・push・PRの有無を確かめ、満たすまで作業に差し戻す。差し戻されたら、
 示された理由を解消して続ける。
 
@@ -37,8 +37,22 @@ node scripts/task-status.mjs $ARGUMENTS
 
 ### 2. 作業場所を用意する
 
-ブランチ名は `claude/task-<3桁の番号>-<英小文字の短いslug>`（例: `claude/task-008-dot-history`）。
+ブランチ名は `<type>/task-<3桁の番号>-<英小文字の短いslug>`（例: `feat/task-008-dot-history`）。
 この名前でないとhookが働かない。
+
+`<type>` はそのタスクの主な変更の種別を1つ選ぶ。使えるのは次の6つだけ。
+
+| type | 選ぶ場面 |
+| --- | --- |
+| `feat` | 機能を追加する |
+| `fix` | 不具合を直す |
+| `refactor` | 振る舞いを変えずに構造を整える |
+| `chore` | 設定・依存・ツールを更新する |
+| `docs` | 文書だけを変更する |
+| `test` | testだけを追加・整備する |
+
+迷ったらタスクの完了条件で最も大きい変更に合わせる（例: 機能追加に伴うtestは `feat`）。
+PRのタイトル・先頭のコミットのtypeと揃える。
 
 ```bash
 git fetch origin main
@@ -46,10 +60,10 @@ git worktree list
 ```
 
 - 同じタスクのworktreeが既にある（再開）: `EnterWorktree` に `path` を渡して入る。
-- ない: `git worktree add .claude/worktrees/task-008 -b claude/task-008-<slug> origin/main` で作り、
+- ない: `git worktree add .claude/worktrees/task-008 -b <type>/task-008-<slug> origin/main` で作り、
   `EnterWorktree` に `path` を渡して入る。
 - 既にこのセッションが別のworktreeにいて作業ツリーがcleanなら、そこで
-  `git switch -c claude/task-008-<slug> origin/main` としてよい。
+  `git switch -c <type>/task-008-<slug> origin/main` としてよい。
 
 worktreeの中で依存を入れ、前回の状態を消す。
 
@@ -96,7 +110,7 @@ AGENTS.mdの「重大な設計判断または複数の有力案がある場合�
 ### 7. pushしてPRを作る
 
 ```bash
-git push -u origin HEAD:claude/task-008-<slug>
+git push -u origin HEAD:<type>/task-008-<slug>
 gh pr create --base main --title "<日本語のタイトル>" --body "<本文>"
 ```
 

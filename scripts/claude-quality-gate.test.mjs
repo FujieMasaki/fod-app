@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { checksFor, evaluateStop, MAX_BLOCKS, MAX_CONSECUTIVE_FAILURES } from "./claude-quality-gate.mjs";
+import {
+  branchTypes,
+  checksFor,
+  evaluateStop,
+  MAX_BLOCKS,
+  MAX_CONSECUTIVE_FAILURES,
+  taskBranchPattern,
+} from "./claude-quality-gate.mjs";
 
 function fakeDeps(overrides = {}) {
   let state = overrides.state ?? null;
   const runs = [];
   const deps = {
-    branch: () => "claude/task-008-dot-history",
+    branch: () => "feat/task-008-dot-history",
     changedPaths: () => ["apps/web/src/main.tsx"],
     run: (check) => {
       runs.push([check.command, ...check.args].join(" "));
@@ -26,10 +33,21 @@ function fakeDeps(overrides = {}) {
 const failing = (label) => (check) =>
   [check.command, ...check.args].join(" ") === label ? { ok: false, output: "1 test failed" } : { ok: true, output: "" };
 
-test("does nothing outside claude/task-* branches", () => {
+test("does nothing outside <type>/task-* branches", () => {
   const { deps, runs } = fakeDeps({ branch: () => "main" });
   assert.deepEqual(evaluateStop(deps), { block: false, message: undefined });
   assert.deepEqual(runs, []);
+});
+
+test("recognises every commit type as a task branch prefix", () => {
+  for (const type of branchTypes) {
+    assert.equal(taskBranchPattern.test(`${type}/task-008-dot-history`), true, type);
+    assert.equal(taskBranchPattern.test(`${type}/task-008`), true, type);
+  }
+  // Prefixes outside the list, and branches without a task number, stay untouched.
+  for (const branch of ["claude/task-008-x", "feature/task-008-x", "feat/dot-history", "feat/task-8-x"]) {
+    assert.equal(taskBranchPattern.test(branch), false, branch);
+  }
 });
 
 test("selects checks with the same classification as CI", () => {
@@ -64,7 +82,7 @@ test("at the limit, hands over locally without a PR, then lets Claude stop", () 
   const { deps, state } = fakeDeps({
     run: failing("pnpm test"),
     pullRequest: () => ({ status: "none" }),
-    state: { branch: "claude/task-008-dot-history", consecutiveFailures: MAX_CONSECUTIVE_FAILURES - 1, blocks: 4 },
+    state: { branch: "feat/task-008-dot-history", consecutiveFailures: MAX_CONSECUTIVE_FAILURES - 1, blocks: 4 },
   });
   const decision = evaluateStop(deps);
   assert.equal(decision.block, true);
@@ -80,7 +98,7 @@ test("at the limit, hands over locally without a PR, then lets Claude stop", () 
 
 test("resets the failure count once checks pass", () => {
   const { deps, state } = fakeDeps({
-    state: { branch: "claude/task-008-dot-history", consecutiveFailures: 3, blocks: 3 },
+    state: { branch: "feat/task-008-dot-history", consecutiveFailures: 3, blocks: 3 },
   });
   evaluateStop(deps);
   assert.equal(state().consecutiveFailures, 0);
@@ -107,7 +125,7 @@ test("does not loop when the PR cannot be checked", () => {
 test("lets Claude stop while paused for a human decision", () => {
   const { deps, runs } = fakeDeps({
     pullRequest: () => ({ status: "none" }),
-    state: { branch: "claude/task-008-dot-history", consecutiveFailures: 0, blocks: 2, paused: "仕様の確認" },
+    state: { branch: "feat/task-008-dot-history", consecutiveFailures: 0, blocks: 2, paused: "仕様の確認" },
   });
   const decision = evaluateStop(deps);
   assert.equal(decision.block, false);
@@ -118,17 +136,17 @@ test("lets Claude stop while paused for a human decision", () => {
 test("stops continuing after the block limit", () => {
   const { deps } = fakeDeps({
     pullRequest: () => ({ status: "none" }),
-    state: { branch: "claude/task-008-dot-history", consecutiveFailures: 0, blocks: MAX_BLOCKS },
+    state: { branch: "feat/task-008-dot-history", consecutiveFailures: 0, blocks: MAX_BLOCKS },
   });
   assert.equal(evaluateStop(deps).block, false);
 });
 
 test("state from another branch is ignored", () => {
   const { deps, state } = fakeDeps({
-    state: { branch: "claude/task-006-identity", consecutiveFailures: 4, blocks: 39, paused: "old" },
+    state: { branch: "fix/task-006-identity", consecutiveFailures: 4, blocks: 39, paused: "old" },
     run: failing("pnpm check"),
   });
   assert.equal(evaluateStop(deps).block, true);
-  assert.equal(state().branch, "claude/task-008-dot-history");
+  assert.equal(state().branch, "feat/task-008-dot-history");
   assert.equal(state().consecutiveFailures, 1);
 });

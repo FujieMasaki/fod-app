@@ -94,7 +94,7 @@ testで固定できる。
 
 1. `node scripts/task-status.mjs <ID>`で判定する。対象外なら理由を示して止まる（設計判断なら
    対話で進めることを提案する）。
-2. mainを最新にし、worktreeとブランチ`claude/task-008-<slug>`を作る。依存をinstallする。
+2. mainを最新にし、worktreeとブランチ`<type>/task-008-<slug>`を作る。依存をinstallする。
 3. 前回の停止の印があれば消す（Step 6）。
 4. タスクファイル・根拠仕様・AGENTS.mdの必読文書を読み、Implementation Planを作る。タスクの
    状態をIn progressにし、`関連Implementation Plan`にリンクする。
@@ -112,7 +112,7 @@ testで固定できる。
 
 Claudeがターンを終えようとするたびに実行する。
 
-1. 現在のブランチが`claude/task-*`でなければ何もしない（通常の会話では検査しない）。
+1. 現在のブランチが`<type>/task-*`でなければ何もしない（通常の会話では検査しない）。
 2. `git merge-base origin/main HEAD`からの差分（未コミットを含む）を`classifyPaths`に渡し、
    CIと同じ基準でweb / apiの要否を決める。docsだけなら検査しない。
 3. webならroot scriptの`check` / `type-check` / `test`、apiなら`rubocop` / `brakeman` / `rspec`を
@@ -139,7 +139,7 @@ Bashのcommandを検査し、次を拒否してClaudeに理由を返す。
 
 ### Step 5: 編集ファイルの即時lint（PostToolUse hook）
 
-`claude/task-*`ブランチで、Edit / Writeしたファイルだけを対象にESLint（js/ts）またはRuboCop（rb）を
+`<type>/task-*`ブランチで、Edit / Writeしたファイルだけを対象にESLint（js/ts）またはRuboCop（rb）を
 実行する。失敗しても止めず、結果をClaudeへの追加情報として返す。最後に品質ゲートでまとめて失敗する
 より、編集直後に直すほうが修正が小さいため。
 
@@ -341,7 +341,12 @@ self-review → push → PR作成 → URL出力 → 停止
     塞ぐことはguardの役割（手元で早く止める多重防御）に見合わない。mainへの取り込みはrulesetが、
     検査の実施はCI Gateが保証する。残るリスクは13章に記載した。
   - worktreeは`EnterWorktree`の`name`ではなく、`git worktree add`で作って`path`で入る。hookを有効にする
-    ブランチ名`claude/task-*`を固定するため。
+    ブランチ名`<type>/task-*`を固定するため。
+  - 作業ブランチのprefixを`claude/`からコミットのtype（`feat` / `fix` / `refactor` / `chore` / `docs` /
+    `test`）に変えた。PR一覧でブランチ名が変更の種類を表し、PRタイトル・コミットのtypeと揃うため。
+    hookの判定は`taskBranchPattern`（`scripts/claude-quality-gate.mjs`）の1か所だけで、この6つの
+    prefixと`task-<3桁>`の組み合わせに限る。他のprefixや番号のないブランチでは、通常の会話と同じく
+    hookが働かない。
   - `.claude/worktrees/**`をESLintの対象から外した。main側の`eslint .`がworktreeの中まで検査しないようにするため。
 - 検証結果:
   - `pnpm test:scripts`: 142件pass（task-status 8、quality-gate 11、guard 105、lint-edited 3と既存test）。PR #29の
@@ -349,7 +354,8 @@ self-review → push → PR作成 → URL出力 → 停止
   - `pnpm exec eslint scripts/`、`pnpm lint:naming`: pass。
   - `node scripts/task-status.mjs`を実タスクで実行: TASK-002は設計判断、TASK-008 / TASK-016は依存未完了
     として`runnable: false`になり、理由が示された。
-  - 一時ブランチ`claude/task-999-smoke`で、`PATH=/usr/bin:/bin`の最小環境からwrapper経由でStop hookを実行した。
+  - 一時ブランチ`claude/task-999-smoke`（prefix変更前の名前）で、`PATH=/usr/bin:/bin`の最小環境から
+    wrapper経由でStop hookを実行した。
     web / apiの全検査が約10秒で通った後、未コミットの変更でblockされた（exit 2）。失敗するtestを一時的に
     追加すると`pnpm test`の失敗出力付きで`(1/5)`としてblockされ、`--pause`後は`systemMessage`付きで終了が
     許可され、`--reset`で状態ファイルが消えた。`gh pr view`はPRのないブランチで`none`を返した。確認後に

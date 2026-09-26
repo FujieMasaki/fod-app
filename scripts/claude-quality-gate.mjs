@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { classifyPaths } from "./ci-changes.mjs";
 
 // Claude Code Stop hook for /run-task, started via scripts/claude-hook.sh.
-// On claude/task-* branches it keeps Claude working until the CI-equivalent
+// On <type>/task-* branches it keeps Claude working until the CI-equivalent
 // checks pass and a PR exists, unless Claude paused for a human decision.
 // Exit code 2 blocks the stop and feeds stderr back to Claude.
 
@@ -14,7 +14,11 @@ export const MAX_BLOCKS = 40;
 const OUTPUT_TAIL_LINES = 60;
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 
-export const taskBranchPattern = /^claude\/task-\d{3}(?:-|$)/;
+// The prefix is the commit type of the task's main change, so the branch name
+// reads like the PR title instead of naming the tool that wrote it.
+export const branchTypes = ["feat", "fix", "refactor", "chore", "docs", "test"];
+
+export const taskBranchPattern = new RegExp(String.raw`^(?:${branchTypes.join("|")})/task-\d{3}(?:-|$)`);
 
 const webChecks = [
   { cwd: ".", command: "pnpm", args: ["check"] },

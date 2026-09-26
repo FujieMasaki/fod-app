@@ -152,11 +152,13 @@ Production BuildはローカルでのPushを遅くしないため、CI側で実�
 
 実装系のタスク（`docs/tasks/`）は、Claude Codeに「TASK-008を進めて」と依頼するか、`/run-task TASK-008` と入力すると、着手可否の確認からPR作成まで止まらずに進みます。自然文でもSkillは起動しますが、確実に起動したいときは `/run-task` を使ってください。対象の条件は[`docs/tasks/README.md`](docs/tasks/README.md)を参照してください。
 
+作業ブランチは `<type>/task-<3桁の番号>-<slug>`（例: `feat/task-008-dot-history`）です。`<type>` はそのタスクの主な変更の種別で、`feat` / `fix` / `refactor` / `chore` / `docs` / `test` のいずれかを使います。以下のhookはこの形のブランチ名でのみ働きます。
+
 | Hook | 対象 | 内容 |
 | --- | --- | --- |
-| Stop | `claude/task-*` ブランチ | CI相当の検査（変更範囲はCIと同じ判定）、コミット・push・PRの有無を確かめ、満たすまで作業に差し戻す |
+| Stop | `<type>/task-*` ブランチ | CI相当の検査（変更範囲はCIと同じ判定）、コミット・push・PRの有無を確かめ、満たすまで作業に差し戻す |
 | PreToolUse | すべて | `--no-verify`、force push、mainへのpush、送信先を明示しないpush、`gh pr merge`、帰属トレーラーを拒否する |
-| PostToolUse | `claude/task-*` ブランチ | 編集したファイルだけESLint / RuboCopを実行し、結果をClaudeに返す |
+| PostToolUse | `<type>/task-*` ブランチ | 編集したファイルだけESLint / RuboCopを実行し、結果をClaudeに返す |
 
 無人で進めるため、セッションは `acceptEdits`（またはauto）のpermission modeで開始してください。`bypassPermissions` は使いません。
 

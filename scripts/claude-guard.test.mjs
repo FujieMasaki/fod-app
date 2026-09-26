@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { denyReason, parseCommand, tokenize } from "./claude-guard.mjs";
 
-const task = "claude/task-008-dot-history";
+const task = "feat/task-008-dot-history";
 
 test("tokenize removes quoting and splits simple commands", () => {
   assert.deepEqual(tokenize(`LEFTHOOK="0" git push 'a b' "c\\"d" e\\ f && gh pr view # --force`), [
@@ -77,7 +77,7 @@ const denied = [
   "git push 2>/dev/null",
   "git push origin 'refs/heads/*:refs/heads/*'",
   "git push origin 'HEAD:refs/heads/ma*'",
-  "git push origin '^refs/heads/claude/*' 'refs/heads/*:refs/heads/*'",
+  "git push origin '^refs/heads/feat/*' 'refs/heads/*:refs/heads/*'",
   // Commands hidden in heredocs, substitutions, and nested shells
   "cat <<'EOF'\nHere's a note.\nEOF\ngit push --dry-run origin HEAD:main",
   "sh <<'EOF'\ngit push origin HEAD:main\nEOF",
