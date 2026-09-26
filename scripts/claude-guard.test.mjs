@@ -33,6 +33,7 @@ test("unterminated quotes, heredocs, and substitutions are reported", () => {
   assert.equal(parseCommand('git commit -m "wip').incomplete, true);
   assert.equal(parseCommand("cat <<EOF\nno end").incomplete, true);
   assert.equal(parseCommand("echo $(git status").incomplete, true);
+  assert.equal(parseCommand('echo "$(cat <<EOF\nno end\n)"').incomplete, true);
   assert.equal(parseCommand("git status").incomplete, false);
 });
 
@@ -88,6 +89,13 @@ const denied = [
   "eval git push origin HEAD:main",
   "command git push origin HEAD:main",
   "nohup git push origin HEAD:main",
+  'command -- git commit -n -m "wrapper check"',
+  "command -p git commit -n -m x",
+  "exec -- git commit -n -m x",
+  "exec -a name git commit -n -m x",
+  "env -i git commit -n -m x",
+  "env -u HOME -- git commit -n -m x",
+  'git commit -m "$(cat <<\'EOF\'\nfix: handle \')\' in input\nEOF\n)" && git push origin HEAD:main',
   // Input the parser cannot close is not guessed at
   'git commit -m "wip',
   "git commit -F - <<'EOF'\nfix: no terminator",
@@ -122,6 +130,11 @@ const allowed = [
   `git push origin HEAD:${task} 2>&-`,
   "cat <<EOF | wc -l\nhello\nEOF",
   'echo "$(date)"',
+  // Claude Code's usual commit form: a heredoc message inside a substitution
+  'git commit -m "$(cat <<\'EOF\'\nfix: handle \')\' in input\nEOF\n)"',
+  'git commit -m "$(cat <<\'EOF\'\nfeat: add x (1/2)\n\n- it\'s done: ( and ) and \\" quotes\nEOF\n)"',
+  'gh pr create --title "x" --body "$(cat <<\'EOF\'\n## 概要\n\n- (a) と b)\nEOF\n)"',
+  "command -v git",
   "sh -c 'pnpm test'",
   "git commit -m 'docs: --no-verify を禁止する規約を追記'",
   "git commit -m 'LEFTHOOK=0 を禁止する'",

@@ -8,6 +8,36 @@ import { fileURLToPath } from "node:url";
 // command and returns stderr to Claude.
 
 const separators = new Set([";", "&", "|", "(", ")"]);
+const heredocStart = /^<<(-?)[ \t]*(?:'([^']*)'|"([^"]*)"|\\?([^\s;&|()<>'"]+))/;
+
+// Index of the `"` closing a double-quoted string that starts at `from`, or -1.
+function closingDoubleQuote(command, from) {
+  for (let index = from; index < command.length; index += 1) {
+    if (command[index] === "\\") index += 1;
+    else if (command[index] === '"') return index;
+  }
+  return -1;
+}
+
+// Skips the heredoc bodies that start after the newline at `index` and returns
+// the index of the newline ending the last delimiter line, or -1 if one is missing.
+function skipHeredocBodies(command, index, heredocs) {
+  let position = index + 1;
+  for (const { strip, delimiter } of heredocs) {
+    let found = false;
+    while (position <= command.length) {
+      const lineEnd = command.indexOf("\n", position);
+      const line = command.slice(position, lineEnd === -1 ? undefined : lineEnd);
+      position = lineEnd === -1 ? command.length + 1 : lineEnd + 1;
+      if ((strip ? line.replace(/^\t+/, "") : line) === delimiter) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) return -1;
+  }
+  return position - 1;
+}
 const redirectOperator = /^(?:&>>|&>|<<<|<<-|<<|<>|<&|>&|>>|>\||>|<)/;
 
 // Splits a command into simple commands, each a list of words with shell
@@ -49,12 +79,31 @@ export function parseCommand(command) {
   };
 
   // Returns the index of the closing character of `$(...)` or `` `...` ``.
+  // Quoted text and heredoc bodies are skipped, so `)` in a commit message
+  // passed as `"$(cat <<'EOF' ... EOF)"` does not end the substitution.
   const substitution = (start, open, close) => {
     let depth = 1;
+    const pending = [];
     for (let index = start; index < command.length; index += 1) {
-      if (command[index] === "\\") index += 1;
-      else if (open && command[index] === open) depth += 1;
-      else if (command[index] === close && --depth === 0) {
+      const char = command[index];
+      if (char === "\\") {
+        index += 1;
+      } else if (char === "'" || (char === '"' && close !== '"')) {
+        const end = char === "'" ? command.indexOf("'", index + 1) : closingDoubleQuote(command, index + 1);
+        if (end === -1) break;
+        index = end;
+      } else if (char === "<" && command.startsWith("<<", index) && !command.startsWith("<<<", index)) {
+        const match = command.slice(index).match(heredocStart);
+        if (match) {
+          pending.push({ strip: match[1] === "-", delimiter: match[2] ?? match[3] ?? match[4] });
+          index += match[0].length - 1;
+        }
+      } else if (char === "\n" && pending.length) {
+        index = skipHeredocBodies(command, index, pending.splice(0));
+        if (index === -1) break;
+      } else if (open && char === open) {
+        depth += 1;
+      } else if (char === close && --depth === 0) {
         nested.push({ text: command.slice(start, index), strict: true });
         return index;
       }
@@ -180,10 +229,19 @@ function isLefthookBypass(assignment) {
 
 // Leading `VAR=value` words and `env VAR=value` set the environment for the command.
 function splitAssignments(words) {
-  let index = words[0] === "env" ? 1 : 0;
+  let index = words[0] === "env" ? skipOptions(words, 1, ["-u", "--unset", "-C", "--chdir", "-S"]) : 0;
   const assignments = [];
   while (assignmentPattern.test(words[index] ?? "")) assignments.push(words[index++]);
   return { assignments, rest: words.slice(index) };
+}
+
+// Index of the first word after a wrapper's options, `--` included.
+function skipOptions(words, index, valueOptions = []) {
+  while (words[index]?.startsWith("-")) {
+    if (words[index] === "--") return index + 1;
+    index += valueOptions.includes(words[index]) ? 2 : 1;
+  }
+  return index;
 }
 
 function parseGit(words) {
@@ -304,7 +362,7 @@ export function denyReason(command, depth = 0) {
   for (const words of segments) {
     const { assignments, rest: afterAssignments } = splitAssignments(words);
     let rest = afterAssignments;
-    while (commandWrappers.has(rest[0])) rest = rest.slice(1);
+    while (commandWrappers.has(rest[0])) rest = rest.slice(skipOptions(rest, 1, ["-a"]));
     const exported = rest[0] === "export" ? rest.slice(1) : [];
     if ([...assignments, ...exported].some(isLefthookBypass)) {
       return "Do not bypass Lefthook. Fix the failing check instead.";
