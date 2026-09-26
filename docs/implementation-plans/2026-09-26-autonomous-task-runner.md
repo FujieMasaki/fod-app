@@ -250,7 +250,8 @@ self-review → push → PR作成 → URL出力 → 停止
 - **testを弱めて通す**: 失敗を消すためにtestを削除・skipする恐れがある。Skillで禁止し、
   self-reviewとPRの「確認すること」でtest差分を確認対象にする。
 - **guardの抜け道**: 文字列検査は完全ではない（別名・scriptの経由など）。permissionとLefthookと
-  併用する安全網として扱い、唯一の防御にしない。
+  併用する安全網として扱い、唯一の防御にしない。mainの保護はGitHubのruleset（PR必須・force push禁止・
+  CI Gate必須）が最終的に担う。
 - **Stop hookの実行時間**: RSpecやVitestが長くなると毎ターンの終了が遅くなる。変更範囲で絞り、
   必要ならtimeoutを設定する。
 - **worktreeの依存**: 新しいworktreeには`node_modules`とbundleがない。Skillの準備手順で入れる。
@@ -316,11 +317,22 @@ self-review → push → PR作成 → URL出力 → 停止
   - tokenizerはリダイレクト（`2>&1`、`>>log`、`&>log`、`<<'EOF'`）のfd番号と対象を引数から除く。`2>&1`の`&`を
     区切りとして扱い、`2>`をrefspecと誤認して正しいpushを拒否していたため（対応中に自分のpushで発見）。
     heredocの本文はコマンドとして検査する。`sh <<EOF`のように実行されうるため、誤検知を許して安全側に倒す。
+  - PR #29の3回目のレビューで、`refs/heads/*:refs/heads/*`のようなwildcard refspec、heredoc本文中の`'`が
+    後続のコマンドを隠す問題、`2>&-`が次の`-n`を消す問題を指摘された。tokenizerを次のように作り直した。
+    - heredocは終端の行を認識して本文を切り出し、外側のコマンドとは別に解析する（本文も検査は続ける）。
+    - `$(...)`と`` `...` ``（二重引用符の中を含む）、`sh -c` / `bash -c` / `eval`の引数を、それぞれ別の
+      コマンドとして解析する。`command` / `exec` / `nohup`などの前置きは外してから判定する。
+    - リダイレクト演算子を明示的に解析し、`>&-` / `<&-`は対象を取らない。
+    - 閉じていない引用符・heredoc・置換を含む場合は推測せず、git / ghを含むコマンドなら拒否する。
+    - wildcard（`*`）と否定（`^`）のrefspecを拒否する。
+  - GitHubのruleset「main: CI必須」がmainへのPR必須・force push禁止・削除禁止・CI Gate必須を強制して
+    おり、bypass actorもいないことを確認した。mainへの直接pushとLefthook回避の最終的な防御はこのrulesetと
+    CIが担い、guardは手元で早く止めるための多重防御と位置づける。
   - worktreeは`EnterWorktree`の`name`ではなく、`git worktree add`で作って`path`で入る。hookを有効にする
     ブランチ名`claude/task-*`を固定するため。
   - `.claude/worktrees/**`をESLintの対象から外した。main側の`eslint .`がworktreeの中まで検査しないようにするため。
 - 検証結果:
-  - `pnpm test:scripts`: 107件pass（task-status 8、quality-gate 11、guard 70、lint-edited 3と既存test）。PR #29の
+  - `pnpm test:scripts`: 131件pass（task-status 8、quality-gate 11、guard 94、lint-edited 3と既存test）。PR #29の
     2回目のレビュー対応後の値。
   - `pnpm exec eslint scripts/`、`pnpm lint:naming`: pass。
   - `node scripts/task-status.mjs`を実タスクで実行: TASK-002は設計判断、TASK-008 / TASK-016は依存未完了
@@ -333,6 +345,9 @@ self-review → push → PR作成 → URL出力 → 停止
   - このセッションで`git push --dry-run --no-verify ...`を実行し、PreToolUse hookが拒否した。
   - 実際のgitで、pre-commitが必ず失敗する一時repositoryを作り、`git commit -nm"wip: hook check"`がhookを
     回避して成功すること（guardが防ぐべき挙動）と、guardがこのcommandを拒否することを確認した。
+  - 3回目のレビューの3件も実際のgitで再現した。wildcard refspecのdry-runで`main -> main`が含まれること、
+    `git commit 2>&- -n`が失敗するpre-commitを回避すること。guardは3件とも拒否し、
+    `git push -u origin HEAD:claude/task-999-x 2>&1`は許可した。
   - 未実施: 実際のタスクで`/run-task`をPR作成まで通す確認、自然文「TASK-XXXを進めて」でのSkill起動確認、
     PostToolUse lintのセッション内での確認。現在は実行可能な実装タスクがなく、新しいセッションでの確認が
     必要なため。PRの「確認すること」に入れる。
