@@ -2,25 +2,41 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Claude Code PreToolUse hook for Bash. A safety net next to permissions and
-// Lefthook, not the only defence: it cannot see through aliases, scripts, or
-// variable expansion. Exit code 2 denies the command and returns stderr to Claude.
+// Claude Code PreToolUse hook for Bash. A safety net next to permissions,
+// Lefthook, and the GitHub ruleset on main, not the only defence: it cannot see
+// through aliases, script files, or variable expansion. Exit code 2 denies the
+// command and returns stderr to Claude.
 
-const separators = new Set([";", "&", "|", "\n", "(", ")"]);
+const separators = new Set([";", "&", "|", "(", ")"]);
+const redirectOperator = /^(?:&>>|&>|<<<|<<-|<<|<>|<&|>&|>>|>\||>|<)/;
 
 // Splits a command into simple commands, each a list of words with shell
 // quoting and escapes removed, so `"--force"` is checked as `--force`.
-export function tokenize(command) {
+// Heredoc bodies and command substitutions are parsed separately and their
+// commands are checked too, since `sh <<EOF` or `$(...)` runs them.
+// `incomplete` reports input the parser could not close (quote, heredoc,
+// substitution); callers treat it as unsafe rather than guess.
+export function parseCommand(command) {
   const segments = [];
+  const nested = [];
+  let incomplete = false;
   let words = [];
   let word = "";
   let inWord = false;
-  // The word after a redirection operator is its target, not an argument.
   let redirectTarget = false;
+  let heredocNext = null;
+  const heredocs = [];
+
   const endWord = () => {
     if (inWord) {
-      if (redirectTarget) redirectTarget = false;
-      else words.push(word);
+      if (heredocNext) {
+        heredocs.push({ ...heredocNext, delimiter: word });
+        heredocNext = null;
+      } else if (redirectTarget) {
+        redirectTarget = false;
+      } else {
+        words.push(word);
+      }
     }
     word = "";
     inWord = false;
@@ -32,37 +48,108 @@ export function tokenize(command) {
     words = [];
   };
 
+  // Returns the index of the closing character of `$(...)` or `` `...` ``.
+  const substitution = (start, open, close) => {
+    let depth = 1;
+    for (let index = start; index < command.length; index += 1) {
+      if (command[index] === "\\") index += 1;
+      else if (open && command[index] === open) depth += 1;
+      else if (command[index] === close && --depth === 0) {
+        nested.push({ text: command.slice(start, index), strict: true });
+        return index;
+      }
+    }
+    incomplete = true;
+    return command.length;
+  };
+
+  // Consumes heredoc bodies that start after the newline at `index`.
+  const readHeredocs = (index) => {
+    let position = index + 1;
+    for (const heredoc of heredocs.splice(0)) {
+      const body = [];
+      let found = false;
+      while (position <= command.length) {
+        const lineEnd = command.indexOf("\n", position);
+        const line = command.slice(position, lineEnd === -1 ? undefined : lineEnd);
+        position = lineEnd === -1 ? command.length + 1 : lineEnd + 1;
+        if ((heredoc.strip ? line.replace(/^\t+/, "") : line) === heredoc.delimiter) {
+          found = true;
+          break;
+        }
+        body.push(line);
+      }
+      if (!found) incomplete = true;
+      // Bodies are often prose (commit messages), so an unbalanced quote there
+      // is not a parse failure of the outer command.
+      nested.push({ text: body.join("\n"), strict: false });
+    }
+    return position - 1;
+  };
+
   for (let index = 0; index < command.length; index += 1) {
     const char = command[index];
     if (char === "'") {
       const end = command.indexOf("'", index + 1);
+      if (end === -1) incomplete = true;
       word += command.slice(index + 1, end === -1 ? undefined : end);
       inWord = true;
       index = end === -1 ? command.length : end;
     } else if (char === '"') {
       inWord = true;
-      for (index += 1; index < command.length && command[index] !== '"'; index += 1) {
-        if (command[index] === "\\" && '"\\$`\n'.includes(command[index + 1] ?? "")) index += 1;
-        word += command[index];
+      let closed = false;
+      for (index += 1; index < command.length; index += 1) {
+        const inner = command[index];
+        if (inner === '"') {
+          closed = true;
+          break;
+        }
+        if (inner === "\\" && '"\\$`\n'.includes(command[index + 1] ?? "")) {
+          index += 1;
+          word += command[index];
+        } else if (inner === "$" && command[index + 1] === "(") {
+          index = substitution(index + 2, "(", ")");
+        } else if (inner === "`") {
+          index = substitution(index + 1, null, "`");
+        } else {
+          word += inner;
+        }
       }
+      if (!closed) incomplete = true;
     } else if (char === "\\") {
       index += 1;
       if (command[index] !== "\n") {
         word += command[index] ?? "";
         inWord = true;
       }
+    } else if (char === "`") {
+      index = substitution(index + 1, null, "`");
+      inWord = true;
+    } else if (char === "$" && command[index + 1] === "(") {
+      index = substitution(index + 2, "(", ")");
+      inWord = true;
     } else if (char === ">" || char === "<" || (char === "&" && command[index + 1] === ">")) {
-      // `2>&1`, `>>log`, `&>log`, `<<'EOF'`: drop the fd number and the target.
+      // A leading fd number (`2>`) belongs to the operator, not the arguments.
       if (/^\d+$/.test(word)) {
         word = "";
         inWord = false;
       }
       endWord();
-      while (/[<>&|-]/.test(command[index + 1] ?? "")) index += 1;
-      redirectTarget = true;
+      const operator = command.slice(index).match(redirectOperator)[0];
+      index += operator.length - 1;
+      if (operator === "<<" || operator === "<<-") {
+        heredocNext = { strip: operator === "<<-" };
+      } else if (operator.endsWith("&") && command[index + 1] === "-") {
+        index += 1; // `2>&-` closes the fd and takes no target.
+      } else {
+        redirectTarget = true;
+      }
     } else if (char === "#" && !inWord) {
       const end = command.indexOf("\n", index);
       index = end === -1 ? command.length : end - 1;
+    } else if (char === "\n") {
+      endSegment();
+      if (heredocs.length) index = readHeredocs(index);
     } else if (separators.has(char)) {
       endSegment();
     } else if (/\s/.test(char)) {
@@ -73,8 +160,17 @@ export function tokenize(command) {
     }
   }
   endSegment();
-  return segments;
+  if (heredocNext || heredocs.length) incomplete = true;
+
+  for (const { text, strict } of nested) {
+    const inner = parseCommand(text);
+    segments.push(...inner.segments);
+    if (strict && inner.incomplete) incomplete = true;
+  }
+  return { segments, incomplete };
 }
+
+export const tokenize = (command) => parseCommand(command).segments;
 
 const assignmentPattern = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
@@ -175,6 +271,9 @@ function pushDenyReason(args) {
   if (refspecs.length === 0) return explicitPushReason;
   for (const refspec of refspecs) {
     if (refspec.startsWith("+")) return "Use --force-with-lease instead of a +refspec.";
+    if (refspec.includes("*") || refspec.startsWith("^")) {
+      return "Push one explicit branch; wildcard and negative refspecs can expand to main.";
+    }
     const separator = refspec.lastIndexOf(":");
     const destination = separator === -1 ? "" : refspec.slice(separator + 1).replace(/^refs\/heads\//, "");
     if (destination === "main") return "Do not push to main. Push the task branch and open a PR.";
@@ -183,19 +282,44 @@ function pushDenyReason(args) {
   return undefined;
 }
 
-export function denyReason(command) {
+// Words that run the rest of the line as a command.
+const commandWrappers = new Set(["command", "builtin", "exec", "nohup", "time", "noglob"]);
+const shells = new Set(["sh", "bash", "zsh", "dash"]);
+const MAX_NESTING = 5;
+
+export function denyReason(command, depth = 0) {
+  if (depth > MAX_NESTING) return "This command nests shells too deeply to check. Run it directly.";
   if (/co-authored-by:/i.test(command) && /\bgit\b[\s\S]*\bcommit\b/.test(command)) {
     return "Do not add Co-Authored-By or other attribution trailers to commits.";
   }
 
-  for (const words of tokenize(command)) {
-    const { assignments, rest } = splitAssignments(words);
+  const { segments, incomplete } = parseCommand(command);
+  if (incomplete && /\b(?:git|gh)\b|LEFTHOOK/.test(command)) {
+    return (
+      "Could not parse this command safely (an unterminated quote, heredoc, or substitution). " +
+      "Split it into simpler commands."
+    );
+  }
+
+  for (const words of segments) {
+    const { assignments, rest: afterAssignments } = splitAssignments(words);
+    let rest = afterAssignments;
+    while (commandWrappers.has(rest[0])) rest = rest.slice(1);
     const exported = rest[0] === "export" ? rest.slice(1) : [];
     if ([...assignments, ...exported].some(isLefthookBypass)) {
       return "Do not bypass Lefthook. Fix the failing check instead.";
     }
 
     const [program, ...args] = rest;
+
+    // `sh -c '...'` and `eval ...` run their argument as a command line.
+    const scriptIndex = shells.has(program) ? args.findIndex((arg) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(arg)) : -1;
+    const script = scriptIndex !== -1 ? args[scriptIndex + 1] : program === "eval" ? args.join(" ") : undefined;
+    if (script !== undefined) {
+      const reason = denyReason(script, depth + 1);
+      if (reason) return reason;
+      continue;
+    }
 
     if (program === "gh") {
       const prIndex = args.indexOf("pr");

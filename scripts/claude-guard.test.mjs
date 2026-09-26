@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { denyReason, tokenize } from "./claude-guard.mjs";
+import { denyReason, parseCommand, tokenize } from "./claude-guard.mjs";
 
 const task = "claude/task-008-dot-history";
 
@@ -18,6 +18,22 @@ test("tokenize drops redirections and their targets", () => {
   ]);
   assert.deepEqual(tokenize("git commit -q -F - <<'EOF' >/dev/null"), [["git", "commit", "-q", "-F", "-"]]);
   assert.deepEqual(tokenize("node x.mjs &> out.txt"), [["node", "x.mjs"]]);
+  // `2>&-` closes stderr and takes no target, so `-n` stays an argument.
+  assert.deepEqual(tokenize("git commit 2>&- -n"), [["git", "commit", "-n"]]);
+});
+
+test("heredoc bodies are parsed apart from the outer command", () => {
+  const { segments, incomplete } = parseCommand("cat <<'EOF'\nHere's a note.\nEOF\ngit push origin HEAD:x\n");
+  assert.equal(incomplete, false);
+  assert.deepEqual(segments[0], ["cat"]);
+  assert.deepEqual(segments[1], ["git", "push", "origin", "HEAD:x"]);
+});
+
+test("unterminated quotes, heredocs, and substitutions are reported", () => {
+  assert.equal(parseCommand('git commit -m "wip').incomplete, true);
+  assert.equal(parseCommand("cat <<EOF\nno end").incomplete, true);
+  assert.equal(parseCommand("echo $(git status").incomplete, true);
+  assert.equal(parseCommand("git status").incomplete, false);
 });
 
 const denied = [
@@ -28,6 +44,8 @@ const denied = [
   'git commit -nm"wip: hook check"',
   "git commit -anm'wip (1/2)'",
   "git commit -am wip --no-verify",
+  'git commit 2>&- -n -m "wip: hook check"',
+  "git commit -m x <&- -n",
   `git push --no-verify origin HEAD:${task}`,
   `git push "--no-verify" origin HEAD:${task}`,
   `LEFTHOOK=0 git push origin HEAD:${task}`,
@@ -56,6 +74,23 @@ const denied = [
   "pnpm test && git push origin HEAD:main",
   "git push origin HEAD:main 2>&1 | tail -5",
   "git push 2>/dev/null",
+  "git push origin 'refs/heads/*:refs/heads/*'",
+  "git push origin 'HEAD:refs/heads/ma*'",
+  "git push origin '^refs/heads/claude/*' 'refs/heads/*:refs/heads/*'",
+  // Commands hidden in heredocs, substitutions, and nested shells
+  "cat <<'EOF'\nHere's a note.\nEOF\ngit push --dry-run origin HEAD:main",
+  "sh <<'EOF'\ngit push origin HEAD:main\nEOF",
+  "cat <<-EOF\n\tbody\n\tEOF\ngit commit -n -m x",
+  'echo "$(git push origin HEAD:main)"',
+  "echo `git push origin HEAD:main`",
+  "sh -c 'git push origin HEAD:main'",
+  'bash -lc "git commit -n -m x"',
+  "eval git push origin HEAD:main",
+  "command git push origin HEAD:main",
+  "nohup git push origin HEAD:main",
+  // Input the parser cannot close is not guessed at
+  'git commit -m "wip',
+  "git commit -F - <<'EOF'\nfix: no terminator",
   // Destination left to the current branch or push config
   "git push",
   "git push origin",
@@ -82,7 +117,12 @@ const allowed = [
   `git push --dry-run origin HEAD:${task}`,
   `git push origin HEAD:${task} 2>&1 | grep -E "rror"`,
   `git push -u origin HEAD:${task} > /tmp/push.log`,
-  "git commit -q -F - <<'EOF' >/dev/null",
+  "git commit -q -F - <<'EOF' >/dev/null\nfix: it's done\n\n- git push の手順を書く\nEOF",
+  "git commit -F - <<-EOF\n\tdocs: indented\n\tEOF",
+  `git push origin HEAD:${task} 2>&-`,
+  "cat <<EOF | wc -l\nhello\nEOF",
+  'echo "$(date)"',
+  "sh -c 'pnpm test'",
   "git commit -m 'docs: --no-verify を禁止する規約を追記'",
   "git commit -m 'LEFTHOOK=0 を禁止する'",
   'git commit -m "fix: main の表示を修正"',
