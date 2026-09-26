@@ -86,6 +86,13 @@ UIを実装・変更する前に、必ず[`docs/design-system.md`](docs/design-s
 Tailwind CSS v4、既存Design Token、shadcn/ui、静けさ・可読性、画面別UI原則に従う。スタイルの
 規約本文をこのファイルや実装規約に複製しない。
 
+## タスクの自動実行
+
+`docs/tasks/`のタスクIDを挙げて作業を依頼された場合は、`/run-task` skill（`.claude/skills/run-task/SKILL.md`）の
+手順に従い、PR作成まで止まらずに進める。対象は[`docs/tasks/README.md`](docs/tasks/README.md)の条件を満たす
+実装系のタスクに限り、設計判断・API契約は人間と対話で進める。自動実行中もこの文書の規約はすべて適用し、
+仕様の不明点・複数の有力案・秘密情報や外部設定が必要な場合は、推測で進めず人間に判断を求めて止まる。
+
 ## 完了前
 
 - 実装前に要件、変更範囲、既存実装への影響、方針を整理したか。

@@ -9,6 +9,7 @@ const eslintConfig = defineConfig([
   globalIgnores([
     ".next/**",
     ".worktrees/**",
+    ".claude/worktrees/**",
     "**/dist/**",
     "**/coverage/**",
   ]),
