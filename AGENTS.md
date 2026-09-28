@@ -18,6 +18,7 @@ AIは実装の代行者ではなく、設計・実装・レビューを支援す
 | 作業 | 必読文書 |
 | --- | --- |
 | すべての実装 | 関連する[`docs/product.md`](docs/product.md) / 機能仕様、[`docs/architecture.md`](docs/architecture.md)、対象変更の既存Implementation Plan |
+| 音声・Dot・認証・外部AI・個人データの送信/保存/削除 | 加えて[`docs/privacy.md`](docs/privacy.md) |
 | frontend実装 | [`docs/development/frontend.md`](docs/development/frontend.md)。UI変更なら加えて[`docs/design-system.md`](docs/design-system.md) |
 | backend実装 | [`docs/development/backend.md`](docs/development/backend.md) |
 | frontend / backendをまたぐ実装 | frontend・backend両方の実装規約、関連機能仕様、architecture |
@@ -30,6 +31,7 @@ AIは実装の代行者ではなく、設計・実装・レビューを支援す
 - `README.md`: プロジェクト概要、起動方法、文書への入口。
 - `docs/product.md`: MVPの目的、範囲、作らないこと、保留事項。
 - `docs/<feature>.md`: 独立した振る舞い、データの正本、受け入れ条件、未決定事項。
+- `docs/privacy.md`: 個人データの扱いに関する横断仕様と未決定事項。
 - `docs/architecture.md`: 構成、責務、継続する設計判断と理由。
 - `docs/development/`: 実装時の境界・制約・判断基準。
 - `docs/code-review/`: 差分を検証し、根拠と重大度を報告する方法。

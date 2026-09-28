@@ -39,6 +39,7 @@
 
 - [product.md](../product.md) — 「2. MVPで成立させる体験と完成条件」
 - [journaling.md](../journaling.md) — 「4. 実サービスのMVP受け入れ条件」
+- [privacy.md](../privacy.md) — 「2. MVPで守る原則」「4. 未決定事項と決定するタスク」
 - [dot-history.md](../dot-history.md) — 「2. MVPで必要な履歴体験」
 
 ## 必要な検証
