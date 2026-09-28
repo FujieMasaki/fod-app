@@ -29,16 +29,23 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 
 ## 2. データと正本
 
-| データ | 現在の正本・保持場所 | 現在の削除・受け渡し | 実サービスで決めること |
+4列目は2026-09-28にTASK-002で採用した実サービスの方針である。**いずれも未実装**で、1〜3列目の
+現在の実装は実装タスクまで変わらない。判断の根拠と比較は
+[TASK-002 Plan](implementation-plans/2026-09-28-task-002-data-lifecycle.md)を正本とする。
+
+| データ | 現在の正本・保持場所 | 現在の削除・受け渡し | 実サービスの方針（2026-09-28採用、未実装） |
 | --- | --- | --- | --- |
-| マイクstream / AudioContext | 録音中のbrowser memory | stop / dispose時にtrackを停止しAudioContextを閉じる。外部送信・永続化しない。 | 権限説明、対応ブラウザ、録音中断のUX |
-| 録音Blob | `MediaRecorder`内部で一時生成され得る | `stop`はBlobを生成し得るが、`useRecorder`はdurationだけを上位へ返す。Blobは後続へ渡さず、保存・送信しない。 | 音声を送るか、保存先、保持期間、削除主体、upload失敗・再送 |
-| 録音時間 | Session Providerと`fod.session.v1` | `reset`またはbrowser storageの削除で消える。UIの削除操作は未実装。 | 永続Dotとの関連、保持・削除方針 |
-| DotSession（id、date、duration、sentence、reflection、closing） | Session Providerと`fod.session.v1`に現在の1件 | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | server側の正本、利用者単位の所有権、履歴、編集・削除、保管期間 |
-| 文字起こし | 存在しない | 生成・保存・送信しない。 | 採用するか、音声との関係、個人データとしての扱い |
-| API response | `createDot`の一時値をZod検証後にDotSessionへ | 未検証値は保存しない。 | 正式なrequest / response / error契約と互換性 |
+| マイクstream / AudioContext | 録音中のbrowser memory | stop / dispose時にtrackを停止しAudioContextを閉じる。外部送信・永続化しない。 | 変えない。録音中のmemoryだけに置く。権限説明・対応ブラウザ・中断UXはTASK-010 |
+| 録音Blob | `MediaRecorder`内部で一時生成され得る | `stop`はBlobを生成し得るが、`useRecorder`はdurationだけを上位へ返す。Blobは後続へ渡さず、保存・送信しない。 | 同一originのRails経由で送る。**音声原本は保存しない**（serverは処理中の一時ファイルのみ、TTL 15分で強制削除）。端末のstorageへも書かない。最長5分・10MB |
+| 録音時間 | Session Providerと`fod.session.v1` | `reset`またはbrowser storageの削除で消える。UIの削除操作は未実装。 | Dotと同じrequestで送り、RDSの`dots`を正本にする。保持・削除もDotと同じ |
+| Dot（id、date、duration、sentence、summary） | Session Providerと`fod.session.v1`に現在の1件（現行のDotSessionは`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。**`reflection`と`closing`は生成も保存もしない** |
+| 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す |
+| 話した内容の要約（`summary`） | 存在しない | — | 文字起こしから生成し、Dotと同じ行に保存する。Dotを削除すれば一緒に消える。要約にも実名は残り得るため、Dot本文と同じ保護・削除・説明の対象にする |
+| API response | `createDot`の一時値をZod検証後にDotSessionへ | 未検証値は保存しない。 | Dotと文字起こしを返す。音声のURLは返さない。正式な契約はTASK-005 |
 
 `localStorage`はbrowser上で利用者が読み書きできるため、認証・認可やserver側の正本には使わない。
+実サービス化では既存の`fod.session.v1`の読み取りをやめ、起動時に削除する。localStorageへ新しい永続
+keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを閉じると消える）に限る。
 
 ## 3. モックと実サービスの区別
 
@@ -57,25 +64,34 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 最初の実サービス化では、次を満たす仕様と実装を同じ変更で確認する。
 
 - 録音開始前に、音声を送るか、送る先、保存・削除の扱いと、他人の実名や住所は必要がなければ
-  言い換えられることを利用者が確認できる。
+  言い換えられることを利用者が確認できる。知らせる内容は
+  [TASK-002 Plan §22](implementation-plans/2026-09-28-task-002-data-lifecycle.md)の7項目とし、
+  認証確認の後、マイクを起動する前に置く。
 - 録音の成功、権限拒否、停止、中断、送信失敗、生成失敗、保存失敗、再試行の各結果が、実際の
-  データ状態と矛盾しない。
-- 保存されたDotは認証済み利用者本人だけが取得・更新・削除できる。
+  データ状態と矛盾しない。音声を保存しないため、生成が始まった後の失敗では同じ音声を再送できず、
+  録り直しになる。画面の文言をこの挙動に一致させる。
+- 保存されたDotは認証済み利用者本人だけが取得・削除できる。削除はDot 1件ごとの削除と退会の
+  両方を備える。**MVPでは生成結果を更新（編集）する手段を持たない。**訂正は削除して録り直す。
+- Dotとして保存するのは`date`、`duration`、`sentence`（今日の一文）、`summary`（話した内容の要約）で、
+  AIからの語りかけ（`reflection`・`closing`）は生成も保存もしない。`summary`は本人が読める場所に表示する。
 - 認証はRails + Deviseのメール＋パスワード・確認メール・パスワード再設定と、OmniAuthのGoogle
   ログインを採用する。Rails CookieStore、HttpOnly/Secure/SameSite=LaxのCookie、同一origin、
   RailsのCSRFとcurrent_userの所有者scopeを使う。email一致の自動統合、MFA、passkey、手動復旧、
   メールOTPは採用しない。通常logoutでコピー済みCookieの即時失効を保証せず、DB sessionによる
   端末別失効・全端末logoutは将来要件とする。localStorageを本人性の根拠にしない。
 - API request / response / errorがWeb、API、契約文書で一致し、responseはschema検証される。
-- 音声原本、文字起こし、生成結果、ログについて、正本、保持場所、保持期間、削除主体が決まっている。
+- 音声原本、文字起こし、生成結果、ログの正本・保持場所・保持期間・削除主体が
+  [TASK-002 Plan §17](implementation-plans/2026-09-28-task-002-data-lifecycle.md)のとおり実装され、
+  保持しないと決めたデータが実際に残らない。
 - 再送・retry・Job再実行で二重のDotや外部AI処理が起きない、または利用者に結果が明確に示される。
 - 複数のDotを利用者ごとに保存し、本人が一覧から過去のDotを選んで振り返れる。
 
 2026-09-24に採用した公開基盤はAWS東京のALB + ECS Fargate + RDS PostgreSQLで、初期は
 ECS 1タスク・RDS Single-AZ。構成と費用方針は[architecture](./architecture.md)を参照する。
 日記内容・音声・AI入力は原則として東京に置くが、国内限定の法的・契約上の約束はまだ行わない。
-音声原本を保存するか、送信経路・保持期間・AI providerは引き続き未決定。この設計採用によって
-§1–3の現行mock・localStorage・未実装の状態が変わったとは扱わない。
+音声原本を保存しないこと、送信経路、保持・削除は2026-09-28にTASK-002で採用した（§2の表）。
+AI providerとpromptは引き続き未決定。この設計採用によって§1–3の現行mock・localStorage・未実装の
+状態が変わったとは扱わない。
 
 ### 録音前認証と期限切れ（2026-09-25採用、未実装）
 
@@ -84,8 +100,9 @@ ECS 1タスク・RDS Single-AZ。構成と費用方針は[architecture](./archit
 自分専用端末でも認証成功から7日で失効し、利用による延長はしない。
 
 送信時にも認証を再確認し、録音中に失効しても認証を迂回して送らない。別Userへ入り直した場合に
-元の録音を送信・関連付けしない。同一Userでの復帰時のmemory内音声の保持/破棄/再送は
-TASK-002/003/010との整合が必要で、今回は確定しない。受理済み処理の所有者は変更しない。
+元の録音を送信・関連付けしない。同一Userで復帰した場合は、録音画面に留まっている間だけmemory内の
+音声を再送できる（2026-09-28にTASK-002で確定）。画面を離れれば破棄され、storageへは書かないため
+復帰後に取り戻せない。受理済み処理の所有者は変更しない。
 
 確認メール24時間・reset6時間と再送制限、期限切れ/衝突時の導線、重要操作の再認証は
 [TASK-001 Plan §50–54・§56](implementation-plans/2026-09-21-task-001-identity-design.md)を参照する。
@@ -93,11 +110,11 @@ TASK-002/003/010との整合が必要で、今回は確定しない。受理済�
 
 ## 5. 未決定事項
 
-- 録音Blobを実サービスへ送るか、送る場合の形式・サイズ制限・upload経路・保持期間
-- AI provider、prompt、文字起こしの有無、同期/非同期生成、失敗時の再試行と冪等性
-- 録音中に期限切れとなった場合のmemory内音声の扱い、password再設定後の既存Cookieの実動作
+- AI provider、prompt、`sentence`と`summary`の文面の作り方、同期/非同期生成、失敗時の再試行と
+  冪等性（TASK-003で決定）
+- 文字起こしまで成功した後の失敗で、録り直さずにテキストから再生成できるようにするか（TASK-003）
+- password再設定後の既存Cookieの実動作
 - password方針・ログイン試行制限の具体値、Googleの確認情報とConfirmableの関係（TASK-006で決定）
-- 利用者の削除要求、Dotと音声・生成結果の削除連鎖
 - 同日の複数録音をDot履歴にどう反映するか、履歴の日付境界と並び順
 - 将来候補である検索・カテゴリ・期間フィルタの仕様と導入段階
 

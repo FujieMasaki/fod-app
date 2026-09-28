@@ -36,8 +36,8 @@ MVPの完成は、少なくとも次を満たす状態とする。
 | MVP対象 | 音声による振り返り、Dotの生成、利用者ごとの安全な保存、今日のDotを見るDay表示、複数Dotの一覧から過去のDotを選ぶ体験。一覧ではDotを丸で表す。実サービスの送信・保存方法は`journaling.md`、一覧の受け入れ条件は`dot-history.md`で扱う。 |
 | 検証候補 | DayからWeek / Monthへ視点を引く表示とアニメーション、週次・月次のAI振り返り。プロトタイプと利用者テストを経て採用を判断し、現時点のMVP完成条件には含めない。 |
 | 将来候補 | Homeでの最近のDot表示、検索、カテゴリ、期間フィルタ、Dot同士のつながりや長期的な傾向の表現。`design-system.md`に画面原則があっても、MVP確定とは扱わない。 |
-| 設計採用・未実装 | AWS東京のALB + ECS Fargate + RDS PostgreSQL、Rails + Deviseのメール＋パスワード・確認メール・パスワード再設定、OmniAuthのGoogleログイン、Rails CookieStore・HttpOnly Cookie・CSRF・Dot所有者認可。初期はECS 1タスク・RDS Single-AZ・同一origin。詳細はarchitectureを参照。 |
-| 未決定 | password方針・ログイン試行制限の具体値、Google確認情報とConfirmableの関係、AI provider、音声原本の保存要否と具体的な保存先、文字起こしの有無、固有名詞を低減する位置と手段、生成の同期/非同期、削除・保持期間、同日に複数回話した場合の扱い、記録のない日の表現、通知・共有。 |
+| 設計採用・未実装 | AWS東京のALB + ECS Fargate + RDS PostgreSQL、Rails + Deviseのメール＋パスワード・確認メール・パスワード再設定、OmniAuthのGoogleログイン、Rails CookieStore・HttpOnly Cookie・CSRF・Dot所有者認可。初期はECS 1タスク・RDS Single-AZ・同一origin。音声は同一originのRails経由で送り原本を保存しない、文字起こし全文をRDSへ保存しない、Dotは`sentence`と`summary`だけを持つ、Dot個別削除と退会を備え編集は持たない。詳細はarchitectureと`journaling.md`を参照。 |
+| 未決定 | password方針・ログイン試行制限の具体値、Google確認情報とConfirmableの関係、AI provider、prompt、固有名詞を低減する位置と手段、生成の同期/非同期、同日に複数回話した場合の扱い、記録のない日の表現、通知・共有。 |
 
 ## 4. MVP対象外と実装前に決めること
 
@@ -45,14 +45,17 @@ MVPの完成は、少なくとも次を満たす状態とする。
 
 - 検索、カテゴリ、期間フィルタ、共有・通知、Homeでの最近のDot表示
 - DayからWeek / Monthへのズーム表示とアニメーション、週次・月次のAI振り返り
-- 音声Blobまたは文字起こしのbrowser永続化
+- 音声Blobまたは文字起こしのbrowser永続化。文字起こしはタブを閉じるまで`sessionStorage`で
+  一時保持するだけとし、localStorage等へ残さない（2026-09-28にTASK-002で採用）
+- 生成結果の編集、AIとの往復のやり取りの保存
 - 配送・本人確認・カード決済のために、住所・本人確認書類・カード番号を入力項目として収集する機能
 - MFA、passkey、運営者の手動アカウント復旧、メールOTP
 - 端末別session失効・全端末logout用DB session、Googleとメールの明示的アカウント連携
 - 国内限定の法的・契約上の保証、厳密なD2の個別例外管理
 
-認証方式と公開基盤は[architecture](./architecture.md)のとおり採用した。認証の残る細部、AI provider、
-音声の送信・保持方法、API契約tooling、background job基盤は、MVPを実装する過程で必要に応じて
+認証方式と公開基盤は[architecture](./architecture.md)のとおり採用した。音声の送信経路と保持・削除は
+2026-09-28にTASK-002で採用し、[`journaling.md`](./journaling.md) §2・§4を正本とする。認証の残る細部、
+AI provider、prompt、API契約tooling、background job基盤は、MVPを実装する過程で必要に応じて
 決める設計事項であり、対象外の機能ではない。既存のdesign-system上の
 表現や技術的な実装可能性だけを理由に、候補機能の優先度を確定しない。
 
@@ -85,7 +88,9 @@ Google/email一致で統合しない。Googleが確認済みとしたメール�
 | 保留事項 | 再検討する条件 | 主な選択肢 |
 | --- | --- | --- |
 | 認証の利用開始・終了・失効の細部 | 最初の永続Dot APIをWebから利用する変更 | 期限・録音前ログイン・メール・衝突時案内・再認証は2026-09-25に採用済み。password方針・ログイン試行制限の具体値、Google確認情報とConfirmableの関係をTASK-006で確定 |
-| 音声の扱い | 音声を実サービスへ送る必要が決まる変更 | browser内で破棄、直接upload、backend経由、保持しない文字起こしなどを保持・削除要件と比較 |
+| 音声の扱い | 再送UXや障害調査のために音声を保存する必要が出た変更 | 2026-09-28に「同一originのRails経由で送り、音声原本と文字起こし全文を保存しない」を採用済み。S3への短期保存を含む比較と採用理由は[TASK-002 Plan](./implementation-plans/2026-09-28-task-002-data-lifecycle.md) |
+| AIとの往復のやり取りの保存 | 対話形式を導入する変更 | 保存する範囲、保持期間、削除、利用者への説明を改めて判断する。MVPには含めない |
+| 話した内容の要約の使い道 | 週次・月次のまとめや分析を実装する変更 | MVPでは表示のみ。まとめの入力として使うかは、検証候補の採用判断と合わせて決める |
 | AI生成の実行方式 | providerと応答時間・失敗時UXが決まる変更 | 同期request、Job、非同期polling / 通知を冪等性と再試行で比較 |
 | Dot履歴の表示 | 複数Dotの一覧を実装する変更 | 同日の複数録音、記録のない日、日付境界と表示順を比較・決定 |
 | Week / Month・検索・カテゴリ・期間 | 複数Dotの保存と振り返り行動を検証した後 | プロトタイプと利用者テストを踏まえ、操作、検索対象、分類方法、期間境界、導入段階を比較 |

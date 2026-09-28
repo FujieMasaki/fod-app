@@ -56,7 +56,7 @@ Browser
 
 認証成功 → 暗号化Cookie sessionをBrowserへ（HttpOnly / Secure / SameSite=Lax）
 通常API → Cookie検証・User取得 → 本人のDot scope → DB
-将来の音声・文字起こし・AI → 東京を基本配置（TASK-002/003で詳細決定）
+将来の音声・文字起こし・AI → 東京を基本配置（経路と保持はTASK-002で採用、providerはTASK-003）
 ```
 
 - Rails + Deviseがメールアドレス＋パスワード、Confirmableの確認メール、Recoverableの
@@ -95,13 +95,45 @@ RDS暗号化、自動backup・保持期限・復元試験、秘密情報管理�
 ECSのローカルdiskを永続データの正本にしない。日記本文・音声・AI入力・Cookie/token・Google
 callbackのcode・確認/再設定tokenを通常ログへ出さない。ALB access logもqueryを記録し得るため、
 初期案では有効化せず、
-ALB metricsと機密を除いたRailsログを使う。保持・削除と復元時の整合はTASK-002で決める。
+ALB metricsと機密を除いたRailsログを使う。保持・削除と復元時の整合は次の
+「音声・文字起こしの経路と保持」で採用した。
+
+### 音声・文字起こしの経路と保持（2026-09-28採用、未実装）
+
+[TASK-002 Plan](implementation-plans/2026-09-28-task-002-data-lifecycle.md)で採用した。実装済みの
+構成ではない。比較は同Plan §18–§21、データごとの保持・削除は同§17。
+
+```text
+Browser（音声は memory のみ。storage へ書かない）
+  → POST /api/v1/dots（同一origin・multipart・Cookie + CSRF・最長5分 / 10MB）
+       → Rails：認証再確認 → current_user で所有者決定 → content type と size を検証
+          → 一時ファイル（ECSローカル。正本ではない）
+          → 外部文字起こし（東京優先）    ← 元音声が第三者へ渡る最初の地点
+          → 外部AI（東京優先）
+          → RDS：dots（sentence / summary / date / duration）
+          → ensure＋TTL 15分で一時ファイルを削除
+  ← response：Dot と文字起こし全文（音声URLは返さない）
+       → Browser：文字起こしは sessionStorage にタブを閉じるまで。logout・User切替で削除
+```
+
+- **音声原本をRDSにもS3にも保存しない。**S3・presigned URL・objectのlifecycleは導入しない。
+  一時ファイルは成否にかかわらず削除し、取りこぼしに備えてTTLでも強制削除する。ECSのローカルdiskを
+  正本にしない方針と矛盾しない使い方に限る。
+- **文字起こし全文をRDSへ保存しない**（列を作らない）。保存するのは話した内容の要約`summary`で、
+  Dotと同じ行に置く。Dotを削除すれば必ず一緒に消える。AIからの語りかけは生成も保存もしない。
+- 削除はDot 1件ごとの物理削除と退会の両方を備える。論理削除にしない。生成結果の更新APIは持たない。
+  削除に失敗したときに削除済みと表示しない。
+- 削除済みデータはRDS自動backupの保持期間内はbackupに残る。**復元手順に「復元後の削除要求の再適用」を
+  含める。**含めないと、消したはずのDotが復元で再出現する。
+- 音声・文字起こし・Dotの本文をログへ出さない。出すのはuser_id・dot_id・処理段階・結果・所要時間まで。
+- 保持期間の既定はログ14日、RDS自動backup 7日。実値は下記「未決定」のとおり公開前に確定する。
 
 ### データ所在地と費用
 
 日記内容・音声・AI入力は原則として東京に置き、文字起こし・AI処理も東京を優先する。
 **国内限定を利用者への法的・契約上の約束にはしない。** Google・メール・外部AI等の全処理が
-国内であるとは扱わない。送信先・目的・保持/削除と説明はTASK-002/003で確認する。
+国内であるとは扱わない。送信先・目的・保持/削除と説明は上記「音声・文字起こしの経路と保持」で
+採用し、委託先ごとの実際の保持設定はTASK-003で一次資料を確認する。
 Cookie sessionは利用者のブラウザに保存され、東京DB内の保存に限定されない。
 厳密なD2の個別例外管理はMVPの採用条件から外し、将来要求が変わった時の検討事項に残す。
 
@@ -139,8 +171,10 @@ ALB/Fargate/RDS/公開IPv4の小規模例でも、1ドル150円・消費税10%�
 - password方針・ログイン試行制限の具体値、Googleの確認情報とConfirmableの関係、Google再認証の有効時間（TASK-006で決定）
 - password再設定後の既存Cookieの実動作（実機検証）
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
+  （ログ14日・backup 7日は既定案であり、実値は未確定）
 - background job基盤
 - API契約でOpenAPIを採用するか、採用時の型生成・生成物管理・検証方法
-- AI providerとその実装方法
+- AI provider・文字起こしprovider・promptとその実装方法、同期/非同期の選択（TASK-003で決定）
+- 音声受信時のPuma占有時間と一時ファイルの実測、受容するaudioのcontent typeの確定
 
 これらは、関連仕様と個別のImplementation Planで選択肢・影響を確認した上で、後続の変更で決定・実装する。
