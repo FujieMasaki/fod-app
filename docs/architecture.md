@@ -107,7 +107,7 @@ ALB metricsと機密を除いたRailsログを使う。保持・削除と復元�
 Browser（音声は memory のみ。storage へ書かない）
   → POST /api/v1/dots（同一origin・multipart・Cookie + CSRF・最長30分 / 32MB）
        → Rails：認証再確認 → current_user で所有者決定 → content type と size を検証
-          → S3東京：一時object（非公開・暗号化・keyはUUID）
+          → S3東京：一時object（非公開・暗号化・versioning無効・keyはUUID）
              ＋ server側の記録：処理ID・所有者・key・受理時刻・再試行期限・状態
           → 外部文字起こし（東京優先）    ← 元音声が第三者へ渡る最初の地点
           → 外部AI（東京優先）
@@ -122,6 +122,12 @@ Browser（音声は memory のみ。storage へ書かない）
   （public access block）で保存時に暗号化し、keyは推測不能なUUIDにする。uploadを受け付ける時点の
   所有者はrequestの`current_user`で決め、clientから渡されたkeyやuser_idを信用しない。
   **presigned URLとCORSは使わない。**
+- **bucketのversioningを有効にしない。**versioningが有効だと、`DeleteObject`もlifecycleの
+  expirationも現行versionにdelete markerを付けるだけで、音声の実体はnoncurrent versionとして残る。
+  **下記の削除に関する記述は、すべてversioningが無効であることを前提にしている。**他の理由で有効に
+  する場合は、noncurrent versionのexpiration・期限切れdelete markerの削除・実体が消える削除方法を
+  セットで必須とする。設定は構築時に確認し、検証対象に含める（TASK-009/015）。
+  replication・backup・object lockも、有効なら別の場所や別の期間で残り得るため同様に確認する。
 - **server側に処理ID・所有者・object key・受理時刻・再試行期限・状態の記録を持つ。**別requestでの
   再試行、別containerで動くJob、退会時の削除は初回requestの外で所有者を判断するため、この記録で
   認可する。**推測困難なkeyを所有権の代わりにしない。**記録の置き場と項目はTASK-003/005で確定する。
