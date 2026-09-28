@@ -33,6 +33,9 @@
 - [journaling.md](../journaling.md) — 「4. 実サービスのMVP受け入れ条件」
 - [journaling.md](../journaling.md) — 「5. 未決定事項」
 - [privacy.md](../privacy.md) — 「2. MVPで守る原則」「3. 送信・保存フローを決める際の確認表」
+- [TASK-002 Plan](../implementation-plans/2026-09-28-task-002-data-lifecycle.md) — 「17. データごとの
+  正本・保持・削除の一覧」「25. 人間の判断と採用内容」。音声を保存しない前提、`sentence`と`summary`
+  だけを保存すること、委託先の保持設定を一次資料で確認することが、このタスクの制約になる。
 
 ## 必要な検証
 

@@ -57,7 +57,7 @@
 - 契約対象: 登録・確認/再送・password login/reset・Google開始/callback・状態確認・logout・CSRFのmethod/path/request/response/error。確認待ち・期限切れ・不正callback・メール配送失敗・衝突時の挙動、個人APIのno-storeも定義する。
 - CookieStoreのlogoutはブラウザCookieの消去であり、コピー済みCookieの即時失効を保証しない。期限検証とUserの有効性確認を区別する。端末別失効・全端末logout用DB session、MFA/passkey/手動復旧、明示的アカウント連携は今回の契約へ追加しない。
 - TASK-006へ移管した判断: password方針・ログイン試行制限の具体値、Google確認情報とConfirmableの関係、Google再認証の有効時間。reset後の既存Cookieの実動作は実機検証が必要。過去の30分/12時間等の提案値を採用しない。
-- TASK-002/003/004の保持・削除・生成/再試行・履歴の決定成果物は未提供。認証方式の変更だけではBlockedを解除しない。
+- TASK-003/004の生成/再試行・履歴の決定成果物は未提供。認証方式の変更だけではBlockedを解除しない。TASK-002の成果物は下記のとおり提供済み。
 
 ### 2026-09-25の認証詳細の採用（契約への入力）
 
@@ -67,3 +67,13 @@
 - Google同一メール衝突時は既存Userにも重複Userにも接続しない。Googleが確認済みと返したメールなら「メール＋パスワードで登録済み」の案内、それ以外は共通の失敗案内を返す。両者の区別をerror契約で定義する。
 - メール変更・password変更・退会はcurrent password、Google専用UserはGoogle再認証を要求する。対象操作の有無はTASK-002の決定に従う。明示的連携と端末管理のAPIはMVPへ追加しない。
 - 採用版Deviseは未確定。5.0.4の標準調査を本アプリの設定済み値として転記しない。他の上流タスクの成果物が揃うまでBlockedを維持する。
+
+### 2026-09-28のデータ保持・削除の採用（契約への入力）
+
+[TASK-002 Plan §25](../implementation-plans/2026-09-28-task-002-data-lifecycle.md)で採用した。契約の文面は本タスクで確定する。
+
+- Dotの作成は同一originの`multipart/form-data`で音声を受け取る。受容するcontent typeを列挙し、最長5分・10MBの上限と超過時のerrorを定義する。音声のURLは返さない。
+- responseはDot（`id` / `date` / `duration` / `sentence` / `summary`）と文字起こし全文。`reflection`と`closing`は契約に含めない。
+- **更新（編集）のendpointを作らない。**Dotは作成・取得・削除だけを持つ。退会のendpointは本人の再認証を前提にする（上記の再認証要件）。
+- 削除は物理削除で、失敗時に成功と区別できるerrorを返す。他人のDotは存在しない扱いにする。
+- 生成の冪等性と同期/非同期の契約はTASK-003の決定を待つ。TASK-002は「二重に作られても本人が個別削除できる」ことだけを前提にしている。
