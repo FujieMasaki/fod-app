@@ -107,18 +107,26 @@ ALB metricsと機密を除いたRailsログを使う。保持・削除と復元�
 Browser（音声は memory のみ。storage へ書かない）
   → POST /api/v1/dots（同一origin・multipart・Cookie + CSRF・最長30分 / 32MB）
        → Rails：認証再確認 → current_user で所有者決定 → content type と size を検証
-          → 一時ファイル（ECSローカル。正本ではない）
+          → S3東京：一時object（非公開・暗号化・keyはUUID・lifecycle 24時間）
           → 外部文字起こし（東京優先）    ← 元音声が第三者へ渡る最初の地点
           → 外部AI（東京優先）
           → RDS：dots（sentence / summary / date / duration）
-          → ensure＋TTL 30分で一時ファイルを削除
+          → 成功：S3の一時objectを即削除 ／ 失敗：残して再試行可（24時間で自動削除）
   ← response：Dot と文字起こし全文（音声URLは返さない）
        → Browser：文字起こしは sessionStorage にタブを閉じるまで。logout・User切替で削除
 ```
 
-- **音声原本をRDSにもS3にも保存しない。**S3・presigned URL・objectのlifecycleは導入しない。
-  一時ファイルは成否にかかわらず削除し、取りこぼしに備えてTTLでも強制削除する。ECSのローカルdiskを
-  正本にしない方針と矛盾しない使い方に限る。
+- **音声原本を長期保存しない。**処理が終わるまでの一時的な預かりとしてS3東京へ置く。bucketは非公開
+  （public access block）で保存時に暗号化し、keyは推測不能なUUIDにする。所有者はrequestの
+  `current_user`で決め、clientから渡されたkeyやuser_idを信用しない。**presigned URLとCORSは使わない。**
+- 一時objectは生成に成功した時点で即削除し、失敗してもlifecycleで**24時間**後に自動削除する。
+  Dotの削除・退会の時点で残っていれば同時に消す。24時間より長く置かない。RDSへは入れない。
+- S3を使うのは再試行のためだけではない。最長30分の音声は同期HTTPで処理しきれず非同期になるため、
+  requestを受けたcontainerとJobを実行するcontainerが同じとは限らず、deployでも入れ替わる。
+  **ECSのローカルdiskを受け渡しに使わない**方針から、リージョン内の置き場が要る。
+- browserからS3へ直接uploadする方式（presigned URL）は採らない。Pumaのthreadを占有する点は
+  `RAILS_MAX_THREADS`既定3・1プロセス・ECS 1タスクという現構成では実測前に判断できないため、
+  実測して問題になった時点で、同じbucketとlifecycleのまま移す。
 - **文字起こし全文をRDSへ保存しない**（列を作らない）。保存するのは話した内容の要約`summary`で、
   Dotと同じ行に置く。Dotを削除すれば必ず一緒に消える。AIからの語りかけは生成も保存もしない。
 - 削除はDot 1件ごとの物理削除と退会の両方を備える。論理削除にしない。生成結果の更新APIは持たない。
@@ -126,7 +134,9 @@ Browser（音声は memory のみ。storage へ書かない）
 - 削除済みデータはRDS自動backupの保持期間内はbackupに残る。**復元手順に「復元後の削除要求の再適用」を
   含める。**含めないと、消したはずのDotが復元で再出現する。
 - 音声・文字起こし・Dotの本文をログへ出さない。出すのはuser_id・dot_id・処理段階・結果・所要時間まで。
-- 保持期間の既定はログ14日、RDS自動backup 7日。実値は下記「未決定」のとおり公開前に確定する。
+- 保持期間の既定はログ14日、RDS自動backup 7日、音声の一時objectは最長24時間。実値は下記「未決定」の
+  とおり公開前に確定する。S3の実費は成功時に即削除する運用では月1円未満の見込みで、Pricing
+  Calculatorで再確認する。
 
 ### データ所在地と費用
 
@@ -175,6 +185,6 @@ ALB/Fargate/RDS/公開IPv4の小規模例でも、1ドル150円・消費税10%�
 - background job基盤（最長30分の音声を同期HTTPで処理できないため、TASK-003で必要になる見込み）
 - API契約でOpenAPIを採用するか、採用時の型生成・生成物管理・検証方法
 - AI provider・文字起こしprovider・promptとその実装方法、同期/非同期の選択（TASK-003で決定）
-- 音声受信時のPuma占有時間と一時ファイルの実測、受容するaudioのcontent typeの確定
+- 音声受信時のPuma占有時間の実測（`RAILS_MAX_THREADS`既定3・ECS 1タスク）、presignedでの直接uploadへ移す条件、受容するaudioのcontent typeの確定、S3 bucketとIAMの具体設定
 
 これらは、関連仕様と個別のImplementation Planで選択肢・影響を確認した上で、後続の変更で決定・実装する。

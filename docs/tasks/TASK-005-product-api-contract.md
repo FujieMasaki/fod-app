@@ -72,8 +72,10 @@
 
 [TASK-002 Plan §25](../implementation-plans/2026-09-28-task-002-data-lifecycle.md)で採用した。契約の文面は本タスクで確定する。
 
-- Dotの作成は同一originの`multipart/form-data`で音声を受け取る。受容するcontent typeを列挙し、最長30分・32MBの上限と超過時のerrorを定義する。音声のbitrateはclientで32kbpsを明示する前提だが、従わないbrowserがあり得るため上限はそれを見込んだ値である。音声のURLは返さない。
+- Dotの作成は同一originの`multipart/form-data`で音声を受け取り、Railsが処理の間だけS3東京へ預ける（presigned URLは使わない）。受容するcontent typeを列挙し、最長30分・32MBの上限と超過時のerrorを定義する。音声のbitrateはclientで32kbpsを明示する前提だが、従わないbrowserがあり得るため上限はそれを見込んだ値である。音声のURLは返さない。
 - responseはDot（`id` / `date` / `duration` / `sentence` / `summary`）と文字起こし全文。`reflection`と`closing`は契約に含めない。
 - **更新（編集）のendpointを作らない。**Dotは作成・取得・削除だけを持つ。退会のendpointは本人の再認証を前提にする（上記の再認証要件）。
-- 削除は物理削除で、失敗時に成功と区別できるerrorを返す。他人のDotは存在しない扱いにする。
+- 削除は物理削除で、失敗時に成功と区別できるerrorを返す。他人のDotは存在しない扱いにする。Dot削除・退会では、残っている一時的な音声も同時に消す。
+- 失敗時の再試行では、音声を預かっている24時間の間は録り直さずに同じ音声で再実行できる。再試行の
+  期限と、期限切れで録り直しになることをerror契約で区別できるようにする。
 - 生成の冪等性と同期/非同期の契約はTASK-003の決定を待つ。最長30分の音声ではALBのidle timeout（既定60秒）内に処理が終わらないため、非同期を前提に契約を組む見込み。TASK-002は「二重に作られても本人が個別削除できる」ことだけを前提にしている。
