@@ -36,7 +36,7 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 | データ | 現在の正本・保持場所 | 現在の削除・受け渡し | 実サービスの方針（2026-09-28採用、未実装） |
 | --- | --- | --- | --- |
 | マイクstream / AudioContext | 録音中のbrowser memory | stop / dispose時にtrackを停止しAudioContextを閉じる。外部送信・永続化しない。 | 変えない。録音中のmemoryだけに置く。権限説明・対応ブラウザ・中断UXはTASK-010 |
-| 録音Blob | `MediaRecorder`内部で一時生成され得る | `stop`はBlobを生成し得るが、`useRecorder`はdurationだけを上位へ返す。Blobは後続へ渡さず、保存・送信しない。 | 同一originのRails経由で送る。**音声原本は保存しない**（serverは処理中の一時ファイルのみ、TTL 15分で強制削除）。端末のstorageへも書かない。最長5分・10MB |
+| 録音Blob | `MediaRecorder`内部で一時生成され得る | `stop`はBlobを生成し得るが、`useRecorder`はdurationだけを上位へ返す。Blobは後続へ渡さず、保存・送信しない。 | 同一originのRails経由で送る。**音声原本は保存しない**（serverは処理中の一時ファイルのみ、TTL 30分で強制削除）。端末のstorageへも書かない。最長30分・32MB |
 | 録音時間 | Session Providerと`fod.session.v1` | `reset`またはbrowser storageの削除で消える。UIの削除操作は未実装。 | Dotと同じrequestで送り、RDSの`dots`を正本にする。保持・削除もDotと同じ |
 | Dot（id、date、duration、sentence、summary） | Session Providerと`fod.session.v1`に現在の1件（現行のDotSessionは`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。**`reflection`と`closing`は生成も保存もしない** |
 | 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す |
@@ -110,7 +110,7 @@ AI providerとpromptは引き続き未決定。この設計採用によって§1
 
 ## 5. 未決定事項
 
-- AI provider、prompt、`sentence`と`summary`の文面の作り方、同期/非同期生成、失敗時の再試行と
+- AI provider、prompt、`sentence`と`summary`の文面の作り方、同期/非同期生成（最長30分の音声では同期HTTPで完結しない見込み）、失敗時の再試行と
   冪等性（TASK-003で決定）
 - 文字起こしまで成功した後の失敗で、録り直さずにテキストから再生成できるようにするか（TASK-003）
 - password再設定後の既存Cookieの実動作

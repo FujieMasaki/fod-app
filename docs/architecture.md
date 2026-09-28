@@ -105,13 +105,13 @@ ALB metricsと機密を除いたRailsログを使う。保持・削除と復元�
 
 ```text
 Browser（音声は memory のみ。storage へ書かない）
-  → POST /api/v1/dots（同一origin・multipart・Cookie + CSRF・最長5分 / 10MB）
+  → POST /api/v1/dots（同一origin・multipart・Cookie + CSRF・最長30分 / 32MB）
        → Rails：認証再確認 → current_user で所有者決定 → content type と size を検証
           → 一時ファイル（ECSローカル。正本ではない）
           → 外部文字起こし（東京優先）    ← 元音声が第三者へ渡る最初の地点
           → 外部AI（東京優先）
           → RDS：dots（sentence / summary / date / duration）
-          → ensure＋TTL 15分で一時ファイルを削除
+          → ensure＋TTL 30分で一時ファイルを削除
   ← response：Dot と文字起こし全文（音声URLは返さない）
        → Browser：文字起こしは sessionStorage にタブを閉じるまで。logout・User切替で削除
 ```
@@ -172,7 +172,7 @@ ALB/Fargate/RDS/公開IPv4の小規模例でも、1ドル150円・消費税10%�
 - password再設定後の既存Cookieの実動作（実機検証）
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
   （ログ14日・backup 7日は既定案であり、実値は未確定）
-- background job基盤
+- background job基盤（最長30分の音声を同期HTTPで処理できないため、TASK-003で必要になる見込み）
 - API契約でOpenAPIを採用するか、採用時の型生成・生成物管理・検証方法
 - AI provider・文字起こしprovider・promptとその実装方法、同期/非同期の選択（TASK-003で決定）
 - 音声受信時のPuma占有時間と一時ファイルの実測、受容するaudioのcontent typeの確定
