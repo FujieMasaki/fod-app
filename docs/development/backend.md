@@ -34,8 +34,9 @@
   複数endpointに反復し、Rails標準だけでは認可・response・transactionの境界を読み取れないときに、
   導入候補と既存コードへの影響をImplementation Planで比較する。
 - 認証・公開基盤は[architecture](../architecture.md)の採用方針に従うが、実装は未追加である。
-  session期限等の細部、AI provider、background job基盤、音声storageの具体方式は未決定であり、
-  文書上の例だけで採用済みにしない。
+  session期限とメールの期限・再送制限を含む認証詳細も同文書で採用済み・未実装である。
+  AI provider、background job基盤、音声storageの具体方式、password方針とログイン試行制限の
+  具体値は未決定であり、文書上の例だけで採用済みにしない。
 
 ### 例外
 
