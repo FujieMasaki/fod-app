@@ -13,7 +13,7 @@
 
 決定した音声の受け渡し方式とAI providerを使い、録音内容からDotを生成してTASK-008の永続保存へつなぐ。文字起こしとJobは採用時だけ実装する。保持・削除方針のうち処理中の一時データの扱いを本タスク、期限による削除と削除要求への対応をTASK-013で扱う。音声を預かるS3 bucket（非公開・暗号化・**versioningを有効にしない**・lifecycleは保険）とIAMの用意、AWS SDKの導入もこのタスクの前提に含む。versioningを有効にする場合は、noncurrent versionのexpiration・期限切れdelete markerの削除・実体が消える削除方法をセットで実装する。replication・backup・object lockの有無も確認する。処理ID・所有者・object key・受理時刻・再試行期限・状態をserverで記録し、再試行とJob実行で所有者を照合する仕組みもここで作る。
 
-2026-09-29にTASK-004で、Dotの`date`を`recorded_at`（録音開始操作をserverが受理した時刻）から算出し、その値を**録音attempt**から決めると採用した。処理の記録を扱う本タスクで、**attemptの識別子を初回uploadで1つの処理記録へ原子的に関連付けて一回性を担保する**実装を行う。同じattemptの同時並行送信、応答前のupload失敗、処理記録が作られる前の失敗でも、二重の処理やDotが生まれないようにする。upload受理後の24時間再試行はattemptの再利用ではなく処理記録で認可し、再試行やJob再実行でも元の`recorded_at`を維持する。契約は[TASK-005](TASK-005-product-api-contract.md)、Dotへの保存と日付算出は[TASK-008](TASK-008-backend-dot-history.md)、不変条件は[TASK-004 Plan §18-3](../implementation-plans/2026-09-28-task-004-history-design.md)。
+2026-09-29にTASK-004で、Dotの`date`を`started_at`（録音開始操作をserverが受理した時刻）から算出し、その値を**録音attempt**から決めると採用した。処理の記録を扱う本タスクで、**attemptの識別子を初回uploadで1つの処理記録へ原子的に関連付けて一回性を担保する**実装を行う。同じattemptの同時並行送信、応答前のupload失敗、処理記録が作られる前の失敗でも、二重の処理やDotが生まれないようにする。upload受理後の24時間再試行はattemptの再利用ではなく処理記録で認可し、再試行やJob再実行でも元の`started_at`を維持する。契約は[TASK-005](TASK-005-product-api-contract.md)、Dotへの保存と日付算出は[TASK-008](TASK-008-backend-dot-history.md)、不変条件は[TASK-004 Plan §18-3](../implementation-plans/2026-09-28-task-004-history-design.md)。
 
 ## 確認可能な完了条件
 
@@ -22,7 +22,7 @@
 - [ ] 生成結果を検証して本人のDotとして保存し、契約どおり結果を返す。非同期を採用した場合は状態・結果の取得まで成立する。
 - [ ] 送信・外部AI・生成結果の検証・保存の各失敗を区別して扱い、未保存なのに保存済みと返さない。
 - [ ] 再送・retry・Job再実行の重複防止、または利用者への明確な結果通知を設計どおり実装している。
-- [ ] 録音attemptの識別子を初回uploadで1つの処理記録へ原子的に関連付け、同じattemptの再送・同時並行送信で二重の処理やDotを作らない。upload受理後の再試行は処理記録で認可し、attemptが使用済みであることを理由に正規の再試行を拒否しない。再試行やJob再実行でも元の`recorded_at`を維持する。
+- [ ] 録音attemptの識別子を初回uploadで1つの処理記録へ原子的に関連付け、同じattemptの再送・同時並行送信で二重の処理やDotを作らない。upload受理後の再試行は処理記録で認可し、attemptが使用済みであることを理由に正規の再試行を拒否しない。再試行やJob再実行でも元の`started_at`を維持する。
 - [ ] 処理中・中断・失敗時の一時データとログをTASK-002の方針に従って扱い、関連する現行仕様・architectureを更新している。
 
 ## 依存するタスクID
