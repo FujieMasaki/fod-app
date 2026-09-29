@@ -157,7 +157,7 @@ POST /api/v1/dots（同一origin・multipart・Cookie + CSRF・最長30分 / 32M
   → client は録音開始時に server が発行した録音attempt を一緒に渡す（TASK-004）
   → Rails: 認証再確認 → attempt の検証（本人・未使用・期限内）→ content type と size を検証
   → 利用者の行を FOR UPDATE で lock → active を確認 → 状態 uploading の記録を作成
-     （項目は §20 の表。処理ID＝録音attemptの識別子、recorded_at も同時に書く）→ commit
+     （項目は §20 の表。処理ID＝録音attemptの識別子、started_at も同時に書く）→ commit
                                          ★退会と排他されるのはこの transaction
   → commit のあとに S3東京へ upload（非公開・暗号化・versioning無効）
      key = audio/<処理ID>/<upload試行番号>
@@ -178,7 +178,7 @@ Job: 記録の所有者と世代を確認 → 状態を transcribing へ
   → Amazon Bedrock の Claude へテキストを渡す           ★★★発話内容が生成AIへ渡る地点
   → sentence と summary を受け取る
   → 利用者の行を FOR UPDATE で lock → 世代番号を確認 → dots へ保存
-     （recorded_at は受理時の値をそのまま。再試行でも書き換えない）
+     （started_at は受理時の値をそのまま。再試行でも書き換えない）
      ＋ 記録を succeeded_cleanup_pending へ（同一 transaction）★成功はここで確定する
 
 [cleanup]  成功の確定とは分けて行う。途中で落ちても記録が残るので再実行できる
@@ -376,8 +376,8 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 ### 入力
 
 - 文字起こし全文。話者分離は使わない（本人1人の独白を前提とする）。
-- 録音日（`date`）と録音時間（`durationSec`）。文面の手掛かりに使う。**`date`は`recorded_at`から
-  算出したAsia/Tokyoの暦日で（TASK-004）、生成AIが決める値ではない。**`recorded_at`自体は
+- 録音日（`date`）と録音時間（`durationSec`）。文面の手掛かりに使う。**`date`は`started_at`から
+  算出したAsia/Tokyoの暦日で（TASK-004）、生成AIが決める値ではない。**`started_at`自体は
   生成へ渡さない（暦日より細かい時刻を文面の手掛かりにしない）。
 - **過去のDotは渡さない。**MVPでは1件の録音だけを入力にする。過去を渡すと、週次・月次のまとめ
   （product.md §3の検証候補）へ踏み込み、保持と説明の範囲が変わる。
@@ -389,7 +389,7 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 | `sentence` | 今日の一文。利用者がその日を一言で思い出せる短い文 | 1文。日本語。本人の言葉を言い換えたもので、助言・評価・診断をしない |
 | `summary` | 話した内容の要約。「何を話したか」を後から思い出すためのもの | 数文。**本人が話していないことを足さない。**要約であって解釈ではない |
 
-- **`date`・`recorded_at`・`duration`は生成結果ではない。**録音attemptと録音の事実から決まる値で、
+- **`date`・`started_at`・`duration`は生成結果ではない。**録音attemptと録音の事実から決まる値で、
   AIの出力として受け取らない（TASK-004）。
 - **`reflection`と`closing`は生成しない**（TASK-002 §25-6で廃止）。AIからの語りかけは保存しない
   という判断に合わせ、生成そのものを行わない。
@@ -619,7 +619,7 @@ TASK-003と相互確認する**として未確定のまま残している。こ�
 
 #### 一回性の起点をTASK-004の録音attemptへ寄せる（2026-09-29に統合）
 
-初稿は**clientが録音ごとに発行するUUID**を処理IDにしていた。TASK-004が`recorded_at`の根拠として
+初稿は**clientが録音ごとに発行するUUID**を処理IDにしていた。TASK-004が`started_at`の根拠として
 **録音attempt**（録音開始操作に対して**serverが**発行する識別子。正本は
 [dot-history.md §2](../dot-history.md)）を採用したため、**一回性の起点をそちらへ寄せる。**
 
@@ -645,7 +645,7 @@ TASK-003と相互確認する**として未確定のまま残している。こ�
 | attemptはcurrent_userに紐づき、**1つのattemptは1件のDot生成にしか使えない** | 処理の記録の`(user_id, 処理ID)`のunique制約で担保する。初回uploadで利用者の行をlockして記録を作るのと同じtransactionで行う |
 | 同じattemptの再送は**同じ処理を返すか明示的な競合を返す**（どちらかはTASK-003/005で決める） | **「同じ処理を返す」を採用する。**既存の記録があればbodyを受け取らず、既存の状態を返す（§20の冪等性と同じ規則） |
 | **upload受理後の24時間再試行はattemptの再利用ではなく処理の記録を使う** | 一致する。受理後の再試行・cleanupはすべて処理の記録で認可する（§20の入口の手続き）。**attemptを使用済みにしたことが正規の再試行を拒否する理由にならない** |
-| 再試行やJob再実行でも**元のattempt由来の`recorded_at`を維持する** | `recorded_at`は受理時に記録と`dots`へ書き、再試行・Job再実行で書き換えない |
+| 再試行やJob再実行でも**元のattempt由来の`started_at`を維持する** | `started_at`は受理時に記録と`dots`へ書き、再試行・Job再実行で書き換えない |
 | 録音をやり直したら新しいattemptを発行し、古いattemptを流用できない | 本Planの範囲外（TASK-010がFrontendで扱う）。server側は使用済みのattemptを受け付けないことで担保する |
 
 **識別子の寿命と、attemptが使える期間は別である。**録音attemptは受理の時点で使用済みになり、
@@ -674,7 +674,7 @@ TASK-002が必須とした項目に、このタスクの決定で必要になる
 | 項目 | 目的 |
 | --- | --- |
 | **処理ID（＝冪等性key＝録音attemptの識別子）** | **serverが録音開始操作に対して発行する**（TASK-004）。結果の照会と重複の判定を**同じ識別子**で行う。**成功時に`dots`の行へ引き継ぐ**ので、記録を消した後もこのIDでDotを引ける |
-| **`recorded_at`** | 録音開始操作をserverが受理した時刻。attemptから決まる。**再試行・Job再実行で書き換えない。**`dots`へも同じ値を書く（TASK-004） |
+| **`started_at`** | 録音開始操作をserverが受理した時刻。attemptから決まる。**再試行・Job再実行で書き換えない。**`dots`へも同じ値を書く（TASK-004） |
 | 所有者（user_id） | upload後の再試行・Job実行・削除の認可。**IDを所有権の代わりにしない** |
 | **処理ID** | 録音attemptの識別子と同一。server発行なのでAWSアカウント内で一意にでき、**S3のkeyとTranscribeのjob名をここから導く**（下記「命名」） |
 | 音声のobject key・文字起こし結果のobject key | cleanupの対象を特定する。処理IDから導けるが、**記録にも持つ**（導出規則を変えたときに過去分を回収できなくなるため） |
@@ -696,7 +696,7 @@ clientが他人のIDを推測しても、所有者が一致しなければ存在
 
 #### 語の定義（TASK-004の「録音attempt」と混同しない）
 
-TASK-004が`recorded_at`の根拠として**録音attempt**（録音開始操作に対してserverが発行する識別子。
+TASK-004が`started_at`の根拠として**録音attempt**（録音開始操作に対してserverが発行する識別子。
 正本は[dot-history.md §2](../dot-history.md)）を採用したため、**本Planでは「attempt」という語を
 使わない**（2026-09-29にTASK-004の担当と調整。同じ語を別の概念に使うと読み手が混乱するため、
 内部実装語である本Plan側を改名した）。
@@ -1075,7 +1075,7 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
 | 40 | **異なる利用者の録音attemptが同じAWSの名前を作る** | S3のkeyや`TranscriptionJobName`が衝突し、`ConflictException`や他人のobjectの上書きが起き得る | **処理IDがAWSアカウント内で一意であることが前提**（§20）。`TranscriptionJobName`の文字種と長さ（`^[0-9a-zA-Z._-]+`、最大200文字）も満たす。満たせない形式なら、server発行の別IDを足してAWSの名前をそこから導く |
 | 36 | **同じ録音attemptで2回uploadする** | 処理の記録の`(user_id, 処理ID)`のunique制約に掛かる | **新しい処理を作らず、既存の状態を返す**（TASK-004 §18-3が許した2案のうち「同じ処理を返す」を採用）。署名済みの値を端末に置く方式でも、この制約で一回性が成立する |
 | 37 | **録音attemptの期限が切れてから再uploadする** | attemptの検証で弾かれる | 受け付けず録り直しを案内する。**受理後の再試行とは別の時計**で、受理後は処理の記録で認可するため期限切れの影響を受けない |
-| 38 | **再試行やJob再実行を経てDotが保存される** | `recorded_at`は受理時の値のまま | **書き換えない。**再試行で新しい時刻に置き換えると、TASK-004の「話した日から動かない」が崩れる |
+| 38 | **再試行やJob再実行を経てDotが保存される** | `started_at`は受理時の値のまま | **書き換えない。**再試行で新しい時刻に置き換えると、TASK-004の「話した日から動かない」が崩れる |
 | 29 | 同じ処理IDのPOSTが並行して届く | 処理の記録の`(user_id, 処理ID)`のunique制約で衝突する | **2件目の記録を作らず、Jobも二重にenqueueしない。**既存の記録の状態を返す（2巡目のレビュー指摘4） |
 
 **週次・月次のAI振り返りは混入していない。**§17の入力は1件の録音の文字起こしだけで、過去のDotを
@@ -1095,7 +1095,7 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
 2. **実行方式 = §19案A。**Solid Queueで非同期にし、workerは当面ECSの同一タスク内でPumaと並走させ、
    clientはpollingで結果を取得する。同期/非同期はTASK-002の30分上限で既に決まっていた。
 3. **冪等性と処理の記録 = §20案A。**冪等性keyと処理IDと録音attemptの識別子を同一にして`dots`の
-   列に置く。**2026-09-29にTASK-004の`recorded_at`採用へ合わせ、client発行のUUIDから
+   列に置く。**2026-09-29にTASK-004の`started_at`採用へ合わせ、client発行のUUIDから
    server発行の録音attemptへ変えた。**これによりprovider IDの層を廃止した。
    **処理の記録は、音声・文字起こし全文・Transcribeのjobのcleanupが終わった時点で削除する。**
    TASK-002が残した相互確認事項への回答であり、`privacy.md §5-1`の「未確定」を解消する。

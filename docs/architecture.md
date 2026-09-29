@@ -111,7 +111,7 @@ Browser（音声は memory のみ。storage へ書かない）
              ＋ server側の記録：処理ID・所有者・key・受理時刻・再試行期限・状態
           → Amazon Transcribe（東京）    ← 元音声が第三者へ渡る最初の地点
           → Amazon Bedrock の Claude（Geo:JP または mantle In-Region）
-          → RDS：dots（sentence / summary / date / recorded_at / duration）
+          → RDS：dots（sentence / summary / date / started_at / duration）
           → 成功（＝Dotの保存まで完了）：一時object（音声）の削除処理を始める
              （記録は後片付けが終わってから消す。2026-09-29にTASK-003で確定）
           → 失敗：受理から24時間は再試行可。期限が来たらアプリが削除（lifecycleは保険）
@@ -166,18 +166,18 @@ Browser（音声は memory のみ。storage へ書かない）
 - ゴミ箱の中のDotをDay・一覧・詳細から除外する。**除外は明示的なscopeで行い、暗黙の既定scope
   （`default_scope`等）に頼らない。**暗黙の除外は、ゴミ箱の中身が一覧へ漏れる事故と、逆にゴミ箱が
   空に見える事故の両方を起こしやすい。実現方法はTASK-008で確定する。
-- **`dots`は`recorded_at`（録音開始操作をserverが受理した時刻・UTC）を持ち、`date`はそこから算出した
+- **`dots`は`started_at`（録音開始操作をserverが受理した時刻・UTC）を持ち、`date`はそこから算出した
   Asia/Tokyoの暦日と
   する**（2026-09-29にTASK-004で採用。正本は[dot-history.md](dot-history.md) §2）。作成時刻を日付の
   根拠にしない。送信・生成・保存の失敗を24時間以内に再試行しても日付が動かないようにするため。
-  `recorded_at`は**録音開始操作をserverが受理した時刻**とする。実際の録音開始操作に対して発行する
+  `started_at`は**録音開始操作をserverが受理した時刻**とする。実際の録音開始操作に対して発行する
   録音attemptの受理時刻であり、認証確認の時刻やclientが計測した値を採用しない。実際に話し始めた
   瞬間との差が残ること（一定の秒数以内とは保証せず、日付境界をまたぐ遅れでは日付がずれ得ること）を
   受け入れる。attemptは本人に紐づき、1件のDot生成にしか使えず、
   やり直しで新しくなり、別Userでは使えず、未送信には期限がある。保存方式（serverに保存するか
   署名済みの値を端末のmemoryに置くか）はTASK-005で決める。一覧の並びと「最新」の判定にも
-  `recorded_at`を使い、同値のときはDotの識別子で決める。
-- **`sentence`と`summary`の更新APIを持つ**（2026-09-29に追加）。`date`・`recorded_at`・`duration`は
+  `started_at`を使い、同値のときはDotの識別子で決める。
+- **`sentence`と`summary`の更新APIを持つ**（2026-09-29に追加）。`date`・`started_at`・`duration`は
   更新させない。
   **アプリは編集前の値を保存しない**（版も履歴も持たない）。消したかった記述が編集履歴に残るのを
   避けるため。ただし**編集より前に取得したbackupには編集前の本文が残る。**「編集前の値はどこにも
@@ -265,7 +265,7 @@ POST .../transcript_ack（client が全文を保存し終えたら送る。冪�
   排他する。具体値はTASK-009で決める。`RAILS_MAX_THREADS`はSolid Queueの実行並列数そのもの
   ではないため、concurrency・DB pool・CPU/memoryは別に実測する。
 - **処理IDと冪等性keyと録音attemptの識別子を同一にし、`dots`の列へ`(user_id, 処理ID)`のunique制約で持つ。**
-  **serverが録音開始操作に対して発行する**（2026-09-29にTASK-004の`recorded_at`採用へ合わせて変更。
+  **serverが録音開始操作に対して発行する**（2026-09-29にTASK-004の`started_at`採用へ合わせて変更。
   当初はclient発行のUUIDだった）。処理の記録にも同じunique制約を置く。
   別々のIDにすると、成功時に処理の記録を消した時点で処理IDとDotの対応が消え、**pollingが結果を
   引けなくなる。**同じkeyでの再送は2件目のDotを作らず既存を返す。
