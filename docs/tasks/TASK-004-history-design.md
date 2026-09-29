@@ -48,11 +48,12 @@
 
 ## 採用済み事項と後続への引き継ぎ（2026-09-29、未実装）
 
-**2026-09-29に人間が6件を判断し、TASK-004をDoneとした。** いずれもPlanの推奨どおり。
+**2026-09-29に人間が7件を判断し、TASK-004をDoneとした。** いずれもPlanの推奨どおり。
 はじめに4件（同日の複数録音・一覧の配置・記録のない日・丸の意味付け）を判断し、その後のレビューで
 日付境界を人間の判断として記録すべきこと、日付の基準をTASK-005へ渡さず本タスクで決めるべきことが
-分かったため、Q5（Asia/Tokyo固定・0:00 JST）とQ6（日付の基準）を追加で判断した
-（Plan §18-2・§24・§25）。
+分かったため、Q5（Asia/Tokyo固定・0:00 JST）とQ6（日付の基準）を追加で判断した。さらに再レビューで
+「認証確認の時刻は録音開始時刻ではない」と分かり、Q7（`recorded_at`を録音attemptから決める）を
+判断した（Plan §18-2・§18-3・§24・§25）。
 
 - 保存は録音1回=Dot 1件の追記のみ。同日の再録音で過去のDotを上書き・統合しない。表示上の
   「1日=1つのDot」は一覧の見せ方であり、保存件数ではない。
@@ -89,8 +90,11 @@
 [dot-history](../dot-history.md) §5と[product](../product.md) §5に再検討条件付きで残した。
 
 引き継ぎ先は[TASK-005](TASK-005-product-api-contract.md)（endpoint・parameter・schema、`date`と
-`recorded_at`の表現形式、`recorded_at`をserverが発行する経路、日付をキーにした日の詳細の取得と
-1日当たりの上限、error）、[TASK-008](TASK-008-backend-dot-history.md)（データ構造・索引・
-日付算出の実装位置・集約query）、[TASK-012](TASK-012-frontend-day-history.md)（route・丸の具体
-寸法・続き取得の操作・文言）。日付の基準そのものは本タスクで決めており、後続で再検討しない。
+`recorded_at`の表現形式、attemptの発行経路と保存方式・再送時の応答、日付をキーにした日の詳細の
+取得と1日当たりの上限、0件のresponse、error）、[TASK-003](TASK-003-generation-design.md)
+（attemptの一回性と24時間再試行の接続を冪等性の検討に含める）、
+[TASK-008](TASK-008-backend-dot-history.md)（データ構造・索引・日付算出の実装位置・集約query・
+attemptの発行と検証の実装）、[TASK-010](TASK-010-frontend-recording.md)（attemptの取得・保持・
+破棄）、[TASK-012](TASK-012-frontend-day-history.md)（route・丸の具体寸法・続き取得の操作・文言・
+0件だった日の再取得）。日付の基準そのものは本タスクで決めており、後続で再検討しない。
 本タスクは判断のみで、実装・実機確認は行っていない。
