@@ -112,8 +112,8 @@ Browser（音声は memory のみ。storage へ書かない）
           → Amazon Transcribe（東京）    ← 元音声が第三者へ渡る最初の地点
           → Amazon Bedrock の Claude（Geo:JP または mantle In-Region）
           → RDS：dots（sentence / summary / date / duration）
-          → 成功（＝Dotの保存まで完了）：一時object（音声）を即削除
-             （記録をいつ消すかはTASK-003と相互確認）
+          → 成功（＝Dotの保存まで完了）：一時object（音声）の削除処理を始める
+             （記録は後片付けが終わってから消す。2026-09-29にTASK-003で確定）
           → 失敗：受理から24時間は再試行可。期限が来たらアプリが削除（lifecycleは保険）
   ← response：Dot と文字起こし全文（音声URLは返さない）
        → Browser：文字起こしは sessionStorage にタブを閉じるまで。logout・User切替で削除
@@ -197,7 +197,7 @@ Job（非同期。worker は当面 ECS 同一タスク内で Puma と並走）
   → Amazon Bedrock の Claude: sentence と summary を生成
   → 利用者の行を FOR UPDATE → 世代番号を確認 → dots へ保存（処理ID を同じ行に持つ）
      ＋ 記録を succeeded_cleanup_pending へ（同一 transaction。ここで成功が確定する）
-  → cleanup: 音声の一時object を即削除。文字起こし結果は client の ACK を待つ
+  → cleanup: 音声の一時object の削除処理を始める。文字起こし結果は client の ACK を待つ
   → cleanup が全部終わってから処理の記録を削除する
   → 失敗: 記録を failed で残す。期限内は再試行できる
   → 期限到来: 音声object・文字起こし結果・Transcribe の job・残る記録の削除処理を始める
@@ -206,7 +206,7 @@ GET /api/v1/dots/generations/:処理ID（client は polling）
   → **まず dots を見る。**同じ処理ID の Dot があれば成功として返す
     （記録が cleanup 待ちで残っていても「処理中」とは返さない）
 POST .../transcript_ack（client が全文を保存し終えたら送る。冪等）
-  → 文字起こし結果と Transcribe の job を即削除する
+  → 文字起こし結果と Transcribe の job の削除処理を始める
 ```
 
 - **文字起こしと生成の委託先をAWSに統一する。**委託先が1社に集約され、確認すべき9項目
@@ -229,7 +229,8 @@ POST .../transcript_ack（client が全文を保存し終えたら送る。冪�
   「workerのmemoryだけを通る」経路は存在しない。**`OutputBucketName`を必ず指定し**、音声の一時
   objectと同じbucketの別prefixへ、同じ条件（非公開・暗号化・versioning無効・keyはUUID）で置く。
   指定を省くとservice-managed bucketへ置かれ、保持と削除を自分たちで制御できない。
-  **端末が受け取って削除ACKを送ったら即削除し、ACKが来ない場合の期限を別に置く。**
+  **端末が受け取って削除ACKを送ったら、その時点で削除処理を始める。**ACKが来ない場合の期限を
+  別に置く。**始める契機は約束できるが、消え終わる時刻は約束しない**（[privacy.md §5-2](privacy.md)）。
   削除では**objectとTranscribeのjob（`DeleteTranscriptionJob`）の両方**を消す。
   **jobが非終端の間は削除できない**ため、終端になるまで追ってから消す。
   **期限を過ぎたら、objectが残っていても端末へ返さない。**
