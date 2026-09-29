@@ -29,8 +29,9 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 
 ## 2. データと正本
 
-**Dot**は、1回の録音から生まれる記録1件を指す。実サービスで`dots`に残るのは`id`、`date`、`duration`、
+**Dot**は、1回の録音から生まれる記録1件を指す。実サービスで利用者に見える内容は`date`、`duration`、
 `sentence`（今日の一文）、`summary`（話した内容の要約）だけで、**音声も文字起こし全文も含まない。**
+`dots`はこれに加えて`id`、所有者、作成・更新時刻、ゴミ箱の状態といった管理用の項目を持つ。
 [`dot-history.md`](./dot-history.md) §1の「Dot = その日の自分」は同じものを一覧で丸として表す
 表示上のコンセプトで、保存する項目の定義ではない。
 
@@ -43,7 +44,7 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 | マイクstream / AudioContext | 録音中のbrowser memory | stop / dispose時にtrackを停止しAudioContextを閉じる。外部送信・永続化しない。 | 変えない。録音中のmemoryだけに置く。権限説明・対応ブラウザ・中断UXはTASK-010 |
 | 録音Blob | `MediaRecorder`内部で一時生成され得る | `stop`はBlobを生成し得るが、`useRecorder`はdurationだけを上位へ返す。Blobは後続へ渡さず、保存・送信しない。 | 同一originのRails経由で送る。**長期保存しない**が、処理が終わるまでS3東京へ一時的に預かる（非公開・暗号化・versioningを有効にしない）。**DotがRDSへ保存されるまで完了したら**即削除（文字起こしや生成が通った時点ではない）。失敗した場合は受理から24時間を再試行の期限とし、期限が来たらアプリが削除する（lifecycleは保険で、それ自体は24時間を保証しない）。Dot削除は対象の処理のもの、退会は本人の全部を削除。端末のstorageへは書かない。最長30分・32MB |
 | 録音時間 | Session Providerと`fod.session.v1` | `reset`またはbrowser storageの削除で消える。UIの削除操作は未実装。 | Dotと同じrequestで送り、RDSの`dots`を正本にする。保持・削除もDotと同じ |
-| Dot（id、date、duration、sentence、summary） | Session Providerと`fod.session.v1`に現在の1件（現行のDotSessionは`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。`sentence`と`summary`は本人が編集でき、編集前の値は残さない。1件ごとの削除はゴミ箱（7日で完全削除）、即時の完全削除も備える。**`reflection`と`closing`は生成も保存もしない** |
+| Dot（id、date、duration、sentence、summary） | Session Providerと`fod.session.v1`に現在の1件（現行のDotSessionは`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。`sentence`と`summary`は本人が編集でき、編集前の値は残さない。1件ごとの削除はゴミ箱（受理から7日で削除処理を始める）、即時の完全削除も備える。**`reflection`と`closing`は生成も保存もしない** |
 | 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す |
 | 話した内容の要約（`summary`） | 存在しない | — | 文字起こしから生成し、Dotと同じ行に保存する。Dotを削除すれば一緒に消える。要約にも実名は残り得るため、Dot本文と同じ保護・削除・説明の対象にする |
 | API response | `createDot`の一時値をZod検証後にDotSessionへ | 未検証値は保存しない。 | Dotと文字起こしを返す。音声のURLは返さない。正式な契約はTASK-005 |
@@ -82,12 +83,18 @@ keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを�
   知っていることを権限の根拠にしない。
 - 保存されたDotは認証済み利用者本人だけが取得・更新・削除できる。
 - 削除はDot 1件ごとの削除と退会の両方を備える。**1件ごとの削除はゴミ箱へ移す形とし、受理から7日で
-  完全に削除する。**ゴミ箱の中のDotはDay・一覧・詳細から取得できず、ゴミ箱の画面からだけ見えて
-  復元できる。画面には「削除しました」ではなく「ゴミ箱に移動しました。7日後に完全に消えます」と示す。
-  **ゴミ箱を経由しない「すぐに完全削除」も備える。**退会はゴミ箱を経由せず、ゴミ箱の中も含めて消す。
-- **`sentence`と`summary`は本人が編集できる。編集前の値は残さない**（版も履歴も持たない）。
+  アプリが削除処理を始める。**ゴミ箱の中のDotはDay・一覧・詳細から取得できず、ゴミ箱の画面からだけ
+  見えて復元できる。**ゴミ箱を経由しない「すぐに完全削除」も備える。**退会はゴミ箱を経由せず、
+  ゴミ箱の中も含めて消す。
+- 画面には「削除しました」ではなく「ゴミ箱に移動しました。7日後から削除処理を行います」と示す。
+  **消え終わる時刻を約束しない。**「完全削除」が指すのはアプリが持つ分で、RDS自動backupと外部
+  providerに残り得る分は含まない。その2つは別の説明として示す。
+- **`sentence`と`summary`は本人が編集できる。アプリは編集前の値を残さない**（版も履歴も持たない）。
   消したかった実名が編集履歴に残るのでは直した意味がないため、戻せないことを編集前に伝える。
   `date`と`duration`は編集させない。ゴミ箱の中のDotは復元してから編集する。
+- ただし**編集より前に取得したbackupには編集前の本文が残る。**「編集前の値はどこにも残らない」とは
+  説明しない。障害復旧で復元したとき、**削除したDotと、編集で取り除いた内容を再び見える状態にしない。**
+  実現方法はTASK-013/015で決める。
 - Dotとして保存するのは`date`、`duration`、`sentence`（今日の一文）、`summary`（話した内容の要約）で、
   AIからの語りかけ（`reflection`・`closing`）は生成も保存もしない。`summary`は本人が読める場所に表示する。
 - 認証はRails + Deviseのメール＋パスワード・確認メール・パスワード再設定と、OmniAuthのGoogle
