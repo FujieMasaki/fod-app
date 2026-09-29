@@ -77,7 +77,9 @@
 - 続き取得はcursor方式とする。offsetやpage番号は採用しない。parameterとcursorの名称・型・既定値と
   上限（Planの提案値は既定30日分・上限100日分）を本タスクで確定する。
 - 日付はAsia/Tokyoの暦日をserverが決め、1日の始まりは0:00 JST。**`date`は`recorded_at`
-  （録音開始時刻・UTC）から算出し、保存時刻からは算出しない**（2026-09-29にTASK-004で採用）。
+  （録音開始操作をserverが受理した時刻・UTC。実際に話し始めた瞬間と完全に一致するとは扱わない。
+  定義は[dot-history](../dot-history.md) §2）から算出し、保存時刻からは算出しない**
+  （2026-09-29にTASK-004で採用）。
   `recorded_at`はDotの項目として返し、本人に更新させない。並びと「最新」の判定も`recorded_at`
   降順・同値ならDotの識別子降順とする。本タスクは`date`と`recorded_at`の表現形式・項目名・
   schemaを定める。
