@@ -13,7 +13,7 @@
 
 既存のMediaDevices / MediaRecorderによる録音を拡張し、利用者への事前説明と実サービスで必要な入力の受け渡しを実装する。durationだけを渡す現行動作を、決定した音声利用方式に合わせる。生成開始後の状態表示と再試行はTASK-011で扱う。
 
-2026-09-29にTASK-004で、Dotの`date`を録音開始時刻（`recorded_at`）から算出すると決めた。これに伴い、**実際の録音開始操作でserverが発行する録音attemptを取得・保持し、送信時に渡す・やり直しや離脱で破棄する**責務が本タスクに入る。attemptの契約（発行の操作、1件のDot生成にしか使えない制約、期限、別Userでの拒否、保存方式）はTASK-005、決定の経緯は[dot-history §2](../dot-history.md)と[TASK-004 Plan §18-3](../implementation-plans/2026-09-28-task-004-history-design.md)。
+2026-09-29にTASK-004で、Dotの`date`を`recorded_at`（録音開始操作をserverが受理した時刻）から算出すると決めた。これに伴い、**実際の録音開始操作でserverが発行する録音attemptを取得・保持し、送信時に渡す・やり直しや離脱で破棄する**責務が本タスクに入る。`recorded_at`と実際の録音開始のずれを小さく保つため、**マイク権限の取得後、attemptの発行が成功した直後に録音を開始する順序**を守る（発行を待たずに録音を始めたり、録音開始から時間を置いて発行したりしない）。attemptの契約（発行の操作、1件のDot生成にしか使えない制約、期限、別Userでの拒否、保存方式）はTASK-005、決定の経緯は[dot-history §2](../dot-history.md)と[TASK-004 Plan §18-3](../implementation-plans/2026-09-28-task-004-history-design.md)。
 
 ## 確認可能な完了条件
 

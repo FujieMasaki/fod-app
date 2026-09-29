@@ -34,7 +34,8 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 `sentence`（今日の一文）、`summary`（話した内容の要約）と、同じ日に複数あるときに区別するための
 録音時刻（`recorded_at`）だけで、**音声も文字起こし全文も含まない。**
 `dots`はこれに加えて`id`、所有者、作成・更新時刻、ゴミ箱の状態といった管理用の項目を持つ。
-`recorded_at`は**録音開始時刻をUTCで保持する項目**で、serverが録音の開始時に決める。`date`は
+`recorded_at`は**録音開始操作をserverが受理した時刻をUTCで保持する項目**で、serverが決める
+（実際に話し始めた瞬間と完全に一致するとは扱わない。定義は[`dot-history.md`](./dot-history.md) §2）。`date`は
 `recorded_at`から算出したAsia/Tokyoの暦日であり、作成時刻（保存時刻）からは算出しない
 （2026-09-29にTASK-004で採用。[`dot-history.md`](./dot-history.md) §2が正本）。
 [`dot-history.md`](./dot-history.md) §1の「Dot = その日の自分」は同じものを一覧で丸として表す
