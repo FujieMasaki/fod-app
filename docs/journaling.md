@@ -48,7 +48,7 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 | 録音Blob | `MediaRecorder`内部で一時生成され得る | `stop`はBlobを生成し得るが、`useRecorder`はdurationだけを上位へ返す。Blobは後続へ渡さず、保存・送信しない。 | 同一originのRails経由で送る。**長期保存しない**が、処理が終わるまでS3東京へ一時的に預かる（非公開・暗号化・versioningを有効にしない）。**DotがRDSへ保存されるまで完了したら**即削除（文字起こしや生成が通った時点ではない）。失敗した場合は受理から24時間を再試行の期限とし、期限が来たらアプリが削除する（lifecycleは保険で、それ自体は24時間を保証しない）。Dot削除は対象の処理のもの、退会は本人の全部を削除。端末のstorageへは書かない。最長30分・32MB |
 | 録音時間 | Session Providerと`fod.session.v1` | `reset`またはbrowser storageの削除で消える。UIの削除操作は未実装。 | Dotと同じrequestで送り、RDSの`dots`を正本にする。保持・削除もDotと同じ |
 | Dot（id、date、duration、sentence、summary） | Session Providerと`fod.session.v1`に現在の1件（現行のDotSessionは`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。`sentence`と`summary`は本人が編集でき、編集前の値は残さない。1件ごとの削除はゴミ箱（受理から7日で削除処理を始める）、即時の完全削除も備える。**`reflection`と`closing`は生成も保存もしない** |
-| 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す |
+| 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。ただし**Amazon Transcribeが結果をS3へ書き出すため、自前のbucketへ出して端末が受け取るまで置く**（2026-09-29にTASK-003で追加）。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す。server側の保持・削除は[privacy.md §5](./privacy.md)を正本とする |
 | 話した内容の要約（`summary`） | 存在しない | — | 文字起こしから生成し、Dotと同じ行に保存する。Dotを削除すれば一緒に消える。要約にも実名は残り得るため、Dot本文と同じ保護・削除・説明の対象にする |
 | API response | `createDot`の一時値をZod検証後にDotSessionへ | 未検証値は保存しない。 | Dotと文字起こしを返す。音声のURLは返さない。正式な契約はTASK-005 |
 

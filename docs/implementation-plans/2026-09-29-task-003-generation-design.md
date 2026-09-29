@@ -626,14 +626,33 @@ clientが他人のIDを推測しても、所有者が一致しなければ存在
 | 状態 | 意味 | 次に進める先 |
 | --- | --- | --- |
 | `uploading` | 記録はcommit済み、S3へのuploadが進行中または放置 | `accepted` / `upload_failed` / `cancel_requested` |
-| `upload_failed` | objectが完成しなかった | 再upload（新しいattemptを取った要求だけ） / `cancel_requested` |
+| `upload_failed` | objectが完成しなかった | **`uploading`**（新しいattemptを取った要求だけ。下記） / `cancel_requested` |
 | `accepted` | objectが完成し、Jobをenqueueした | `transcribing` / `cancel_requested` |
 | `transcribing` | Transcribeのjobを開始し、終端を待っている | `generating` / `failed` / `cancel_requested` |
 | `generating` | 生成中 | `succeeded_cleanup_pending` / `failed` / `cancel_requested` |
 | `failed` | 失敗。期限内なら再試行できる | `transcribing` / `generating`（retry） / `cancel_requested` |
-| `succeeded_cleanup_pending` | **Dotは保存済み。**cleanupだけが残っている | 削除（cleanup完了） |
+| `succeeded_cleanup_pending` | **Dotは保存済み。**cleanupだけが残っている | **自分自身**（cleanup失敗→新attemptで再実行） / 削除（cleanup完了） |
 | `cancel_requested` | 退会・期限到来・明示削除。**これ以降、生成へ進まない** | `cleanup_pending` |
-| `cleanup_pending` | 外部資源の後片付け中。非終端jobの終端待ちを含む | 削除（cleanup完了） |
+| `cleanup_pending` | 外部資源の後片付け中。非終端jobの終端待ちを含む | **自分自身**（cleanup失敗→新attemptで再実行） / 削除（cleanup完了） |
+
+**cleanupの失敗は終端ではない**（4巡目のレビュー指摘2）。`succeeded_cleanup_pending`と
+`cleanup_pending`は**状態を保ったまま新しいattemptを取って再実行する**（自己遷移）。
+
+- 再実行はcleanupの認可条件（期限到来・退会・明示削除）で入る。leaseで二重実行を防ぐ。
+- **既に消えている資源への再実行は冪等に成功として扱う。**S3のobjectもTranscribeのjobも、
+  無ければ「消えている」ので失敗にしない。
+- **`succeeded_cleanup_pending`からDotを作り直さない。**この状態の記録はcleanup専用で、
+  生成の入力には使わない。
+- 全部消えてから記録を削除する。**途中で落ちてもこの状態に留まるので、必ず再開できる。**
+
+**再uploadは`uploading`へ戻す**（4巡目のレビュー指摘3）。新しいattempt（lease token）を発行し、
+旧attemptを失効させたうえで`upload_failed` → `uploading`と遷移させる。状態を据え置いて
+attemptだけ更新する形にはしない（`uploading`が「upload中」を表す状態のままになるため）。
+
+**旧leaseを失効させても、開始済みのS3 PUTは止まらない**（4巡目の任意指摘🔵）。失効の直後に
+古いPUTが完成し、新しいattemptやcleanupと同じkeyを奪い合う可能性がある。**object keyに
+attemptを含めて世代ごとに別のkeyにし、記録が持つ「現在有効なkey」以外は残存として回収する。**
+実装方法はTASK-009で確定するが、**「lease失効だけで古いPUTが無効になる」と仮定しない。**
 
 **すべての遷移は条件付き更新（現在の状態を条件に含めるUPDATE）で行う。**状態を確保してから
 S3の読み出しや外部サービスの呼び出しへ進む。読んでから更新するのでは、下の競合を防げない。
@@ -642,24 +661,33 @@ S3の読み出しや外部サービスの呼び出しへ進む。読んでから
 「終端後に生成へ進む」と「終端後に削除する」の両方へ分岐させると、**退会したのにBedrockへ
 全文を送る経路**が残る（3巡目のレビュー指摘3）。
 
-#### 入口の共通条件（retry・再upload・cleanupに共通）
+#### 入口の手続き（retry・再upload・cleanupに共通）
 
-**新しい処理を始める側は、すべて同じ入口を通す。**利用者の操作による再試行も、自動回収による
-再実行も区別しない。
+**新しい処理を始める側は、すべて同じ手続きを通す。**利用者の操作による再試行も、自動回収による
+再実行も区別しない。**共通なのは手続きであって、認可の条件ではない。**
 
 1. **利用者の行を`FOR UPDATE`でlockする。**
-2. `active`であること、記録の世代番号が現在の世代と一致すること、**期限内であること**、
-   現在の状態が遷移元として妥当であることを確認する。
-3. 条件を満たせばattempt（lease token）を発行し、状態を条件付きで更新してからcommitする。
-4. **外部の呼び出しはcommitのあとに行う。**
+2. **現在の状態が遷移元として妥当であることを確認する。**
+3. **下表の認可条件を確認する。ここだけ処理ごとに違う。**
+4. 条件を満たせばattempt（lease token）を発行し、状態を条件付きで更新してからcommitする。
+5. **外部の呼び出しはcommitのあとに行う。**
+
+| 処理 | 認可の条件 |
+| --- | --- |
+| retry（生成・文字起こしの再試行） | 利用者が`active`・世代一致・**期限内** |
+| 再upload | 同上。加えて旧leaseが失効していること |
+| **cleanup（後片付け）** | **期限到来・退会・明示削除のいずれか。`active`も期限内も要求しない** |
+
+**cleanupに`active`と期限内を要求してはいけない**（4巡目のレビュー指摘1）。cleanupの契機は
+まさに「退会した」「期限が過ぎた」なので、共通条件をそのまま当てると**`cancel_requested`と
+`cleanup_pending`から永久に抜け出せなくなる。**3巡目の書き方はこの矛盾を持っていた。
 
 - **retryとcleanupは同じ記録を奪い合う。**`failed`から`transcribing`/`generating`へ進める更新と、
   `failed`から`cancel_requested`へ進める更新を**どちらも条件付きにして、片方だけを成功させる**
-  （3巡目のレビュー指摘5）。retryが勝つ条件は「active・世代一致・期限内」、cleanupが勝つ条件は
-  「期限到来・退会・明示削除」で、重ならない。
-- **退会の受理後にretryを受け付けない。**入口が利用者の行をlockして`active`を見るので、
+  （3巡目のレビュー指摘5）。上表のとおり条件が重ならないので、両方が勝つことはない。
+- **退会の受理後にretryを受け付けない。**retryの入口が利用者の行をlockして`active`を見るので、
   自動回収も含めてここで止まる。TASK-002の「退会の受理以降は新規の保存・再試行・結果の確定を
-  止める」を満たす。
+  止める」を満たす。**cleanupは止めない。**
 - **保証できる境界を明示する。**退会より前に始まったBedrockのrequestは止められない。
   約束できるのは**「退会の受理後に新しいBedrockのrequestを開始しない」**ことと、
   **「退会後に結果を確定させない」**ことである。
@@ -853,7 +881,10 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
 | 8 | 保存（RDS）が失敗 | Dotは無い。objectは残る（TASK-002の「成功」の定義） | 文字起こし結果が残っていれば生成から、無ければ文字起こしからやり直す |
 | 9 | **保存は成功したが応答が届かない** | Dotは存在する。記録は`succeeded_cleanup_pending`か削除済み | **再試行しない。**pollingは**まずdotsを見る**ので、記録が残っていても成功として返す（§9） |
 | 22 | **Dotの保存直後にworkerが止まる** | Dotと記録が同時に存在する。cleanupは未了 | **pollingはDotを優先するので成功として返せる**（記録が残っていても「処理中」にしない）。残った記録は**cleanup専用**で、生成の再試行には使わない（2巡目のレビュー指摘10） |
-| 23 | 音声を削除したあと、記録を削除する前に止まる | 記録が`succeeded_cleanup_pending`で残る | cleanupを再実行する。既に消えているものは冪等に成功として扱う |
+| 23 | 音声を削除したあと、記録を削除する前に止まる | 記録が`succeeded_cleanup_pending`で残る | **状態を保ったまま新しいattemptを取って再実行する**（自己遷移）。既に消えているものは冪等に成功として扱う |
+| 32 | **cleanupが繰り返し失敗する** | `succeeded_cleanup_pending`または`cleanup_pending`に留まる | **終端にしない。**cleanupの認可条件（期限到来・退会・明示削除）で何度でも入れる。`active`も期限内も要求しない（4巡目のレビュー指摘1）。残存を検知して運用で拾う |
+| 33 | **退会・期限到来でcleanupが入口を通る** | 利用者は`active`でなく、期限も過ぎている | **通る。**cleanupの認可条件はretryと別で、`active`と期限内を要求しない。ここを共通にすると`cleanup_pending`から抜け出せない |
+| 34 | **`upload_failed`から再uploadする** | 旧attemptが失効している | 新しいattemptを発行して**`uploading`へ戻す。**旧leaseで始まったPUTが後から完成し得るため、**keyをattemptごとに分け、記録が持つ有効なkey以外を残存として回収する** |
 | 10 | 同じ冪等性keyで再送 | `dots`のunique制約で衝突する | **2件目のDotを作らず、既存のDotを返す** |
 | 11 | cleanup完了後にDotを完全削除し、同じ処理IDで再送する | `dots`にもcleanup済みの記録にも無いため、**新しい録音として受理される** | これは穴ではない。**cleanupが終わるまで記録が残る**（§20）ので、消し残した音声がある間は記録も残り、unique制約が効く。**旧objectが残ったまま新しいDotが作られる経路は無い**（3巡目のレビュー指摘6で訂正。2巡目の記述は「成功時に記録を即削除する」前提だった） |
 | 31 | **ACKの処理後にresponseが届かない／ACKが重複・並行して届く／fallbackのcleanup後に遅れて届く** | 対象が既に無い場合がある | **所有者を確認したうえで、冪等に成功として扱う。**object・job・記録のいずれが無くても失敗にしない。ACK自体は保存しない（§27） |
