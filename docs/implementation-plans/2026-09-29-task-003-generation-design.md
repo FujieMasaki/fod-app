@@ -736,7 +736,9 @@ TASK-004が`recorded_at`の根拠として**録音attempt**（録音開始操作
 - **`TranscriptionJobName`には文字種と長さの制約がある。**AWSアカウント内で一意であることに加え、
   `^[0-9a-zA-Z._-]+`、最大200文字である
   （[StartTranscriptionJob](https://docs.aws.amazon.com/transcribe/latest/APIReference/API_StartTranscriptionJob.html)）。
-  **処理IDをそのままjob名に使うなら、この形式を満たす値であることをTASK-005の契約で定める。**
+  **制約が掛かるのは処理ID単体ではなく、`<処理ID>-<文字起こし試行番号>`として組み立てた後の
+  job名全体である。**試行番号を付けた後の長さと文字種で判定する。形式はTASK-005の契約で定め、
+  実際の値での確認はTASK-009で行う。
 
 - 置き場は**RDSの表**にする。Solid QueueがRDSを使うため、Jobと記録の整合を同じDBで扱える。
 - **記録自体も個人データ**として`privacy.md §5-1`の対象に残す。
