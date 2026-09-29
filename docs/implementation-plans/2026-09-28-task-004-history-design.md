@@ -397,7 +397,8 @@ Day（今日のDot） ──「過去のDotを見る」──▶ 一覧（丸 + 
   丸の配置と意味付けの原則（§25）。
 - TASK-005が決める: endpointのpath・method、parameterとcursorの名称・型・既定値と上限、
   responseのschemaと項目名、日付・録音時刻の表現形式、日付の基準（録音開始か保存時刻か）、
-  一覧・詳細・続き取得のerrorとstatus、削除済み・他人のDotの区別、互換性確認の運用。
+  Dayの今日の最新Dotを専用endpointで取得するか一覧で兼ねるか、一覧・詳細・続き取得のerrorと
+  status、今日の記録なしと取得失敗の区別、削除済み・他人のDotの区別、互換性確認の運用。
 - TASK-008が決める: DBのデータ構造と索引、日付算出の実装位置、current_user scopeでの取得、
   同日集約のquery、保存失敗時の整合性、testの範囲。
 - TASK-012が決める: route構成と一覧の入口（「Dot」tabの有効化を含む）、丸のサイズ・余白・
