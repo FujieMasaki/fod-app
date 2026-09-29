@@ -52,20 +52,23 @@
 はじめに4件（同日の複数録音・一覧の配置・記録のない日・丸の意味付け）を判断し、その後のレビューで
 日付境界を人間の判断として記録すべきこと、日付の基準をTASK-005へ渡さず本タスクで決めるべきことが
 分かったため、Q5（Asia/Tokyo固定・0:00 JST）とQ6（日付の基準）を追加で判断した。さらに再レビューで
-「認証確認の時刻は録音開始時刻ではない」と分かり、Q7（`recorded_at`を録音attemptから決める）と
-Q8（`recorded_at`を「serverが録音開始操作を受理した時刻」と定義する）を判断した
+「認証確認の時刻は録音開始時刻ではない」と分かり、Q7（`started_at`を録音attemptから決める）と
+Q8（`started_at`を「serverが録音開始操作を受理した時刻」と定義する）を判断した
 （Plan §18-2・§18-3・§18-4・§24・§25）。
 
 - 保存は録音1回=Dot 1件の追記のみ。同日の再録音で過去のDotを上書き・統合しない。表示上の
   「1日=1つのDot」は一覧の見せ方であり、保存件数ではない。
 - 日付はserverがAsia/Tokyoの暦日として決め、1日の始まりは0:00 JST。clientの時計・タイムゾーンを
   日付の根拠にしない。深夜のオフセットは使わない。
-- `date`は**`recorded_at`（録音開始操作をserverが受理した時刻・UTC）から算出**し、作成時刻
+- `date`は**`started_at`（録音開始操作をserverが受理した時刻・UTC）から算出**し、作成時刻
   （保存時刻）からは算出しない。
-  失敗の再試行や日をまたぐ録音で、話した日から日付が動かないようにするため。`recorded_at`は
-  本人に編集させず、保持・削除はDot本体と同じ。「最新」は`recorded_at`降順、同値ならDotの識別子
+  失敗の再試行や日をまたぐ録音で、話した日から日付が動かないようにするため。`started_at`は
+  本人に編集させず、保持・削除はDot本体と同じ。「最新」は`started_at`降順、同値ならDotの識別子
   降順。`dots`の項目としてjournaling / privacy / architectureへ反映済み。
-- `recorded_at`は**「serverが録音開始操作を受理した時刻」**と定義する。実際の録音開始操作に対応して
+- `started_at`は**「その記録の入力を始めた操作をserverが受理した時刻」**と定義する（MVPの入力手段は
+  音声だけなので、実際には録音開始操作の受理時刻）。項目名は当初`recorded_at`としていたが、
+  PR #41 マージ後に`started_at`へ改めた（Plan §27）。入力手段に縛られない名前にするためで、
+  定義とルールは変えていない。`created_at`（Railsが自動管理する行の作成時刻）とは別の項目である。実際の録音開始操作に対応して
   serverが発行する録音attemptの受理時刻であり、認証確認の時刻は使わない。実際に話し始めた瞬間との
   差は受け入れ、両者が完全に一致するとは扱わず、**差が一定の秒数以内とも保証しない**。
   **遅れが日付境界（0:00 JST）をまたいだ場合は日付がずれ得る。**端末が計測した開始時刻を送る案は、
@@ -73,7 +76,7 @@ Q8（`recorded_at`を「serverが録音開始操作を受理した時刻」と�
 - attemptは本人に紐づき、1件のDot生成にしか使えず、やり直しで新しくなり、別Userでは使えず、
   未送信には期限がある。一回性は初回uploadでattemptの識別子を処理の記録へ原子的に関連付けて
   担保し、**upload受理後の24時間再試行はattemptの再利用ではなく処理の記録を使う**。再試行や
-  Job再実行でも元の`recorded_at`を維持する。保存方式と復帰時の再利用可否はTASK-005、冪等性との
+  Job再実行でも元の`started_at`を維持する。保存方式と復帰時の再利用可否はTASK-005、冪等性との
   接続はTASK-003、Frontendでの取得・保持・破棄と録音開始の順序は
   [TASK-010](TASK-010-frontend-recording.md)。serverに保存する方式ならprivacyへ保持・期限・削除を
   追加する（Plan §18-3・§18-4）。
@@ -99,15 +102,15 @@ Q8（`recorded_at`を「serverが録音開始操作を受理した時刻」と�
 残る判断は、利用者ごとのタイムゾーン設定、深夜境界のオフセット、同日の複数Dotをまとめる表現で、
 [dot-history](../dot-history.md) §5と[product](../product.md) §5に再検討条件付きで残した。
 
-引き継ぎ先は次のとおり。日付の基準と`recorded_at`の定義そのものは本タスクで決めており、後続で
+引き継ぎ先は次のとおり。日付の基準と`started_at`の定義そのものは本タスクで決めており、後続で
 再検討しない。本タスクは判断のみで、実装・実機確認は行っていない。
 
 - [TASK-003](TASK-003-generation-design.md): attemptの一回性と24時間再試行の接続を冪等性の検討に
   含める。
-- [TASK-005](TASK-005-product-api-contract.md): endpoint・parameter・schema、`date`と`recorded_at`の
+- [TASK-005](TASK-005-product-api-contract.md): endpoint・parameter・schema、`date`と`started_at`の
   表現形式、attemptの発行経路と保存方式・再送時の応答、日付をキーにした日の詳細の取得と1日当たりの
   上限、0件のresponse、error。
-- [TASK-008](TASK-008-backend-dot-history.md): データ構造・索引、Dotへの`recorded_at`の保存と
+- [TASK-008](TASK-008-backend-dot-history.md): データ構造・索引、Dotへの`started_at`の保存と
   日付算出の実装位置、集約queryと日付キーの取得。
 - [TASK-009](TASK-009-backend-audio-generation.md): attemptの発行と検証、**attemptの識別子を初回
   uploadで処理記録へ原子的に関連付けること**、同時並行送信・応答前のupload失敗の扱い、upload受理後の
