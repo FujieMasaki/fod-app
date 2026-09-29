@@ -104,7 +104,7 @@ keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを�
 - ただし**編集より前に取得したbackupには編集前の本文が残る。**「編集前の値はどこにも残らない」とは
   説明しない。障害復旧で復元したとき、**削除したDotと、編集で取り除いた内容を再び見える状態にしない。**
   実現方法はTASK-013/015で決める。
-- Dotとして保存するのは`date`、`started_at`（録音開始操作をserverが受理した時刻・UTC）、`duration`、`sentence`（今日の一文）、
+- Dotとして保存するのは`date`、`started_at`（定義は[dot-history §2](./dot-history.md)。MVPの音声入力では録音開始操作の受理時刻・UTC）、`duration`、`sentence`（今日の一文）、
   `summary`（話した内容の要約）で、AIからの語りかけ（`reflection`・`closing`）は生成も保存もしない。
   `summary`は本人が読める場所に表示する。`date`は`started_at`から算出したAsia/Tokyoの暦日とし、
   保存時刻からは算出しない。`started_at`は編集させず、同日に複数あるDotの区別と並びに使う。
