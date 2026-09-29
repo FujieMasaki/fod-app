@@ -155,10 +155,10 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
 POST /api/v1/dots（同一origin・multipart・Cookie + CSRF・最長30分 / 32MB）
   → Rails: 認証再確認 → content type と size を検証
   → 利用者の行を FOR UPDATE で lock → active を確認 → 状態 uploading の記録を作成
-     （項目は §20 の表。名前は provider ID と attempt 番号から導く）→ commit
+     （項目は §20 の表。名前は provider ID と試行番号から導く）→ commit
                                          ★退会と排他されるのはこの transaction
   → commit のあとに S3東京へ upload（非公開・暗号化・versioning無効）
-     key = audio/<provider ID>/<upload attempt>
+     key = audio/<provider ID>/<upload試行番号>
   → upload 完成 → 世代番号を再確認 → 記録を accepted へ → Job を enqueue
      ※ 世代がずれていれば object を削除して終える（記録が消えていても手元の key で消す）
   → 202 相当で処理IDと再試行期限を返す                        ★ここで request は終わる
@@ -166,8 +166,8 @@ POST /api/v1/dots（同一origin・multipart・Cookie + CSRF・最長30分 / 32M
 [生成]  ここから非同期。worker は当面 ECS 同一タスク内
 Job: 記録の所有者と世代を確認 → 状態を transcribing へ
   → Amazon Transcribe（東京）へ S3 の object を渡す      ★★元音声が委託先へ渡る最初の地点
-     TranscriptionJobName = <provider ID>-<transcribe attempt>
-     OutputKey = transcripts/<provider ID>/<transcribe attempt>.json（§20の導出規則）
+     TranscriptionJobName = <provider ID>-<文字起こし試行番号>
+     OutputKey = transcripts/<provider ID>/<文字起こし試行番号>.json（§20の導出規則）
      OutputBucketName に自前の bucket を指定する（音声と同じ bucket の別 prefix）
      ※ response を失っても新しい job を作らず GetTranscriptionJob で合流する
   → 文字起こし結果が自前 S3 へ書き出される（§27）
@@ -185,7 +185,7 @@ Job: 記録の所有者と世代を確認 → 状態を transcribing へ
      Dot の完全削除・退会を受理したときも、その時点で削除へ回す（§20の認可表）
      ※ job が非終端なら DeleteTranscriptionJob は通らない。終端まで reconcile する
   → prefix（audio/<provider ID>/ と transcripts/<provider ID>/）ごと列挙して消す
-     旧 attempt の孤児もここで拾う。lifecycle は最後の受け皿（保険）
+     古い試行の孤児もここで拾う。lifecycle は最後の受け皿（保険）
   → 全部消えてから処理の記録を削除する
   ※ どれかの削除に失敗したら「削除済み」と扱わず再実行し、残存を検知する
 
@@ -307,7 +307,7 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 **状態機械の整合を文書だけで確認する作業は、ここで終える。**別AIのレビューを5巡受け、指摘は
 10 → 14 → 7 → 5 → 4件と収束したが、**3巡目以降は指摘の多くが「前の巡の修正が作った矛盾」**
 だった。§20の状態表にある状態と遷移、外部資源4種（S3の音声／S3の文字起こし結果／Transcribeのjob／Dot）・
-attempt世代の組み合わせは、**文章の読み合わせで閉じたと判定するのに向いていない。**
+試行番号の組み合わせは、**文章の読み合わせで閉じたと判定するのに向いていない。**
 
 - **遷移IDを振ったので、テストと1対1で対応づけられる**（§20の状態表）。
 - **TASK-009で状態遷移テストを先に書き、そこで閉じる。**実装の完了条件に入れた。
@@ -562,19 +562,19 @@ attempt世代の組み合わせは、**文章の読み合わせで閉じたと�
 | **HTTPのuploaderが消えた（`uploading`）** | **Jobがまだ存在しないので、Solid Queueは何も知らない。**watchdogが一定時間更新のない`uploading`を拾い、`HeadObject`で実体を見て決める（下記） |
 | workerプロセスが消えた | Solid Queueがプロセスの消失として回収する。その結果をアプリ側で拾う |
 | Transcribeの完了待ち | **`GetTranscriptionJob`でAWS側の状態を見る。**待っている限りstaleではない |
-| Job個体が止まった | attempt回数とlease tokenで排他し、二重実行を防いだうえで再実行する |
+| Job個体が止まった | 試行回数とlease tokenで排他し、二重実行を防いだうえで再実行する |
 
 **`uploading`の回収を誰がやるかが抜けていた**（3巡目のレビュー指摘2）。record-firstにしたことで、
 記録をcommitしたあと・upload完了前にrequestやcontainerが落ちる窓ができた。**この時点ではJobを
 enqueueしておらず、Transcribeのjobも無いので、上の3つのどれにも引っかからない。**
 pollingは永遠に`uploading`を返し、退会は「進行中の処理がある」まま完了できない。
 
-- **uploadにもattemptとlease tokenを持たせる。**
+- **uploadにも試行番号とlease tokenを持たせる。**
 - watchdogが、最終進捗時刻から一定時間更新のない`uploading`を検知し、`HeadObject`で判定する。
   - **objectが無い** → `upload_failed`へ。
   - **objectが完成していて、まだenqueueしていない** → `accepted`へ進めてenqueueする。
   - **世代が合わない、または利用者が退会中** → objectを削除して**`cancel_requested`へ**（そこから`cleanup_pending`へ進む）。状態表を飛ばして直接`cleanup_pending`にしない。
-- **再uploadを許すのは、旧leaseを失効させて新しいattemptを取った要求だけ。**「既存の記録が
+- **再uploadを許すのは、旧leaseを失効させて新しい実行権を取った要求だけ。**「既存の記録が
   あればbodyを受け取らない」は、**生きているuploadと放置されたuploadを区別してから**適用する。
   区別せずに再uploadを許すと、元のrequestと再requestが同じkeyへ並行して書く。
 
@@ -634,6 +634,19 @@ TASK-002が必須とした項目に、このタスクの決定で必要になる
 `dots`のunique制約も`(user_id, 処理ID)`にし、照会は常に`current_user.dots`にscopeする。
 clientが他人のIDを推測しても、所有者が一致しなければ存在しない扱いにする。
 
+#### 語の定義（TASK-004の「録音attempt」と混同しない）
+
+TASK-004が`recorded_at`の根拠として**録音attempt**（録音開始操作に対してserverが発行する識別子。
+正本は[dot-history.md §2](../dot-history.md)）を採用したため、**本Planでは「attempt」という語を
+使わない**（2026-09-29にTASK-004の担当と調整。同じ語を別の概念に使うと読み手が混乱するため、
+内部実装語である本Plan側を改名した）。
+
+| 本Planの語 | 意味 | TASK-004の「録音attempt」との違い |
+| --- | --- | --- |
+| **試行番号** | 再試行の世代。S3のkeyとTranscribeのjob名に含め、古いPUTが後から完成したときの孤児を回収する（upload試行番号／文字起こし試行番号） | 録音attemptは録音開始の受理証で、1件のDot生成にしか使えない。試行番号は1つの処理の中で増える |
+| **実行権**（lease token） | 同じ処理を二重に動かさないための排他。入口で発行する | 同上 |
+| **世代番号** | 利用者ごとの番号。退会との排他に使う | 処理ではなく利用者に紐づく |
+
 #### 命名: 処理IDをそのままAWSの名前に使わない
 
 **`TranscriptionJobName`はAWSアカウント内で一意でなければならず、衝突すると`ConflictException`に
@@ -648,21 +661,21 @@ clientが他人のIDを推測しても、所有者が一致しなければ存在
 
 - provider IDはserverが生成する（`user_id`とclientの値を混ぜてHMACで導くか、server側でUUIDを
   もう1つ発行する。どちらでもよいが、**AWSアカウント内で一意**であることを満たす）。
-  **provider IDは処理ごとに1つで、attemptが変わっても変わらない。**
-- **名前はprovider IDとattempt番号の2つから導く。**provider IDだけからは導かない
-  （5巡目のレビュー指摘3。4巡目にattempt別keyを足したとき、「provider IDだけから決定的に導く」
+  **provider IDは処理ごとに1つで、試行番号が変わっても変わらない。**
+- **名前はprovider IDと試行番号の2つから導く。**provider IDだけからは導かない
+  （5巡目のレビュー指摘3。4巡目に試行番号ごとのkeyを足したとき、「provider IDだけから決定的に導く」
   という元の規則と衝突したまま両方が残っていた）。
 
-| 資源 | 導出規則 | attemptが変わる契機 |
+| 資源 | 導出規則 | 試行番号が変わる契機 |
 | --- | --- | --- |
-| 音声のobject key | `audio/<provider ID>/<upload attempt>` | 再upload |
-| Transcribeのjob名 | `<provider ID>-<transcribe attempt>` | 文字起こしからの再試行 |
-| 文字起こし結果のobject key（`OutputKey`） | `transcripts/<provider ID>/<transcribe attempt>.json` | 同上 |
+| 音声のobject key | `audio/<provider ID>/<upload試行番号>` | 再upload |
+| Transcribeのjob名 | `<provider ID>-<文字起こし試行番号>` | 文字起こしからの再試行 |
+| 文字起こし結果のobject key（`OutputKey`） | `transcripts/<provider ID>/<文字起こし試行番号>.json` | 同上 |
 
-- **記録は「現在有効なattempt番号」と、そこから導いた現在有効なkey・job名を持つ。**
+- **記録は「現在有効な試行番号」と、そこから導いた現在有効なkey・job名を持つ。**
   Transcribeへ渡す入力は現在有効な音声key、cleanupの第一の対象は現在有効なkeyである。
-- **旧attemptのkeyは、prefixを列挙して回収する**（下記「孤児の回収」）。
-- attempt番号を固定したまま同じ名前で照会できるので、**応答喪失時に`GetTranscriptionJob`で
+- **古い試行のkeyは、prefixを列挙して回収する**（下記「孤児の回収」）。
+- 試行番号を固定したまま同じ名前で照会できるので、**応答喪失時に`GetTranscriptionJob`で
   既存jobへ合流する**という規則（§20のTranscribeのjobの回収）はそのまま成り立つ。
 - **user_id・email・録音日など、推測できる値や個人情報をAWSの名前に入れない。**
 
@@ -676,14 +689,14 @@ clientが他人のIDを推測しても、所有者が一致しなければ存在
 | 状態 | 意味 | 遷移（ID・先・検証するシナリオ） |
 | --- | --- | --- |
 | `uploading` | 記録はcommit済み、S3へのuploadが進行中または放置 | **T1** → `accepted`（§24-1） ／ **T2** → `upload_failed`（§24-2・30） ／ **T3** → `cancel_requested`（§24-19） |
-| `upload_failed` | objectが完成しなかった | **T4** → `uploading`（新attemptを取った要求だけ。§24-34） ／ **T5** → `cancel_requested`（§24-33） |
+| `upload_failed` | objectが完成しなかった | **T4** → `uploading`（新しい実行権を取った要求だけ。§24-34） ／ **T5** → `cancel_requested`（§24-33） |
 | `accepted` | objectが完成し、Jobをenqueueした | **T6** → `transcribing`（§24-1） ／ **T7** → `cancel_requested`（§24-3・33） |
 | `transcribing` | Transcribeのjobを開始し、終端を待っている | **T8** → `generating`（§24-1・25） ／ **T9** → `failed`（§24-4・12） ／ **T10** → `cancel_requested`（§24-26） |
 | `generating` | 生成中 | **T11** → `succeeded_cleanup_pending`（§24-1） ／ **T12** → `failed`（§24-5・6・8・13） ／ **T13** → `cancel_requested`（§24-14） |
 | `failed` | 失敗。期限内なら再試行できる | **T14** → `transcribing`（音声から。§24-4） ／ **T15** → `generating`（全文から。§24-5・6） ／ **T16** → `cancel_requested`（§24-16・33） |
-| `succeeded_cleanup_pending` | **Dotは保存済み。**cleanupだけが残っている | **T17** → 自分自身（cleanup失敗→新attemptで再実行。§24-23・32） ／ **T18** → 削除（cleanup完了。§24-1） ／ **T22** → `cancel_requested`（この状態のままDotの完全削除・退会を受理した。**T17の自己遷移より優先する**） |
+| `succeeded_cleanup_pending` | **Dotは保存済み。**cleanupだけが残っている | **T17** → 自分自身（cleanup失敗→新しい実行権で再実行。§24-23・32） ／ **T18** → 削除（cleanup完了。§24-1） ／ **T22** → `cancel_requested`（この状態のままDotの完全削除・退会を受理した。**T17の自己遷移より優先する**） |
 | `cancel_requested` | 退会・期限到来・明示削除。**これ以降、生成へ進まない** | **T19** → `cleanup_pending`（§24-26・33） |
-| `cleanup_pending` | 外部資源の後片付け中。非終端jobの終端待ちを含む | **T20** → 自分自身（cleanup失敗→新attemptで再実行。§24-32） ／ **T21** → 削除（cleanup完了。§24-19） |
+| `cleanup_pending` | 外部資源の後片付け中。非終端jobの終端待ちを含む | **T20** → 自分自身（cleanup失敗→新しい実行権で再実行。§24-32） ／ **T21** → 削除（cleanup完了。§24-19） |
 
 **遷移IDはシナリオ側から参照する**（5巡目の任意指摘）。**上表のどの遷移にも、対応するシナリオが
 無い状態を作らない。**遷移を足したら、同じ変更でシナリオも足す。
@@ -694,7 +707,7 @@ clientが他人のIDを推測しても、所有者が一致しなければ存在
 対応が無いことを漏れと扱わない。
 
 **cleanupの失敗は終端ではない**（4巡目のレビュー指摘2）。`succeeded_cleanup_pending`と
-`cleanup_pending`は**状態を保ったまま新しいattemptを取って再実行する**（自己遷移）。
+`cleanup_pending`は**状態を保ったまま新しい実行権を取って再実行する**（自己遷移）。
 
 - 再実行はcleanupの認可条件（下記の5契機の表）で入る。leaseで二重実行を防ぐ。
 - **既に消えている資源への再実行は冪等に成功として扱う。**S3のobjectもTranscribeのjobも、
@@ -703,12 +716,12 @@ clientが他人のIDを推測しても、所有者が一致しなければ存在
   生成の入力には使わない。
 - 全部消えてから記録を削除する。**途中で落ちてもこの状態に留まるので、必ず再開できる。**
 
-**再uploadは`uploading`へ戻す**（4巡目のレビュー指摘3）。新しいattempt（lease token）を発行し、
-旧attemptを失効させたうえで`upload_failed` → `uploading`と遷移させる。状態を据え置いて
-attemptだけ更新する形にはしない（`uploading`が「upload中」を表す状態のままになるため）。
+**再uploadは`uploading`へ戻す**（4巡目のレビュー指摘3）。新しい実行権（lease token）を発行し、
+古い実行権を失効させたうえで`upload_failed` → `uploading`と遷移させる。状態を据え置いて
+実行権だけ更新する形にはしない（`uploading`が「upload中」を表す状態のままになるため）。
 
 **旧leaseを失効させても、開始済みのS3 PUTは止まらない**（4巡目の任意指摘🔵）。失効の直後に
-古いPUTが完成し得る。**object keyにattemptを含めて世代ごとに別のkeyにする**ので、新しいattemptの
+古いPUTが完成し得る。**object keyに試行番号を含めて試行ごとに別のkeyにする**ので、新しい試行の
 objectを壊すことはない。取り残される旧keyは「孤児の回収」（prefixの列挙とlifecycle）で拾う。
 **「lease失効だけで古いPUTが無効になる」と仮定しない。**
 
@@ -727,7 +740,7 @@ S3の読み出しや外部サービスの呼び出しへ進む。読んでから
 1. **利用者の行を`FOR UPDATE`でlockする。**
 2. **現在の状態が遷移元として妥当であることを確認する。**
 3. **下表の認可条件を確認する。ここだけ処理ごとに違う。**
-4. 条件を満たせばattempt（lease token）を発行し、状態を条件付きで更新してからcommitする。
+4. 条件を満たせば実行権（lease token）を発行し、状態を条件付きで更新してからcommitする。
 5. **外部の呼び出しはcommitのあとに行う。**
 
 | 処理 | 認可の条件 | 消す対象 |
@@ -754,7 +767,7 @@ cleanupの契機はまさに「退会した」「期限が過ぎた」なので�
 **旧leaseを失効させても、開始済みのS3 PUTは止まらない。**cleanupがkeyを消した後に古いPUTが
 完成すると、**消したはずのkeyが再び現れる。**記録を削除済みなら、記録を辿る回収もできない。
 
-- **記録を削除する前に、進行中のattemptが無いことを確認する。**leaseが失効していること、
+- **記録を削除する前に、進行中の実行権が無いことを確認する。**leaseが失効していること、
   および`HeadObject`で現在の実体を確認することを条件にする。
 - **それでも取りこぼす。**PUTの完了を外から確実に止める手段はないため、
   **記録に依存しない回収を別に置く。**
@@ -957,7 +970,7 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
 | # | シナリオ | 結果の判定 | 再開点 |
 | --- | --- | --- | --- |
 | 1 | 正常終了 | Dotが保存され、記録が`succeeded_cleanup_pending`になり、cleanupのあとに記録を削除する | なし |
-| 2 | uploadの途中で切れる | **`uploading`の記録は存在し得る**（record-firstのため）。objectは未完成 | **watchdogが拾う**（§19）。`HeadObject`でobjectが無ければ`upload_failed`、完成していればenqueueへ進める。端末のBlobが残っていれば再送できるが、**旧leaseを失効させて新しいattemptを取った要求だけ**に許す |
+| 2 | uploadの途中で切れる | **`uploading`の記録は存在し得る**（record-firstのため）。objectは未完成 | **watchdogが拾う**（§19）。`HeadObject`でobjectが無ければ`upload_failed`、完成していればenqueueへ進める。端末のBlobが残っていれば再送できるが、**旧leaseを失効させて新しい実行権を取った要求だけ**に許す |
 | 30 | **`uploading`のまま放置される**（requestやcontainerが落ちる） | Jobをenqueueしていないので、Solid QueueもTranscribeも何も知らない | **§19のwatchdogが唯一の回収手段。**これが無いとpollingが永遠に`uploading`を返し、退会が完了できない（3巡目のレビュー指摘2） |
 | 3 | 受理後、Jobがenqueueされる前に落ちる | 記録は`accepted`のまま。objectは残る | 再試行で同じobjectからやり直す。期限を過ぎたら削除処理へ |
 | 4 | 文字起こしが失敗 | 記録を`failed`（再試行可）にする。**元音声は既に委託先へ渡っている** | 同じobjectから文字起こしをやり直す |
@@ -967,11 +980,11 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
 | 8 | 保存（RDS）が失敗 | Dotは無い。objectは残る（TASK-002の「成功」の定義） | 文字起こし結果が残っていれば生成から、無ければ文字起こしからやり直す |
 | 9 | **保存は成功したが応答が届かない** | Dotは存在する。記録は`succeeded_cleanup_pending`か削除済み | **再試行しない。**pollingは**まずdotsを見る**ので、記録が残っていても成功として返す（§9） |
 | 22 | **Dotの保存直後にworkerが止まる** | Dotと記録が同時に存在する。cleanupは未了 | **pollingはDotを優先するので成功として返せる**（記録が残っていても「処理中」にしない）。残った記録は**cleanup専用**で、生成の再試行には使わない（2巡目のレビュー指摘10） |
-| 23 | 音声を削除したあと、記録を削除する前に止まる | 記録が`succeeded_cleanup_pending`で残る | **状態を保ったまま新しいattemptを取って再実行する**（自己遷移）。既に消えているものは冪等に成功として扱う |
+| 23 | 音声を削除したあと、記録を削除する前に止まる | 記録が`succeeded_cleanup_pending`で残る | **状態を保ったまま新しい実行権を取って再実行する**（自己遷移）。既に消えているものは冪等に成功として扱う |
 | 32 | **cleanupが繰り返し失敗する** | `succeeded_cleanup_pending`または`cleanup_pending`に留まる | **終端にしない。**cleanupの認可条件（§20の5契機）で何度でも入れる。期限到来・退会・Dotの完全削除による場合は`active`も期限内も要求しない（4巡目のレビュー指摘1）。残存を検知して運用で拾う |
 | 33 | **退会・期限到来でcleanupが入口を通る** | 利用者は`active`でなく、期限も過ぎている | **通る。**cleanupの認可条件はretryと別で（§20の5契機の表）、`active`と期限内を要求しない。ここを共通にすると`cleanup_pending`から抜け出せない |
-| 35 | **`succeeded_cleanup_pending`のままDotの完全削除・退会を受理する** | Dotは既に消える／消えた。記録はcleanup待ち | **T22で`cancel_requested`へ移す（T17の自己遷移より優先）。**進行中のcleanup attemptがあっても、最終的にcancel側の後片付けへ収束させる。ACKを待たずに文字起こし結果とjobも削除へ回す。pollingは以後、全文を返さない（§27の「返さない条件」） |
-| 34 | **`upload_failed`から再uploadする** | 旧attemptが失効している | 新しいattemptを発行して**`uploading`へ戻す。**旧leaseで始まったPUTが後から完成し得るため、**keyをattemptごとに分け、記録が持つ有効なkey以外を残存として回収する** |
+| 35 | **`succeeded_cleanup_pending`のままDotの完全削除・退会を受理する** | Dotは既に消える／消えた。記録はcleanup待ち | **T22で`cancel_requested`へ移す（T17の自己遷移より優先）。**進行中のcleanupの実行があっても、最終的にcancel側の後片付けへ収束させる。ACKを待たずに文字起こし結果とjobも削除へ回す。pollingは以後、全文を返さない（§27の「返さない条件」） |
+| 34 | **`upload_failed`から再uploadする** | 古い実行権が失効している | 新しい実行権を発行して**`uploading`へ戻す。**旧leaseで始まったPUTが後から完成し得るため、**keyを試行番号ごとに分け、記録が持つ有効なkey以外を残存として回収する** |
 | 10 | 同じ冪等性keyで再送 | `dots`のunique制約で衝突する | **2件目のDotを作らず、既存のDotを返す** |
 | 11 | cleanup完了後にDotを完全削除し、同じ処理IDで再送する | `dots`にもcleanup済みの記録にも無いため、**新しい録音として受理される** | これは穴ではない。**cleanupが終わるまで記録が残る**（§20）ので、消し残した音声がある間は記録も残り、unique制約が効く。**旧objectが残ったまま新しいDotが作られる経路は無い**（3巡目のレビュー指摘6で訂正。2巡目の記述は「成功時に記録を即削除する」前提だった） |
 | 31 | **ACKの処理後にresponseが届かない／ACKが重複・並行して届く／fallbackのcleanup後に遅れて届く** | 対象が既に無い場合がある | **所有者を確認したうえで、冪等に成功として扱う。**object・job・記録のいずれが無くても失敗にしない。ACK自体は保存しない（§27） |
@@ -985,10 +998,10 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
 | 19 | 退会の直前に受理されたuploadが、退会の削除処理のあとにS3への保存を終える | 記録は利用者の行のlockの中で先に作られる（record-first）。**退会は`uploading`の記録を即削除せずcancel対象として残す** | uploaderが世代のずれを見てobjectを削除し、cleanup完了を記録する。**記録が消えていても手元のkeyで消す。**進行中の処理が0になるまで退会を完了としない（§20） |
 | 20 | 成功したあと、clientがACKを送らないまま期限が過ぎる | Dotは保存済み。**文字起こし結果は削除処理の対象になる** | 全文は取り戻せない。Dotは残るので`sentence`と`summary`は読める |
 | 21 | 期限を過ぎた後にpollingが来る | `dots`に処理IDがある | Dotを返す。**objectが残っていても全文は返さない。**「取得できなかった」ではなく「保持期間を過ぎた」と示す（§27） |
-| 24 | **`StartTranscriptionJob`のresponseを失う** | AWS側ではjobが受理されている可能性がある | **同じ名前で新しいjobを作らない。**job名は`<provider ID>-<transcribe attempt>`から決まるので（§20の命名表）、attemptを変えない限り同じ名前で`GetTranscriptionJob`へ合流できる |
+| 24 | **`StartTranscriptionJob`のresponseを失う** | AWS側ではjobが受理されている可能性がある | **同じ名前で新しいjobを作らない。**job名は`<provider ID>-<文字起こし試行番号>`から決まるので（§20の命名表）、試行番号を変えない限り同じ名前で`GetTranscriptionJob`へ合流できる |
 | 25 | worker停止中にTranscribeが完了する | 自前S3に全文が書き出されている。記録は`transcribing`のまま | reconcileで`GetTranscriptionJob`を見て、完了していれば生成から進む。**Transcribeを再実行しない** |
 | 26 | 期限到来・退会の時点でTranscribeのjobが非終端 | `DeleteTranscriptionJob`が`BadRequestException`になり得る | **削除要求だけで終わらせない。**終端になるまでreconcileし、終端後にobjectとjobを消してから記録を消す。**それまで退会を完了としない**（§20） |
-| 27 | 同じ処理IDで別の音声を送る | 既存の記録がある | **bodyを受け取らず既存の状態を返す。**object keyはserverがprovider IDとattempt番号から決めるので上書きされない。再uploadは`uploading`／`upload_failed`で完成objectが無い場合だけ（§20） |
+| 27 | 同じ処理IDで別の音声を送る | 既存の記録がある | **bodyを受け取らず既存の状態を返す。**object keyはserverがprovider IDと試行番号から決めるので上書きされない。再uploadは`uploading`／`upload_failed`で完成objectが無い場合だけ（§20） |
 | 28 | 別の利用者が同じ処理ID（UUID）を送る | DBのunique制約は`(user_id, 処理ID)`なので両方受理される | **AWSの名前はprovider IDから導くので衝突しない。**処理IDをそのまま`TranscriptionJobName`やS3 keyに使うと`ConflictException`や他人のobjectの上書きが起き得る（2巡目のレビュー指摘13） |
 | 29 | 同じ処理IDのPOSTが並行して届く | 処理の記録の`(user_id, 処理ID)`のunique制約で衝突する | **2件目の記録を作らず、Jobも二重にenqueueしない。**既存の記録の状態を返す（2巡目のレビュー指摘4） |
 
