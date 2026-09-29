@@ -36,8 +36,8 @@ MVPの完成は、少なくとも次を満たす状態とする。
 | MVP対象 | 音声による振り返り、Dotの生成、利用者ごとの安全な保存、今日のDotを見るDay表示、複数Dotの一覧から過去のDotを選ぶ体験。一覧ではDotを丸で表す。実サービスの送信・保存方法は`journaling.md`、一覧の受け入れ条件は`dot-history.md`で扱う。 |
 | 検証候補 | DayからWeek / Monthへ視点を引く表示とアニメーション、週次・月次のAI振り返り。プロトタイプと利用者テストを経て採用を判断し、現時点のMVP完成条件には含めない。 |
 | 将来候補 | Homeでの最近のDot表示、検索、カテゴリ、期間フィルタ、Dot同士のつながりや長期的な傾向の表現。`design-system.md`に画面原則があっても、MVP確定とは扱わない。 |
-| 設計採用・未実装 | AWS東京のALB + ECS Fargate + RDS PostgreSQL、Rails + Deviseのメール＋パスワード・確認メール・パスワード再設定、OmniAuthのGoogleログイン、Rails CookieStore・HttpOnly Cookie・CSRF・Dot所有者認可。初期はECS 1タスク・RDS Single-AZ・同一origin。詳細はarchitectureを参照。 |
-| 未決定 | password方針・ログイン試行制限の具体値、Google確認情報とConfirmableの関係、AI provider、音声原本の保存要否と具体的な保存先、文字起こしの有無、固有名詞を低減する位置と手段、生成の同期/非同期、削除・保持期間、同日に複数回話した場合の扱い、記録のない日の表現、通知・共有。 |
+| 設計採用・未実装 | AWS東京のALB + ECS Fargate + RDS PostgreSQL、Rails + Deviseのメール＋パスワード・確認メール・パスワード再設定、OmniAuthのGoogleログイン、Rails CookieStore・HttpOnly Cookie・CSRF・Dot所有者認可。初期はECS 1タスク・RDS Single-AZ・同一origin。詳細はarchitectureを参照。Dot履歴は録音1回=1件の保存、一覧は1日=1つの丸で新しい順、日付はserverのAsia/Tokyo。詳細は`dot-history.md`を参照。 |
+| 未決定 | password方針・ログイン試行制限の具体値、Google確認情報とConfirmableの関係、AI provider、音声原本の保存要否と具体的な保存先、文字起こしの有無、固有名詞を低減する位置と手段、生成の同期/非同期、削除・保持期間、利用者ごとのタイムゾーン設定、通知・共有。 |
 
 ## 4. MVP対象外と実装前に決めること
 
@@ -87,7 +87,7 @@ Google/email一致で統合しない。Googleが確認済みとしたメール�
 | 認証の利用開始・終了・失効の細部 | 最初の永続Dot APIをWebから利用する変更 | 期限・録音前ログイン・メール・衝突時案内・再認証は2026-09-25に採用済み。password方針・ログイン試行制限の具体値、Google確認情報とConfirmableの関係をTASK-006で確定 |
 | 音声の扱い | 音声を実サービスへ送る必要が決まる変更 | browser内で破棄、直接upload、backend経由、保持しない文字起こしなどを保持・削除要件と比較 |
 | AI生成の実行方式 | providerと応答時間・失敗時UXが決まる変更 | 同期request、Job、非同期polling / 通知を冪等性と再試行で比較 |
-| Dot履歴の表示 | 複数Dotの一覧を実装する変更 | 同日の複数録音、記録のない日、日付境界と表示順を比較・決定 |
+| Dot履歴の日付境界 | 国外での利用、または日付のずれ・深夜の録音についての申告 | 同日の複数録音、記録のない日、日付境界と表示順は2026-09-29に採用済み（`dot-history.md` §2）。利用者ごとのタイムゾーン設定と深夜境界のオフセットを、既存Dotの日付の再算出を含めて比較 |
 | Week / Month・検索・カテゴリ・期間 | 複数Dotの保存と振り返り行動を検証した後 | プロトタイプと利用者テストを踏まえ、操作、検索対象、分類方法、期間境界、導入段階を比較 |
 | API契約tooling | 最初のプロダクトAPIをWebが利用する変更 | OpenAPIを推奨候補にし、型生成・生成物管理・検証toolは別に判断 |
 | 要配慮個人情報の該当性と漏えい時対応 | 公開前、または音声・生成結果を実サービスへ保存する変更 | 該当範囲、報告・本人通知の要否と手順、公開範囲と保持期間による規模の抑制をTASK-017で一次資料から判断 |

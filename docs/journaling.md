@@ -34,7 +34,7 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 | マイクstream / AudioContext | 録音中のbrowser memory | stop / dispose時にtrackを停止しAudioContextを閉じる。外部送信・永続化しない。 | 権限説明、対応ブラウザ、録音中断のUX |
 | 録音Blob | `MediaRecorder`内部で一時生成され得る | `stop`はBlobを生成し得るが、`useRecorder`はdurationだけを上位へ返す。Blobは後続へ渡さず、保存・送信しない。 | 音声を送るか、保存先、保持期間、削除主体、upload失敗・再送 |
 | 録音時間 | Session Providerと`fod.session.v1` | `reset`またはbrowser storageの削除で消える。UIの削除操作は未実装。 | 永続Dotとの関連、保持・削除方針 |
-| DotSession（id、date、duration、sentence、reflection、closing） | Session Providerと`fod.session.v1`に現在の1件 | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | server側の正本、利用者単位の所有権、履歴、編集・削除、保管期間 |
+| DotSession（id、date、duration、sentence、reflection、closing） | Session Providerと`fod.session.v1`に現在の1件 | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | server側の正本、利用者単位の所有権、編集・削除、保管期間。履歴の保存単位・日付・並び順は[dot-history §2](./dot-history.md)で採用済み（未実装） |
 | 文字起こし | 存在しない | 生成・保存・送信しない。 | 採用するか、音声との関係、個人データとしての扱い |
 | API response | `createDot`の一時値をZod検証後にDotSessionへ | 未検証値は保存しない。 | 正式なrequest / response / error契約と互換性 |
 
@@ -98,7 +98,6 @@ TASK-002/003/010との整合が必要で、今回は確定しない。受理済�
 - 録音中に期限切れとなった場合のmemory内音声の扱い、password再設定後の既存Cookieの実動作
 - password方針・ログイン試行制限の具体値、Googleの確認情報とConfirmableの関係（TASK-006で決定）
 - 利用者の削除要求、Dotと音声・生成結果の削除連鎖
-- 同日の複数録音をDot履歴にどう反映するか、履歴の日付境界と並び順
 - 将来候補である検索・カテゴリ・期間フィルタの仕様と導入段階
 
 これらは、最初のプロダクトAPIとWeb接続を設計するImplementation Planで選択肢、脅威、運用コストを
