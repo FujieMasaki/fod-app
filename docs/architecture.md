@@ -263,12 +263,14 @@ POST .../transcript_ack（client が全文を保存し終えたら送る。冪�
   Transcribe待ちは`GetTranscriptionJob`でAWS側の状態を見て、Job個体の停止はlease tokenで
   排他する。具体値はTASK-009で決める。`RAILS_MAX_THREADS`はSolid Queueの実行並列数そのもの
   ではないため、concurrency・DB pool・CPU/memoryは別に実測する。
-- **処理IDと冪等性keyを同一のUUIDにし、`dots`の列へ`(user_id, 処理ID)`のunique制約で持つ。**
+- **処理IDと冪等性keyと録音attemptの識別子を同一にし、`dots`の列へ`(user_id, 処理ID)`のunique制約で持つ。**
+  **serverが録音開始操作に対して発行する**（2026-09-29にTASK-004の`recorded_at`採用へ合わせて変更。
+  当初はclient発行のUUIDだった）。処理の記録にも同じunique制約を置く。
   別々のIDにすると、成功時に処理の記録を消した時点で処理IDとDotの対応が消え、**pollingが結果を
   引けなくなる。**同じkeyでの再送は2件目のDotを作らず既存を返す。
   **二重のDotは防ぐが、外部AI処理の二重消費は防がない。**処理の記録にも同じunique制約を置き、
   同じ処理IDのPOSTが並行しても記録とJobを二重に作らない。**AWSのjob名とS3のkeyは、clientが
-  発行する処理IDではなくserverが発行するprovider IDから導く**（job名はAWSアカウント内で一意で
+  発行する値ではなく**serverが発行する処理ID（＝TASK-004の録音attemptの識別子）から導く**（job名はAWSアカウント内で一意で
   なければならず、利用者間で衝突し得るため）。
 - **再試行は、文字起こし結果が残っていれば生成からやり直す。**残っていなければ文字起こしから
   やり直す。Transcribeは費用の支配項目なので、手元に全文があるのに再実行しない。
