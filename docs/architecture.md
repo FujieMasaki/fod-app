@@ -196,9 +196,8 @@ Job（非同期。worker は当面 ECS 同一タスク内で Puma と並走）
   → Amazon Bedrock の Claude: sentence と summary を生成
   → 利用者の行を FOR UPDATE → 世代番号を確認 → dots へ保存（処理ID を同じ行に持つ）
      ＋ 記録を succeeded_cleanup_pending へ（同一 transaction。ここで成功が確定する）
-  → 成功: 音声の一時object を即削除 → 処理の記録を削除
-          （文字起こし結果は client の ACK を待つ）
-  → cleanup 完了後に処理の記録を削除する
+  → cleanup: 音声の一時object を即削除。文字起こし結果は client の ACK を待つ
+  → cleanup が全部終わってから処理の記録を削除する
   → 失敗: 記録を failed で残す。期限内は再試行できる
   → 期限到来: 音声object・文字起こし結果・Transcribe の job・残る記録の削除処理を始める
 
@@ -258,7 +257,12 @@ POST .../transcript_ack（client が全文を保存し終えたら送る。冪�
   なければならず、利用者間で衝突し得るため）。
 - **再試行は、文字起こし結果が残っていれば生成からやり直す。**残っていなければ文字起こしから
   やり直す。Transcribeは費用の支配項目なので、手元に全文があるのに再実行しない。
-  テキストから再生成する経路は持たない。
+- **再試行とcleanupは同じ記録を奪い合うため、どちらも条件付き更新にして片方だけを成功させる。**
+  再試行・再upload・cleanupは同じ入口（利用者の行のlock → `active`・世代・期限・現在の状態の
+  確認 → attemptの発行）を通す。自動回収も同じ入口を通る。
+- **Transcribeが終端したあと、Bedrockへ送る前にもう一度この入口を通す。**退会や期限到来を
+  受理していれば生成へ進まず後片付けへ回す。**退会の受理後に新しいBedrockのrequestを開始しない。**
+  既に始まっているrequestは止められないので、そこは約束しない。
 - **退会は利用者の行のlockと世代番号で排他する。**状態の確認だけでは、確認を通過したuploadが
   退会の削除処理のあとに完了する経路を塞げない。受理時に利用者の行を`SELECT ... FOR UPDATE`で
   lockし、`active`の確認と処理の記録の作成を同じtransactionで行い、世代番号を記録へ写す。
