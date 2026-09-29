@@ -27,7 +27,7 @@ MVPの完成は、少なくとも次を満たす状態とする。
 - モックによる体験確認と実サービスの挙動を混同しない。
 - 今日のDotを大きく見られる。
 - 保存された複数のDotを丸として見渡せ、過去の任意のDotの詳細へ到達できる。
-- Dotの本文を直せて、消したものを一定期間は取り戻せる。今すぐ完全に消すこともできる。
+- Dotの本文を直せて、消したものを一定期間は取り戻せる。ゴミ箱を経由せず完全削除を要求することもできる。
 
 ## 3. 現在の区分
 
@@ -37,7 +37,7 @@ MVPの完成は、少なくとも次を満たす状態とする。
 | MVP対象 | 音声による振り返り、Dotの生成、利用者ごとの安全な保存、今日のDotを見るDay表示、複数Dotの一覧から過去のDotを選ぶ体験。一覧ではDotを丸で表す。**Dot本文の編集と、ゴミ箱を経由する削除**（2026-09-29にTASK-002で追加）。実サービスの送信・保存方法は`journaling.md`、一覧の受け入れ条件は`dot-history.md`で扱う。 |
 | 検証候補 | DayからWeek / Monthへ視点を引く表示とアニメーション、週次・月次のAI振り返り。プロトタイプと利用者テストを経て採用を判断し、現時点のMVP完成条件には含めない。 |
 | 将来候補 | Homeでの最近のDot表示、検索、カテゴリ、期間フィルタ、Dot同士のつながりや長期的な傾向の表現。`design-system.md`に画面原則があっても、MVP確定とは扱わない。 |
-| 設計採用・未実装 | AWS東京のALB + ECS Fargate + RDS PostgreSQL、Rails + Deviseのメール＋パスワード・確認メール・パスワード再設定、OmniAuthのGoogleログイン、Rails CookieStore・HttpOnly Cookie・CSRF・Dot所有者認可。初期はECS 1タスク・RDS Single-AZ・同一origin。音声は同一originのRails経由で送り、処理が終わるまでS3東京へ一時的に預けて長期保存しない、文字起こし全文をRDSへ保存しない、Dotは`sentence`と`summary`だけを持つ、Dot個別削除（ゴミ箱で7日）と即時完全削除と退会を備え、`sentence`・`summary`を編集できる（編集前の値は残さない）。詳細はarchitectureと`journaling.md`を参照。 |
+| 設計採用・未実装 | AWS東京のALB + ECS Fargate + RDS PostgreSQL、Rails + Deviseのメール＋パスワード・確認メール・パスワード再設定、OmniAuthのGoogleログイン、Rails CookieStore・HttpOnly Cookie・CSRF・Dot所有者認可。初期はECS 1タスク・RDS Single-AZ・同一origin。音声は同一originのRails経由で送り、処理が終わるまでS3東京へ一時的に預けて長期保存しない、文字起こし全文をRDSへ保存しない、Dotは`sentence`と`summary`だけを持つ、Dot個別削除（ゴミ箱を経由し、7日後に削除処理を始める）と即時完全削除と退会を備え、`sentence`・`summary`を編集できる（編集前の値は残さない）。詳細はarchitectureと`journaling.md`を参照。 |
 | 未決定 | password方針・ログイン試行制限の具体値、Google確認情報とConfirmableの関係、AI provider、prompt、固有名詞を低減する位置と手段、生成の同期/非同期、同日に複数回話した場合の扱い、記録のない日の表現、通知・共有。 |
 
 ## 4. MVP対象外と実装前に決めること
