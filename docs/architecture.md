@@ -192,11 +192,13 @@ POST /api/v1/dots（同期）
 
 Job（非同期。worker は当面 ECS 同一タスク内で Puma と並走）
   → Amazon Transcribe（東京）: S3 の object を入力に文字起こし
-  → 文字起こし結果は Transcribe が S3 へ書き出す（置き場は未決定。下記）
+  → 文字起こし結果を自前 S3 へ書き出させる（OutputBucketName を指定。下記）
   → Amazon Bedrock の Claude: sentence と summary を生成
   → RDS dots へ保存（世代番号を再確認 → 処理ID を同じ行に持つ）
-  → 成功: S3 の一時object と文字起こし結果を削除 → 処理の記録を削除
+  → 成功: 音声の一時object を即削除 → 処理の記録を削除
+          （文字起こし結果は client が取りに来るまで残す）
   → 失敗: 記録を failed で残す。受理から24時間は同じ音声で再試行できる
+  → 受理から24時間: 音声object・文字起こし結果・Transcribe の job・残る記録を削除
 
 GET /api/v1/dots/generations/:処理ID（client は polling）
   → 記録が processing / failed、記録が無く dots に同じ処理ID があれば成功として返す
@@ -218,9 +220,15 @@ GET /api/v1/dots/generations/:処理ID（client は polling）
   である。**Globalプロファイルは世界中へルーティングされる。**endpointによって可否が違うため、
   `bedrock-runtime`と`bedrock-mantle`の対応表を取り違えない。**model idはTASK-009で決める。
   モデルの都合で所在地方針を黙って曲げない。**
-- **文字起こし結果の置き場は未決定。**Transcribeのバッチは結果をS3へ書き出すため、
-  「workerのmemoryだけを通る」経路は存在しない。自前bucket・service-managed bucket・streamingへの
-  切替・全文返却の取りやめを比較して決める（[TASK-003 Plan §27](implementation-plans/2026-09-29-task-003-generation-design.md)）。
+- **文字起こし結果は自前のS3へ置く。**Transcribeのバッチは結果をS3へ書き出すため、
+  「workerのmemoryだけを通る」経路は存在しない。**`OutputBucketName`を必ず指定し**、音声の一時
+  objectと同じbucketの別prefixへ、同じ条件（非公開・暗号化・versioning無効・keyはUUID）で置く。
+  指定を省くとservice-managed bucketへ置かれ、保持と削除を自分たちで制御できない。
+  **削除の契機は音声と同じ受理から24時間**で、新しい期限を増やさない。**ただし音声が成功時に
+  即削除されるのに対し、文字起こし結果は成功しても24時間残る**（clientがpollingで取りに来るまで
+  必要なため）。削除では**objectとTranscribeのjob（`DeleteTranscriptionJob`）の両方**を消す。
+  期間と契機の正本は[privacy.md §5](privacy.md)、判断は
+  [TASK-003 Plan §27](implementation-plans/2026-09-29-task-003-generation-design.md)。
   選定するモデルのdata retention modeも確認し、保持とAWSによる人的レビューが必須のモデルを
   使う場合は、それを録音前の案内に書く。
 - **Job基盤はSolid Queue**（RDSのテーブルを使う）。ElastiCache Redisを常時稼働させないため、
