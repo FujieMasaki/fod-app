@@ -60,7 +60,7 @@ Dot生成後に利用者が任意で行える深掘り対話は、この基本�
 - 国内限定の法的・契約上の保証、厳密なD2の個別例外管理
 
 認証方式と公開基盤は[architecture](./architecture.md)のとおり採用した。音声の送信経路と保持・削除は
-2026-09-28にTASK-002で採用し、[`journaling.md`](./journaling.md) §2・§4を正本とする。認証の残る細部、
+2026-09-28にTASK-002で採用した。体験と受け入れ条件は[`journaling.md`](./journaling.md) §2・§4、**保持期間と削除の契機は[`privacy.md`](./privacy.md) §5**を正本とする。認証の残る細部、
 promptの最終文面とAPI契約toolingは、MVPを実装する過程で必要に応じて決める設計事項であり、
 対象外の機能ではない。AI provider・文字起こしprovider・background job基盤は2026-09-29にTASK-003で
 採用した。既存のdesign-system上の

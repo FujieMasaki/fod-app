@@ -110,7 +110,7 @@ Browser（音声は memory のみ。storage へ書かない）
           → S3東京：一時object（非公開・暗号化・versioning無効・keyはUUID）
              ＋ server側の記録：処理ID・所有者・key・受理時刻・再試行期限・状態
           → Amazon Transcribe（東京）    ← 元音声が第三者へ渡る最初の地点
-          → Amazon Bedrock の Claude（日本国外へ出ない経路で使えるモデル）
+          → Amazon Bedrock の Claude（Geo:JP または mantle In-Region）
           → RDS：dots（sentence / summary / date / duration）
           → 成功（＝Dotの保存まで完了）：一時object（音声）を即削除
              （記録をいつ消すかはTASK-003と相互確認）
@@ -192,19 +192,20 @@ POST /api/v1/dots（同期）
 
 Job（非同期。worker は当面 ECS 同一タスク内で Puma と並走）
   → Amazon Transcribe（東京）: S3 の object を入力に文字起こし
-  → 文字起こしテキストは worker の memory のみ（DB にも S3 にも書かない）
+  → 文字起こし結果は Transcribe が S3 へ書き出す（置き場は未決定。下記）
   → Amazon Bedrock の Claude: sentence と summary を生成
-  → RDS dots へ保存（冪等性key を同じ行に持つ）
-  → 成功: S3 の一時object を削除 → 処理の記録を削除
+  → RDS dots へ保存（世代番号を再確認 → 処理ID を同じ行に持つ）
+  → 成功: S3 の一時object と文字起こし結果を削除 → 処理の記録を削除
   → 失敗: 記録を failed で残す。受理から24時間は同じ音声で再試行できる
 
 GET /api/v1/dots/generations/:処理ID（client は polling）
-  → processing / succeeded / failed。記録が無く Dot があれば成功として返す
+  → 記録が processing / failed、記録が無く dots に同じ処理ID があれば成功として返す
 ```
 
 - **文字起こしと生成の委託先をAWSに統一する。**委託先が1社に集約され、確認すべき9項目
   （[privacy.md §5-1](privacy.md)の外部provider行）の対象が1つになる。**認証はECS task roleの
-  IAMで行い、APIキーをアプリで持たない。**対象bucketと対象モデルだけを許す最小権限にする。
+  IAMで行い、**長期固定のAPIキーをアプリで持たない**（ECSはSDKへ一時credentialを供給するため、
+  鍵の確認項目が無くなるわけではない）。対象bucketと対象モデルだけを許す最小権限にする。
   **9項目は未確認で、確認は公開前に人間が行う。**
 - **Transcribeについて、AWS OrganizationsのAI services opt-out policyの適用を必須とする。**
   AWSのAIサービスは**既定では顧客コンテンツをサービス改善に利用し、利用リージョン外へ保存し得る**。
@@ -212,10 +213,14 @@ GET /api/v1/dots/generations/:処理ID（client は polling）
   適用せずに音声を送ると、上記「日記内容・音声・AI入力は原則として東京」が成り立たない。
   適用後にeffective policyを照会して効いていることを確認する（TASK-009/015）。
   なおBedrockはこのopt-out policyの対象外で、モデルごとのdata retention modeで別に確認する。
-- **Bedrockのモデルは、推論が日本国外へ出ない経路で使えるものから選ぶ。**Bedrockには
-  In-Region・地理を限定したcross-region inference・Globalの区別があり、**Globalは世界中へ
-  ルーティングされる。**どのClaudeモデルがどれに当たるかは**未確定**で、model idはTASK-009で
-  対応表とモデルカードを直接読んで決める。**モデルの都合で所在地方針を黙って曲げない。**
+- **Bedrockのモデルは、推論が日本国外へ出ない経路で使えるものから選ぶ。**日本国内に収まるのは
+  **Geo: JPの推論profile（宛先は東京と大阪）**か、**`bedrock-mantle` endpointのIn-Region（東京のみ）**
+  である。**Globalプロファイルは世界中へルーティングされる。**endpointによって可否が違うため、
+  `bedrock-runtime`と`bedrock-mantle`の対応表を取り違えない。**model idはTASK-009で決める。
+  モデルの都合で所在地方針を黙って曲げない。**
+- **文字起こし結果の置き場は未決定。**Transcribeのバッチは結果をS3へ書き出すため、
+  「workerのmemoryだけを通る」経路は存在しない。自前bucket・service-managed bucket・streamingへの
+  切替・全文返却の取りやめを比較して決める（[TASK-003 Plan §27](implementation-plans/2026-09-29-task-003-generation-design.md)）。
   選定するモデルのdata retention modeも確認し、保持とAWSによる人的レビューが必須のモデルを
   使う場合は、それを録音前の案内に書く。
 - **Job基盤はSolid Queue**（RDSのテーブルを使う）。ElastiCache Redisを常時稼働させないため、
@@ -224,15 +229,22 @@ GET /api/v1/dots/generations/:処理ID（client は polling）
   Solid Queueのまま分けられる。
 - **clientへの結果の受け渡しはpolling。**ALBのidle timeoutとECS 1タスクという構成で接続を
   維持しない。**応答喪失後の結果照会にも同じendpointで答えられる。**
-- **`processing`が受理から24時間を過ぎたら`failed`として扱う。**worker停止・deploy・例外で
-  記録が止まった場合に、永遠に待つ画面を作らない。
-- **冪等性keyは`dots`の列にunique制約で持つ。**同じkeyでの再送は2件目のDotを作らず既存を返す。
+- **止まったJobを最終進捗時刻で検知する（stale判定）。**24時間は再試行の終了期限であって、
+  障害の検知期限ではない。処理の記録に最終進捗時刻を持ち、分単位で更新が止まった`processing`を
+  検知して再実行または`failed`にする。具体値はSolid Queueのlease・heartbeatの挙動を確認して
+  TASK-009で決める。
+- **処理IDと冪等性keyを同一のUUIDにし、`dots`の列へ`(user_id, 処理ID)`のunique制約で持つ。**
+  別々のIDにすると、成功時に処理の記録を消した時点で処理IDとDotの対応が消え、**pollingが結果を
+  引けなくなる。**同じkeyでの再送は2件目のDotを作らず既存を返す。
   **二重のDotは防ぐが、外部AI処理の二重消費は防がない**（再試行では文字起こしからやり直す）。
 - **再試行は文字起こしからやり直す。**文字起こし全文を保存しない制約から一意に決まる。
   テキストから再生成する経路は持たない。
-- **退会は処理の記録の状態で排他する。**退会の受理で利用者を`withdrawing`にして新規の受理と
-  再試行を止め、**進行中のJobは結果を書き込む直前に所有者の状態を確認し、`withdrawing`なら
-  書き込まない。**確認と書き込みは同じtransactionで行う。生成のcancel UIはMVPで持たない。
+- **退会は利用者の行のlockと世代番号で排他する。**状態の確認だけでは、確認を通過したuploadが
+  退会の削除処理のあとに完了する経路を塞げない。受理時に利用者の行を`SELECT ... FOR UPDATE`で
+  lockし、`active`の確認と処理の記録の作成を同じtransactionで行い、世代番号を記録へ写す。
+  **upload完了時とJobの書き込み直前にも世代番号を再確認し、ずれていれば回収する。**
+  退会の完了条件は「数えて消した」ではなく**「その利用者の進行中の処理が0であること」**とする。
+  生成のcancel UIはMVPで持たない。
 - **model idとpromptは設定で固定する。**固定しないと、ある日から生成結果の調子が変わる。
 - Bedrockのrequest / responseと文字起こしテキストは発話内容そのものなので、SDKのdebug logや
   error trackingへ出さない（上記「ログへ出さない」と同じ対象）。
