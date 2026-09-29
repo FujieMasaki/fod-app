@@ -84,7 +84,9 @@
 残る判断は、利用者ごとのタイムゾーン設定、深夜境界のオフセット、同日の複数Dotをまとめる表現で、
 [dot-history](../dot-history.md) §5と[product](../product.md) §5に再検討条件付きで残した。
 
-引き継ぎ先は[TASK-005](TASK-005-product-api-contract.md)（endpoint・parameter・schema・日付の基準・
-error）、[TASK-008](TASK-008-backend-dot-history.md)（データ構造・索引・日付算出・集約query）、
-[TASK-012](TASK-012-frontend-day-history.md)（route・丸の具体寸法・続き取得の操作・文言）。
+引き継ぎ先は[TASK-005](TASK-005-product-api-contract.md)（endpoint・parameter・schema、`date`と
+`recorded_at`の表現形式、`recorded_at`をserverが発行する経路、日付をキーにした日の詳細の取得と
+1日当たりの上限、error）、[TASK-008](TASK-008-backend-dot-history.md)（データ構造・索引・
+日付算出の実装位置・集約query）、[TASK-012](TASK-012-frontend-day-history.md)（route・丸の具体
+寸法・続き取得の操作・文言）。日付の基準そのものは本タスクで決めており、後続で再検討しない。
 本タスクは判断のみで、実装・実機確認は行っていない。
