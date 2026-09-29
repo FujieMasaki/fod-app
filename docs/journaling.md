@@ -31,8 +31,12 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 ## 2. データと正本
 
 **Dot**は、1回の録音から生まれる記録1件を指す。実サービスで利用者に見える内容は`date`、`duration`、
-`sentence`（今日の一文）、`summary`（話した内容の要約）だけで、**音声も文字起こし全文も含まない。**
+`sentence`（今日の一文）、`summary`（話した内容の要約）と、同じ日に複数あるときに区別するための
+録音時刻（`recorded_at`）だけで、**音声も文字起こし全文も含まない。**
 `dots`はこれに加えて`id`、所有者、作成・更新時刻、ゴミ箱の状態といった管理用の項目を持つ。
+`recorded_at`は**録音開始時刻をUTCで保持する項目**で、serverが録音の開始時に決める。`date`は
+`recorded_at`から算出したAsia/Tokyoの暦日であり、作成時刻（保存時刻）からは算出しない
+（2026-09-29にTASK-004で採用。[`dot-history.md`](./dot-history.md) §2が正本）。
 [`dot-history.md`](./dot-history.md) §1の「Dot = その日の自分」は同じものを一覧で丸として表す
 表示上のコンセプトで、保存する項目の定義ではない。
 
@@ -47,7 +51,7 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 | マイクstream / AudioContext | 録音中のbrowser memory | stop / dispose時にtrackを停止しAudioContextを閉じる。外部送信・永続化しない。 | 変えない。録音中のmemoryだけに置く。権限説明・対応ブラウザ・中断UXはTASK-010 |
 | 録音Blob | `MediaRecorder`内部で一時生成され得る | `stop`はBlobを生成し得るが、`useRecorder`はdurationだけを上位へ返す。Blobは後続へ渡さず、保存・送信しない。 | 同一originのRails経由で送る。**長期保存しない**が、処理が終わるまでS3東京へ一時的に預かる（非公開・暗号化・versioningを有効にしない）。**DotがRDSへ保存されるまで完了したら**即削除（文字起こしや生成が通った時点ではない）。失敗した場合は受理から24時間を再試行の期限とし、期限が来たらアプリが削除する（lifecycleは保険で、それ自体は24時間を保証しない）。Dot削除は対象の処理のもの、退会は本人の全部を削除。端末のstorageへは書かない。最長30分・32MB |
 | 録音時間 | Session Providerと`fod.session.v1` | `reset`またはbrowser storageの削除で消える。UIの削除操作は未実装。 | Dotと同じrequestで送り、RDSの`dots`を正本にする。保持・削除もDotと同じ |
-| Dot（id、date、duration、sentence、summary） | Session Providerと`fod.session.v1`に現在の1件（現行のDotSessionは`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。`sentence`と`summary`は本人が編集でき、編集前の値は残さない。1件ごとの削除はゴミ箱（受理から7日で削除処理を始める）、即時の完全削除も備える。**`reflection`と`closing`は生成も保存もしない**。録音1回ごとに1件を保存し、`date`はserverがAsia/Tokyoの暦日として決める（[dot-history §2](./dot-history.md)で2026-09-29採用） |
+| Dot（id、date、recorded_at、duration、sentence、summary） | Session Providerと`fod.session.v1`に現在の1件（現行のDotSessionは`date`のみで`recorded_at`はなく、`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。`sentence`と`summary`は本人が編集でき、編集前の値は残さない。1件ごとの削除はゴミ箱（受理から7日で削除処理を始める）、即時の完全削除も備える。**`reflection`と`closing`は生成も保存もしない**。録音1回ごとに1件を保存し、`recorded_at`（録音開始時刻・UTC）をserverが決め、`date`はそこから算出したAsia/Tokyoの暦日とする。`recorded_at`は`date`・`duration`と同じく本人に編集させず、保持・削除はDot本体と同じ（[dot-history §2](./dot-history.md)で2026-09-29採用） |
 | 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す |
 | 話した内容の要約（`summary`） | 存在しない | — | 文字起こしから生成し、Dotと同じ行に保存する。Dotを削除すれば一緒に消える。要約にも実名は残り得るため、Dot本文と同じ保護・削除・説明の対象にする |
 | API response | `createDot`の一時値をZod検証後にDotSessionへ | 未検証値は保存しない。 | Dotと文字起こしを返す。音声のURLは返さない。正式な契約はTASK-005 |
@@ -98,8 +102,10 @@ keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを�
 - ただし**編集より前に取得したbackupには編集前の本文が残る。**「編集前の値はどこにも残らない」とは
   説明しない。障害復旧で復元したとき、**削除したDotと、編集で取り除いた内容を再び見える状態にしない。**
   実現方法はTASK-013/015で決める。
-- Dotとして保存するのは`date`、`duration`、`sentence`（今日の一文）、`summary`（話した内容の要約）で、
-  AIからの語りかけ（`reflection`・`closing`）は生成も保存もしない。`summary`は本人が読める場所に表示する。
+- Dotとして保存するのは`date`、`recorded_at`（録音開始時刻・UTC）、`duration`、`sentence`（今日の一文）、
+  `summary`（話した内容の要約）で、AIからの語りかけ（`reflection`・`closing`）は生成も保存もしない。
+  `summary`は本人が読める場所に表示する。`date`は`recorded_at`から算出したAsia/Tokyoの暦日とし、
+  保存時刻からは算出しない。`recorded_at`は編集させず、同日に複数あるDotの区別と並びに使う。
 - 認証はRails + Deviseのメール＋パスワード・確認メール・パスワード再設定と、OmniAuthのGoogle
   ログインを採用する。Rails CookieStore、HttpOnly/Secure/SameSite=LaxのCookie、同一origin、
   RailsのCSRFとcurrent_userの所有者scopeを使う。email一致の自動統合、MFA、passkey、手動復旧、

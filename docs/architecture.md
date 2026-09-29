@@ -111,7 +111,7 @@ Browser（音声は memory のみ。storage へ書かない）
              ＋ server側の記録：処理ID・所有者・key・受理時刻・再試行期限・状態
           → 外部文字起こし（東京優先）    ← 元音声が第三者へ渡る最初の地点
           → 外部AI（東京優先）
-          → RDS：dots（sentence / summary / date / duration）
+          → RDS：dots（sentence / summary / date / recorded_at / duration）
           → 成功（＝Dotの保存まで完了）：一時object（音声）を即削除
              （記録をいつ消すかはTASK-003と相互確認）
           → 失敗：受理から24時間は再試行可。期限が来たらアプリが削除（lifecycleは保険）
@@ -164,7 +164,13 @@ Browser（音声は memory のみ。storage へ書かない）
 - ゴミ箱の中のDotをDay・一覧・詳細から除外する。**除外は明示的なscopeで行い、暗黙の既定scope
   （`default_scope`等）に頼らない。**暗黙の除外は、ゴミ箱の中身が一覧へ漏れる事故と、逆にゴミ箱が
   空に見える事故の両方を起こしやすい。実現方法はTASK-008で確定する。
-- **`sentence`と`summary`の更新APIを持つ**（2026-09-29に追加）。`date`と`duration`は更新させない。
+- **`dots`は`recorded_at`（録音開始時刻・UTC）を持ち、`date`はそこから算出したAsia/Tokyoの暦日と
+  する**（2026-09-29にTASK-004で採用。正本は[dot-history.md](dot-history.md) §2）。作成時刻を日付の
+  根拠にしない。送信・生成・保存の失敗を24時間以内に再試行しても日付が動かないようにするため。
+  `recorded_at`はserverが録音の開始時に決め、clientから受け取った値を採用しない。一覧の並びと
+  「最新」の判定にも`recorded_at`を使い、同値のときはDotの識別子で決める。
+- **`sentence`と`summary`の更新APIを持つ**（2026-09-29に追加）。`date`・`recorded_at`・`duration`は
+  更新させない。
   **アプリは編集前の値を保存しない**（版も履歴も持たない）。消したかった記述が編集履歴に残るのを
   避けるため。ただし**編集より前に取得したbackupには編集前の本文が残る。**「編集前の値はどこにも
   残らない」とは書かない。
