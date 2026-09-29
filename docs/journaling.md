@@ -29,6 +29,11 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 
 ## 2. データと正本
 
+**Dot**は、1回の録音から生まれる記録1件を指す。実サービスで`dots`に残るのは`id`、`date`、`duration`、
+`sentence`（今日の一文）、`summary`（話した内容の要約）だけで、**音声も文字起こし全文も含まない。**
+[`dot-history.md`](./dot-history.md) §1の「Dot = その日の自分」は同じものを一覧で丸として表す
+表示上のコンセプトで、保存する項目の定義ではない。
+
 4列目はTASK-002で採用した実サービスの方針である（2026-09-28採用、ゴミ箱と編集は2026-09-29に追加）。**いずれも未実装**で、1〜3列目の
 現在の実装は実装タスクまで変わらない。判断の根拠と比較は
 [TASK-002 Plan](implementation-plans/2026-09-28-task-002-data-lifecycle.md)を正本とする。
