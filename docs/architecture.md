@@ -109,8 +109,8 @@ Browser（音声は memory のみ。storage へ書かない）
        → Rails：認証再確認 → current_user で所有者決定 → content type と size を検証
           → S3東京：一時object（非公開・暗号化・versioning無効・keyはUUID）
              ＋ server側の記録：処理ID・所有者・key・受理時刻・再試行期限・状態
-          → 外部文字起こし（東京優先）    ← 元音声が第三者へ渡る最初の地点
-          → 外部AI（東京優先）
+          → Amazon Transcribe（東京）    ← 元音声が第三者へ渡る最初の地点
+          → Amazon Bedrock の Claude（日本国外へ出ない経路で使えるモデル）
           → RDS：dots（sentence / summary / date / duration）
           → 成功（＝Dotの保存まで完了）：一時object（音声）を即削除
              （記録をいつ消すかはTASK-003と相互確認）
@@ -132,8 +132,9 @@ Browser（音声は memory のみ。storage へ書かない）
 - **server側に処理ID・所有者・object key・受理時刻・再試行期限・状態の記録を持つ。**別requestでの
   再試行、別containerで動くJob、退会時の削除は初回requestの外で所有者を判断するため、この記録で
   認可する。**推測困難なkeyを所有権の代わりにしない。**記録の置き場と項目はTASK-003/005で確定する。
-  この記録自体も個人データとして保持・削除の対象にする。**成功した処理の記録をいつ消すかは、
-  応答喪失後の結果照会と冪等性の設計に依存するためTASK-003と相互確認し、ここでは固定しない。**
+  この記録自体も個人データとして保持・削除の対象にする。**成功した処理の記録は、Dotの保存まで
+  完了した時点で削除する**（2026-09-29にTASK-003で確定）。冪等性keyは`dots`の行へ引き継ぐため、
+  応答喪失後の結果照会は記録が無くてもDotで答えられる。
 - 一時object（音声）は**DotがRDSへ保存されるまで完了した時点**で即削除する（文字起こしや生成が通った時点ではない。保存で落ちたときに再試行できるようにするため）。失敗した場合は**受理から24時間**を再試行の期限とし、
   期限が来たら**アプリが削除する**。削除に失敗したら再実行し、残存を検知できるようにする。
   RDSへは入れない。
@@ -177,6 +178,64 @@ Browser（音声は memory のみ。storage へ書かない）
 - 保持期間の既定はログ14日、RDS自動backup 7日、音声の一時objectは再試行期限の24時間。実値は下記
   「未決定」のとおり公開前に確定する。S3の実費は成功時に即削除する運用では月1円未満の見込みで、
   Pricing Calculatorで再確認する。
+
+### 生成の実行方式（2026-09-29採用、未実装）
+
+[TASK-003 Plan](implementation-plans/2026-09-29-task-003-generation-design.md)で採用した。
+実装済みの構成ではない。比較は同Plan §18–§21、採用内容は同§25。
+
+```text
+POST /api/v1/dots（同期）
+  → Rails：認証・所有者・形式・size検証 → S3東京へ一時object
+     ＋ 処理の記録（処理ID・所有者・key・冪等性key・受理時刻・再試行期限・状態）
+  → Solid Queue へ enqueue → 処理IDと再試行期限を返して request は終わる
+
+Job（非同期。worker は当面 ECS 同一タスク内で Puma と並走）
+  → Amazon Transcribe（東京）: S3 の object を入力に文字起こし
+  → 文字起こしテキストは worker の memory のみ（DB にも S3 にも書かない）
+  → Amazon Bedrock の Claude: sentence と summary を生成
+  → RDS dots へ保存（冪等性key を同じ行に持つ）
+  → 成功: S3 の一時object を削除 → 処理の記録を削除
+  → 失敗: 記録を failed で残す。受理から24時間は同じ音声で再試行できる
+
+GET /api/v1/dots/generations/:処理ID（client は polling）
+  → processing / succeeded / failed。記録が無く Dot があれば成功として返す
+```
+
+- **文字起こしと生成の委託先をAWSに統一する。**委託先が1社に集約され、確認すべき9項目
+  （[privacy.md §5-1](privacy.md)の外部provider行）の対象が1つになる。**認証はECS task roleの
+  IAMで行い、APIキーをアプリで持たない。**対象bucketと対象モデルだけを許す最小権限にする。
+  **9項目は未確認で、確認は公開前に人間が行う。**
+- **Transcribeについて、AWS OrganizationsのAI services opt-out policyの適用を必須とする。**
+  AWSのAIサービスは**既定では顧客コンテンツをサービス改善に利用し、利用リージョン外へ保存し得る**。
+  Transcribeはこのopt-out policyの対象サービスで、**設定しない限りopt-inのままである。**
+  適用せずに音声を送ると、上記「日記内容・音声・AI入力は原則として東京」が成り立たない。
+  適用後にeffective policyを照会して効いていることを確認する（TASK-009/015）。
+  なおBedrockはこのopt-out policyの対象外で、モデルごとのdata retention modeで別に確認する。
+- **Bedrockのモデルは、推論が日本国外へ出ない経路で使えるものから選ぶ。**Bedrockには
+  In-Region・地理を限定したcross-region inference・Globalの区別があり、**Globalは世界中へ
+  ルーティングされる。**どのClaudeモデルがどれに当たるかは**未確定**で、model idはTASK-009で
+  対応表とモデルカードを直接読んで決める。**モデルの都合で所在地方針を黙って曲げない。**
+  選定するモデルのdata retention modeも確認し、保持とAWSによる人的レビューが必須のモデルを
+  使う場合は、それを録音前の案内に書く。
+- **Job基盤はSolid Queue**（RDSのテーブルを使う）。ElastiCache Redisを常時稼働させないため、
+  基盤費の目標（月5,000円、許容1万円前後）を増やさない。**workerは当面ECSの同一タスク内で
+  Pumaと並走させ、Puma占有やdeployでの中断が実測で問題になれば別タスクへ分ける。**
+  Solid Queueのまま分けられる。
+- **clientへの結果の受け渡しはpolling。**ALBのidle timeoutとECS 1タスクという構成で接続を
+  維持しない。**応答喪失後の結果照会にも同じendpointで答えられる。**
+- **`processing`が受理から24時間を過ぎたら`failed`として扱う。**worker停止・deploy・例外で
+  記録が止まった場合に、永遠に待つ画面を作らない。
+- **冪等性keyは`dots`の列にunique制約で持つ。**同じkeyでの再送は2件目のDotを作らず既存を返す。
+  **二重のDotは防ぐが、外部AI処理の二重消費は防がない**（再試行では文字起こしからやり直す）。
+- **再試行は文字起こしからやり直す。**文字起こし全文を保存しない制約から一意に決まる。
+  テキストから再生成する経路は持たない。
+- **退会は処理の記録の状態で排他する。**退会の受理で利用者を`withdrawing`にして新規の受理と
+  再試行を止め、**進行中のJobは結果を書き込む直前に所有者の状態を確認し、`withdrawing`なら
+  書き込まない。**確認と書き込みは同じtransactionで行う。生成のcancel UIはMVPで持たない。
+- **model idとpromptは設定で固定する。**固定しないと、ある日から生成結果の調子が変わる。
+- Bedrockのrequest / responseと文字起こしテキストは発話内容そのものなので、SDKのdebug logや
+  error trackingへ出さない（上記「ログへ出さない」と同じ対象）。
 
 ### データ所在地と費用
 
@@ -222,9 +281,9 @@ ALB/Fargate/RDS/公開IPv4の小規模例でも、1ドル150円・消費税10%�
 - password再設定後の既存Cookieの実動作（実機検証）
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
   （ログ14日・backup 7日は既定案であり、実値は未確定）
-- background job基盤（最長30分の音声を同期HTTPで処理できないため、TASK-003で必要になる見込み）
 - API契約でOpenAPIを採用するか、採用時の型生成・生成物管理・検証方法
-- AI provider・文字起こしprovider・promptとその実装方法、同期/非同期の選択（TASK-003で決定）
+- promptの最終文面、Bedrockのmodel idとdata retention mode、pollingの間隔と打ち切り（TASK-005/009で確定）
+- 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認結果（公開前に人間が実施）
 - 音声受信時のPuma占有時間の実測（`RAILS_MAX_THREADS`既定3・ECS 1タスク）、presignedでの直接uploadへ移す条件、受容するaudioのcontent typeの確定、S3 bucketとIAMの具体設定
 
 これらは、関連仕様と個別のImplementation Planで選択肢・影響を確認した上で、後続の変更で決定・実装する。

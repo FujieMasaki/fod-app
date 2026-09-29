@@ -40,9 +40,9 @@ Dot生成後に利用者が任意で行える深掘り対話は、この基本�
 | MVP対象 | 音声による振り返り、Dotの生成、利用者ごとの安全な保存、今日のDotを見るDay表示、複数Dotの一覧から過去のDotを選ぶ体験。一覧ではDotを丸で表す。**Dot本文の編集と、ゴミ箱を経由する削除**（2026-09-29にTASK-002で追加）。実サービスの送信・保存方法は`journaling.md`、一覧の受け入れ条件は`dot-history.md`で扱う。 |
 | 検証候補 | DayからWeek / Monthへ視点を引く表示とアニメーション、週次・月次のAI振り返り。プロトタイプと利用者テストを経て採用を判断し、現時点のMVP完成条件には含めない。 |
 | 将来候補 | Homeでの最近のDot表示、検索、カテゴリ、期間フィルタ、Dot同士のつながりや長期的な傾向の表現。`design-system.md`に画面原則があっても、MVP確定とは扱わない。 |
-| 設計採用・未実装 | AWS東京のALB + ECS Fargate + RDS PostgreSQL、Rails + Deviseのメール＋パスワード・確認メール・パスワード再設定、OmniAuthのGoogleログイン、Rails CookieStore・HttpOnly Cookie・CSRF・Dot所有者認可。初期はECS 1タスク・RDS Single-AZ・同一origin。音声は同一originのRails経由で送り、処理が終わるまでS3東京へ一時的に預けて長期保存しない、文字起こし全文をRDSへ保存しない、Dotは`sentence`と`summary`だけを持つ、Dot個別削除（ゴミ箱を経由し、7日後に削除処理を始める）と即時完全削除と退会を備え、`sentence`・`summary`を編集できる（編集前の値は残さない）。詳細はarchitectureと`journaling.md`を参照。 |
+| 設計採用・未実装 | AWS東京のALB + ECS Fargate + RDS PostgreSQL、Rails + Deviseのメール＋パスワード・確認メール・パスワード再設定、OmniAuthのGoogleログイン、Rails CookieStore・HttpOnly Cookie・CSRF・Dot所有者認可。初期はECS 1タスク・RDS Single-AZ・同一origin。音声は同一originのRails経由で送り、処理が終わるまでS3東京へ一時的に預けて長期保存しない、文字起こし全文をRDSへ保存しない、Dotは`sentence`と`summary`だけを持つ、Dot個別削除（ゴミ箱を経由し、7日後に削除処理を始める）と即時完全削除と退会を備え、`sentence`・`summary`を編集できる（編集前の値は残さない）。文字起こしはAmazon Transcribe（東京）、生成はAmazon BedrockのClaudeで、非同期に実行しclientはpollingで結果を取る。AIへ送る前の固有名詞の低減は行わない。詳細はarchitectureと`journaling.md`を参照。 |
 | 次段階として体験方針を採用・未実装 | Dot生成後の任意の深掘り対話。対話でDotを自動更新せず、利用者が承認した変更だけを反映する体験方針を[dot-follow-up.md](./dot-follow-up.md)で採用した。会話回数・終了/再開・失敗時の扱い、対話・更新履歴の保持は未定で[TASK-018](./tasks/TASK-018-dot-follow-up-dialogue-design.md)が扱う。現行のMVP完成条件には含めない。 |
-| 未決定 | password方針・ログイン試行制限の具体値、Google確認情報とConfirmableの関係、AI provider、prompt、固有名詞を低減する位置と手段、生成の同期/非同期、同日に複数回話した場合の扱い、記録のない日の表現、通知・共有。 |
+| 未決定 | password方針・ログイン試行制限の具体値、Google確認情報とConfirmableの関係、promptの最終文面、委託先への9項目の確認結果、同日に複数回話した場合の扱い、記録のない日の表現、通知・共有。 |
 
 ## 4. MVP対象外と実装前に決めること
 
@@ -61,8 +61,9 @@ Dot生成後に利用者が任意で行える深掘り対話は、この基本�
 
 認証方式と公開基盤は[architecture](./architecture.md)のとおり採用した。音声の送信経路と保持・削除は
 2026-09-28にTASK-002で採用し、[`journaling.md`](./journaling.md) §2・§4を正本とする。認証の残る細部、
-AI provider、prompt、API契約tooling、background job基盤は、MVPを実装する過程で必要に応じて
-決める設計事項であり、対象外の機能ではない。既存のdesign-system上の
+promptの最終文面とAPI契約toolingは、MVPを実装する過程で必要に応じて決める設計事項であり、
+対象外の機能ではない。AI provider・文字起こしprovider・background job基盤は2026-09-29にTASK-003で
+採用した。既存のdesign-system上の
 表現や技術的な実装可能性だけを理由に、候補機能の優先度を確定しない。
 
 Deviseでメール＋パスワード、確認メール、パスワード再設定を扱い、GoogleログインをOmniAuthで
@@ -98,7 +99,7 @@ Google/email一致で統合しない。Googleが確認済みとしたメール�
 | 深掘り対話の実装詳細 | 基本のDot生成MVPが完成し、TASK-018で会話回数・終了/再開・失敗時の扱い・データ保持を決める変更 | 体験方針は[dot-follow-up.md](./dot-follow-up.md)で採用済み。対話履歴・反映されなかった提案の保存要否と範囲・保持期間、最初のDot・現在のDot・更新履歴のデータモデル（TASK-002の「編集履歴を持たない」方針との整合を含む）、途中離脱・再開の扱いをTASK-018で比較・決定する |
 | 話した内容の要約の使い道 | 週次・月次のまとめや分析を実装する変更 | MVPでは表示と編集のみ。まとめの入力として使うかは、検証候補の採用判断と合わせて決める。本人が編集した内容が混ざる前提で考える |
 | ゴミ箱の期間と編集履歴 | 誤削除の相談が実際に起きた変更、または保持期間を見直す変更 | 2026-09-29に「ゴミ箱7日・編集履歴は持たない」を採用済み。履歴を持たないのは、消したかった実名が編集履歴に残るのを避けるためで、利便性の判断ではない |
-| AI生成の実行方式 | providerと応答時間・失敗時UXが決まる変更 | 同期request、Job、非同期polling / 通知を冪等性と再試行で比較 |
+| 委託先の確認と公開可否 | 公開前、または実際に音声・発話内容を外部へ送る変更 | 学習利用・保持・リージョン・人のレビュー・サブプロセッサ・委託契約・事故時の通知・鍵・第三者認証の9項目を一次資料で確認する。**未確認の項目を「問題ない」と扱わない**（TASK-003 Plan §26） |
 | Dot履歴の表示 | 複数Dotの一覧を実装する変更 | 同日の複数録音、記録のない日、日付境界と表示順を比較・決定 |
 | Week / Month・検索・カテゴリ・期間 | 複数Dotの保存と振り返り行動を検証した後 | プロトタイプと利用者テストを踏まえ、操作、検索対象、分類方法、期間境界、導入段階を比較 |
 | API契約tooling | 最初のプロダクトAPIをWebが利用する変更 | OpenAPIを推奨候補にし、型生成・生成物管理・検証toolは別に判断 |
