@@ -155,9 +155,10 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
 POST /api/v1/dots（同一origin・multipart・Cookie + CSRF・最長30分 / 32MB）
   → Rails: 認証再確認 → content type と size を検証
   → 利用者の行を FOR UPDATE で lock → active を確認 → 状態 uploading の記録を作成
-     （処理ID＝冪等性key・所有者・provider ID・object key・受理時刻・再試行期限・
-       世代番号・最終進捗時刻）→ commit    ★退会と排他されるのはこの transaction
-  → commit のあとに S3東京へ upload（非公開・暗号化・versioning無効・key は provider ID 由来）
+     （項目は §20 の表。名前は provider ID と attempt 番号から導く）→ commit
+                                         ★退会と排他されるのはこの transaction
+  → commit のあとに S3東京へ upload（非公開・暗号化・versioning無効）
+     key = audio/<provider ID>/<upload attempt>
   → upload 完成 → 世代番号を再確認 → 記録を accepted へ → Job を enqueue
      ※ 世代がずれていれば object を削除して終える（記録が消えていても手元の key で消す）
   → 202 相当で処理IDと再試行期限を返す                        ★ここで request は終わる
@@ -165,7 +166,8 @@ POST /api/v1/dots（同一origin・multipart・Cookie + CSRF・最長30分 / 32M
 [生成]  ここから非同期。worker は当面 ECS 同一タスク内
 Job: 記録の所有者と世代を確認 → 状態を transcribing へ
   → Amazon Transcribe（東京）へ S3 の object を渡す      ★★元音声が委託先へ渡る最初の地点
-     TranscriptionJobName と OutputKey は provider ID から決定的に導く
+     TranscriptionJobName = <provider ID>-<transcribe attempt>
+     OutputKey = transcripts/<provider ID>/<transcribe attempt>.json（§20の導出規則）
      OutputBucketName に自前の bucket を指定する（音声と同じ bucket の別 prefix）
      ※ response を失っても新しい job を作らず GetTranscriptionJob で合流する
   → 文字起こし結果が自前 S3 へ書き出される（§27）
@@ -180,7 +182,10 @@ Job: 記録の所有者と世代を確認 → 状態を transcribing へ
   → 音声の一時object を削除
   → 文字起こし結果と Transcribe の job は、client の ACK を待つ（§27）
   → ACK を受けたら即削除。来なければ 受理から24時間で削除処理を始める
+     Dot の完全削除・退会を受理したときも、その時点で削除へ回す（§20の認可表）
      ※ job が非終端なら DeleteTranscriptionJob は通らない。終端まで reconcile する
+  → prefix（audio/<provider ID>/ と transcripts/<provider ID>/）ごと列挙して消す
+     旧 attempt の孤児もここで拾う。lifecycle は最後の受け皿（保険）
   → 全部消えてから処理の記録を削除する
   ※ どれかの削除に失敗したら「削除済み」と扱わず再実行し、残存を検知する
 
@@ -190,9 +195,14 @@ GET /api/v1/dots/generations/:処理ID    （認可は current_user に scope �
      （記録が succeeded_cleanup_pending で残っていても「処理中」とは返さない）
   → Dot が無く 記録が uploading / transcribing / generating: 処理中。期限の日時を返す
   → Dot が無く 記録が failed: 失敗の種類と、再試行できるかと期限日時を返す
+  → Dot が無く 記録が cancel_requested / cleanup_pending: **処理中とも失敗とも返さない。**
+     受け付けを終えたものとして返す（利用者が削除した／退会した／期限が過ぎた結果）
   → 記録も Dot も無い: 受理されていないか、Dot が削除済み
   ※ 成功の response には文字起こし全文を含める。自前 S3 から読み出して返す（§27）
-     期限を過ぎていれば、object が残っていても全文は返さず Dot だけを返す
+  ※ **次のいずれかに当たれば、object が残っていても全文を返さない**（§27の「返さない条件」）
+     - 期限を過ぎている
+     - そのDotの完全削除を受理した
+     - 退会を受理した
 
 POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し終えたら送る）
   → current_user.dots と処理ID で認可 → 文字起こし結果と Transcribe の job を即削除
@@ -1024,10 +1034,10 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
    確認する（既定として採用。質問していない）。**TASK-002 Plan §13がSafariだけ失敗するリスクとして
    挙げた項目で、確認はTASK-009の疎通で行う。
 8. **文字起こし結果の置き場 = §27案A（自前のS3へ置く）。**レビュー指摘で「workerのmemoryのみ」が
-   事実として誤りと分かったため、追加で判断した。音声と同じbucketの別prefixに同じ条件で置き、
-   **削除の契機も音声と同じ受理から24時間にする**（新しい期限を増やさない）。
-   **clientが受け取ったら削除ACKを送り、serverが即座に消す。**ACKが来ない場合のfallbackとして
-   受理から24時間で削除処理を始める。初稿は「取得の有無をserverが持つと成功した処理の記録を
+   事実として誤りと分かったため、追加で判断した。音声と同じbucketの別prefixに同じ条件で置く。
+   **clientが受け取ったら削除ACKを送り、serverが即座に消す。**削除の契機は
+   **ACKの受領・受理から24時間の経過・そのDotの完全削除・退会の4つ**（`privacy.md §5-1`が正本。
+   §20の認可表に契機ごとの削除範囲がある）。初稿は「取得の有無をserverが持つと成功した処理の記録を
    残すことになる」として取得後削除を採らなかったが、**この理由は成立していなかった**
    （2巡目のレビュー指摘3。成功後も`dots`に処理IDが残るため記録なしで認可できる）。
    **それでもTASK-002の前提に対しては後退である**ことを§27に記録した。
@@ -1158,8 +1168,18 @@ S3にも書かない」となっており、**現状の記述は実態と合わ�
 - `privacy.md §5-1`へ**新しいデータ行を1つ追加する。**保持しないデータとして扱わない。
 - **削除の完了は約束しない。**24時間は削除処理を始める時刻であって、消え終わる時刻ではない。
   障害時には残り得る。`privacy.md §5-2`の約束できる／できないの分け方をそのまま使う。
-- **期限を過ぎたら、objectが残っていても全文を返さない。**endpointの振る舞いを物理的な削除の
-  結果と切り離す。「削除済みだから返さない」ではなく「保持期間を過ぎたから返さない」とする。
+- **endpointの振る舞いを物理的な削除の結果と切り離す。**「objectが消えたから返せない」ではなく、
+  **仕様として返さない条件**を決める。cleanupが終わるまでの間にpollingが来ても、
+  下表に当たれば全文を返さない（6巡目のレビュー指摘3。従来は期限しか書いていなかった）。
+
+| 返さない条件 | 理由 |
+| --- | --- |
+| 受理から24時間の期限を過ぎている | 保持期間を過ぎたため |
+| **そのDotの完全削除を受理した** | 利用者が消すと決めたものを、後片付けの途中に返さない |
+| **退会を受理した** | 同上。退会の受理後は結果の確定も取得もしない |
+
+  いずれも**cleanupの完了を待たずに、受理した時点から返さない。**物理削除が終わっていない間に
+  返してしまうと、「削除した」と操作した利用者へ削除対象の中身を返すことになる。
 - 録音前の案内（TASK-002 Plan §22の7項目）の項目3「音声と文字起こし全文を残さず」は、
   **文字起こし結果を一時的に預かる事実と合わなくなる。**音声と同じ言い方（処理のあいだ預かり、
   やり直せる期限のあとに削除処理を行う）へ揃える。文言の確定はTASK-010。
