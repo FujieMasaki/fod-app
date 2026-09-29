@@ -29,7 +29,7 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 
 ## 2. データと正本
 
-4列目は2026-09-28にTASK-002で採用した実サービスの方針である。**いずれも未実装**で、1〜3列目の
+4列目はTASK-002で採用した実サービスの方針である（2026-09-28採用、ゴミ箱と編集は2026-09-29に追加）。**いずれも未実装**で、1〜3列目の
 現在の実装は実装タスクまで変わらない。判断の根拠と比較は
 [TASK-002 Plan](implementation-plans/2026-09-28-task-002-data-lifecycle.md)を正本とする。
 
@@ -38,7 +38,7 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 | マイクstream / AudioContext | 録音中のbrowser memory | stop / dispose時にtrackを停止しAudioContextを閉じる。外部送信・永続化しない。 | 変えない。録音中のmemoryだけに置く。権限説明・対応ブラウザ・中断UXはTASK-010 |
 | 録音Blob | `MediaRecorder`内部で一時生成され得る | `stop`はBlobを生成し得るが、`useRecorder`はdurationだけを上位へ返す。Blobは後続へ渡さず、保存・送信しない。 | 同一originのRails経由で送る。**長期保存しない**が、処理が終わるまでS3東京へ一時的に預かる（非公開・暗号化・versioningを有効にしない）。**DotがRDSへ保存されるまで完了したら**即削除（文字起こしや生成が通った時点ではない）。失敗した場合は受理から24時間を再試行の期限とし、期限が来たらアプリが削除する（lifecycleは保険で、それ自体は24時間を保証しない）。Dot削除は対象の処理のもの、退会は本人の全部を削除。端末のstorageへは書かない。最長30分・32MB |
 | 録音時間 | Session Providerと`fod.session.v1` | `reset`またはbrowser storageの削除で消える。UIの削除操作は未実装。 | Dotと同じrequestで送り、RDSの`dots`を正本にする。保持・削除もDotと同じ |
-| Dot（id、date、duration、sentence、summary） | Session Providerと`fod.session.v1`に現在の1件（現行のDotSessionは`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。**`reflection`と`closing`は生成も保存もしない** |
+| Dot（id、date、duration、sentence、summary） | Session Providerと`fod.session.v1`に現在の1件（現行のDotSessionは`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。`sentence`と`summary`は本人が編集でき、編集前の値は残さない。1件ごとの削除はゴミ箱（7日で完全削除）、即時の完全削除も備える。**`reflection`と`closing`は生成も保存もしない** |
 | 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す |
 | 話した内容の要約（`summary`） | 存在しない | — | 文字起こしから生成し、Dotと同じ行に保存する。Dotを削除すれば一緒に消える。要約にも実名は残り得るため、Dot本文と同じ保護・削除・説明の対象にする |
 | API response | `createDot`の一時値をZod検証後にDotSessionへ | 未検証値は保存しない。 | Dotと文字起こしを返す。音声のURLは返さない。正式な契約はTASK-005 |
@@ -75,8 +75,14 @@ keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを�
   障害時に削除が遅れ得ることは、録音前の案内に含める。
 - 音声の再試行・Job実行・削除は、server側が持つ所有者の記録で認可する。処理IDやobject keyを
   知っていることを権限の根拠にしない。
-- 保存されたDotは認証済み利用者本人だけが取得・削除できる。削除はDot 1件ごとの削除と退会の
-  両方を備える。**MVPでは生成結果を更新（編集）する手段を持たない。**訂正は削除して録り直す。
+- 保存されたDotは認証済み利用者本人だけが取得・更新・削除できる。
+- 削除はDot 1件ごとの削除と退会の両方を備える。**1件ごとの削除はゴミ箱へ移す形とし、受理から7日で
+  完全に削除する。**ゴミ箱の中のDotはDay・一覧・詳細から取得できず、ゴミ箱の画面からだけ見えて
+  復元できる。画面には「削除しました」ではなく「ゴミ箱に移動しました。7日後に完全に消えます」と示す。
+  **ゴミ箱を経由しない「すぐに完全削除」も備える。**退会はゴミ箱を経由せず、ゴミ箱の中も含めて消す。
+- **`sentence`と`summary`は本人が編集できる。編集前の値は残さない**（版も履歴も持たない）。
+  消したかった実名が編集履歴に残るのでは直した意味がないため、戻せないことを編集前に伝える。
+  `date`と`duration`は編集させない。ゴミ箱の中のDotは復元してから編集する。
 - Dotとして保存するのは`date`、`duration`、`sentence`（今日の一文）、`summary`（話した内容の要約）で、
   AIからの語りかけ（`reflection`・`closing`）は生成も保存もしない。`summary`は本人が読める場所に表示する。
 - 認証はRails + Deviseのメール＋パスワード・確認メール・パスワード再設定と、OmniAuthのGoogle
@@ -94,7 +100,7 @@ keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを�
 2026-09-24に採用した公開基盤はAWS東京のALB + ECS Fargate + RDS PostgreSQLで、初期は
 ECS 1タスク・RDS Single-AZ。構成と費用方針は[architecture](./architecture.md)を参照する。
 日記内容・音声・AI入力は原則として東京に置くが、国内限定の法的・契約上の約束はまだ行わない。
-音声原本を長期保存しないこと、処理が終わるまでの一時的な預かり、送信経路、保持・削除は2026-09-28にTASK-002で採用した（§2の表）。
+音声原本を長期保存しないこと、処理が終わるまでの一時的な預かり、送信経路、保持・削除は2026-09-28にTASK-002で採用した（§2の表）。ゴミ箱による削除と`sentence`・`summary`の編集は2026-09-29に追加した。
 AI providerとpromptは引き続き未決定。この設計採用によって§1–3の現行mock・localStorage・未実装の
 状態が変わったとは扱わない。
 
