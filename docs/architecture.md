@@ -233,7 +233,8 @@ POST .../transcript_ack（client が全文を保存し終えたら送る。冪�
   別に置く。**始める契機は約束できるが、消え終わる時刻は約束しない**（[privacy.md §5-2](privacy.md)）。
   削除では**objectとTranscribeのjob（`DeleteTranscriptionJob`）の両方**を消す。
   **jobが非終端の間は削除できない**ため、終端になるまで追ってから消す。
-  **期限を過ぎたら、objectが残っていても端末へ返さない。**
+  **期限を過ぎた、そのDotの完全削除を受理した、退会を受理した、のいずれかに当たると、objectが
+  残っていても端末へ返さない。**いずれもcleanupの完了を待たず、受理した時点から返さない。
   期間と契機の正本は[privacy.md §5](privacy.md)、判断は
   [TASK-003 Plan §27](implementation-plans/2026-09-29-task-003-generation-design.md)。
   選定するモデルのdata retention modeも確認し、保持とAWSによる人的レビューが必須のモデルを
