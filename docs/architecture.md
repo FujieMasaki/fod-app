@@ -164,7 +164,8 @@ Browser（音声は memory のみ。storage へ書かない）
 - ゴミ箱の中のDotをDay・一覧・詳細から除外する。**除外は明示的なscopeで行い、暗黙の既定scope
   （`default_scope`等）に頼らない。**暗黙の除外は、ゴミ箱の中身が一覧へ漏れる事故と、逆にゴミ箱が
   空に見える事故の両方を起こしやすい。実現方法はTASK-008で確定する。
-- **`dots`は`recorded_at`（録音開始時刻・UTC）を持ち、`date`はそこから算出したAsia/Tokyoの暦日と
+- **`dots`は`recorded_at`（録音開始操作をserverが受理した時刻・UTC）を持ち、`date`はそこから算出した
+  Asia/Tokyoの暦日と
   する**（2026-09-29にTASK-004で採用。正本は[dot-history.md](dot-history.md) §2）。作成時刻を日付の
   根拠にしない。送信・生成・保存の失敗を24時間以内に再試行しても日付が動かないようにするため。
   `recorded_at`は**録音開始操作をserverが受理した時刻**とする。実際の録音開始操作に対して発行する
