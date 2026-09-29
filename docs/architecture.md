@@ -167,8 +167,11 @@ Browser（音声は memory のみ。storage へ書かない）
 - **`dots`は`recorded_at`（録音開始時刻・UTC）を持ち、`date`はそこから算出したAsia/Tokyoの暦日と
   する**（2026-09-29にTASK-004で採用。正本は[dot-history.md](dot-history.md) §2）。作成時刻を日付の
   根拠にしない。送信・生成・保存の失敗を24時間以内に再試行しても日付が動かないようにするため。
-  `recorded_at`はserverが録音の開始時に決め、clientから受け取った値を採用しない。一覧の並びと
-  「最新」の判定にも`recorded_at`を使い、同値のときはDotの識別子で決める。
+  `recorded_at`は**実際の録音開始操作に対してserverが発行する録音attempt**から決め、認証確認の
+  時刻やclientから受け取った値を採用しない。attemptは本人に紐づき、1件のDot生成にしか使えず、
+  やり直しで新しくなり、別Userでは使えず、未送信には期限がある。保存方式（serverに保存するか
+  署名済みの値を端末のmemoryに置くか）はTASK-005で決める。一覧の並びと「最新」の判定にも
+  `recorded_at`を使い、同値のときはDotの識別子で決める。
 - **`sentence`と`summary`の更新APIを持つ**（2026-09-29に追加）。`date`・`recorded_at`・`duration`は
   更新させない。
   **アプリは編集前の値を保存しない**（版も履歴も持たない）。消したかった記述が編集履歴に残るのを
