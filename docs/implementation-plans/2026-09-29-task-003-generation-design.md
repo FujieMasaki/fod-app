@@ -202,11 +202,8 @@ GET /api/v1/dots/generations/:処理ID    （認可は current_user に scope �
      受け付けを終えたものとして返す（利用者が削除した／退会した／期限が過ぎた結果）
   → 記録も Dot も無い: 受理されていないか、Dot が削除済み
   ※ 成功の response には文字起こし全文を含める。自前 S3 から読み出して返す（§27）
-  ※ **次のいずれかに当たれば、object が残っていても全文を返さない**（§27の「返さない条件」）
-     - 端末から削除ACKを受け取った
-     - 期限を過ぎている
-     - そのDotの完全削除を受理した
-     - 退会を受理した
+  ※ **object が残っていても全文を返さない条件がある。§27の「返さない条件」を見る**
+     （同じ文書の中で条件を二重に書かない。片方だけ古くなるため）
 
 POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し終えたら送る）
   → current_user.dots と (user_id, 処理ID) で認可 → 文字起こし結果と job の削除処理を始める
@@ -673,10 +670,9 @@ TASK-002が必須とした項目に、このタスクの決定で必要になる
 
 | 項目 | 目的 |
 | --- | --- |
-| **処理ID（＝冪等性key＝録音attemptの識別子）** | **serverが録音開始操作に対して発行する**（TASK-004）。結果の照会と重複の判定を**同じ識別子**で行う。**成功時に`dots`の行へ引き継ぐ**ので、記録を消した後もこのIDでDotを引ける |
+| **処理ID（＝冪等性key＝録音attemptの識別子）** | **serverが録音開始操作に対して発行する**（TASK-004）。結果の照会と重複の判定を**同じ識別子**で行う。**成功時に`dots`の行へ引き継ぐ**ので、記録を消した後もこのIDでDotを引ける。server発行なのでAWSアカウント内で一意にでき、**S3のkeyとTranscribeのjob名もここから導く**（下記「命名」） |
 | **`started_at`** | **定義は[dot-history.md §2](../dot-history.md)を見る**（TASK-004が決めた基準時刻。本Planでは写さない）。本Planが決めるのは扱いだけで、**受理時に記録へ書き、再試行・Job再実行で書き換えない。**`dots`へも同じ値を書く |
 | 所有者（user_id） | upload後の再試行・Job実行・削除の認可。**IDを所有権の代わりにしない** |
-| **処理ID** | 録音attemptの識別子と同一。server発行なのでAWSアカウント内で一意にでき、**S3のkeyとTranscribeのjob名をここから導く**（下記「命名」） |
 | 音声のobject key・文字起こし結果のobject key | cleanupの対象を特定する。処理IDから導けるが、**記録にも持つ**（導出規則を変えたときに過去分を回収できなくなるため） |
 | Transcribeのjob名 | 同上。非終端jobの照会（`GetTranscriptionJob`）と削除に要る |
 | 受理時刻・再試行期限 | 期限の判定と、画面に出す期限日時 |
@@ -686,7 +682,7 @@ TASK-002が必須とした項目に、このタスクの決定で必要になる
 | 失敗の種類 | 再試行できるかの判定と、画面の文言の出し分け |
 
 **unique制約は`dots`だけでなく処理の記録にも要る。**記録側にも`(user_id, 処理ID)`のunique制約を
-置く。Dotがまだ無い間に同じUUIDのPOSTが並行すると、**記録が2件でき、Jobが2本enqueueされ得る**
+置く。Dotがまだ無い間に同じ処理IDのPOSTが並行すると、**記録が2件でき、Jobが2本enqueueされ得る**
 （2巡目のレビュー指摘4）。衝突したら新しく作らず、既存の記録の状態を返す。
 
 **処理IDと冪等性keyを別々にしない。**別にすると、成功時に記録を消した時点で処理IDとDotの対応が
@@ -711,13 +707,14 @@ TASK-004が`started_at`の根拠として**録音attempt**（録音開始操作�
 
 **`TranscriptionJobName`はAWSアカウント内で一意でなければならず、衝突すると`ConflictException`に
 なる**（[StartTranscriptionJob](https://docs.aws.amazon.com/transcribe/latest/APIReference/API_StartTranscriptionJob.html)）。
-処理IDはclientが発行し、DBのunique制約は`(user_id, 処理ID)`なので、**別の利用者が同じUUIDを
-送れてしまう。**そのまま使うと、
+**初稿は処理IDをclient発行のUUIDにしていた。**DBのunique制約が`(user_id, 処理ID)`だったため、
+別の利用者が同じ値を送れてしまい、そのままAWSの名前に使うと次が起き得た（2巡目のレビュー指摘13）。
 
-- 他人と同じUUIDを送るだけでjobの開始を妨害できる。
+- 他人と同じ値を送るだけでjobの開始を妨害できる。
 - S3のkeyも処理IDだけから作ると、**利用者をまたいで上書き・誤読が起き得る。**
 
-したがって**AWSの名前はserverが発行する処理ID（＝録音attemptの識別子）から導く。**
+**現在の処理IDはserver発行（TASK-004の録音attempt）なのでこの経路は塞がっているが、
+一意性を前提にした設計であることは変わらない。**AWSの名前はその処理IDから導く。
 
 - 処理IDは**録音開始操作に対してserverが発行する**（TASK-004の録音attempt。旧案はserver側でUUIDを
   もう1つ発行する案だった）。**AWSアカウント内で一意**であることを満たす必要がある（TASK-005で契約化）。
