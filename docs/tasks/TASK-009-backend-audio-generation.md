@@ -11,7 +11,7 @@
 
 ## 目的と作業範囲
 
-決定した音声の受け渡し方式とAI providerを使い、録音内容からDotを生成してTASK-008の永続保存へつなぐ。**文字起こしとJobは2026-09-29にTASK-003で採用済み**（Amazon Transcribe東京、Amazon BedrockのClaude、Solid Queueによる非同期、clientはpolling）。保持・削除方針のうち処理中の一時データの扱いを本タスク、期限による削除と削除要求への対応をTASK-013で扱う。音声を預かるS3 bucket（非公開・暗号化・**versioningを有効にしない**・lifecycleは保険）とIAMの用意、AWS SDKの導入もこのタスクの前提に含む。versioningを有効にする場合は、noncurrent versionのexpiration・期限切れdelete markerの削除・実体が消える削除方法をセットで実装する。replication・backup・object lockの有無も確認する。処理の記録（処理ID＝冪等性key・所有者・provider ID・現在有効な音声と文字起こし結果のobject key・Transcribeのjob名・試行番号・受理時刻・再試行期限・状態・世代番号・最終進捗時刻・失敗の種類）をserverで持ち、再試行とJob実行で所有者を照合する仕組みもここで作る。
+決定した音声の受け渡し方式とAI providerを使い、録音内容からDotを生成してTASK-008の永続保存へつなぐ。**文字起こしとJobは2026-09-29にTASK-003で採用済み**（Amazon Transcribe東京、Amazon BedrockのClaude、Solid Queueによる非同期、clientはpolling）。保持・削除方針のうち処理中の一時データの扱いを本タスク、期限による削除と削除要求への対応をTASK-013で扱う。音声を預かるS3 bucket（非公開・暗号化・**versioningを有効にしない**・lifecycleは保険）とIAMの用意、AWS SDKの導入もこのタスクの前提に含む。versioningを有効にする場合は、noncurrent versionのexpiration・期限切れdelete markerの削除・実体が消える削除方法をセットで実装する。replication・backup・object lockの有無も確認する。処理の記録（処理ID＝冪等性key＝録音attemptの識別子・所有者・`recorded_at`・現在有効な音声と文字起こし結果のobject key・Transcribeのjob名・試行番号・受理時刻・再試行期限・状態・世代番号・最終進捗時刻・失敗の種類）をserverで持ち、再試行とJob実行で所有者を照合する仕組みもここで作る。
 
 **TASK-003の状態機械をそのまま実装する。**[TASK-003 Plan §20](../implementation-plans/2026-09-29-task-003-generation-design.md)が状態と遷移を表で定義しているので、**表にあるすべての遷移をテストで1本ずつ検証する**（下記の完了条件）。文書だけで閉じたと判定するのが難しい領域なので、実装時にテストで閉じる。
 
@@ -28,6 +28,8 @@
 - [ ] 止まった処理を状態ごとに検知して回収できる。放置された`uploading`をwatchdogが拾い、Transcribeの完了待ちは`GetTranscriptionJob`で生きているか判定し、生きているjobを二重に開始しない。
 - [ ] 退会の受理以降、新しい保存・再試行・結果の確定が起きない。利用者の行のlockと世代番号で排他し、Transcribeの終端後にBedrockへ送る前にも確認する。進行中の処理が0になるまで完了としない。
 - [ ] **録音attemptの識別子を処理IDとして使い、再試行・Job再実行でも`recorded_at`を書き換えない。**同じattemptの再送は新しい処理を作らず既存の状態を返す。使用済みであることを理由に、受理後の正規の再試行を拒否しない。
+- [ ] **異なる利用者の録音attemptが同じAWSの名前（S3のkey・`TranscriptionJobName`）を作らない。**処理IDがAWSアカウント内で一意であること、`TranscriptionJobName`の文字種と長さの制約（`^[0-9a-zA-Z._-]+`、最大200文字）を満たすことを、実際の値で確認する。
+- [ ] **削除ACKを受け取ったあとは、cleanupが終わる前にpollingが来ても文字起こし全文を返さない。**期限切れ・Dotの完全削除・退会も同じ。**物理削除の完了に依存させない。**
 - [ ] **再uploadを許す窓が録音attemptの期限を超えない。**期限が切れていれば再uploadを受け付けず、録り直しを案内する。
 - [ ] **`succeeded_cleanup_pending`でcleanup再試行（T17）と削除・退会の受理（T22）が競合したときの期待結果を検証している。**T22が優先し、以後pollingは全文を返さず、進行中のcleanupの実行も最終的にcancel側の後片付けへ収束する。両方の実行順でテストする。
 - [ ] **cleanupの5つの契機それぞれで、認可条件と削除対象と他の処理への非波及を検証している。**遷移テストだけでは網羅できない（ACKは状態遷移を伴わず、契機ごとに削除範囲が違うため）。
