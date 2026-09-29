@@ -194,14 +194,19 @@ Job（非同期。worker は当面 ECS 同一タスク内で Puma と並走）
   → Amazon Transcribe（東京）: S3 の object を入力に文字起こし
   → 文字起こし結果を自前 S3 へ書き出させる（OutputBucketName を指定。下記）
   → Amazon Bedrock の Claude: sentence と summary を生成
-  → RDS dots へ保存（世代番号を再確認 → 処理ID を同じ行に持つ）
+  → 利用者の行を FOR UPDATE → 世代番号を確認 → dots へ保存（処理ID を同じ行に持つ）
+     ＋ 記録を succeeded_cleanup_pending へ（同一 transaction。ここで成功が確定する）
   → 成功: 音声の一時object を即削除 → 処理の記録を削除
-          （文字起こし結果は client が取りに来るまで残す）
-  → 失敗: 記録を failed で残す。受理から24時間は同じ音声で再試行できる
-  → 受理から24時間: 音声object・文字起こし結果・Transcribe の job・残る記録を削除
+          （文字起こし結果は client の ACK を待つ）
+  → cleanup 完了後に処理の記録を削除する
+  → 失敗: 記録を failed で残す。期限内は再試行できる
+  → 期限到来: 音声object・文字起こし結果・Transcribe の job・残る記録の削除処理を始める
 
 GET /api/v1/dots/generations/:処理ID（client は polling）
-  → 記録が processing / failed、記録が無く dots に同じ処理ID があれば成功として返す
+  → **まず dots を見る。**同じ処理ID の Dot があれば成功として返す
+    （記録が cleanup 待ちで残っていても「処理中」とは返さない）
+POST .../transcript_ack（client が全文を保存し終えたら送る。冪等）
+  → 文字起こし結果と Transcribe の job を即削除する
 ```
 
 - **文字起こしと生成の委託先をAWSに統一する。**委託先が1社に集約され、確認すべき9項目
@@ -224,9 +229,10 @@ GET /api/v1/dots/generations/:処理ID（client は polling）
   「workerのmemoryだけを通る」経路は存在しない。**`OutputBucketName`を必ず指定し**、音声の一時
   objectと同じbucketの別prefixへ、同じ条件（非公開・暗号化・versioning無効・keyはUUID）で置く。
   指定を省くとservice-managed bucketへ置かれ、保持と削除を自分たちで制御できない。
-  **削除の契機は音声と同じ受理から24時間**で、新しい期限を増やさない。**ただし音声が成功時に
-  即削除されるのに対し、文字起こし結果は成功しても24時間残る**（clientがpollingで取りに来るまで
-  必要なため）。削除では**objectとTranscribeのjob（`DeleteTranscriptionJob`）の両方**を消す。
+  **端末が受け取って削除ACKを送ったら即削除し、ACKが来ない場合の期限を別に置く。**
+  削除では**objectとTranscribeのjob（`DeleteTranscriptionJob`）の両方**を消す。
+  **jobが非終端の間は削除できない**ため、終端になるまで追ってから消す。
+  **期限を過ぎたら、objectが残っていても端末へ返さない。**
   期間と契機の正本は[privacy.md §5](privacy.md)、判断は
   [TASK-003 Plan §27](implementation-plans/2026-09-29-task-003-generation-design.md)。
   選定するモデルのdata retention modeも確認し、保持とAWSによる人的レビューが必須のモデルを
@@ -237,20 +243,29 @@ GET /api/v1/dots/generations/:処理ID（client は polling）
   Solid Queueのまま分けられる。
 - **clientへの結果の受け渡しはpolling。**ALBのidle timeoutとECS 1タスクという構成で接続を
   維持しない。**応答喪失後の結果照会にも同じendpointで答えられる。**
-- **止まったJobを最終進捗時刻で検知する（stale判定）。**24時間は再試行の終了期限であって、
-  障害の検知期限ではない。処理の記録に最終進捗時刻を持ち、分単位で更新が止まった`processing`を
-  検知して再実行または`failed`にする。具体値はSolid Queueのlease・heartbeatの挙動を確認して
-  TASK-009で決める。
+- **止まったJobを状態ごとに検知する（stale判定）。**再試行の期限は障害の検知期限ではない。
+  **「最終進捗時刻からN分」だけで再実行しない**（Transcribeの完了待ちは正常でも分単位で止まる
+  ため、生きているjobを二重に開始してしまう）。worker消失はSolid Queueの回収結果を拾い、
+  Transcribe待ちは`GetTranscriptionJob`でAWS側の状態を見て、Job個体の停止はlease tokenで
+  排他する。具体値はTASK-009で決める。`RAILS_MAX_THREADS`はSolid Queueの実行並列数そのもの
+  ではないため、concurrency・DB pool・CPU/memoryは別に実測する。
 - **処理IDと冪等性keyを同一のUUIDにし、`dots`の列へ`(user_id, 処理ID)`のunique制約で持つ。**
   別々のIDにすると、成功時に処理の記録を消した時点で処理IDとDotの対応が消え、**pollingが結果を
   引けなくなる。**同じkeyでの再送は2件目のDotを作らず既存を返す。
-  **二重のDotは防ぐが、外部AI処理の二重消費は防がない**（再試行では文字起こしからやり直す）。
-- **再試行は文字起こしからやり直す。**文字起こし全文を保存しない制約から一意に決まる。
+  **二重のDotは防ぐが、外部AI処理の二重消費は防がない。**処理の記録にも同じunique制約を置き、
+  同じ処理IDのPOSTが並行しても記録とJobを二重に作らない。**AWSのjob名とS3のkeyは、clientが
+  発行する処理IDではなくserverが発行するprovider IDから導く**（job名はAWSアカウント内で一意で
+  なければならず、利用者間で衝突し得るため）。
+- **再試行は、文字起こし結果が残っていれば生成からやり直す。**残っていなければ文字起こしから
+  やり直す。Transcribeは費用の支配項目なので、手元に全文があるのに再実行しない。
   テキストから再生成する経路は持たない。
 - **退会は利用者の行のlockと世代番号で排他する。**状態の確認だけでは、確認を通過したuploadが
   退会の削除処理のあとに完了する経路を塞げない。受理時に利用者の行を`SELECT ... FOR UPDATE`で
   lockし、`active`の確認と処理の記録の作成を同じtransactionで行い、世代番号を記録へ写す。
-  **upload完了時とJobの書き込み直前にも世代番号を再確認し、ずれていれば回収する。**
+  **記録を先に作ってからS3へuploadする**（先にuploadすると、記録が無いobjectを退会時に
+  列挙できない）。**upload完了時に世代番号を再確認し、ずれていれば手元のkeyでobjectを消す。
+  Jobの最終書き込みでも同じ利用者の行を`FOR UPDATE`でlockし、世代の確認とDotのinsertを同一
+  transactionに入れる。**退会は`uploading`の記録を即削除せず、uploaderが片付けるまで待つ。
   退会の完了条件は「数えて消した」ではなく**「その利用者の進行中の処理が0であること」**とする。
   生成のcancel UIはMVPで持たない。
 - **model idとpromptは設定で固定する。**固定しないと、ある日から生成結果の調子が変わる。
