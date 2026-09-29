@@ -1,7 +1,8 @@
 # Dot History Specification
 
 この文書は、保存された複数のDotを見渡して過去のDotへ戻る体験を扱う。MVP全体の範囲は
-[`product.md`](./product.md)、録音からDot生成までの仕様は[`journaling.md`](./journaling.md)を参照する。
+[`product.md`](./product.md)、録音からDot生成までの仕様は[`journaling.md`](./journaling.md)、
+Dot生成後の任意の深掘り対話は[`dot-follow-up.md`](./dot-follow-up.md)を参照する。
 
 ## 1. Dotのモチーフ
 
@@ -26,6 +27,10 @@ Focus on Dotでは「Dot = その日の自分」を、UIで丸として表す。
 
 一覧の厳密な配置、並び順、日付境界、同日の複数録音、記録のない日の表現は、実装前に決める。
 検索、カテゴリ、期間フィルタは、このMVP受け入れ条件に含めない。
+
+一覧・詳細で表示するDotは、`dot-follow-up.md`が扱う深掘り対話により後から更新され得る。更新後の
+表示方法、最初に生成された内容と現在の内容の区別、更新履歴の参照方法は、このMVP受け入れ条件には
+含めず、深掘り対話の実装前の判断として`dot-follow-up.md`とTASK-018で決める。
 
 ## 3. 時間軸の検証候補
 
@@ -58,6 +63,8 @@ MVPは個々のDotに対する日々の振り返りを扱う。週次の「今�
 - Dotの色・サイズに意味を持たせるか、線で結ぶか
 - Weekの開始曜日、Day / Week / Monthの操作とアニメーション
 - 週次・月次AI振り返りを読みたいと感じるか、採用する場合の生成・保存方法
+- 深掘り対話による更新後のDot表示、最初の生成内容と現在の内容の区別方法、更新履歴の参照方法
+  （詳細は[dot-follow-up.md](./dot-follow-up.md)と[TASK-018](./tasks/TASK-018-dot-follow-up-dialogue-design.md)）
 
 これらを未決定のまま実装へ持ち込まない。MVP一覧に直接必要な事項は、関連するImplementation Planで
 決めてから実装する。

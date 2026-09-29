@@ -2,7 +2,8 @@
 
 この文書は、録音からDotの振り返りまでの機能仕様である。現在の実装、実サービスのMVPで満たすべき
 振る舞い、未決定事項を区別する。MVP全体の範囲は[`product.md`](./product.md)、個人データの扱いは
-[`privacy.md`](./privacy.md)、複数Dotの履歴体験は[`dot-history.md`](./dot-history.md)を参照する。
+[`privacy.md`](./privacy.md)、複数Dotの履歴体験は[`dot-history.md`](./dot-history.md)、Dot生成後の
+任意の深掘り対話は[`dot-follow-up.md`](./dot-follow-up.md)を参照する。
 
 ## 1. 現在実装されているflow
 
@@ -144,3 +145,16 @@ AI providerとpromptは引き続き未決定。この設計採用によって§1
 
 これらは、最初のプロダクトAPIとWeb接続を設計するImplementation Planで選択肢、脅威、運用コストを
 比較して決める。現行のモックやdesign-system記載だけから確定しない。
+
+## 6. Dot生成後の深掘り対話（体験方針採用・未実装）
+
+本文書§1〜5が扱う「録音 → 最初のDot生成 → 保存 → 表示」という基本flowに加え、保存済みの1件のDotに
+対して利用者が任意で深掘り対話を行える体験を採用した。対話の位置づけ、Dotへの反映方法、データ区分、
+未決定事項は[dot-follow-up.md](./dot-follow-up.md)を正本とする。
+
+- 対話は基本flowに追加する独立した機能であり、毎回のDot生成で対話を必須にしない。対話を開始しない
+  場合、本文書§1〜5の現行仕様・受け入れ条件は変わらない。
+- 対話はDotを自動更新せず、利用者が明示的に承認した変更だけをDotへ反映する。
+- 現時点では未実装であり、MVP完成条件との関係は[product.md §3](./product.md)を参照する。実装前に
+  決める事項はdot-follow-up.md §5・§6と[TASK-018](./tasks/TASK-018-dot-follow-up-dialogue-design.md)を
+  参照する。
