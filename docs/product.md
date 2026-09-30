@@ -2,7 +2,8 @@
 
 この文書は、プロダクトの目的、MVPの範囲、作らないこと、未決定事項の正本である。画面や実装の詳細は
 機能仕様、個人データの取扱いは[`privacy.md`](./privacy.md)、構成上の判断は
-[`architecture.md`](./architecture.md)を参照する。
+[`architecture.md`](./architecture.md)、プロダクトの存在理由と長期的な方向性は
+[`product-vision.md`](./product-vision.md)を参照する。
 
 ## 1. 目的と対象ユーザー
 
