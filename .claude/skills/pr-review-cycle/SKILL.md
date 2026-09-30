@@ -20,14 +20,17 @@ description: 「PR作成して」と依頼されたら、PR作成→セルフレ
 
 ### 1. PR作成
 
-現在のブランチの変更をpushし、`gh pr create` でPRを作る。タイトル・本文は日本語、
-`.github/pull_request_template.md` の見出し順（概要 / 取り組んだ理由 /（バグ対応なら原因）/
-取り組んだこと / 確認すること）に従う。
+`git status` でコミットされていない変更がないか確認し、あれば先にコミットする。そのうえで
+`git push -u origin HEAD:<ブランチ名>` で送信先を明示してpushし、`gh pr create` でPRを作る。
+タイトル・本文は日本語、`.github/pull_request_template.md` の見出し順（概要 / 取り組んだ理由 /
+（バグ対応なら原因）/ 取り組んだこと / 確認すること）に従う。
 
 ### 2. セルフレビュー
 
 `self-review` skillでdiff全体を確認する。該当する [docs/code-review/](../../../docs/code-review/)
-のレビュー入口とsecurity観点で見直し、見つかった問題はここで直してコミットする。
+のレビュー入口とsecurity観点で見直し、見つかった問題はここで直してコミットし、
+`git push origin HEAD:<ブランチ名>` で即座にpushする（後続のcodexレビューが、この時点の
+最新コミットを見られるようにする）。
 
 ### 3. codexへレビュー依頼
 

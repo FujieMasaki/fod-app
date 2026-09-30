@@ -135,9 +135,11 @@ Markdownのみの変更のため、自動テストは対象外。pre-commit / pr
 ## 16. Completion Record
 
 - 状態: 2026-09-30 完了。
-- 実装差異: 当初はPlanなしで実装し、Codexレビューの指摘（P1: pushし忘れ、P2: `--base`欠落、
-  P2: 仕組み化コミットが未レビュー、P2: 本Planの欠落）を受けて、SKILL.mdの手順を修正し、
-  本Planを事後的に追加した。
-- 検証結果: pre-commit / pre-push hook通過。`codex review --base main`でのレビューを実施し、
-  指摘を本Planと同じコミットで反映した。
+- 実装差異: 当初はPlanなしで実装し、Codexレビューを2回受けて次の指摘を反映した。
+  1周目: P1 修正コミットのpushし忘れ、P2 カスタム観点使用時の`--base`欠落、
+  P2 仕組み化コミットが未レビュー、P2 本Planの欠落。
+  2周目: P1 コミット前のpending changes未確認、P1 セルフレビュー時点の修正コミットの
+  push漏れ、P2 upstream未設定時の`git log @{u}..HEAD`失敗。
+- 検証結果: pre-commit / pre-push hook通過。`codex review --base main`でのレビューを2回実施し、
+  いずれの指摘も同じPR内のコミットで反映した。
 - 関連: PR #44（<https://github.com/FujieMasaki/fod-app/pull/44>）。
