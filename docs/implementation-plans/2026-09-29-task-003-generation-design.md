@@ -520,6 +520,40 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
    **呼び出し方が違う**（§11）。MVPでは`aws-sdk-bedrockruntime`で呼べるGeo: JPに限り、
    In-Regionを採る場合はclientの選定をTASK-009の判断に加える。
 
+### 補足（2026-09-30・人間との対話ログからの追記）: なぜ案Aか・opt-outのタイミング
+
+**なぜ案Aか（3行で）**
+
+- 案B（Transcribe東京 + Anthropic直接API）は生成にClaudeを使える点は案Aと同じだが、委託先が2社になり、
+  完了条件7（委託先9項目の確認）の対象が2倍になる。
+- 案C（OpenAI統一）は1社に見えるが、日本endpointがStorage Yes / Processing Noのため東京原則
+  （`architecture.md`「日記内容・音声・AI入力は原則として東京」）を満たせず、ZDR承認もOpenAI側の
+  sales承認という外部裁量に依存する。
+- 案Aは文字起こし（Transcribe）と生成（Bedrock上のClaude）がどちらもAWSの契約範囲内に収まり、
+  委託先確認が1社で完結する。決め手はモデル性能の比較ではなく、この完了条件7の重さである。
+
+**opt-out policyは「適用すれば過去の保存分も消せる」が「適用前に実際に使われた事実は消せない」**
+
+上記1の必須条件について、AWS公式資料は次のとおり説明する（4・5の引用と同一）。
+
+> "When you opt out of content use by an AWS AI service, that service deletes all of the associated
+> historical content that was shared with AWS before you set the option."
+
+opt-outを設定すると、それ以前に送った音声の**保存データ自体は削除される**。しかし、opt-outするまでの
+間に**実際にサービス改善目的で使われた（処理された）という事実そのものは、後からの削除では取り消せない**。
+
+例:
+
+1. opt-out未設定のまま音声Aを送信した時点で、AWSは音声Aをサービス改善目的（モデル評価等）に
+   使える状態にある（既定はopt-in）。
+2. その後opt-out policyを適用すると、以降に送る音声は改善目的に使われなくなり、音声Aの保存履歴も
+   削除される。
+3. しかし1と2の間に、AWSが実際に音声Aを使って改善処理を行っていた場合、その「使われた」という
+   事実は後からの削除でも取り消せない。
+
+「音声を1件でも送る前にopt-outを適用する」ことを必須条件（上記1）としているのは、削除できるかどうか
+ではなく、**適用前に一度も改善目的の使用が起きないようにする**ためである。
+
 ## 19. 判断2: 実行方式と結果の受け渡し（比較。採用は§25-2）
 
 **同期か非同期かは選べない。**TASK-002 §25-8が録音の上限を30分にした時点で、ALBのidle timeout
