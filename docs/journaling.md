@@ -54,7 +54,7 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 | 録音Blob | `MediaRecorder`内部で一時生成され得る | `stop`はBlobを生成し得るが、`useRecorder`はdurationだけを上位へ返す。Blobは後続へ渡さず、保存・送信しない。 | 同一originのRails経由で送る。**長期保存しない**が、処理が終わるまでS3東京へ一時的に預かる（非公開・暗号化・versioningを有効にしない）。**DotがRDSへ保存されるまで完了したら**即削除（文字起こしや生成が通った時点ではない）。失敗した場合は受理から24時間を再試行の期限とし、期限が来たらアプリが削除する（lifecycleは保険で、それ自体は24時間を保証しない）。Dot削除は対象の処理のもの、退会は本人の全部を削除。端末のstorageへは書かない。最長30分・32MB |
 | 録音時間 | Session Providerと`fod.session.v1` | `reset`またはbrowser storageの削除で消える。UIの削除操作は未実装。 | Dotと同じrequestで送り、RDSの`dots`を正本にする。保持・削除もDotと同じ |
 | Dot（id、date、started_at、duration、sentence、summary） | Session Providerと`fod.session.v1`に現在の1件（現行のDotSessionは`date`のみで`started_at`はなく、`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。`sentence`と`summary`は本人が編集でき、編集前の値は残さない。1件ごとの削除はゴミ箱（受理から7日で削除処理を始める）、即時の完全削除も備える。**`reflection`と`closing`は生成も保存もしない**。録音1回ごとに1件を保存し、`started_at`（録音開始操作をserverが受理した時刻・UTC）をserverが決め、`date`はそこから算出したAsia/Tokyoの暦日とする。`started_at`は`date`・`duration`と同じく本人に編集させず、保持・削除はDot本体と同じ（[dot-history §2](./dot-history.md)で2026-09-29採用） |
-| 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す |
+| 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。ただし**Amazon Transcribeが結果をS3へ書き出すため、自前のbucketへ出して端末が受け取るまで置く**（2026-09-29にTASK-003で追加）。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す。server側の保持・削除は[privacy.md §5](./privacy.md)を正本とする |
 | 話した内容の要約（`summary`） | 存在しない | — | 文字起こしから生成し、Dotと同じ行に保存する。Dotを削除すれば一緒に消える。要約にも実名は残り得るため、Dot本文と同じ保護・削除・説明の対象にする |
 | API response | `createDot`の一時値をZod検証後にDotSessionへ | 未検証値は保存しない。 | Dotと文字起こしを返す。音声のURLは返さない。正式な契約はTASK-005 |
 
@@ -104,7 +104,7 @@ keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを�
 - ただし**編集より前に取得したbackupには編集前の本文が残る。**「編集前の値はどこにも残らない」とは
   説明しない。障害復旧で復元したとき、**削除したDotと、編集で取り除いた内容を再び見える状態にしない。**
   実現方法はTASK-013/015で決める。
-- Dotとして保存するのは`date`、`started_at`（録音開始操作をserverが受理した時刻・UTC）、`duration`、`sentence`（今日の一文）、
+- Dotとして保存するのは`date`、`started_at`（定義は[dot-history §2](./dot-history.md)。MVPの音声入力では録音開始操作の受理時刻・UTC）、`duration`、`sentence`（今日の一文）、
   `summary`（話した内容の要約）で、AIからの語りかけ（`reflection`・`closing`）は生成も保存もしない。
   `summary`は本人が読める場所に表示する。`date`は`started_at`から算出したAsia/Tokyoの暦日とし、
   保存時刻からは算出しない。`started_at`は編集させず、同日に複数あるDotの区別と並びに使う。
@@ -117,14 +117,52 @@ keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを�
 - 音声原本、文字起こし、生成結果、ログの保持目的・起点・削除の契機が
   [privacy.md §5](./privacy.md)のとおり実装され、保持しないと決めたデータが実際に残らない。
 - 再送・retry・Job再実行で二重のDotや外部AI処理が起きない、または利用者に結果が明確に示される。
+  **二重のDotは冪等性keyで防ぐが、外部AI処理の二重消費は防がない**（再試行では生成を、
+  文字起こし結果が残っていなければ文字起こしからやり直すため）。利用者には再試行できるかどうかと
+  期限日時を示す（TASK-003）。
+- 生成は非同期で行い、送信・生成・保存の状態と失敗時の再開点が利用者に分かる。画面を閉じても
+  結果が残り、あとから結果を確認できる（TASK-003）。
 - 複数のDotを利用者ごとに保存し、本人が一覧から過去のDotを選んで振り返れる。
 
 2026-09-24に採用した公開基盤はAWS東京のALB + ECS Fargate + RDS PostgreSQLで、初期は
 ECS 1タスク・RDS Single-AZ。構成と費用方針は[architecture](./architecture.md)を参照する。
 日記内容・音声・AI入力は原則として東京に置くが、国内限定の法的・契約上の約束はまだ行わない。
 音声原本を長期保存しないこと、処理が終わるまでの一時的な預かり、送信経路、保持・削除は2026-09-28にTASK-002で採用した（§2の表）。ゴミ箱による削除と`sentence`・`summary`の編集は2026-09-29に追加した。
-AI providerとpromptは引き続き未決定。この設計採用によって§1–3の現行mock・localStorage・未実装の
-状態が変わったとは扱わない。
+文字起こしとAI provider・実行方式は2026-09-29にTASK-003で採用した（下記「生成の実行方式」）。
+promptの最終文面と委託先の確認は残っている。この設計採用によって§1–3の現行mock・localStorage・
+未実装の状態が変わったとは扱わない。
+
+### 生成の実行方式（2026-09-29採用、未実装）
+
+[TASK-003 Plan](implementation-plans/2026-09-29-task-003-generation-design.md)で採用した。
+実装済みの挙動ではない。経路と保持の正本は[privacy.md §5](./privacy.md)、構成は
+[architecture](./architecture.md)を参照する。
+
+- 文字起こしはAmazon Transcribe（東京）、生成はAmazon BedrockのClaude。**委託先をAWSに統一する。**
+  Bedrockのモデルは推論が日本国外へ出ない経路で使えるものから選ぶ（model idは未確定）。
+  **Transcribeは既定では入力がサービス改善に使われ得るため、opt-outの適用を公開の前提とする。**
+- **非同期で実行する。**送信のrequestは処理IDと再試行期限を返して終わり、生成はJobで進む。
+  利用者は結果を取りに行く形になる。画面を閉じてもJobは止まらず、結果はあとから確認できる。
+- 生成するのは`sentence`（今日の一文）と`summary`（話した内容の要約）だけ。
+  **AIからの語りかけ（`reflection`・`closing`）は生成しない。**
+  要約は本人が話していないことを足さず、利用者の言葉を別の関係へ勝手に置き換えない。
+- **AIへ送る前に固有名詞を減らす処理は行わない。**生成前の置換でもBedrockへ渡すテキストと
+  生成結果への伝播は減らせるが、**その限定的な効果より誤検出・文脈破壊・実装費を重く見た。**
+  元音声が文字起こしへ渡る境界は減らせない。**「匿名化済み」とは表示しない。**
+  残ったものは編集・1件ごとの削除・退会で直せる（[privacy.md §2原則5](./privacy.md)）。
+- 失敗したときは、**文字起こし結果が残っていれば生成からやり直し、残っていなければ同じ音声から
+  文字起こしをやり直す。**どちらでも録り直しにはならず、
+  **再試行できる期限は[privacy.md §5](./privacy.md)が定める。**
+- **文字起こし全文は結果と一緒に端末へ返す。**そのため、生成が終わったあとも**端末が受け取るまで
+  serverに置く**（自前のS3。期間と契機は[privacy.md §5](./privacy.md)）。**端末が保存し終えたら
+  その旨をserverへ知らせ（受領通知／ACK）、serverはその時点で削除処理を始める。**知らせが届かなかった場合の期限は
+  正本を参照する。消え終わる時刻は約束しない。
+  **次のいずれかに当たると全文を返さない。**端末が受け取ったことを知らせた後、保持期間を過ぎた後、
+  そのDotを完全削除した後、退会した後である。**理由によってDotが残るかどうかは違う。**
+  受領を知らせた後と保持期間を過ぎた後はDot（`sentence`と`summary`）が残るので読める。
+  そのDotを完全削除した場合と退会した場合は**Dotも残らない。**
+  録音前の案内もこの実態に合わせる（TASK-010）。
+- 文字起こしが空（無音・極端に短い）の場合は生成へ進まず、録り直しを案内する。
 
 ### 録音前認証と期限切れ（2026-09-25採用、未実装）
 
@@ -143,9 +181,9 @@ AI providerとpromptは引き続き未決定。この設計採用によって§1
 
 ## 5. 未決定事項
 
-- AI provider、prompt、`sentence`と`summary`の文面の作り方、同期/非同期生成（最長30分の音声では同期HTTPで完結しない見込み）、失敗時の再試行と
-  冪等性（TASK-003で決定）
-- 文字起こしまで成功した後の失敗で、録り直さずにテキストから再生成できるようにするか（TASK-003）
+- promptの最終文面と、`sentence`・`summary`の長さの上限（TASK-005/009で確定）
+- 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認結果（公開前に人間が実施）
+- pollingの間隔と打ち切りの扱い（TASK-005/011で確定）
 - password再設定後の既存Cookieの実動作
 - password方針・ログイン試行制限の具体値、Googleの確認情報とConfirmableの関係（TASK-006で決定）
 - 将来候補である検索・カテゴリ・期間フィルタの仕様と導入段階

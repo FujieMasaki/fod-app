@@ -109,11 +109,11 @@ Browser（音声は memory のみ。storage へ書かない）
        → Rails：認証再確認 → current_user で所有者決定 → content type と size を検証
           → S3東京：一時object（非公開・暗号化・versioning無効・keyはUUID）
              ＋ server側の記録：処理ID・所有者・key・受理時刻・再試行期限・状態
-          → 外部文字起こし（東京優先）    ← 元音声が第三者へ渡る最初の地点
-          → 外部AI（東京優先）
+          → Amazon Transcribe（東京）    ← 元音声が第三者へ渡る最初の地点
+          → Amazon Bedrock の Claude（Geo:JP または mantle In-Region）
           → RDS：dots（sentence / summary / date / started_at / duration）
-          → 成功（＝Dotの保存まで完了）：一時object（音声）を即削除
-             （記録をいつ消すかはTASK-003と相互確認）
+          → 成功（＝Dotの保存まで完了）：一時object（音声）の削除処理を始める
+             （記録は後片付けが終わってから消す。2026-09-29にTASK-003で確定）
           → 失敗：受理から24時間は再試行可。期限が来たらアプリが削除（lifecycleは保険）
   ← response：Dot と文字起こし全文（音声URLは返さない）
        → Browser：文字起こしは sessionStorage にタブを閉じるまで。logout・User切替で削除
@@ -132,8 +132,10 @@ Browser（音声は memory のみ。storage へ書かない）
 - **server側に処理ID・所有者・object key・受理時刻・再試行期限・状態の記録を持つ。**別requestでの
   再試行、別containerで動くJob、退会時の削除は初回requestの外で所有者を判断するため、この記録で
   認可する。**推測困難なkeyを所有権の代わりにしない。**記録の置き場と項目はTASK-003/005で確定する。
-  この記録自体も個人データとして保持・削除の対象にする。**成功した処理の記録をいつ消すかは、
-  応答喪失後の結果照会と冪等性の設計に依存するためTASK-003と相互確認し、ここでは固定しない。**
+  この記録自体も個人データとして保持・削除の対象にする。**処理の記録は、音声・文字起こし結果・
+  Transcribeのjobの後片付けが終わった時点で削除する**（2026-09-29にTASK-003で確定。Dotの保存
+  時点ではない。後片付けに必要な情報を持っているのがこの記録だけのため）。冪等性keyは`dots`の
+  行へ引き継ぐため、応答喪失後の結果照会は記録が無くてもDotで答えられる。
 - 一時object（音声）は**DotがRDSへ保存されるまで完了した時点**で即削除する（文字起こしや生成が通った時点ではない。保存で落ちたときに再試行できるようにするため）。失敗した場合は**受理から24時間**を再試行の期限とし、
   期限が来たら**アプリが削除する**。削除に失敗したら再実行し、残存を検知できるようにする。
   RDSへは入れない。
@@ -164,11 +166,12 @@ Browser（音声は memory のみ。storage へ書かない）
 - ゴミ箱の中のDotをDay・一覧・詳細から除外する。**除外は明示的なscopeで行い、暗黙の既定scope
   （`default_scope`等）に頼らない。**暗黙の除外は、ゴミ箱の中身が一覧へ漏れる事故と、逆にゴミ箱が
   空に見える事故の両方を起こしやすい。実現方法はTASK-008で確定する。
-- **`dots`は`started_at`（録音開始操作をserverが受理した時刻・UTC）を持ち、`date`はそこから算出した
+- **`dots`は`started_at`（定義は[dot-history §2](dot-history.md)。MVPの音声入力では録音開始操作の受理時刻・UTC）を持ち、`date`はそこから算出した
   Asia/Tokyoの暦日と
   する**（2026-09-29にTASK-004で採用。正本は[dot-history.md](dot-history.md) §2）。作成時刻を日付の
   根拠にしない。送信・生成・保存の失敗を24時間以内に再試行しても日付が動かないようにするため。
-  `started_at`は**録音開始操作をserverが受理した時刻**とする。実際の録音開始操作に対して発行する
+  `started_at`の定義は[dot-history §2](dot-history.md)を正本とする。**MVPの入力手段は音声だけなので、
+  実際には録音開始操作の受理時刻になる。**実際の録音開始操作に対して発行する
   録音attemptの受理時刻であり、認証確認の時刻やclientが計測した値を採用しない。実際に話し始めた
   瞬間との差が残ること（一定の秒数以内とは保証せず、日付境界をまたぐ遅れでは日付がずれ得ること）を
   受け入れる。attemptは本人に紐づき、1件のDot生成にしか使えず、
@@ -189,6 +192,108 @@ Browser（音声は memory のみ。storage へ書かない）
 - 保持期間の既定はログ14日、RDS自動backup 7日、音声の一時objectは再試行期限の24時間。実値は下記
   「未決定」のとおり公開前に確定する。S3の実費は成功時に即削除する運用では月1円未満の見込みで、
   Pricing Calculatorで再確認する。
+
+### 生成の実行方式（2026-09-29採用、未実装）
+
+[TASK-003 Plan](implementation-plans/2026-09-29-task-003-generation-design.md)で採用した。
+実装済みの構成ではない。比較は同Plan §18–§21、採用内容は同§25。
+
+```text
+POST /api/v1/dots（同期）
+  → Rails：認証・所有者・形式・size検証 → S3東京へ一時object
+     ＋ 処理の記録（処理ID・所有者・key・冪等性key・受理時刻・再試行期限・状態）
+  → Solid Queue へ enqueue → 処理IDと再試行期限を返して request は終わる
+
+Job（非同期。worker は当面 ECS 同一タスク内で Puma と並走）
+  → Amazon Transcribe（東京）: S3 の object を入力に文字起こし
+  → 文字起こし結果を自前 S3 へ書き出させる（OutputBucketName を指定。下記）
+  → Amazon Bedrock の Claude: sentence と summary を生成
+  → 利用者の行を FOR UPDATE → 世代番号を確認 → dots へ保存（処理ID を同じ行に持つ）
+     ＋ 記録を succeeded_cleanup_pending へ（同一 transaction。ここで成功が確定する）
+  → cleanup: 音声の一時object の削除処理を始める。文字起こし結果は client の ACK を待つ
+  → cleanup が全部終わってから処理の記録を削除する
+  → 失敗: 記録を failed で残す。期限内は再試行できる
+  → 期限到来: 音声object・文字起こし結果・Transcribe の job・残る記録の削除処理を始める
+
+GET /api/v1/dots/generations/:処理ID（client は polling）
+  → **まず dots を見る。**同じ処理ID の Dot があれば成功として返す
+    （記録が cleanup 待ちで残っていても「処理中」とは返さない）
+POST .../transcript_ack（client が全文を保存し終えたら送る。冪等）
+  → 文字起こし結果と Transcribe の job の削除処理を始める
+```
+
+- **文字起こしと生成の委託先をAWSに統一する。**委託先が1社に集約され、確認すべき9項目
+  （[privacy.md §5-1](privacy.md)の外部provider行）の対象が1つになる。**認証はECS task roleの
+  IAMで行い、**長期固定のAPIキーをアプリで持たない**（ECSはSDKへ一時credentialを供給するため、
+  鍵の確認項目が無くなるわけではない）。対象bucketと対象モデルだけを許す最小権限にする。
+  **9項目は未確認で、確認は公開前に人間が行う。**
+- **Transcribeについて、AWS OrganizationsのAI services opt-out policyの適用を必須とする。**
+  AWSのAIサービスは**既定では顧客コンテンツをサービス改善に利用し、利用リージョン外へ保存し得る**。
+  Transcribeはこのopt-out policyの対象サービスで、**設定しない限りopt-inのままである。**
+  適用せずに音声を送ると、上記「日記内容・音声・AI入力は原則として東京」が成り立たない。
+  適用後にeffective policyを照会して効いていることを確認する（TASK-009/015）。
+  なおBedrockはこのopt-out policyの対象外で、モデルごとのdata retention modeで別に確認する。
+- **Bedrockのモデルは、推論が日本国外へ出ない経路で使えるものから選ぶ。**日本国内に収まるのは
+  **Geo: JPの推論profile（宛先は東京と大阪）**か、**`bedrock-mantle` endpointのIn-Region（東京のみ）**
+  である。**Globalプロファイルは世界中へルーティングされる。**endpointによって可否が違うため、
+  `bedrock-runtime`と`bedrock-mantle`の対応表を取り違えない。**model idはTASK-009で決める。
+  モデルの都合で所在地方針を黙って曲げない。**
+- **文字起こし結果は自前のS3へ置く。**Transcribeのバッチは結果をS3へ書き出すため、
+  「workerのmemoryだけを通る」経路は存在しない。**`OutputBucketName`を必ず指定し**、音声の一時
+  objectと同じbucketの別prefixへ、同じ条件（非公開・暗号化・versioning無効・keyはUUID）で置く。
+  指定を省くとservice-managed bucketへ置かれ、保持と削除を自分たちで制御できない。
+  **端末が受け取って削除ACKを送ったら、その時点で削除処理を始める。**ACKが来ない場合の期限を
+  別に置く。**始める契機は約束できるが、消え終わる時刻は約束しない**（[privacy.md §5-2](privacy.md)）。
+  削除では**objectとTranscribeのjob（`DeleteTranscriptionJob`）の両方**を消す。
+  **jobが非終端の間は削除できない**ため、終端になるまで追ってから消す。
+  **端末から削除ACKを受け取った、期限を過ぎた、そのDotの完全削除を受理した、退会を受理した、
+  のいずれかに当たると、objectが
+  残っていても端末へ返さない。**いずれもcleanupの完了を待たず、受理した時点から返さない。
+  期間と契機の正本は[privacy.md §5](privacy.md)、判断は
+  [TASK-003 Plan §27](implementation-plans/2026-09-29-task-003-generation-design.md)。
+  選定するモデルのdata retention modeも確認し、保持とAWSによる人的レビューが必須のモデルを
+  使う場合は、それを録音前の案内に書く。
+- **Job基盤はSolid Queue**（RDSのテーブルを使う）。ElastiCache Redisを常時稼働させないため、
+  基盤費の目標（月5,000円、許容1万円前後）を増やさない。**workerは当面ECSの同一タスク内で
+  Pumaと並走させ、Puma占有やdeployでの中断が実測で問題になれば別タスクへ分ける。**
+  Solid Queueのまま分けられる。
+- **clientへの結果の受け渡しはpolling。**ALBのidle timeoutとECS 1タスクという構成で接続を
+  維持しない。**応答喪失後の結果照会にも同じendpointで答えられる。**
+- **止まったJobを状態ごとに検知する（stale判定）。**再試行の期限は障害の検知期限ではない。
+  **「最終進捗時刻からN分」だけで再実行しない**（Transcribeの完了待ちは正常でも分単位で止まる
+  ため、生きているjobを二重に開始してしまう）。worker消失はSolid Queueの回収結果を拾い、
+  Transcribe待ちは`GetTranscriptionJob`でAWS側の状態を見て、Job個体の停止はlease tokenで
+  排他する。具体値はTASK-009で決める。`RAILS_MAX_THREADS`はSolid Queueの実行並列数そのもの
+  ではないため、concurrency・DB pool・CPU/memoryは別に実測する。
+- **処理IDと冪等性keyと録音attemptの識別子を同一にし、`dots`の列へ`(user_id, 処理ID)`のunique制約で持つ。**
+  **serverが録音開始操作に対して発行する**（2026-09-29にTASK-004の`started_at`採用へ合わせて変更。
+  当初はclient発行のUUIDだった）。処理の記録にも同じunique制約を置く。
+  別々のIDにすると、成功時に処理の記録を消した時点で処理IDとDotの対応が消え、**pollingが結果を
+  引けなくなる。**同じkeyでの再送は2件目のDotを作らず既存を返す。
+  **二重のDotは防ぐが、外部AI処理の二重消費は防がない。**処理の記録にも同じunique制約を置き、
+  同じ処理IDのPOSTが並行しても記録とJobを二重に作らない。**AWSのjob名とS3のkeyは、clientが
+  発行する値ではなく**serverが発行する処理ID（＝TASK-004の録音attemptの識別子）から導く**（job名はAWSアカウント内で一意で
+  なければならず、利用者間で衝突し得るため）。
+- **再試行は、文字起こし結果が残っていれば生成からやり直す。**残っていなければ文字起こしから
+  やり直す。Transcribeは費用の支配項目なので、手元に全文があるのに再実行しない。
+- **再試行とcleanupは同じ記録を奪い合うため、どちらも条件付き更新にして片方だけを成功させる。**
+  再試行・再upload・cleanupは同じ入口（利用者の行のlock → `active`・世代・期限・現在の状態の
+  確認 → 実行権の発行）を通す。自動回収も同じ入口を通る。
+- **Transcribeが終端したあと、Bedrockへ送る前にもう一度この入口を通す。**退会や期限到来を
+  受理していれば生成へ進まず後片付けへ回す。**退会の受理後に新しいBedrockのrequestを開始しない。**
+  既に始まっているrequestは止められないので、そこは約束しない。
+- **退会は利用者の行のlockと世代番号で排他する。**状態の確認だけでは、確認を通過したuploadが
+  退会の削除処理のあとに完了する経路を塞げない。受理時に利用者の行を`SELECT ... FOR UPDATE`で
+  lockし、`active`の確認と処理の記録の作成を同じtransactionで行い、世代番号を記録へ写す。
+  **記録を先に作ってからS3へuploadする**（先にuploadすると、記録が無いobjectを退会時に
+  列挙できない）。**upload完了時に世代番号を再確認し、ずれていれば手元のkeyでobjectを消す。
+  Jobの最終書き込みでも同じ利用者の行を`FOR UPDATE`でlockし、世代の確認とDotのinsertを同一
+  transactionに入れる。**退会は`uploading`の記録を即削除せず、uploaderが片付けるまで待つ。
+  退会の完了条件は「数えて消した」ではなく**「その利用者の進行中の処理が0であること」**とする。
+  生成のcancel UIはMVPで持たない。
+- **model idとpromptは設定で固定する。**固定しないと、ある日から生成結果の調子が変わる。
+- Bedrockのrequest / responseと文字起こしテキストは発話内容そのものなので、SDKのdebug logや
+  error trackingへ出さない（上記「ログへ出さない」と同じ対象）。
 
 ### データ所在地と費用
 
@@ -234,9 +339,9 @@ ALB/Fargate/RDS/公開IPv4の小規模例でも、1ドル150円・消費税10%�
 - password再設定後の既存Cookieの実動作（実機検証）
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
   （ログ14日・backup 7日は既定案であり、実値は未確定）
-- background job基盤（最長30分の音声を同期HTTPで処理できないため、TASK-003で必要になる見込み）
 - API契約でOpenAPIを採用するか、採用時の型生成・生成物管理・検証方法
-- AI provider・文字起こしprovider・promptとその実装方法、同期/非同期の選択（TASK-003で決定）
+- promptの最終文面、Bedrockのmodel idとdata retention mode、pollingの間隔と打ち切り（TASK-005/009で確定）
+- 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認結果（公開前に人間が実施）
 - 音声受信時のPuma占有時間の実測（`RAILS_MAX_THREADS`既定3・ECS 1タスク）、presignedでの直接uploadへ移す条件、受容するaudioのcontent typeの確定、S3 bucketとIAMの具体設定
 
 これらは、関連仕様と個別のImplementation Planで選択肢・影響を確認した上で、後続の変更で決定・実装する。
