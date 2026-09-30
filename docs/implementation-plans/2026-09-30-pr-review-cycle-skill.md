@@ -155,6 +155,14 @@ Markdownのみの変更のため、自動テストは対象外。pre-commit / pr
   コミット済みの許可リストにないため自動実行が止まりうる。対応として、ローカルの
   `<base>`を経由せず常に`origin/<base>`を基準にする設計へ変更し（`git log`は`..`の
   片方向に修正）、コミット済み`.claude/settings.json`に`codex review`の許可を追加した。
-- 検証結果: pre-commit / pre-push hook通過。`codex review`でのレビューを複数回実施し、
+  7周目: P2 base上に未pushのローカルコミットがあると、`origin/<base>`から新しい
+  ブランチを作ることでそのコミットを取りこぼす、P2 最初のpush（PR作成時点）では
+  Railsのrspec/rubocop/brakeman等、pre-push hook対象外の検証が一度も走らない。
+  対応として、base上に未pushコミットがある場合はHEADからブランチを作るよう分岐を
+  追加し、最初のコミット前にも変更領域に応じた検証を行うよう明記した。
+  ここまでで自動ループの上限（5回）を人間の判断で2回延長している。指摘が徐々に
+  狭いエッジケースになってきており、収束が見えにくいため、この時点でユーザーに
+  続行方針を再確認する。
+- 検証結果: pre-commit / pre-push hook通過。`codex review`でのレビューを7回実施し、
   いずれの指摘も同じPR内のコミットで反映した。
 - 関連: PR #44（<https://github.com/FujieMasaki/fod-app/pull/44>）。

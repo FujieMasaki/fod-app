@@ -25,9 +25,12 @@ description: 「PR作成して」と依頼されたら、PR作成→セルフレ
    ローカルの`<ベースブランチ>`ではなく、常に取得した`origin/<ベースブランチ>`を使う
    （ローカルの`<ベースブランチ>`は自分の作業や他タスクで先行・変化している場合があり、
    pullで揃えたつもりでも検出漏れが起きうるため、比較対象そのものをリモートに統一する）。
-3. `git rev-parse --abbrev-ref HEAD` で現在のブランチを確認する。ベースブランチと同じなら、
-   `git switch -c <type>/<slug> origin/<ベースブランチ>` で、取得した最新のリモートbaseから
-   新しいブランチを作って切り替える。
+3. `git rev-parse --abbrev-ref HEAD` で現在のブランチを確認する。ベースブランチと同じ場合:
+   - `git log origin/<ベースブランチ>..HEAD --oneline` を確認する。**空でなければ**
+     （誤ってbase上に直接コミットしてしまった等）、それらのコミットを取りこぼさないよう
+     `git switch -c <type>/<slug>`で**現在のHEADから**新しいブランチを作る。
+   - 空であれば、`git switch -c <type>/<slug> origin/<ベースブランチ>` で、取得した
+     最新のリモートbaseから新しいブランチを作る。
 4. 無関係な変更が残っていないか事前に確認する。
    - `git status` で未コミットの変更を確認する。
    - `git log origin/<ベースブランチ>..HEAD --oneline`（`..`のみ。`...`にすると
@@ -36,9 +39,14 @@ description: 「PR作成して」と依頼されたら、PR作成→セルフレ
    どちらかで無関係な変更（未コミット・コミット済み問わず）が見つかったら、自動で
    退避・削除・コミットせず、ユーザーに確認する。確認が取れない、または対応方針が
    決まらない場合は、推測で進めず「止まる条件」に従う。
-5. 今回の依頼に関係する変更だけをコミットする。`git push -u origin HEAD:<ブランチ名>` で
-   送信先を明示してpushし、`gh pr create --base <ベースブランチ>` でPRを作る。以降の手順3で
-   使う `codex review --base origin/<ベースブランチ>` と同じ基準（最新のリモートbase）を使う。
+5. 今回の依頼に関係する変更だけをコミットする。コミット前に、変更した領域に応じた検証を
+   実行する（例: frontendは`pnpm --filter @focus-on-dot/web type-check` / `test`、
+   apps/apiのRailsコードは`cd apps/api && bundle exec rspec` / `bundle exec rubocop` /
+   `bundle exec brakeman`）。pre-push hookで検証されない領域（Railsのtest/lint/security
+   scanなど）は、pushする前に自分で実行して結果を確認する。検証が通ったら
+   `git push -u origin HEAD:<ブランチ名>` で送信先を明示してpushし、
+   `gh pr create --base <ベースブランチ>` でPRを作る。以降の手順3で使う
+   `codex review --base origin/<ベースブランチ>` と同じ基準（最新のリモートbase）を使う。
    タイトル・本文は日本語、`.github/pull_request_template.md` の見出し順（概要 / 取り組んだ理由 /
    （バグ対応なら原因）/ 取り組んだこと / 確認すること）に従う。
 
