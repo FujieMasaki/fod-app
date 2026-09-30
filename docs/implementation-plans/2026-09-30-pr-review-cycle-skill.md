@@ -140,6 +140,8 @@ Markdownのみの変更のため、自動テストは対象外。pre-commit / pr
   P2 仕組み化コミットが未レビュー、P2 本Planの欠落。
   2周目: P1 コミット前のpending changes未確認、P1 セルフレビュー時点の修正コミットの
   push漏れ、P2 upstream未設定時の`git log @{u}..HEAD`失敗。
-- 検証結果: pre-commit / pre-push hook通過。`codex review --base main`でのレビューを2回実施し、
+  3周目: P2 `gh pr create`にレビューと同じ`--base`を渡していない、P2 `main`ブランチ上での
+  実行を弾いていない、P2 完了確認が`git status`のcleanさを見ていない。
+- 検証結果: pre-commit / pre-push hook通過。`codex review --base main`でのレビューを3回実施し、
   いずれの指摘も同じPR内のコミットで反映した。
 - 関連: PR #44（<https://github.com/FujieMasaki/fod-app/pull/44>）。
