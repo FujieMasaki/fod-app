@@ -17,7 +17,7 @@ AIは実装の代行者ではなく、設計・実装・レビューを支援す
 
 | 作業 | 必読文書 |
 | --- | --- |
-| 新機能・UX・プロダクト仕様の検討 | [`docs/product-vision.md`](docs/product-vision.md)、[`docs/future-candidates.md`](docs/future-candidates.md)、[`docs/product.md`](docs/product.md)、関連機能仕様 |
+| 新機能・UX・プロダクト仕様の検討 | [`docs/product-vision.md`](docs/product-vision.md)、[`docs/future-candidates/`](docs/future-candidates/README.md)、[`docs/product.md`](docs/product.md)、関連機能仕様 |
 | すべての実装 | 関連する[`docs/product.md`](docs/product.md) / 機能仕様、[`docs/architecture.md`](docs/architecture.md)、対象変更の既存Implementation Plan |
 | 音声・Dot・認証・外部AI・個人データの送信/保存/削除 | 加えて[`docs/privacy.md`](docs/privacy.md) |
 | frontend実装 | [`docs/development/frontend.md`](docs/development/frontend.md)。UI変更なら加えて[`docs/design-system.md`](docs/design-system.md) |
@@ -32,8 +32,9 @@ AIは実装の代行者ではなく、設計・実装・レビューを支援す
 - `README.md`: プロジェクト概要、起動方法、文書への入口。
 - `docs/product-vision.md`: プロダクトの存在理由、価値仮説、長期的な方向性、競争領域。実装範囲の
   正本ではなく、将来構想を明示的な仕様変更なしにMVP要件へ昇格させない。
-- `docs/future-candidates.md`: MVP範囲外の将来機能候補を蓄積する場所。項目はそのままMVP要件や
-  `product.md`の検証候補・将来候補を意味せず、実装を検討する段階で判断とともに反映する。
+- `docs/future-candidates/`: MVP範囲外の将来機能候補を1候補1ファイルで蓄積する場所。索引は
+  `README.md`。項目はそのままMVP要件や`product.md`の検証候補・将来候補を意味せず、実装を検討する
+  段階で判断とともに反映する。
 - `docs/product.md`: MVPの目的、範囲、作らないこと、保留事項。
 - `docs/<feature>.md`: 独立した振る舞い、データの正本、受け入れ条件、未決定事項。
 - `docs/privacy.md`: 個人データの扱いに関する横断仕様と未決定事項。

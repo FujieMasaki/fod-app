@@ -40,7 +40,7 @@ Dotが原本であり、カテゴリー・人物タグはDotを後から見る�
 
 カテゴリーによる横断的な振り返りは、[`product.md`](./product.md)の「将来候補」区分に既に含まれる。
 人物タグによる横断的な振り返り、写真・動画のDotへの関連付け、年間ダイジェスト生成は、MVP範囲外の
-将来機能候補として[`future-candidates.md`](./future-candidates.md)に蓄積し、まだ`product.md`の
+将来機能候補として[`future-candidates/`](./future-candidates/README.md)に蓄積し、まだ`product.md`の
 「将来候補」区分には反映していない。時間軸を俯瞰する方向性は`product.md`の「将来候補」区分、
 および[`dot-history.md`](./dot-history.md) §4の「Dot → Line → Pattern」という将来構想と重なる。
 
