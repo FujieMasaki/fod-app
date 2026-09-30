@@ -142,6 +142,9 @@ Markdownのみの変更のため、自動テストは対象外。pre-commit / pr
   push漏れ、P2 upstream未設定時の`git log @{u}..HEAD`失敗。
   3周目: P2 `gh pr create`にレビューと同じ`--base`を渡していない、P2 `main`ブランチ上での
   実行を弾いていない、P2 完了確認が`git status`のcleanさを見ていない。
-- 検証結果: pre-commit / pre-push hook通過。`codex review --base main`でのレビューを3回実施し、
+  4周目: P2 依頼と無関係な変更まで「先にコミット」してしまう、P2 レビュー修正後にRails等の
+  pre-push対象外の検証を再実行していない、P2 ベース判定が`main`固定でreleaseブランチ等を
+  想定していない。
+- 検証結果: pre-commit / pre-push hook通過。`codex review --base main`でのレビューを4回実施し、
   いずれの指摘も同じPR内のコミットで反映した。
 - 関連: PR #44（<https://github.com/FujieMasaki/fod-app/pull/44>）。
