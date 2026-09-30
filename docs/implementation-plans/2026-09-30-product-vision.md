@@ -14,8 +14,9 @@ AIも人間も、新機能やUX検討の際にこの前提を参照できるよ�
 
 ## 3. Background
 
-- ユーザーが録音アプリ→ChatGPT→NotebookLMという運用を続ける中で、FoDの価値は「AIが要約すること」
-  ではなく「記録が積み重なり、後から俯瞰することで自分の変化に気づけること」にあると整理された。
+- 開発者自身が録音アプリ→ChatGPT→NotebookLMという運用を実体験として続ける中で、FoDの価値は
+  「AIが要約すること」ではなく「記録が積み重なり、後から俯瞰することで自分の変化に気づけること」に
+  あると整理された。
 - この「なぜ作るか」という前提はdocs/product.mdを含むどの既存文書にも書かれておらず、product.mdへ
   そのまま書き足すと、MVP要件と将来構想が混ざるおそれがあった。
 - 別のAI（Codex）からも、product-vision.mdをMVP正本と分離して新設する提案を受けた。
@@ -64,9 +65,9 @@ AIも人間も、新機能やUX検討の際にこの前提を参照できるよ�
 
 ## 7. Proposed Approach
 
-1. docs/product-vision.mdを新設し、ユーザーの運用メモ（iPhone録音→ChatGPT→NotebookLM）から得た
-   価値仮説を、Why / Core Value / 競合しない領域と競争する領域 / データ思想（一文）/ Future /
-   MVPとの関係の6セクションに圧縮する。
+1. docs/product-vision.mdを新設し、開発者自身の実体験に基づく運用メモ（iPhone録音→ChatGPT→
+   NotebookLM）から得た価値仮説を、Why / Core Value / 競合しない領域と競争する領域 / データ思想
+   （一文）/ Future / MVPとの関係の6セクションに圧縮する。
 2. docs/future-candidates.mdを新設し、人物タグ・写真動画の関連付け・年間ダイジェスト生成を初期項目
    として記録する。今後も同様の将来候補を追加していく前提で運用する。
 3. AGENTS.mdの必読文書表と文書の役割説明へ、両文書の位置づけと「MVP要件へ昇格させない」旨を
