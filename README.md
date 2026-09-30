@@ -10,6 +10,10 @@
 
 文章を書くジャーナリングよりも気軽に、自分の言葉をそのまま残せる体験をつくることを目的としています。
 
+複数のアプリ（録音アプリ・ChatGPT・NotebookLM）を毎日使い分けて音声ジャーナリングを続ける中で、
+アプリを跨ぐ運用が面倒になったことがこのプロダクトを作るきっかけです。現在も開発者自身がほぼ毎日
+使っています。詳しい背景は[docs/product-vision.md](docs/product-vision.md)を参照してください。
+
 現在はMVP開発段階で、まずは以下の基本的な体験を中心に開発しています。
 
 - 音声で振り返りを残す
@@ -88,6 +92,8 @@ User、認証、Dot、音声、AI処理のプロダクトAPIは未実装です�
 
 | 文書 | 役割 |
 | --- | --- |
+| [`docs/product-vision.md`](docs/product-vision.md) | プロダクトの存在理由、価値仮説、長期的な方向性、競争領域 |
+| [`docs/future-candidates/`](docs/future-candidates/README.md) | MVP範囲外の将来機能候補の蓄積場所（1候補1ファイル） |
 | [`docs/product.md`](docs/product.md) | MVPの目的、範囲、作らないこと、未決定事項 |
 | [`docs/journaling.md`](docs/journaling.md) | 録音から振り返りまでの現行仕様とMVP受け入れ条件 |
 | [`docs/privacy.md`](docs/privacy.md) | 個人データの最小化、外部送信、固有名詞と削除に関する横断仕様 |
