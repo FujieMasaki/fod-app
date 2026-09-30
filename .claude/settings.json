@@ -34,7 +34,8 @@
       "Bash(git merge-base *)",
       "Bash(git rev-parse *)",
       "Bash(gh pr create *)",
-      "Bash(gh pr view *)"
+      "Bash(gh pr view *)",
+      "Bash(codex review *)"
     ],
     "deny": [
       "Read(./.env*)",
