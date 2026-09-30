@@ -37,9 +37,11 @@ Dotをコピーしない（1 Dotが複数カテゴリー・複数人物タグに
 
 ## 5. Future（現在のMVP範囲外）
 
-カテゴリー・人物タグによる横断的な振り返り、写真・動画のDotへの関連付け、年間ダイジェスト生成は
-将来候補である。これらは[`product.md`](./product.md)の「将来候補」区分、および
-[`dot-history.md`](./dot-history.md) §4の「Dot → Line → Pattern」という将来構想と対応する。
+カテゴリー・人物タグによる横断的な振り返り、写真・動画のDotへの関連付け、年間ダイジェスト生成は、
+MVP範囲外の将来機能候補として[`future-candidates.md`](./future-candidates.md)に蓄積する。これらは
+まだ[`product.md`](./product.md)の「将来候補」区分には反映していない。時間軸を俯瞰する方向性は
+`product.md`の「将来候補」区分、および[`dot-history.md`](./dot-history.md) §4の
+「Dot → Line → Pattern」という将来構想と重なる。
 
 ## 6. この文書とMVPの関係
 
