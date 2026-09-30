@@ -53,9 +53,11 @@ description: 「PR作成して」と依頼されたら、PR作成→セルフレ
 ### 2. セルフレビュー
 
 `self-review` skillでdiff全体を確認する。該当する [docs/code-review/](../../../docs/code-review/)
-のレビュー入口とsecurity観点で見直し、見つかった問題はここで直してコミットし、
-`git push origin HEAD:<ブランチ名>` で即座にpushする（後続のcodexレビューが、この時点の
-最新コミットを見られるようにする）。
+のレビュー入口とsecurity観点で見直し、見つかった問題はここで直す。手順5と同様に、
+コミット前に変更した領域に応じた検証（frontendの型・test、apps/apiのRailsコードは
+rspec / rubocop / brakeman等）を実行し、pre-push hookで検証されない領域は自分で確認する。
+検証が通ったらコミットし、`git push origin HEAD:<ブランチ名>` で即座にpushする
+（後続のcodexレビューが、この時点の最新コミットを見られるようにする）。
 
 ### 3. codexへレビュー依頼
 
