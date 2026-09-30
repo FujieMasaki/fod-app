@@ -150,6 +150,11 @@ Markdownのみの変更のため、自動テストは対象外。pre-commit / pr
   ここまでで自動ループの上限（5回）に達したため一旦停止し、ユーザーに方針を確認した。
   ユーザーの指示（自動でstashせず無関係な変更は事前確認する、コード修正前に必ずベースを
   最新化してからブランチを切る）に沿って手順1を書き換え、6周目のレビューへ進めた。
-- 検証結果: pre-commit / pre-push hook通過。`codex review --base main`でのレビューを実施し、
+  6周目: P2 `git log <base>...HEAD`の三点リーダーがbase側の新規コミットまで拾ってしまう、
+  P2 ローカルのbaseブランチ自体が先行しているケースを検出できない、P2 `git branch`が
+  コミット済みの許可リストにないため自動実行が止まりうる。対応として、ローカルの
+  `<base>`を経由せず常に`origin/<base>`を基準にする設計へ変更し（`git log`は`..`の
+  片方向に修正）、コミット済み`.claude/settings.json`に`codex review`の許可を追加した。
+- 検証結果: pre-commit / pre-push hook通過。`codex review`でのレビューを複数回実施し、
   いずれの指摘も同じPR内のコミットで反映した。
 - 関連: PR #44（<https://github.com/FujieMasaki/fod-app/pull/44>）。
