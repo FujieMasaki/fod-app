@@ -49,6 +49,7 @@ const problemBase = {
 const generalProblemSchema = z.object({ ...problemBase, code: z.enum(generalErrorCodes) });
 const validationFailedProblemSchema = z.object({
   ...problemBase,
+  status: z.literal(422),
   code: z.literal("validation_failed"),
   errors: z
     .array(
@@ -61,11 +62,13 @@ const validationFailedProblemSchema = z.object({
 });
 const rateLimitedProblemSchema = z.object({
   ...problemBase,
+  status: z.literal(429),
   code: z.literal("rate_limited"),
   retry_after_seconds: z.number().int().min(1),
 });
 const retryExpiredProblemSchema = z.object({
   ...problemBase,
+  status: z.literal(409),
   code: z.literal("retry_expired"),
   retry_expires_at: z.iso.datetime(),
 });

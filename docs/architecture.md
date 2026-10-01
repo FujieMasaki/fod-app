@@ -290,8 +290,19 @@ POST .../transcript_ack（client が全文を保存し終えたら送る。冪�
 - **再試行とcleanupは同じ記録を奪い合うため、どちらも条件付き更新にして片方だけを成功させる。**
   再試行・再upload・cleanupは同じ入口（利用者の行のlock → `active`・世代・期限・現在の状態の
   確認 → 実行権の発行）を通す。自動回収も同じ入口を通る。
+- **処理の取り消し**（Dotになる前の処理。`DELETE /api/v1/generations/{id}`。2026-10-01にTASK-005で
+  追加）も同じ入口を通す。TASK-003 Plan §20の認可表に無い契機なので、ここを正とする。
+  - 認可: 処理の記録の所有者（`current_user`と`(user_id, 処理ID)`）。処理IDを知っていることを
+    権限にしない。
+  - 対象: Dotがまだ無い状態（`uploading`・`upload_failed`・`accepted`・`transcribing`・`generating`・
+    `failed`と、期限到来で`cancel_requested`・`cleanup_pending`にある記録）。`succeeded_cleanup_pending`と
+    Dotがある処理は取り消さない（`generation_completed`）。
+  - 退会・期限到来によるcleanupと同じく、**`active`と期限内を要求しない**（期限を過ぎた処理も取り消せる）。
+  - 受理したら`cancel_requested`へ移し、**その処理の全部**（音声・文字起こし結果・Transcribeのjob・
+    処理の記録）を消す。同じ利用者の他の処理には触れない。使用済みattemptの`id`と期限を残す
+    （[privacy.md §5-1](privacy.md)）。成功の確定（T11）とは条件付き更新で排他し、先に確定した方が勝つ。
 - **Transcribeが終端したあと、Bedrockへ送る前にもう一度この入口を通す。**退会や期限到来を
-  受理していれば生成へ進まず後片付けへ回す。**退会の受理後に新しいBedrockのrequestを開始しない。**
+  受理していれば（処理の取り消しも同じ）生成へ進まず後片付けへ回す。**退会の受理後に新しいBedrockのrequestを開始しない。**
   既に始まっているrequestは止められないので、そこは約束しない。
 - **退会は利用者の行のlockと世代番号で排他する。**状態の確認だけでは、確認を通過したuploadが
   退会の削除処理のあとに完了する経路を塞げない。受理時に利用者の行を`SELECT ... FOR UPDATE`で

@@ -126,8 +126,9 @@ export interface paths {
          *     `intent=reauthenticate`は、Google専用の利用者が退会の前に再認証するときに使う
          *     （有効時間はTASK-006で決める）。退会を受理した利用者も`intent=sign_in`でloginでき、
          *     callbackは`/`へ戻す（Webは`account_status`で退会の状況画面へ進める）。
-         *     試行回数の制限に掛かった場合は、JSONの`429`ではなく`/login?auth_error=rate_limited`へ
-         *     redirectする（form POSTでbrowserが遷移するため）。
+         *     試行回数の制限に掛かった場合は、JSONの`429`ではなく`auth_error=rate_limited`を付けてredirectする
+         *     （form POSTでbrowserが遷移するため）。戻り先は`intent=sign_in`なら`/login`、`reauthenticate`なら
+         *     `return_to`（省略時は`/`。loginしたまま退会などの流れへ戻れるようにするため）。
          */
         post: operations["startGoogleAuth"];
         delete?: never;
@@ -146,12 +147,14 @@ export interface paths {
         /**
          * Googleからのcallback
          * @description JSON APIではない。認証応答とstateを検証し、SPAへredirectする。成功時は`return_to`
-         *     （省略時は`/`）へ、失敗時は`/login?auth_error=<理由>`へ戻す（理由の一覧は`contracts/README.md`）。
+         *     （省略時は`/`）へ戻す。失敗時は`auth_error=<理由>`を付けて、`intent=sign_in`なら`/login`へ、
+         *     loginしたままの`intent=reauthenticate`なら`return_to`（省略時は`/`）へ戻す（理由の一覧は
+         *     `contracts/README.md`）。
          *
          *     `intent=reauthenticate`では、**Googleが返した利用者（検証済みのprovider/uid）が、いまlogin
          *     している利用者に紐づくGoogleの利用者と一致することを必ず確かめる。**一致しなければsessionも
          *     再認証の時刻も変えず、`return_to`（省略時は`/`）へ`auth_error=google_reauthentication_mismatch`を
-         *     付けて戻す。loginしていない状態の`reauthenticate`は`google_auth_failed`にする。盗まれたsessionに
+         *     付けて戻す。loginしていない状態の`reauthenticate`は`/login?auth_error=google_auth_failed`にする。盗まれたsessionに
          *     別のGoogle利用者で再認証を通し、退会まで進められないようにするため。
          *     Googleが確認済みと返したメールが、メール＋passwordの利用者と一致した場合は
          *     `google_email_conflict`を返し、既存の利用者へも新しい利用者へも接続しない。
@@ -177,9 +180,11 @@ export interface paths {
         post?: never;
         /**
          * 退会を受け付ける
-         * @description password利用者は`current_password`が必須で、送られなければ`422 validation_failed`、違っていれば
-         *     `403 reauthentication_failed`を返す。Google専用の利用者（passwordを持たない）は送らず、代わりに
-         *     直近のGoogle再認証が必要で、無ければ`403 google_reauthentication_required`を返す。
+         * @description **まだ受理していない退会では**、password利用者は`current_password`が必須で、送られなければ
+         *     `422 validation_failed`、違っていれば`403 reauthentication_failed`を返す。Google専用の利用者
+         *     （passwordを持たない）は送らず、代わりに直近のGoogle再認証が必要で、無ければ
+         *     `403 google_reauthentication_required`を返す。**受理済みの退会のやり直しでは、bodyを見ずに
+         *     （`current_password`の有無も確かめずに）`202`を返す。**
          *
          *     受理の時点で新しい保存・再試行・結果の確定を止め、ゴミ箱の中も含めて本人のデータを消す。
          *     **進行中の処理が0になり、削除が終わるまで完了を返さない。**受理後もsessionは完了まで残し、
@@ -303,14 +308,18 @@ export interface paths {
         post?: never;
         /**
          * Dotになる前の処理を取り消し、預けた音声などを消す
-         * @description Dotがまだ無い処理（`processing` / `failed` / `expired`）を取り消す。生成へは進めず、預けた
+         * @description Dotがまだ無い処理（`processing` / `failed` / `expired`）を取り消す。認可・対象の状態・消す範囲は
+         *     `docs/architecture.md`「生成の実行方式」の「処理の取り消し」を正とする。生成へは進めず、預けた
          *     音声・文字起こし結果・文字起こしのjob・処理の記録の削除処理を始める（`privacy.md` §5-1の
          *     「処理の取り消し」）。`202`は削除を受け付けたことを表し、消え終わったことは表さない
          *     （文字起こしのjobが終わるまで消せないなど、完了は遅れ得る）。受理以降、この処理の照会は`404`。
          *     外部へ既に渡った分は取り消せない。
          *
          *     Dotの保存まで終わっている処理は取り消せず`409 generation_completed`を返す（Webは
-         *     `DELETE /api/v1/dots/{dot_id}`での完全削除へ案内する）。存在しない・他人の・受理済みの処理は`404`。
+         *     `DELETE /api/v1/dots/{dot_id}`での完全削除へ案内する）。ただしそのDotがゴミ箱の中なら、照会と
+         *     同じく`404`を返す（ゴミ箱のendpoint以外からゴミ箱の中のDotの存在を示さないため）。
+         *     存在しない処理・他人の処理・取り消しを受理済みの処理は`404`。応答を失ってDELETEを送り直した
+         *     場合も`404`になるので、Webは自分が送った取り消しの再送で`404`を受けたら取り消し済みとして扱う。
          */
         delete: operations["cancelGeneration"];
         options?: never;
@@ -551,7 +560,8 @@ export interface components {
             /** @description `urn:focus-on-dot:problem:<code>`の形のURN（識別子。実domainが未確定のため取得可能なURLにしない） */
             type: string;
             title: string;
-            status: number;
+            /** @enum {integer} */
+            status: 422;
             detail?: string;
             /** @enum {string} */
             code: "validation_failed";
@@ -562,7 +572,8 @@ export interface components {
             /** @description `urn:focus-on-dot:problem:<code>`の形のURN（識別子。実domainが未確定のため取得可能なURLにしない） */
             type: string;
             title: string;
-            status: number;
+            /** @enum {integer} */
+            status: 429;
             detail?: string;
             /** @enum {string} */
             code: "rate_limited";
@@ -573,7 +584,8 @@ export interface components {
             /** @description `urn:focus-on-dot:problem:<code>`の形のURN（識別子。実domainが未確定のため取得可能なURLにしない） */
             type: string;
             title: string;
-            status: number;
+            /** @enum {integer} */
+            status: 409;
             detail?: string;
             /** @enum {string} */
             code: "retry_expired";

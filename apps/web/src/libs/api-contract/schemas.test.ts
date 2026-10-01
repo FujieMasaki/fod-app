@@ -78,6 +78,12 @@ describe("Webのschemaが契約外の値を拒否する", () => {
     expect(problemSchema.safeParse({ ...base, type: "x", status: 422, code: "validation_failed", errors: [] }).success).toBe(false);
   });
 
+  it("拡張項目を持つcodeでstatusを取り違えたProblemを拒否する", () => {
+    const problem = { type: "x", title: "x", status: 400, code: "rate_limited", retry_after_seconds: 60 };
+    expect(problemSchema.safeParse(problem).success).toBe(false);
+    expect(problemSchema.safeParse({ ...problem, status: 429 }).success).toBe(true);
+  });
+
   it("statusごとに必須の項目が欠けたGenerationを拒否する", () => {
     const base = { id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04", started_at: "2026-09-28T13:04:05Z", retryable: false };
     expect(generationSchema.safeParse({ ...base, status: "processing", stage: "transcribing", poll_after_seconds: 3 }).success).toBe(false);
@@ -186,9 +192,6 @@ describe("Zod schemaの制約値が契約と一致する", () => {
       "GenerationProcessing.poll_after_seconds",
       "ProblemGeneral.status",
       "ProblemRateLimited.retry_after_seconds",
-      "ProblemRateLimited.status",
-      "ProblemRetryExpired.status",
-      "ProblemValidationFailed.status",
     ]);
   });
 

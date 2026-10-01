@@ -177,9 +177,12 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | Googleの再認証の一致 | `intent=reauthenticate`では、Googleが返したprovider/uidがloginしている利用者のものと一致しなければ、sessionを変えず`auth_error=google_reauthentication_mismatch` | 盗まれたsessionに別のGoogle利用者で再認証を通し、退会まで進める経路を塞ぐため（レビュー6回目） |
 | `return_to`の照合 | 契約のpatternは外し、serverが文字列全体（`\A`〜`\z`）で照合して、合わなければ`/`へ戻す | Rubyの`^`・`$`は行単位で一致し、改行を挟んだ値を通すため。拒否するとログインそのものが失敗するので、無視して`/`へ戻す（レビュー6回目）。改行を含む値のtestはTASK-006で書く |
 | codeごとに必須の拡張項目 | `Problem`を`ProblemGeneral`・`ProblemValidationFailed`（`errors`）・`ProblemRateLimited`（`retry_after_seconds`）・`ProblemRetryExpired`（`retry_expires_at`）のoneOfに分ける | 説明文だけの必須では、欠けたresponseを両側の検証で検出できないため（レビュー6回目） |
-| 処理の取り消し | `DELETE /api/v1/generations/{id}`（Dotになる前の処理だけ。`202`は受理であって完了ではない）。Dotができていれば`409 generation_completed` | Q10 |
+| 処理の取り消し | `DELETE /api/v1/generations/{id}`（Dotになる前の処理だけ。`202`は受理であって完了ではない）。Dotができていれば`409 generation_completed`、そのDotがゴミ箱の中なら`404`。認可・対象の状態・消す範囲はarchitecture.mdに置く | Q10。TASK-003 Plan §20の認可表に取り消しの行が無く、cleanupの入口条件（`active`・期限内）をそのまま当てると期限切れの処理を取り消せないため、正本をarchitectureに置いた（レビュー7回目） |
+| 退会のやり直しと入力の検証 | `422`・`403`はまだ受理していない退会だけ。受理済みのやり直しはbodyを見ずに`202` | 必須項目の検証を先に行う実装だと、passwordを持たないWebのやり直しが`422`で止まるため（レビュー7回目） |
+| 再認証の失敗の戻り先 | `intent=reauthenticate`の失敗（`rate_limited`・不一致など）は`return_to`へ戻す。`sign_in`の失敗は`/login` | loginしたまま退会の流れから外れないようにするため（レビュー7回目） |
+| codeとstatusの組み合わせ | 拡張項目を持つ3つのcodeはstatusも固定する（`validation_failed`=422・`rate_limited`=429・`retry_expired`=409） | statusの取り違えを検証で拾えるようにするため。拡張項目を持たないcodeの組み合わせはREADMEの表を正とし、request specで確かめる（レビュー7回目） |
 | 費用がかかる操作の`429` | 録音attemptの発行・送信・再試行に`429 rate_limited`を予約する。具体値と採否はTASK-009。確認・再設定のtoken消費にも`429`を置き、Googleログインの開始は`auth_error=rate_limited`へのredirectで表す | 後からresponseを足すと古いWebが扱えない変更になるため、先に枠だけ置く（レビュー5回目） |
-| `return_to` | 英数字・`-`・`_`・`/`だけの素のpathに限るpattern | `/\evil.example`などをbrowserが別originとして扱うopen redirectを防ぐため（レビュー4回目） |
+| `return_to`（レビュー6回目の「`return_to`の照合」で置き換えた） | 英数字・`-`・`_`・`/`だけの素のpathに限るpattern | `/\evil.example`などをbrowserが別originとして扱うopen redirectを防ぐため（レビュー4回目） |
 | 成功後の再試行期限 | `retry_expires_at`は`succeeded`では返さない | 成功後は後片付けで処理の記録が消え、Dotの項目からは期限を復元できないため（codexレビュー1回目） |
 | 状態ごとの必須項目 | `Session`・`Generation`・`Transcript`は状態ごとのschemaに分け（`oneOf`。`Generation`と`Transcript`は`status`のdiscriminator）、必ず返す項目を`required`にする。Webは`z.discriminatedUnion`で同じ形にする | 説明文だけに書いた必須は、両側の検証で欠落を検出できないため（codexレビュー3回目） |
 | 日時の形式 | `Z`で終わるUTCだけ（全date-timeにpatternを付ける）。`+00:00`は契約外 | OpenAPIの`date-time`は`+00:00`を許すが、Zodの`z.iso.datetime()`は許さず、契約上正しい値をWebが拒否し得たため。境界値を両側のtestで確かめる（codexレビュー3回目） |

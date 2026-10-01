@@ -117,13 +117,13 @@ PRのレビューでは「この変更は古いWeb・古いAPIのどちらと組
 | `deletion_failed` | 503 | 完全削除の途中で失敗した | 削除済みと表示せず、やり直しを案内 |
 | `internal_error` | 500 | 想定外の失敗 | 一般的な失敗表示 |
 
-Googleのログインは失敗理由をJSONではなく、redirect先の`auth_error=<理由>`で渡す（通常は
-`/login`、再認証の不一致だけは`return_to`）。
+Googleのログインは失敗理由をJSONではなく、redirect先の`auth_error=<理由>`で渡す（`intent=sign_in`は
+`/login`、loginしたままの`intent=reauthenticate`は`return_to`）。
 
 | 理由 | 意味 |
 | --- | --- |
 | `google_email_conflict` | Googleが確認済みとしたメールが、メール＋passwordの利用者と一致した。メールでのログインを案内する |
-| `google_reauthentication_mismatch` | 再認証でGoogleが返した利用者が、いまloginしている利用者と一致しない。sessionは変えず、`return_to`へ戻す |
+| `google_reauthentication_mismatch` | 再認証でGoogleが返した利用者が、いまloginしている利用者と一致しない。sessionは変えない |
 | `rate_limited` | 試行回数の制限に掛かった |
 | `google_auth_failed` | それ以外の失敗（共通の案内） |
 
