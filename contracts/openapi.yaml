@@ -14,8 +14,8 @@ info:
     - 個人に関わるresponseはすべて`Cache-Control: no-store`を付ける。
     - 他人のresourceと存在しないresourceは区別せず`404 not_found`を返す。ゴミ箱の中のDotは
       ゴミ箱のendpoint以外から`404 not_found`になる。
-    - 日時はUTCのISO 8601（`2026-09-28T13:04:05Z`）、日付はAsia/Tokyoの暦日（`YYYY-MM-DD`）で、
-      どちらもserverが決める。
+    - 日時は`Z`で終わるUTCのISO 8601（`2026-09-28T13:04:05Z`。`+00:00`の形は使わない）、日付は
+      Asia/Tokyoの暦日（`YYYY-MM-DD`）で、どちらもserverが決める。
     - 失敗はRFC 9457（`application/problem+json`）で返し、Webは`code`で判定する。
     - 退会を受理した利用者には、`GET /api/v1/session`・`GET /api/v1/account/deletion`・
       `DELETE /api/v1/account`（失敗後のやり直し）以外は`409 account_deletion_in_progress`を返す。
@@ -1126,6 +1126,7 @@ components:
         retry_expires_at:
           type: string
           format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
           description: "`retry_expired`のときだけ。過ぎた期限"
         retry_after_seconds:
           type: integer
@@ -1170,23 +1171,40 @@ components:
           description: "`taken`は使わない予約値（登録の有無を明かさないため）"
 
     Session:
+      description: |
+        `authenticated`で形が分かれる。未認証でもCSRF tokenは返す。
+      oneOf:
+        - $ref: "#/components/schemas/SessionAuthenticated"
+        - $ref: "#/components/schemas/SessionAnonymous"
+    SessionAuthenticated:
       type: object
-      required: [authenticated, csrf_token]
+      required: [authenticated, csrf_token, expires_at, user, account_status]
       properties:
         authenticated:
           type: boolean
+          enum: [true]
         csrf_token:
           type: string
         expires_at:
           type: string
           format: date-time
-          description: 認証成功から7日。利用では延長しない。`authenticated=true`のときだけ
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+          description: 認証成功から7日。利用では延長しない
         user:
           $ref: "#/components/schemas/SessionUser"
         account_status:
           type: string
           enum: [active, deletion_in_progress]
-          description: "`authenticated=true`のときだけ。`deletion_in_progress`なら退会の状況画面へ"
+          description: "`deletion_in_progress`なら退会の状況画面へ"
+    SessionAnonymous:
+      type: object
+      required: [authenticated, csrf_token]
+      properties:
+        authenticated:
+          type: boolean
+          enum: [false]
+        csrf_token:
+          type: string
     SessionUser:
       type: object
       required: [id, email, email_confirmed, sign_in_methods]
@@ -1297,10 +1315,12 @@ components:
         started_at:
           type: string
           format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
           description: 録音開始操作をserverが受理した時刻。Dotの`date`の根拠
         expires_at:
           type: string
           format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
           description: このattemptで送信できる期限（発行から2時間）。受理後の再試行期限とは別
     DotUpload:
       type: object
@@ -1317,52 +1337,124 @@ components:
           description: Webが計測した録音の長さ（最長30分）
 
     Generation:
+      description: |
+        生成の状態。`status`で形が分かれ、状態ごとに必ず返す項目が決まっている。
+        `processing`: 送信・文字起こし・生成のいずれかの途中。
+        `succeeded`: Dotを保存した。
+        `failed`: 失敗した。`retryable`と`failure`で次の操作が決まる。
+        `expired`: 再試行の期限を過ぎ、預かっていた音声の削除処理に入った。録り直しが必要。
+          後片付けが終わると処理の記録が消え、以後は`404`になる。
+      oneOf:
+        - $ref: "#/components/schemas/GenerationProcessing"
+        - $ref: "#/components/schemas/GenerationSucceeded"
+        - $ref: "#/components/schemas/GenerationFailed"
+        - $ref: "#/components/schemas/GenerationExpired"
+      discriminator:
+        propertyName: status
+        mapping:
+          processing: "#/components/schemas/GenerationProcessing"
+          succeeded: "#/components/schemas/GenerationSucceeded"
+          failed: "#/components/schemas/GenerationFailed"
+          expired: "#/components/schemas/GenerationExpired"
+    GenerationProcessing:
       type: object
-      required: [id, status, started_at, retryable]
+      required: [id, status, stage, started_at, retryable, retry_expires_at, poll_after_seconds]
       properties:
         id:
           type: string
           format: uuid
         status:
           type: string
-          enum: [processing, succeeded, failed, expired]
-          description: |
-            `processing`: 送信・文字起こし・生成のいずれかの途中。
-            `succeeded`: Dotを保存した。
-            `failed`: 失敗した。`retryable`と`failure`で次の操作が決まる。
-            `expired`: 再試行の期限を過ぎ、預かっていた音声の削除処理に入った。録り直しが必要。
-              後片付けが終わると処理の記録が消え、以後は`404`になる。
+          enum: [processing]
         stage:
           type: string
           enum: [uploading, transcribing, generating]
-          description: "`processing`のときだけ。画面の進捗表示に使う"
+          description: 画面の進捗表示に使う
         started_at:
           type: string
           format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
         retryable:
           type: boolean
-          description: "`failed`で、期限内かつ録り直さずにやり直せるときだけ`true`"
+          enum: [false]
         retry_expires_at:
-          type: string
-          format: date-time
-          description: |
-            受理から24時間の再試行期限。`processing` / `failed` / `expired`では必ず返し、`succeeded`では
-            返さない（成功後は後片付けで処理の記録が消え、期限を持たないため）。音声が残っている間だけ
-            画面に出す。消え終わる時刻ではない。
-        failure:
-          $ref: "#/components/schemas/GenerationFailure"
+          $ref: "#/components/schemas/RetryExpiresAt"
         poll_after_seconds:
           type: integer
           minimum: 1
           maximum: 60
-          description: "`processing`のときだけ。次に取得するまでの秒数"
+          description: 次に取得するまでの秒数
+    GenerationSucceeded:
+      type: object
+      description: |
+        成功後は後片付けで処理の記録が消え、期限を持たないため`retry_expires_at`を返さない。
+      required: [id, status, started_at, retryable, dot, transcript]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [succeeded]
+        started_at:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+        retryable:
+          type: boolean
+          enum: [false]
         dot:
           $ref: "#/components/schemas/Dot"
         transcript:
           $ref: "#/components/schemas/Transcript"
+    GenerationFailed:
+      type: object
+      required: [id, status, started_at, retryable, retry_expires_at, failure]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [failed]
+        started_at:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+        retryable:
+          type: boolean
+          description: 期限内かつ録り直さずにやり直せるときだけ`true`
+        retry_expires_at:
+          $ref: "#/components/schemas/RetryExpiresAt"
+        failure:
+          $ref: "#/components/schemas/GenerationFailure"
+    GenerationExpired:
+      type: object
+      required: [id, status, started_at, retryable, retry_expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [expired]
+        started_at:
+          type: string
+          format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+        retryable:
+          type: boolean
+          enum: [false]
+        retry_expires_at:
+          $ref: "#/components/schemas/RetryExpiresAt"
+    RetryExpiresAt:
+      type: string
+      format: date-time
+      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+      description: |
+        受理から24時間の再試行期限。音声が残っている間だけ画面に出す。消え終わる時刻ではない。
     GenerationFailure:
       type: object
-      description: "`status=failed`のときだけ"
       required: [kind]
       properties:
         kind:
@@ -1375,16 +1467,32 @@ components:
               `POST /api/v1/dots`へ送り直せる。
             `empty_recording`: 無音・極端に短い。再試行できず、録り直しを案内する。
     Transcript:
+      description: 文字起こし全文。`status`で形が分かれる
+      oneOf:
+        - $ref: "#/components/schemas/TranscriptAvailable"
+        - $ref: "#/components/schemas/TranscriptUnavailable"
+      discriminator:
+        propertyName: status
+        mapping:
+          available: "#/components/schemas/TranscriptAvailable"
+          unavailable: "#/components/schemas/TranscriptUnavailable"
+    TranscriptAvailable:
       type: object
-      description: "`status=succeeded`のときだけ"
-      required: [status]
+      required: [status, text]
       properties:
         status:
           type: string
-          enum: [available, unavailable]
+          enum: [available]
         text:
           type: string
-          description: "`available`のときだけ。文字起こし全文"
+          description: 文字起こし全文
+    TranscriptUnavailable:
+      type: object
+      required: [status, unavailable_reason]
+      properties:
+        status:
+          type: string
+          enum: [unavailable]
         unavailable_reason:
           type: string
           enum: [acknowledged, expired]
@@ -1406,6 +1514,7 @@ components:
         started_at:
           type: string
           format: date-time
+          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
           description: 録音開始操作をserverが受理した時刻（UTC）。並びと同日の区別に使う
         duration_seconds:
           type: integer
@@ -1439,9 +1548,11 @@ components:
             trashed_at:
               type: string
               format: date-time
+              pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
             deletion_begins_at:
               type: string
               format: date-time
+              pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
               description: 削除処理を始める日時（受理から7日）。消え終わる時刻ではない
     TrashedDotList:
       type: object

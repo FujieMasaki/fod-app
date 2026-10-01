@@ -69,26 +69,48 @@ export const dotSchema = z.object({
   summary: z.string().max(2000),
 });
 
-export const generationSchema = z.object({
-  id: z.uuid(),
-  status: z.enum(["processing", "succeeded", "failed", "expired"]),
-  stage: z.enum(["uploading", "transcribing", "generating"]).optional(),
-  started_at: z.iso.datetime(),
-  retryable: z.boolean(),
-  retry_expires_at: z.iso.datetime().optional(),
-  failure: z
-    .object({ kind: z.enum(["processing_failed", "upload_incomplete", "empty_recording"]) })
-    .optional(),
-  poll_after_seconds: z.number().int().min(1).max(60).optional(),
-  dot: dotSchema.optional(),
-  transcript: z
-    .object({
-      status: z.enum(["available", "unavailable"]),
-      text: z.string().optional(),
-      unavailable_reason: z.enum(["acknowledged", "expired"]).optional(),
-    })
-    .optional(),
-});
+const retryExpiresAtSchema = z.iso.datetime();
+
+const transcriptSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("available"), text: z.string() }),
+  z.object({ status: z.literal("unavailable"), unavailable_reason: z.enum(["acknowledged", "expired"]) }),
+]);
+
+// statusごとに必ず返す項目が違う（契約のGenerationのoneOf）。
+export const generationSchema = z.discriminatedUnion("status", [
+  z.object({
+    id: z.uuid(),
+    status: z.literal("processing"),
+    stage: z.enum(["uploading", "transcribing", "generating"]),
+    started_at: z.iso.datetime(),
+    retryable: z.literal(false),
+    retry_expires_at: retryExpiresAtSchema,
+    poll_after_seconds: z.number().int().min(1).max(60),
+  }),
+  z.object({
+    id: z.uuid(),
+    status: z.literal("succeeded"),
+    started_at: z.iso.datetime(),
+    retryable: z.literal(false),
+    dot: dotSchema,
+    transcript: transcriptSchema,
+  }),
+  z.object({
+    id: z.uuid(),
+    status: z.literal("failed"),
+    started_at: z.iso.datetime(),
+    retryable: z.boolean(),
+    retry_expires_at: retryExpiresAtSchema,
+    failure: z.object({ kind: z.enum(["processing_failed", "upload_incomplete", "empty_recording"]) }),
+  }),
+  z.object({
+    id: z.uuid(),
+    status: z.literal("expired"),
+    started_at: z.iso.datetime(),
+    retryable: z.literal(false),
+    retry_expires_at: retryExpiresAtSchema,
+  }),
+]);
 
 export type Problem = z.infer<typeof problemSchema>;
 export type Dot = z.infer<typeof dotSchema>;

@@ -534,20 +534,28 @@ export interface components {
              */
             code: "required" | "too_long" | "invalid_format" | "out_of_range" | "not_allowed" | "taken";
         };
-        Session: {
-            authenticated: boolean;
+        /** @description `authenticated`で形が分かれる。未認証でもCSRF tokenは返す。 */
+        Session: components["schemas"]["SessionAuthenticated"] | components["schemas"]["SessionAnonymous"];
+        SessionAuthenticated: {
+            /** @enum {boolean} */
+            authenticated: true;
             csrf_token: string;
             /**
              * Format: date-time
-             * @description 認証成功から7日。利用では延長しない。`authenticated=true`のときだけ
+             * @description 認証成功から7日。利用では延長しない
              */
-            expires_at?: string;
-            user?: components["schemas"]["SessionUser"];
+            expires_at: string;
+            user: components["schemas"]["SessionUser"];
             /**
-             * @description `authenticated=true`のときだけ。`deletion_in_progress`なら退会の状況画面へ
+             * @description `deletion_in_progress`なら退会の状況画面へ
              * @enum {string}
              */
-            account_status?: "active" | "deletion_in_progress";
+            account_status: "active" | "deletion_in_progress";
+        };
+        SessionAnonymous: {
+            /** @enum {boolean} */
+            authenticated: false;
+            csrf_token: string;
         };
         SessionUser: {
             /** Format: uuid */
@@ -636,41 +644,86 @@ export interface components {
             /** @description Webが計測した録音の長さ（最長30分） */
             duration_seconds: number;
         };
-        Generation: {
+        /**
+         * @description 生成の状態。`status`で形が分かれ、状態ごとに必ず返す項目が決まっている。
+         *     `processing`: 送信・文字起こし・生成のいずれかの途中。
+         *     `succeeded`: Dotを保存した。
+         *     `failed`: 失敗した。`retryable`と`failure`で次の操作が決まる。
+         *     `expired`: 再試行の期限を過ぎ、預かっていた音声の削除処理に入った。録り直しが必要。
+         *       後片付けが終わると処理の記録が消え、以後は`404`になる。
+         */
+        Generation: components["schemas"]["GenerationProcessing"] | components["schemas"]["GenerationSucceeded"] | components["schemas"]["GenerationFailed"] | components["schemas"]["GenerationExpired"];
+        GenerationProcessing: {
             /** Format: uuid */
             id: string;
             /**
-             * @description `processing`: 送信・文字起こし・生成のいずれかの途中。
-             *     `succeeded`: Dotを保存した。
-             *     `failed`: 失敗した。`retryable`と`failure`で次の操作が決まる。
-             *     `expired`: 再試行の期限を過ぎ、預かっていた音声の削除処理に入った。録り直しが必要。
-             *       後片付けが終わると処理の記録が消え、以後は`404`になる。
+             * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            status: "processing" | "succeeded" | "failed" | "expired";
+            status: "processing";
             /**
-             * @description `processing`のときだけ。画面の進捗表示に使う
+             * @description 画面の進捗表示に使う
              * @enum {string}
              */
-            stage?: "uploading" | "transcribing" | "generating";
+            stage: "uploading" | "transcribing" | "generating";
             /** Format: date-time */
             started_at: string;
-            /** @description `failed`で、期限内かつ録り直さずにやり直せるときだけ`true` */
-            retryable: boolean;
-            /**
-             * Format: date-time
-             * @description 受理から24時間の再試行期限。`processing` / `failed` / `expired`では必ず返し、`succeeded`では
-             *     返さない（成功後は後片付けで処理の記録が消え、期限を持たないため）。音声が残っている間だけ
-             *     画面に出す。消え終わる時刻ではない。
-             */
-            retry_expires_at?: string;
-            failure?: components["schemas"]["GenerationFailure"];
-            /** @description `processing`のときだけ。次に取得するまでの秒数 */
-            poll_after_seconds?: number;
-            dot?: components["schemas"]["Dot"];
-            transcript?: components["schemas"]["Transcript"];
+            /** @enum {boolean} */
+            retryable: false;
+            retry_expires_at: components["schemas"]["RetryExpiresAt"];
+            /** @description 次に取得するまでの秒数 */
+            poll_after_seconds: number;
         };
-        /** @description `status=failed`のときだけ */
+        /** @description 成功後は後片付けで処理の記録が消え、期限を持たないため`retry_expires_at`を返さない。 */
+        GenerationSucceeded: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "succeeded";
+            /** Format: date-time */
+            started_at: string;
+            /** @enum {boolean} */
+            retryable: false;
+            dot: components["schemas"]["Dot"];
+            transcript: components["schemas"]["Transcript"];
+        };
+        GenerationFailed: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "failed";
+            /** Format: date-time */
+            started_at: string;
+            /** @description 期限内かつ録り直さずにやり直せるときだけ`true` */
+            retryable: boolean;
+            retry_expires_at: components["schemas"]["RetryExpiresAt"];
+            failure: components["schemas"]["GenerationFailure"];
+        };
+        GenerationExpired: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "expired";
+            /** Format: date-time */
+            started_at: string;
+            /** @enum {boolean} */
+            retryable: false;
+            retry_expires_at: components["schemas"]["RetryExpiresAt"];
+        };
+        /**
+         * Format: date-time
+         * @description 受理から24時間の再試行期限。音声が残っている間だけ画面に出す。消え終わる時刻ではない。
+         */
+        RetryExpiresAt: string;
         GenerationFailure: {
             /**
              * @description `processing_failed`: 文字起こし・生成・保存のいずれかで失敗。`retry`で再試行できる
@@ -682,18 +735,29 @@ export interface components {
              */
             kind: "processing_failed" | "upload_incomplete" | "empty_recording";
         };
-        /** @description `status=succeeded`のときだけ */
-        Transcript: {
-            /** @enum {string} */
-            status: "available" | "unavailable";
-            /** @description `available`のときだけ。文字起こし全文 */
-            text?: string;
+        /** @description 文字起こし全文。`status`で形が分かれる */
+        Transcript: components["schemas"]["TranscriptAvailable"] | components["schemas"]["TranscriptUnavailable"];
+        TranscriptAvailable: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "available";
+            /** @description 文字起こし全文 */
+            text: string;
+        };
+        TranscriptUnavailable: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            status: "unavailable";
             /**
              * @description `acknowledged`: 受領通知を受理した（Webは`sessionStorage`の分を使う）。
              *     `expired`: 保持期間を過ぎた。
              * @enum {string}
              */
-            unavailable_reason?: "acknowledged" | "expired";
+            unavailable_reason: "acknowledged" | "expired";
         };
         Dot: {
             /** Format: uuid */

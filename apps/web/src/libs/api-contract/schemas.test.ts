@@ -71,6 +71,25 @@ describe("Webのschemaが契約外の値を拒否する", () => {
     expect(problemSchema.safeParse({ type: "x", title: "x", status: 500, code: "unknown" }).success).toBe(false);
   });
 
+  it("statusごとに必須の項目が欠けたGenerationを拒否する", () => {
+    const base = { id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04", started_at: "2026-09-28T13:04:05Z", retryable: false };
+    expect(generationSchema.safeParse({ ...base, status: "processing", stage: "transcribing", poll_after_seconds: 3 }).success).toBe(false);
+    expect(generationSchema.safeParse({ ...base, status: "succeeded" }).success).toBe(false);
+  });
+
+  it("Zで終わらない日時を拒否する（契約のpatternと同じ境界）", () => {
+    const dot = {
+      id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04",
+      date: "2026-09-28",
+      started_at: "2026-09-28T13:04:05+00:00",
+      duration_seconds: 312,
+      sentence: "",
+      summary: "",
+    };
+    expect(dotSchema.safeParse(dot).success).toBe(false);
+    expect(dotSchema.safeParse({ ...dot, started_at: "2026-09-28T13:04:05.123Z" }).success).toBe(true);
+  });
+
   it("上限を超えたsentenceを拒否する", () => {
     const dot = {
       id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04",

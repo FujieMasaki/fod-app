@@ -171,6 +171,8 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | 退会中の操作 | 受理後は`GET /api/v1/session`・`GET /api/v1/account/deletion`・`DELETE /api/v1/account`（失敗後のやり直し）以外を`409 account_deletion_in_progress`。やり直しでは再認証を求めない | Q5でsessionを完了まで残すため、他の操作を明示的に止める。やり直しまで止めると`failed`から回復できない（codexレビュー1回目）。Google専用の利用者に再認証を求めると、退会中は再認証の経路も止まっていて回復できないため、受理時の本人確認で足りるとした（codexレビュー2回目） |
 | 録音attemptの渡し方 | `POST /api/v1/dots`の`X-Recording-Attempt` header（multipartの本文に入れない） | 同じattemptの再送を、32MBの本文を読む前に判定するため（TASK-003 Plan §20の「bodyを受け取らずに既存の状態を返す」。codexレビュー1回目） |
 | 成功後の再試行期限 | `retry_expires_at`は`succeeded`では返さない | 成功後は後片付けで処理の記録が消え、Dotの項目からは期限を復元できないため（codexレビュー1回目） |
+| 状態ごとの必須項目 | `Session`・`Generation`・`Transcript`は状態ごとのschemaに分け（`oneOf`。`Generation`と`Transcript`は`status`のdiscriminator）、必ず返す項目を`required`にする。Webは`z.discriminatedUnion`で同じ形にする | 説明文だけに書いた必須は、両側の検証で欠落を検出できないため（codexレビュー3回目） |
+| 日時の形式 | `Z`で終わるUTCだけ（全date-timeにpatternを付ける）。`+00:00`は契約外 | OpenAPIの`date-time`は`+00:00`を許すが、Zodの`z.iso.datetime()`は許さず、契約上正しい値をWebが拒否し得たため。境界値を両側のtestで確かめる（codexレビュー3回目） |
 | 登録 | 登録済みかにかかわらず`202`。登録済みならログインと再設定を案内するメールを送る | Q6 |
 | ゴミ箱へ移したとき | `deletion_begins_at`（削除処理を始める日時）を返す | TASK-002の「示すなら消え終わる時刻として読めない形」。項目名で「始める」を表す |
 | Google callbackの失敗 | `/login?auth_error=`に`google_email_conflict`または`google_auth_failed`を付けてredirect | browserのredirectなのでJSONのerrorを返せない |
@@ -311,8 +313,9 @@ DotやProblemを複数のfeatureが使うため（React・route・表示判断�
   - Redocly CLIは2.57.0ではなく2.55.0（`minimumReleaseAge`。§11）。
 - 検証結果:
   - `pnpm check`: 成功（Redocly lint 0件。例外4件は`.redocly.lint-ignore.yaml`に理由を記載）。
-  - `pnpm type-check`: 成功。`vitest run src/libs/api-contract`: 151件成功。
-  - `bundle exec rubocop`: 違反0。`bundle exec rspec`: 167件成功。
+  - `pnpm type-check`: 成功。`vitest run src/libs/api-contract`: 153件成功。
+  - `bundle exec rubocop`: 違反0。`bundle exec rspec`: 172件成功。
+  - codexレビュー（3回）の指摘はすべて対応した。内容は§7-4・§11の「codexレビュー」と付けた行。
   - ずれの検出: Zodの`summary`を任意にすると`tsc`が失敗し、生成した型を書き換えると
     `check:api-types`が終了コード1になった。いずれも確認後に元へ戻した。
   - 未実施: endpointの実装が無いため、request specでの実responseの照合
