@@ -23,8 +23,9 @@
   [backend実装規約](../../development/backend.md)に沿うか。
 - requestごとに認証・認可を行い、他人のDotや関連resourceへアクセスできないか。
 - parameterの許可範囲、validation、DB制約、transaction、異常系、再試行・重複実行の扱いが妥当か。
-- request / response / errorの契約がWebと一致し、不要な属性や内部エラーを返さず、段階的デプロイ時の
-  互換性を考慮しているか。
+- request / response / errorが[`contracts/openapi.yaml`](../../../contracts/openapi.yaml)と一致し、
+  request specで照合しているか。不要な属性や内部エラーを返さず、古いWebと組み合わさっても壊れないか
+  （[`contracts/README.md`](../../../contracts/README.md) §3）。
 - 録音、文字起こし、生成結果、個人データの保存・送信・削除・ログ出力が仕様どおりか。
 - request spec、model spec、Service / Job specのうち、変更したリスクを検証するtestがあるか。
 

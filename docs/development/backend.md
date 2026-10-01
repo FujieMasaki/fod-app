@@ -68,6 +68,10 @@
 
 - Webが利用する最初のプロダクトAPIでは、request、response、error、認証、互換性を同じ変更で
   更新する。契約の運用はarchitectureの方針に従う。
+- API契約の正本は[`contracts/openapi.yaml`](../../contracts/openapi.yaml)。endpointを実装する前に
+  契約を確認し、形を変えるときは先に契約を直す。request specでは
+  `assert_response_schema_confirm(status)`でresponseを契約と照合する。errorはRFC 9457の形で、
+  契約の`code`を返す。運用は[`contracts/README.md`](../../contracts/README.md)。
 - endpoint単位の認証・認可、許可parameter、成功・失敗responseはrequest specで確認する。
 - validation、関連、制約、state transitionなどModel固有の不変条件はmodel specで確認する。
 - ServiceやJobを追加した場合は、その業務境界、失敗、再試行・重複実行を直接testする。
@@ -79,8 +83,8 @@
 
 ### 保留
 
-- OpenAPI、型生成、契約検証libraryは最初のプロダクトAPIをWebが使う変更で選択肢を比較する。今回の
-  基盤だけを理由に導入しない。
+- 契約からserverのコードを生成する方式は採らない（2026-10-01にTASK-005で決定。理由は
+  [architecture](../architecture.md)の「決定済み」）。
 
 ## 4. 実装前チェック
 

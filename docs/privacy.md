@@ -116,11 +116,11 @@ MVP全体の範囲は[product](./product.md)を正本とする。
   する」前提で保持・削除を決めていたが、Transcribeのバッチは必ずS3へ書き出すため成立しなかった。
   **§5-1にデータ行を追加し、保持しないデータとして扱わない。**採用内容と比較は
   [TASK-003 Plan](./implementation-plans/2026-09-29-task-003-generation-design.md)。
-- TASK-005: 録音attempt（実際の録音開始操作に対してserverが発行し、Dotの`started_at`になる値）を
-  serverに保存する方式を採る場合の、未送信attemptの保持・期限・削除。署名済みの値を端末のmemoryに
-  置く方式なら新しい保存は生じない。どちらを採るかはTASK-005で決める
-  （2026-09-29にTASK-004で`started_at`を採用したことに伴う）。**TASK-003は署名済み・端末保持でも
-  一回性が成立する設計にしているため、この分岐は発火しない見込みである**（TASK-003 Plan §20）。
+- TASK-005（2026-10-01に決定）: 録音attempt（実際の録音開始操作に対してserverが発行し、Dotの
+  `started_at`になる値）は、**serverが暗号化・署名したtokenを端末のmemoryにだけ置き、serverには
+  保存しない**方式を採った。一回性は初回送信で処理の記録の一意制約により担保する（TASK-003 Plan §20）。
+  未送信attemptの保存は生じないため、§5へのデータ行の追加は不要である。tokenは端末のstorageへ
+  書かない。契約は[`contracts/openapi.yaml`](../contracts/openapi.yaml)の`POST /api/v1/recording_attempts`。
 - TASK-006: 採用済み認証方式に従う認証情報の保存・送信・失効を実装し、
   [architecture](./architecture.md)とTASK-001 Planの経路に照らして検証する。
 - TASK-009/010/011: 決定した経路と、送信・保存前の利用者操作・失敗時の挙動を実装する。

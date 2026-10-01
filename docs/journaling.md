@@ -56,7 +56,7 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 | Dot（id、date、started_at、duration、sentence、summary） | Session Providerと`fod.session.v1`に現在の1件（現行のDotSessionは`date`のみで`started_at`はなく、`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。`sentence`と`summary`は本人が編集でき、編集前の値は残さない。1件ごとの削除はゴミ箱（受理から7日で削除処理を始める）、即時の完全削除も備える。**`reflection`と`closing`は生成も保存もしない**。録音1回ごとに1件を保存し、`started_at`（録音開始操作をserverが受理した時刻・UTC）をserverが決め、`date`はそこから算出したAsia/Tokyoの暦日とする。`started_at`は`date`・`duration`と同じく本人に編集させず、保持・削除はDot本体と同じ（[dot-history §2](./dot-history.md)で2026-09-29採用） |
 | 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。ただし**Amazon Transcribeが結果をS3へ書き出すため、自前のbucketへ出して端末が受け取るまで置く**（2026-09-29にTASK-003で追加）。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す。server側の保持・削除は[privacy.md §5](./privacy.md)を正本とする |
 | 話した内容の要約（`summary`） | 存在しない | — | 文字起こしから生成し、Dotと同じ行に保存する。Dotを削除すれば一緒に消える。要約にも実名は残り得るため、Dot本文と同じ保護・削除・説明の対象にする |
-| API response | `createDot`の一時値をZod検証後にDotSessionへ | 未検証値は保存しない。 | Dotと文字起こしを返す。音声のURLは返さない。正式な契約はTASK-005 |
+| API response | `createDot`の一時値をZod検証後にDotSessionへ | 未検証値は保存しない。 | Dotと文字起こしを返す。音声のURLは返さない。正式な契約は[`contracts/openapi.yaml`](../contracts/openapi.yaml)（2026-10-01にTASK-005で作成、未実装） |
 
 `localStorage`はbrowser上で利用者が読み書きできるため、認証・認可やserver側の正本には使わない。
 実サービス化では既存の`fod.session.v1`の読み取りをやめ、起動時に削除する。localStorageへ新しい永続
@@ -70,6 +70,9 @@ keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを�
   Dot保存、AI処理は実装されていない。
 - `VITE_DOT_API_URL`設定時の本文なしPOSTは暫定的な接続点であり、音声Blob、duration、利用者、
   正式なRails API契約を表すものではない。
+- 実サービスの正式な契約は[`contracts/openapi.yaml`](../contracts/openapi.yaml)を正本とする
+  （2026-10-01にTASK-005で作成。運用は[`contracts/README.md`](../contracts/README.md)）。契約に
+  沿ったendpointと呼び出しは、後続の実装タスクまで存在しない。
 - 現行ErrorStateの「音声は保存されています」という文言は実装と一致しない。音声Blobは保存されず、
   再試行時にも音声を再送できない。この差異を解消する変更では、表示文言と実際の保持・再試行仕様を
   同時に更新する。実サービスでは音声が残っている間は再試行できるようになるため、「保存されています」
@@ -121,7 +124,9 @@ keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを�
   文字起こし結果が残っていなければ文字起こしからやり直すため）。利用者には再試行できるかどうかと
   期限日時を示す（TASK-003）。
 - 生成は非同期で行い、送信・生成・保存の状態と失敗時の再開点が利用者に分かる。画面を閉じても
-  結果が残り、あとから結果を確認できる（TASK-003）。
+  結果が残り、あとから結果を確認できる（TASK-003）。結果はpollingで取得し、間隔はserverが返す
+  `poll_after_seconds`に従う。Webは自動の取得を15分で止め、再表示や利用者の操作で再開する
+  （打ち切っても処理は止まらない。2026-10-01にTASK-005で決定）。
 - 複数のDotを利用者ごとに保存し、本人が一覧から過去のDotを選んで振り返れる。
 
 2026-09-24に採用した公開基盤はAWS東京のALB + ECS Fargate + RDS PostgreSQLで、初期は
@@ -181,9 +186,9 @@ promptの最終文面と委託先の確認は残っている。この設計採�
 
 ## 5. 未決定事項
 
-- promptの最終文面と、`sentence`・`summary`の長さの上限（TASK-005/009で確定）
+- promptの最終文面（TASK-009で確定）。`sentence`・`summary`の上限は2026-10-01にTASK-005で
+  200文字・2,000文字と決めた（契約の`Dot`）。生成側の上限はTASK-009でこれ以下に揃える
 - 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認結果（公開前に人間が実施）
-- pollingの間隔と打ち切りの扱い（TASK-005/011で確定）
 - password再設定後の既存Cookieの実動作
 - password方針・ログイン試行制限の具体値、Googleの確認情報とConfirmableの関係（TASK-006で決定）
 - 将来候補である検索・カテゴリ・期間フィルタの仕様と導入段階
