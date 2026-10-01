@@ -172,6 +172,9 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | 録音attemptの渡し方 | `POST /api/v1/dots`の`X-Recording-Attempt` header（multipartの本文に入れない）。再送の前にWebが`GET /api/v1/generations/{attempt.id}`で既存の処理を確かめる | 同じattemptの再送を、multipartの解釈とS3への保存より前に判定するため（TASK-003 Plan §20。codexレビュー1回目）。ただしPumaは本文を受け取り終えてからアプリへ渡すので、serverの判定では本文の再送信そのものは防げない。そこはWebの事前確認で避ける（レビュー4回目） |
 | 退会中のlogin | 退会を受理した利用者もlogin（password・Googleの`intent=sign_in`）でき、`account_status=deletion_in_progress`を返す。serverは`failed`の削除を自動でも再実行する | 退会中にsessionを失う（7日の期限・logout）と、やり直しの経路が無くなり個人データが残るため（レビュー4回目） |
 | ゴミ箱の中のDotの処理への再送 | `422 attempt_invalid` | ゴミ箱のendpoint以外からゴミ箱の中のDotを返さないため（レビュー4回目） |
+| 完全削除・退会の後の再送 | 使用済みattemptの`id`と期限だけを期限まで残し、`422 attempt_invalid` | 消したDotを作り直さないため（Q7） |
+| 退会中のlogout | 退会中も`DELETE /api/v1/session`は`409`にしない。sessionを使わないendpointは退会中の制限の対象外 | 共有端末で退会中のsessionを消せなくなるため（レビュー5回目） |
+| 費用がかかる操作の`429` | 録音attemptの発行・送信・再試行に`429 rate_limited`を予約する。具体値と採否はTASK-009 | 後からresponseを足すと古いWebが扱えない変更になるため、先に枠だけ置く（レビュー5回目） |
 | `return_to` | 英数字・`-`・`_`・`/`だけの素のpathに限るpattern | `/\evil.example`などをbrowserが別originとして扱うopen redirectを防ぐため（レビュー4回目） |
 | 成功後の再試行期限 | `retry_expires_at`は`succeeded`では返さない | 成功後は後片付けで処理の記録が消え、Dotの項目からは期限を復元できないため（codexレビュー1回目） |
 | 状態ごとの必須項目 | `Session`・`Generation`・`Transcript`は状態ごとのschemaに分け（`oneOf`。`Generation`と`Transcript`は`status`のdiscriminator）、必ず返す項目を`required`にする。Webは`z.discriminatedUnion`で同じ形にする | 説明文だけに書いた必須は、両側の検証で欠落を検出できないため（codexレビュー3回目） |

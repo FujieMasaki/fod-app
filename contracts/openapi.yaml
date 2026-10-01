@@ -17,9 +17,10 @@ info:
     - 日時は`Z`で終わるUTCのISO 8601（`2026-09-28T13:04:05Z`。`+00:00`の形は使わない）、日付は
       Asia/Tokyoの暦日（`YYYY-MM-DD`）で、どちらもserverが決める。
     - 失敗はRFC 9457（`application/problem+json`）で返し、Webは`code`で判定する。
-    - 退会を受理した利用者には、login（passwordと、Googleの`intent=sign_in`）・`GET /api/v1/session`・
-      `GET /api/v1/account/deletion`・`DELETE /api/v1/account`（失敗後のやり直し）以外は
-      `409 account_deletion_in_progress`を返す。loginを許すのは、退会中にsessionを失っても（7日の
+    - 退会を受理した利用者には、login（passwordと、Googleの`intent=sign_in`）・logout
+      （`DELETE /api/v1/session`）・`GET /api/v1/session`・`GET /api/v1/account/deletion`・
+      `DELETE /api/v1/account`（失敗後のやり直し）以外は`409 account_deletion_in_progress`を返す。
+      sessionを使わないendpoint（登録・確認・password再設定）はこの対象外で、通常どおり扱う。loginを許すのは、退会中にsessionを失っても（7日の
       期限・logout）状況の確認とやり直しへ戻れるようにするため。serverも`failed`の削除を自動で
       再実行する。
 servers:
@@ -451,6 +452,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "409":
           $ref: "#/components/responses/AccountDeletionInProgress"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -533,6 +536,8 @@ paths:
                   $ref: "#/components/examples/ProblemAttemptExpired"
                 attemptInvalid:
                   $ref: "#/components/examples/ProblemAttemptInvalid"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -627,6 +632,8 @@ paths:
                   $ref: "#/components/examples/ProblemRetryExpired"
                 retryNotAllowed:
                   $ref: "#/components/examples/ProblemRetryNotAllowed"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -1092,7 +1099,9 @@ components:
             cursorInvalid:
               $ref: "#/components/examples/ProblemCursorInvalid"
     RateLimited:
-      description: "`rate_limited`: 試行回数の制限（具体値はTASK-006）"
+      description: |
+        `rate_limited`: 試行回数の制限。認証まわりの具体値はTASK-006、録音・送信・再試行
+        （外部の文字起こし・生成の費用がかかる操作）の具体値と採否はTASK-009で決める
       content:
         application/problem+json:
           schema:

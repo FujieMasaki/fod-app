@@ -93,36 +93,80 @@ describe("Webのschemaが契約外の値を拒否する", () => {
 });
 
 // 型の一致検査は制約値（maxLengthなど）を比べないため、契約から読んだ値の境界でZodと一致させる。
-describe("Dotの制約値が契約と一致する", () => {
-  const properties: Record<string, { maxLength?: number; minimum?: number; maximum?: number }> =
-    contract.components.schemas.Dot.properties;
-  const valid = {
-    id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04",
-    date: "2026-09-28",
-    started_at: "2026-09-28T13:04:05Z",
-    duration_seconds: 312,
-    sentence: "",
-    summary: "",
-  };
-  const parses = (field: string, value: unknown) => dotSchema.safeParse({ ...valid, [field]: value }).success;
+// Zod schemaを足したら、制約を持つ契約のschemaをここへ足す。
+type Limits = { maxLength?: number; minimum?: number; maximum?: number };
 
-  const stringLimits = Object.entries(properties).filter(([, p]) => p.maxLength !== undefined);
-  const integerLimits = Object.entries(properties).filter(([, p]) => p.minimum !== undefined);
+const limitTargets: { contractSchema: string; schema: z.ZodType; valid: Record<string, unknown> }[] = [
+  {
+    contractSchema: "Dot",
+    schema: dotSchema,
+    valid: {
+      id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04",
+      date: "2026-09-28",
+      started_at: "2026-09-28T13:04:05Z",
+      duration_seconds: 312,
+      sentence: "",
+      summary: "",
+    },
+  },
+  {
+    contractSchema: "Problem",
+    schema: problemSchema,
+    valid: { type: "urn:focus-on-dot:problem:rate_limited", title: "x", status: 429, code: "rate_limited", retry_after_seconds: 60 },
+  },
+  {
+    contractSchema: "GenerationProcessing",
+    schema: generationSchema,
+    valid: {
+      id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04",
+      status: "processing",
+      stage: "transcribing",
+      started_at: "2026-09-28T13:04:05Z",
+      retryable: false,
+      retry_expires_at: "2026-09-29T13:20:11Z",
+      poll_after_seconds: 3,
+    },
+  },
+];
 
-  it("文字数の上限と整数の範囲を契約に持つ", () => {
-    expect(stringLimits.map(([field]) => field).sort()).toEqual(["sentence", "summary"]);
-    expect(integerLimits.map(([field]) => field)).toEqual(["duration_seconds"]);
+const limitCases = limitTargets.flatMap(({ contractSchema, schema, valid }) =>
+  Object.entries<Limits>(contract.components.schemas[contractSchema].properties)
+    .filter(([, limits]) => limits.maxLength !== undefined || limits.minimum !== undefined || limits.maximum !== undefined)
+    .map(([field, limits]) => ({
+      label: `${contractSchema}.${field}`,
+      limits,
+      parses: (value: unknown) => schema.safeParse({ ...valid, [field]: value }).success,
+    })),
+);
+
+describe("Zod schemaの制約値が契約と一致する", () => {
+  it("各対象の正しい値そのものは受け付ける", () => {
+    for (const { schema, valid } of limitTargets) expect(schema.safeParse(valid).success).toBe(true);
   });
 
-  it.each(stringLimits)("%s は契約のmaxLengthちょうどを受け付け、超えると拒否する", (field, { maxLength }) => {
-    expect(parses(field, "あ".repeat(maxLength!))).toBe(true);
-    expect(parses(field, "あ".repeat(maxLength! + 1))).toBe(false);
+  it("制約を持つ項目を対象のすべてから集めている", () => {
+    expect(limitCases.map((c) => c.label).sort()).toEqual([
+      "Dot.duration_seconds",
+      "Dot.sentence",
+      "Dot.summary",
+      "GenerationProcessing.poll_after_seconds",
+      "Problem.retry_after_seconds",
+      "Problem.status",
+    ]);
   });
 
-  it.each(integerLimits)("%s は契約のminimum・maximumの外を拒否する", (field, { minimum, maximum }) => {
-    expect(parses(field, minimum)).toBe(true);
-    expect(parses(field, minimum! - 1)).toBe(false);
-    expect(parses(field, maximum)).toBe(true);
-    expect(parses(field, maximum! + 1)).toBe(false);
+  it.each(limitCases)("$label は契約の境界ちょうどを受け付け、外を拒否する", ({ limits, parses }) => {
+    if (limits.maxLength !== undefined) {
+      expect(parses("あ".repeat(limits.maxLength))).toBe(true);
+      expect(parses("あ".repeat(limits.maxLength + 1))).toBe(false);
+    }
+    if (limits.minimum !== undefined) {
+      expect(parses(limits.minimum)).toBe(true);
+      expect(parses(limits.minimum - 1)).toBe(false);
+    }
+    if (limits.maximum !== undefined) {
+      expect(parses(limits.maximum)).toBe(true);
+      expect(parses(limits.maximum + 1)).toBe(false);
+    }
   });
 });

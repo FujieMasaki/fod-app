@@ -915,7 +915,10 @@ export interface components {
                 "application/problem+json": components["schemas"]["Problem"];
             };
         };
-        /** @description `rate_limited`: 試行回数の制限（具体値はTASK-006） */
+        /**
+         * @description `rate_limited`: 試行回数の制限。認証まわりの具体値はTASK-006、録音・送信・再試行
+         *     （外部の文字起こし・生成の費用がかかる操作）の具体値と採否はTASK-009で決める
+         */
         RateLimited: {
             headers: {
                 [name: string]: unknown;
@@ -1329,6 +1332,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["AccountDeletionInProgress"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -1392,6 +1396,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -1459,6 +1464,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["InternalError"];
         };
     };
