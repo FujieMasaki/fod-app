@@ -328,7 +328,12 @@ DotやProblemを複数のfeatureが使うため（React・route・表示判断�
   - `pnpm check`: 成功（Redocly lint 0件。例外4件は`.redocly.lint-ignore.yaml`に理由を記載）。
   - `pnpm type-check`: 成功。`vitest run src/libs/api-contract`: 153件成功。
   - `bundle exec rubocop`: 違反0。`bundle exec rspec`: 172件成功。
-  - codexレビュー（3回）の指摘はすべて対応した。内容は§7-4・§11の「codexレビュー」と付けた行。
+  - レビューは計8回（codex 4回、Claudeのサブエージェント 3回、2つのレビューを統合した外部のレビュー 1回）。
+    指摘はすべて対応し、`b1d4261`でcodex（GPT-6.1 Sol・推論high）がLGTM。内容は§7-4・§11の
+    「レビュー」と付けた行。codexの環境ではDBに接続できずRails specを実行できなかったため、同じコミットで
+    ローカルに実行した（188件成功）。
+  - 再発防止: 繰り返し見つかった種類の不備を`contracts/README.md` §7のレビュー観点にまとめ、
+    backend・frontendのレビュー入口から参照した。
   - ずれの検出: Zodの`summary`を任意にすると`tsc`が失敗し、生成した型を書き換えると
     `check:api-types`が終了コード1になった。いずれも確認後に元へ戻した。
   - 未実施: endpointの実装が無いため、request specでの実responseの照合

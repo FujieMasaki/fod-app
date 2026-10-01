@@ -25,7 +25,8 @@
 - parameterの許可範囲、validation、DB制約、transaction、異常系、再試行・重複実行の扱いが妥当か。
 - request / response / errorが[`contracts/openapi.yaml`](../../../contracts/openapi.yaml)と一致し、
   request specで照合しているか。不要な属性や内部エラーを返さず、古いWebと組み合わさっても壊れないか
-  （[`contracts/README.md`](../../../contracts/README.md) §3）。
+  （[`contracts/README.md`](../../../contracts/README.md) §3）。契約を変える差分では、同READMEの
+  §7「契約の変更をレビューするときの観点」も確認する。
 - 録音、文字起こし、生成結果、個人データの保存・送信・削除・ログ出力が仕様どおりか。
 - request spec、model spec、Service / Job specのうち、変更したリスクを検証するtestがあるか。
 

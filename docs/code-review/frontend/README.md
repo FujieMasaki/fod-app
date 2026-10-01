@@ -15,7 +15,8 @@ Focus on Dot のフロントエンドコードレビューにおける運用ル�
 - 関連する仕様・受け入れ条件、frontend実装規約、architecture、Implementation Planを確認し、
   仕様との一致、責務と依存、状態不整合、異常系・再試行、API契約・互換性、test不足を確認する。
   API契約は[`contracts/openapi.yaml`](../../../contracts/openapi.yaml)と一致し、古いAPIと組み合わさっても
-  壊れないか（[`contracts/README.md`](../../../contracts/README.md) §3）を確認する。
+  壊れないか（[`contracts/README.md`](../../../contracts/README.md) §3）を確認する。契約を変える差分では、
+  同READMEの§7「契約の変更をレビューするときの観点」も確認する。
 - 指摘には重大度、該当ファイル・行、根拠、影響、具体的な修正案を付ける。十分な根拠を
   得られないものは「要確認」とし、事実と推測を区別する。
 - Critical、High、Medium の指摘がなければ `LGTM` と明記する。無理に改善案を
