@@ -45,7 +45,7 @@ publishが拒否された場合も、ページを作らずにその旨を完了�
 
 ### 1. 材料を集める
 
-- `gh pr view <番号> --json number,title,body,headRefOid,url` と `gh pr diff <番号>`
+- `gh pr view <番号> --json number,title,body,headRefOid,url` と `git diff origin/<ベースブランチ>...HEAD`
 - `gh pr checks <番号>`（CIの結果）。CIが実行中なら、`gh pr checks <番号> --watch`をBash toolの
   バックグラウンド実行で走らせ、終わるまで待つ。CIが動かないブランチなら、そのことを書く。
   - **CIが失敗していたら、ページを作らない。** `pr-review-cycle`から呼ばれた場合は、同skillの手順6
@@ -60,7 +60,10 @@ publishが拒否された場合も、ページを作らずにその旨を完了�
 Artifact toolの規約に従う。最初に`action: "quickstart"`（intentは`other`）を呼び、その結果にある
 ページの規約（ライト・ダーク両方のtheme、スマホ幅、CDNの制限、localStorageの扱い）に従ってHTMLを書く。
 見た目と動きは参考ページ（PR #45: <https://claude.ai/artifact/KUcAvcCSNudXRp9BBZoo3v>、`action: "read"`で
-読める）に合わせる。参考ページを読めない場合は、この skill の5節の構成とArtifactの規約だけに従う。
+読める）に合わせる。参考ページを読めない場合は、この手順2に書いた本文の5つの節とArtifactの規約だけに従う。
+
+ページの`<title>`は`PR #<番号> レビューガイド`に固定する（別のセッションから同じページを探す手がかりにする）。
+実例として引用するコード・JSON・Mermaidのラベルは、`&`・`<`・`>`をエスケープしてから埋め込む。
 
 ページの上部に、次を出す。
 
@@ -92,6 +95,9 @@ Artifact toolの規約に従う。最初に`action: "quickstart"`（intentは`ot
 
 ### 3. publishする
 
+- このセッションでまだURLを持っていなければ、publishの前にArtifact toolの`action: "list"`で
+  `PR #<番号> レビューガイド`のページを探す。あれば`action: "read"`で読み、その`url`を指定して更新する
+  （同じPRのページを重複させず、閲覧者のチェック状態を引き継ぐため）。
 - HTMLはscratchpad（なければOSの一時ディレクトリ。例: `mktemp -d`）に置き、リポジトリには置かない。
 - 初回は`icon`と1文の`description`を付けてpublishする。
 - 同じPRに後から修正が入ったら、**同じファイルを編集して再publishする**（URLが変わらず、閲覧者の
