@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     ".claude/worktrees/**",
     "**/dist/**",
     "**/coverage/**",
+    // contracts/openapi.yaml から生成する型（pnpm --filter @focus-on-dot/web generate:api-types）
+    "apps/web/src/types/api-contract.d.ts",
   ]),
   {
     files: ["**/*.{ts,tsx}"],

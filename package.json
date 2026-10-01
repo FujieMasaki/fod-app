@@ -13,7 +13,7 @@
     "preview": "pnpm --filter @focus-on-dot/web preview",
     "lint": "eslint . && pnpm lint:naming && pnpm lint:contract",
     "lint:naming": "node scripts/check-naming.mjs",
-    "lint:contract": "REDOCLY_TELEMETRY=off REDOCLY_SUPPRESS_UPDATE_NOTICE=true redocly lint main",
+    "lint:contract": "REDOCLY_TELEMETRY=off REDOCLY_SUPPRESS_UPDATE_NOTICE=true redocly lint main && pnpm --filter @focus-on-dot/web check:api-types",
     "check": "pnpm lint",
     "type-check": "pnpm --filter @focus-on-dot/web type-check",
     "test": "pnpm test:scripts && pnpm --filter @focus-on-dot/web test",
