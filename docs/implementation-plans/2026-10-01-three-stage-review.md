@@ -162,7 +162,9 @@ node scripts/codex-final-check.mjs → codex exec --sandbox read-only（final-ch
 
 ### Automated
 
-Markdown・JSONのみの変更のため、自動テストは対象外。pre-commit / pre-push hookの通過を確認する。
+- `node --test scripts/codex-final-check.test.mjs`: 余分な引数・不正なbaseの拒否と、常にread-onlyで
+  呼ぶ引数の組み立てを確認する。
+- pre-commit / pre-push hook（`pnpm test`にscriptsのtestを含む）の通過を確認する。
 
 ## 15. Definition of Done
 

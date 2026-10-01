@@ -16,7 +16,7 @@ Claude Codeのセルフレビューとサブエージェント（[`code-reviewer
 ## 2. 手順
 
 1. 指示されたbase（例: `origin/main`）に対し、`git diff <base>...HEAD`でレビュー対象の差分を取得する。
-   冒頭で、確認した差分の範囲（baseとHEADのコミット）を報告する。
+   冒頭で、確認した差分の範囲（baseの先端・merge-base・HEADのコミット）を報告する。
 2. 変更された領域の`security.md`と、同じディレクトリの`README.md`（報告形式の出典）を必ず読む
    （`apps/web/`は[`frontend/`](./frontend/README.md)、`apps/api/`は[`backend/`](./backend/README.md)、
    `contracts/`・両方にまたがる変更・どちらにも当てはまらない変更は両方）。
