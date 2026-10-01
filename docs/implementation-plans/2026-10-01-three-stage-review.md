@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中（2026-10-01）。
+完了（2026-10-01）。
 
 ## 2. Goal
 
@@ -198,7 +198,29 @@ node scripts/codex-final-check.mjs → codex exec --sandbox read-only（final-ch
 
 ## 16. Completion Record
 
-- 状態:
+- 状態: 2026-10-01 完了。Codexの最終チェックでLGTM（`4a5728a`）。
 - 実装差異:
+  - Q1の見直し: `codex exec -s read-only`の直接実行は、許可ルールが前方一致のためsandboxを外すオプションを
+    足せると指摘され、決まった引数で呼ぶ`scripts/codex-final-check.mjs`に置き換えた（人間の判断）。
+  - スクリプトの固定引数は、レビューの指摘ごとに次を加えた: execpolicyのrulesを読まない（Codexの指摘、
+    `git fetch`がallowで再現）、ユーザー設定（MCPサーバ`node_repl`・`cua_repl`、plugin）を読まない、
+    browser・computer use・apps・hooks・plugins・web検索を無効にする、承認を`never`に固定する、20分で
+    打ち切る、`.codex`・`AGENTS.override.md`・`.agents`があれば起動しない。
+  - Q2の見直し: 当初の「設計・仕様の修正のときだけサブエージェント」を、同日に「サブエージェントのLGTMが
+    出るまでCodexへ進まない」へ変更した（人間の判断）。
+  - 最終チェックは自分が作成したブランチだけを対象にした（個人開発のため他人のブランチは考慮しない、人間の判断）。
+  - 人間が判断したsecurityの指摘は、Planに記録すれば同じ内容の再指摘で止まらないことにした（人間の判断）。
 - 検証結果:
-- 関連:
+  - 本PR自体を更新後の手順で回した。サブエージェント: 1段階目4回（3回の上限に人間の判断で1回追加、
+    最後はLGTMなしでCodexへ）、Codexの指摘後の段階で4回（上限後に人間の判断で1回追加し、4回目でLGTM）。
+    Codex: 2回（1回目🟠1件、2回目LGTM。間に利用上限で結果の出ない実行が1回あり、回数に数えていない）。
+  - `codex-final-check.mjs`経由でCodexを実際に3回起動した。報告されたdiffの範囲はスクリプトが出したSHAと
+    一致し、Codexの実行後も作業ツリーは変わらなかった（`git status`が空）。`--ignore-user-config`でも認証と
+    固定したmodelで起動できた。利用上限のときは終了コード1とログ末尾で止まった。
+  - `node --test scripts/codex-final-check.test.mjs`: 6件成功。pre-commit / pre-push hook（`pnpm test`）通過。
+  - 対応しなかった指摘（すべてLow、任意改善）: サブエージェントがリポジトリ外のdiffを読むときに許可確認で
+    止まりうる、代わりのagentの読み取り専用は指示だけで担保している、`git fetch`で直るbaseの不在も終了コード
+    2で止まる、無効にしていないCodexのfeatureが残る・成功時もログを消さない。
+  - 再発防止: サブエージェント・Codexの指摘はsandboxの抜け道に集中した。抜け道を塞ぐ引数はすべて
+    `codex-final-check.test.mjs`で固定し、機械的に検出できるようにした。
+- 関連: PR #46（<https://github.com/FujieMasaki/fod-app/pull/46>）、PR #45（3段にする判断の根拠）。
