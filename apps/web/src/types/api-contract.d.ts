@@ -38,7 +38,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/registrations": {
+    "/api/v1/registration": {
         parameters: {
             query?: never;
             header?: never;
@@ -59,7 +59,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/confirmations": {
+    "/api/v1/confirmation": {
         parameters: {
             query?: never;
             header?: never;
@@ -85,7 +85,7 @@ export interface paths {
         patch: operations["confirmEmail"];
         trace?: never;
     };
-    "/api/v1/passwords": {
+    "/api/v1/password": {
         parameters: {
             query?: never;
             header?: never;
@@ -354,7 +354,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/generations/{generation_id}/transcript_ack": {
+    "/api/v1/generations/{generation_id}/transcript": {
         parameters: {
             query?: never;
             header?: never;
@@ -366,13 +366,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        post?: never;
         /**
-         * 文字起こし全文を端末へ保存し終えたことを知らせる
-         * @description Webが全文を`sessionStorage`へ保存し終えたら送る。serverは文字起こし結果の削除処理を始める
-         *     （消え終わる時刻は約束しない）。冪等で、対象が既に無くても本人の処理なら`204`を返す。
+         * 端末へ保存し終えた文字起こし全文を、server側から消す
+         * @description 文字起こし全文の受領通知（ACK）。Webは全文を`sessionStorage`へ保存し**終えてから**呼ぶ。
+         *     serverは文字起こし結果のobjectと文字起こしのjobの削除処理を始め、以後この処理の照会では
+         *     全文を返さない（`transcript.status=unavailable`）。server側の全文は戻せない。
+         *     `202`は削除を受け付けたことを表し、消え終わったことは表さない。何度呼んでも結果は変わらず、
+         *     対象が既に無くても本人の処理なら`202`を返す。Dotそのものは消さない。
          */
-        post: operations["acknowledgeTranscript"];
-        delete?: never;
+        delete: operations["deleteTranscript"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1575,7 +1578,7 @@ export interface operations {
             500: components["responses"]["InternalError"];
         };
     };
-    acknowledgeTranscript: {
+    deleteTranscript: {
         parameters: {
             query?: never;
             header: {
@@ -1590,8 +1593,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 受け付けた */
-            204: {
+            /** @description 削除を受け付けた（本文なし） */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };

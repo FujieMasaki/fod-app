@@ -229,7 +229,7 @@ Job（非同期。worker は当面 ECS 同一タスク内で Puma と並走）
 GET /api/v1/generations/:処理ID（client は polling）
   → **まず dots を見る。**同じ処理ID の Dot があれば成功として返す
     （記録が cleanup 待ちで残っていても「処理中」とは返さない）
-POST .../transcript_ack（client が全文を保存し終えたら送る。冪等）
+DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し終えたら送る受領通知。冪等）
   → 文字起こし結果と Transcribe の job の削除処理を始める
 ```
 

@@ -85,6 +85,9 @@ PRのレビューでは「この変更は古いWeb・古いAPIのどちらと組
 - serverが正規表現で入力を照合するときは、文字列全体を表す`\A`・`\z`を使う（Rubyの`^`・`$`は
   行単位で一致する）。契約のpatternはWeb（JavaScript）とAPI（Ruby）の両方で評価されるので、
   `^`・`$`ではなく、両方で文字列の端だけに一致する`(?<![\s\S])`・`(?![\s\S])`を使う。
+- `DELETE`は、そのresourceをserverから消す（戻せない）操作だけに使う。Dotをゴミ箱へ移すような戻せる
+  操作には使わない（`POST /api/v1/dots/{dot_id}/trash`）。path名は、利用者にとって1つしかない
+  resource（`session`・`registration`・`confirmation`・`password`・`account`）を単数形にする。
 - 一覧の続きはcursor。`next_cursor`が`null`なら終わり。Webはcursorの中身を解釈しない。
 - 失敗はRFC 9457（`application/problem+json`）。Webは`code`で判定し、`title`・`detail`を
   そのまま画面に出さない。`detail`に日記本文・文字起こし・メールアドレスを入れない。

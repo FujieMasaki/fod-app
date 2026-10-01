@@ -119,11 +119,11 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | 認証 | `GET /api/v1/session` | 認証状態・期限（`expires_at`）・メール確認済みか・CSRF token |
 | | `POST /api/v1/session` | メール＋passwordでlogin |
 | | `DELETE /api/v1/session` | logout |
-| | `POST /api/v1/registrations` | 登録（確認メール送信） |
-| | `POST /api/v1/confirmations` | 確認メールの再送（共通受付応答） |
-| | `PATCH /api/v1/confirmations` | 確認tokenの消費 |
-| | `POST /api/v1/passwords` | 再設定メールの送信（共通受付応答） |
-| | `PATCH /api/v1/passwords` | 再設定tokenの消費と新しいpassword |
+| | `POST /api/v1/registration` | 登録（確認メール送信） |
+| | `POST /api/v1/confirmation` | 確認メールの再送（共通受付応答） |
+| | `PATCH /api/v1/confirmation` | 確認tokenの消費 |
+| | `POST /api/v1/password` | 再設定メールの送信（共通受付応答） |
+| | `PATCH /api/v1/password` | 再設定tokenの消費と新しいpassword |
 | | `POST /auth/google_oauth2`・`GET /auth/google_oauth2/callback` | Google開始（CSRF保護したform POST）・callback（SPAへredirectし結果をcodeで渡す） |
 | | `DELETE /api/v1/account` | 退会の受理（再認証つき。202） |
 | | `GET /api/v1/account/deletion` | 退会の状況（`in_progress` / `completed` / `failed`） |
@@ -131,7 +131,7 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | 生成 | `POST /api/v1/dots` | 音声・attempt・durationの送信。処理IDと再試行期限を返す（202） |
 | | `GET /api/v1/generations/{id}` | 生成状態のpolling。成功時はDotと文字起こし全文 |
 | | `POST /api/v1/generations/{id}/retry` | 期限内の再試行 |
-| | `POST /api/v1/generations/{id}/transcript_ack` | 文字起こし全文の受領通知（冪等） |
+| | `DELETE /api/v1/generations/{id}/transcript` | 文字起こし全文の受領通知。server側の全文の削除を受け付ける（冪等・202） |
 | 履歴 | `GET /api/v1/days` | 日単位の一覧（cursor） |
 | | `GET /api/v1/days/today` | Dayの今日（今日の最新Dotの有無を区別して返す） |
 | | `GET /api/v1/days/{date}` | 日の詳細（その日のゴミ箱外のDot。cursor） |
@@ -233,7 +233,7 @@ contracts/openapi.yaml（正本・手で書く）
 → 録音 → POST /api/v1/dots（音声 + token。202でGeneration）
 → GET /api/v1/generations/{id} を poll_after_seconds ごとに取得
 → succeeded（Dot + 文字起こし全文） → 全文を sessionStorage へ保存
-→ POST /api/v1/generations/{id}/transcript_ack
+→ DELETE /api/v1/generations/{id}/transcript
 ```
 
 ## 10. Files to Change
@@ -408,5 +408,7 @@ DotやProblemを複数のfeatureが使うため（React・route・表示判断�
 | Q6 | A | 登録済みのメールアドレスでも`202`で同じ応答を返し、そのアドレスへログイン・再設定を案内するメールを送る。日記アプリを使っていること自体を第三者に明かさない。メールの文面はTASK-006 |
 | Q8 | A | 退会で`current_password`が送られなければ`422 validation_failed`、違えば`403 reauthentication_failed`。Google専用の利用者はpasswordを持たないので送らず、Googleの再認証で本人確認する |
 | Q9 | A | `email_unconfirmed`はpasswordが一致したときだけ返し、一致しなければ`invalid_credentials`。Q6と同じく登録の有無を明かさない |
+| Q11 | A | 認証まわりのpathを単数形（`/registration`・`/confirmation`・`/password`）にし、`/session`・`/account`とそろえる。利用者にとって1つしかないresourceで、DeviseとRailsの単数resourceの慣習にも合うため |
+| Q12 | A | 文字起こし全文の受領通知を`POST …/transcript_ack`から`DELETE /api/v1/generations/{id}/transcript`（`202`）へ改名する。serverがすること（server側の全文を消す）をそのまま表し、何度送っても同じ結果になるDELETEの性質と、Q3の「DELETEは戻せない削除だけ」に合うため。「保存し終えてから呼ぶ」は説明文で約束する |
 | Q10 | A | Dotになる前の処理を取り消して預けた音声などを消す`DELETE /api/v1/generations/{id}`を足す。`privacy.md`の「処理が終わらずに残っている一時的な音声も削除の対象に含める」を満たすため。TASK-003の「生成のcancel UIはMVPで持たない」は画面の話として、APIはTASK-003のcleanupの「明示削除」の経路を使う。画面に出すかはTASK-011。取り消し後の再送もQ7の使用済みattemptで防ぐ |
 | Q7 | A | 完全削除・退会で処理の記録とDotを消すと、attemptの期限内に同じattemptで再送されたときDotが作り直され、TASK-004の「1つのattemptは1件のDot生成にしか使えない」が崩れる（レビュー4回目）。使用済みattemptの`id`と期限だけを期限（最大2時間）まで残し、再送を`attempt_invalid`にする。利用者・本文・音声を含まず、privacy.md §5-1に行を足す。Q2の「attemptをserverに残さない」の、完全削除・退会の後の短い間だけの例外。何も残さず既知の制限とする案（B）は、消した日記が戻る事故を許すため採らない |
