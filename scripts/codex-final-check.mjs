@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { closeSync, mkdtempSync, openSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -46,21 +46,32 @@ function main(args) {
     return 2;
   }
 
+  const revision = (args) => spawnSync("git", args, { cwd: repoRoot, encoding: "utf8" }).stdout.trim();
   const outputDir = mkdtempSync(path.join(tmpdir(), "codex-final-check-"));
   const outputFile = path.join(outputDir, "final.md");
-  // Progress output is long; keep only the final message. stdin is closed so codex
-  // neither appends it to the prompt nor waits for input.
+  const logFile = path.join(outputDir, "progress.log");
+  // Printed first so the range Codex reports can be compared, and the files found again.
+  console.log(`base: ${result.base} ${revision(["rev-parse", result.base])}`);
+  console.log(`merge-base: ${revision(["merge-base", result.base, "HEAD"])}`);
+  console.log(`HEAD: ${revision(["rev-parse", "HEAD"])}`);
+  console.log(`saved: ${outputFile} (progress: ${logFile})\n`);
+
+  // Progress output is long, so stdout and stderr both go to the log and only the final
+  // message is printed. stdin is closed so codex neither appends it to the prompt nor
+  // waits for input.
+  const log = openSync(logFile, "w");
   const codex = spawnSync("codex", buildCodexArgs(result.base, outputFile), {
     cwd: repoRoot,
-    stdio: ["ignore", "ignore", "inherit"],
+    stdio: ["ignore", log, log],
   });
+  closeSync(log);
   if (codex.error || codex.status !== 0) {
-    console.error(`codex exec failed: ${codex.error?.message ?? `exit ${codex.status}`}`);
+    const tail = readFileSync(logFile, "utf8").split("\n").slice(-20).join("\n");
+    console.error(`codex exec failed: ${codex.error?.message ?? `exit ${codex.status}`}\n${tail}`);
     return 1;
   }
 
   process.stdout.write(readFileSync(outputFile, "utf8"));
-  console.error(`\nsaved: ${outputFile}`);
   return 0;
 }
 
