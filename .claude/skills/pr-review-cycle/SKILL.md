@@ -117,7 +117,8 @@ Codexは必ずこのスクリプト経由で実行し、`codex exec`を直接実
 前方一致のため、`codex exec -s read-only *`を許可すると、後ろにsandboxを外すオプション
 （`--dangerously-bypass-approvals-and-sandbox`等）を足しても確認なしで通ってしまう。スクリプトは
 baseだけを受け取り（形式を検査し、余分な引数は拒否する）、`codex exec --sandbox read-only`の引数を
-すべて自分で組み立てる。許可ルールもこのスクリプトだけにしている。
+すべて自分で組み立てる。execpolicyの`allow`に一致したコマンドはsandbox外で実行されるため、
+`--ignore-rules`でrulesを読み込まず、承認も`never`に固定する。許可ルールもこのスクリプトだけにしている。
 
 - 時間がかかるため、Bash toolのバックグラウンド実行（`run_in_background`）で実行し、終了の通知を待つ。
   スクリプトは20分で打ち切る。

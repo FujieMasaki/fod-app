@@ -78,7 +78,8 @@
    ならなければ止まる。誤検知と判断した指摘は理由を記録すれば解消済みとできるが、securityの指摘は
    人間の判断を仰ぐ。
 4. `scripts/codex-final-check.mjs`を追加する。baseだけを受け取り、形式を検査し、余分な引数を拒否して、
-   `codex exec --sandbox read-only`の引数をすべて自分で組み立てる。20分で打ち切り、timeoutは専用の終了コード
+   `codex exec --sandbox read-only --ignore-rules -c approval_policy="never"`の引数をすべて自分で組み立てる
+   （execpolicyの`allow`に一致したコマンドはsandbox外で実行されるため、rulesを読み込まない）。20分で打ち切り、timeoutは専用の終了コード
    （3）で返す。`.claude/settings.json`の
    `codex review`の許可を、このスクリプトの許可に置き換える。
 5. `AGENTS.md`と`README.md`の記述を3段のレビューに合わせる。
