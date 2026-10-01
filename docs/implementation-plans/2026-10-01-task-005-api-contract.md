@@ -2,8 +2,8 @@
 
 ## 1. Status
 
-実施中（2026-10-01）。作業区分がAPI契約のため、論点ごとに人間と対話で決めた（§17のQ1〜Q7、
-すべて推奨案）。契約・検証の仕組み・関連文書の更新を終え、契約の具体例のレビューを人間に依頼する。
+完了（2026-10-01）。作業区分がAPI契約のため、論点ごとに人間と対話で決めた（§17のQ1〜Q12、
+すべて推奨案）。契約・検証の仕組み・関連文書の更新を終え、契約の具体例の人間によるレビューでLGTMを得た。
 
 依存先のうちTASK-003はIn progressのまま着手した（2026-10-01に人間が判断）。TASK-003に残る完了条件7
 （委託先への9項目の確認。公開前に人間が実施）は、API契約の前提となる判断（provider・実行方式・
@@ -318,8 +318,11 @@ DotやProblemを複数のfeatureが使うため（React・route・表示判断�
 
 ## 16. Completion Record
 
-- 状態: 2026-10-01、契約と検証の仕組み・関連文書の更新を完了。人間による契約の具体例のレビュー
-  （§14 Manual）が済むまで、TASK-005はIn progressのままにする。
+- 状態: 2026-10-01に完了。契約と検証の仕組み・関連文書の更新を終え、人間による契約の具体例の
+  レビュー（§14 Manual）でLGTMを得た。レビューはPR #45の「確認すること」12項目を、レビューガイドの
+  ページ（例のJSONと判断基準つきのチェックリスト）で行った。互換性の運用（§14 Manualの最後の項目）は、
+  段階を踏む手間を受け入れる判断とした（版を照合して毎回再読み込みさせる代案は、録音中に画面を
+  止め得るため採らない）。
 - 実装差異:
   - OpenAPIは3.1ではなく3.0.3（committeeの対応範囲。§8）。
   - 契約の置き場は`docs/api/`ではなく`contracts/`（CIで両側の検査を走らせるため。§8）。
@@ -329,11 +332,12 @@ DotやProblemを複数のfeatureが使うため（React・route・表示判断�
   - Redocly CLIは2.57.0ではなく2.55.0（`minimumReleaseAge`。§11）。
 - 検証結果:
   - `pnpm check`: 成功（Redocly lint 0件。例外4件は`.redocly.lint-ignore.yaml`に理由を記載）。
-  - `pnpm type-check`: 成功。`vitest run src/libs/api-contract`: 153件成功。
-  - `bundle exec rubocop`: 違反0。`bundle exec rspec`: 172件成功。
+  - `pnpm type-check`: 成功。`vitest run src/libs/api-contract`: 177件成功。
+  - `bundle exec rubocop`: 違反0。`bundle exec rspec`: 192件成功。
   - レビューは計8回（codex 4回、Claudeのサブエージェント 3回、2つのレビューを統合した外部のレビュー 1回）。
     指摘はすべて対応し、`b1d4261`でcodex（GPT-6.1 Sol・推論high）がLGTM。仕組み化（§7の観点）を
-    足した後のcodexレビューで、その観点に当たる不備が2件見つかり、対応した。内容は§7-4・§11の
+    足した後のcodexレビュー（3回）で、その観点に当たる不備が計5件見つかり、対応して`a7224a0`で
+    再びLGTM。その後のQ11・Q12（pathの単数形化と受領通知の改名）とこの記録はcodexの再レビューで確認する。内容は§7-4・§11の
     「レビュー」と付けた行。codexの環境ではDBに接続できずRails specを実行できなかったため、同じコミットで
     ローカルに実行した（188件成功）。
   - 再発防止: 繰り返し見つかった種類の不備を`contracts/README.md` §7のレビュー観点にまとめ、
@@ -341,8 +345,7 @@ DotやProblemを複数のfeatureが使うため（React・route・表示判断�
   - ずれの検出: Zodの`summary`を任意にすると`tsc`が失敗し、生成した型を書き換えると
     `check:api-types`が終了コード1になった。いずれも確認後に元へ戻した。
   - 未実施: endpointの実装が無いため、request specでの実responseの照合
-    （`assert_response_schema_confirm`）は実装タスクで行う。契約の具体例の人間によるレビュー
-    （§14 Manual）はPRで依頼する。
+    （`assert_response_schema_confirm`）は実装タスクで行う。
 - 関連: 実装はTASK-006〜014。providerが変わる場合の見直し箇所は§13。
 
 ## 17. 人間に判断を求める項目（2026-10-01）

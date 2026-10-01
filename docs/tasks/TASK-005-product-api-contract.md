@@ -7,7 +7,7 @@
 | 対象領域 | 共通 |
 | 作業区分 | API契約 |
 | 優先度 | P0 |
-| 状態 | In progress |
+| 状態 | Done |
 
 ## 目的と作業範囲
 
@@ -25,7 +25,7 @@
 2026-10-01に、契約の正本[`contracts/openapi.yaml`](../../contracts/openapi.yaml)と運用
 [`contracts/README.md`](../../contracts/README.md)を作成し、完了条件1〜6を満たした（判断と検証は
 [Plan](../implementation-plans/2026-10-01-task-005-api-contract.md) §16・§17）。「必要な検証」のうち
-具体例の人間によるレビュー（Plan §14 Manual）が済むまでIn progressのままにする。
+具体例の人間によるレビュー（Plan §14 Manual）も2026-10-01にLGTMとなり、Doneにした。
 
 下の「契約への入力」は着手前の記録である。生成のpathは`/api/v1/dots/generations/:処理ID`から
 `/api/v1/generations/{id}`へ変えた（Plan §7-4）。現在の形は契約を正とする。
