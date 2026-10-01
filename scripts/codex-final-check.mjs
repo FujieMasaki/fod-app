@@ -34,6 +34,14 @@ export const DISABLED_FEATURES = [
   "plugins",
 ];
 
+// Codex reads these from the working tree even without the user config. The check only runs on
+// branches the user wrote, so their presence is unexpected and is refused rather than trusted.
+export const UNEXPECTED_CODEX_FILES = [".codex", "AGENTS.override.md", ".agents"];
+
+export function findUnexpectedCodexFiles(root, exists = existsSync) {
+  return UNEXPECTED_CODEX_FILES.filter((name) => exists(path.join(root, name)));
+}
+
 export function validateArgs(args) {
   if (args.length !== 1) {
     return { ok: false, error: "base branch only: node scripts/codex-final-check.mjs origin/<base>" };
@@ -87,6 +95,12 @@ function main(args) {
   });
   if (verify.status !== 0) {
     console.error(`base not found: ${result.base} (run git fetch first)`);
+    return 2;
+  }
+
+  const unexpected = findUnexpectedCodexFiles(repoRoot);
+  if (unexpected.length > 0) {
+    console.error(`refusing to run codex: unexpected ${unexpected.join(", ")} in the repository root`);
     return 2;
   }
 
