@@ -186,7 +186,8 @@ Browser（音声は memory のみ。storage へ書かない）
   受け入れる。attemptは本人に紐づき、1件のDot生成にしか使えず、
   やり直しで新しくなり、別Userでは使えず、未送信には期限（発行から2時間）がある。**serverが
   暗号化・署名したtokenを端末のmemoryにだけ置き、serverには保存しない**（2026-10-01にTASK-005で
-  決定）。一覧の並びと「最新」の判定にも
+  決定）。例外として、Dotの完全削除と退会の後は、同じattemptで消したDotが作り直されないよう、
+  attemptの`id`と期限だけを期限まで残す（[privacy.md §5-1](privacy.md)）。一覧の並びと「最新」の判定にも
   `started_at`を使い、同値のときはDotの識別子で決める。
 - **`sentence`と`summary`の更新APIを持つ**（2026-09-29に追加）。`date`・`started_at`・`duration`は
   更新させない。

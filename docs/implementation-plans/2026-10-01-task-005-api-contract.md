@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中（2026-10-01）。作業区分がAPI契約のため、論点ごとに人間と対話で決めた（§17のQ1〜Q6、
+実施中（2026-10-01）。作業区分がAPI契約のため、論点ごとに人間と対話で決めた（§17のQ1〜Q7、
 すべて推奨案）。契約・検証の仕組み・関連文書の更新を終え、契約の具体例のレビューを人間に依頼する。
 
 依存先のうちTASK-003はIn progressのまま着手した（2026-10-01に人間が判断）。TASK-003に残る完了条件7
@@ -89,7 +89,7 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 - `docs/dot-history.md` §5: 録音attemptの保存方式・期限・再利用の可否
 - `docs/development/backend.md` §3・`docs/development/frontend.md` §2: 契約の参照と検証の手順
 - `docs/code-review/backend/README.md`・`docs/code-review/frontend/README.md`: 契約との一致と互換性の確認
-- `docs/privacy.md` §4: 録音attemptの保存方式の決定（serverに保存しないため§5の追加は不要）
+- `docs/privacy.md` §4・§5-1: 録音attemptの保存方式の決定と、完全削除・退会の後に残す使用済みattemptの行（Q7）
 - `docs/tasks/TASK-005-product-api-contract.md`: 状態・本Planへのリンク・完了条件
 
 ## 7. Proposed Approach（採用。正本は`contracts/openapi.yaml`）
@@ -387,3 +387,4 @@ DotやProblemを複数のfeatureが使うため（React・route・表示判断�
 | Q4 | A | RFC 9457の外枠に、判定用の`code`を拡張項目として必ず付ける。`detail`に個人データを入れない。画面の文言はWebが`code`から決める |
 | Q5 | A | 退会は受理後もsessionを完了まで残し、Webは`GET /api/v1/account/deletion`で状況を取得する。完了したら1回だけ`completed`を返してsessionを破棄する。失敗は`failed`で示し、やり直せる。通常は数秒で終わるが、長い録音の文字起こし中に退会した場合は数分かかり得るので、TASK-014でその文言を用意する。即時に「退会しました」と出す案（C）は、消えていないのに消えたと表示し得るため採らない。受付だけを示す案（D）はTASK-002の「失敗を成功と区別できるerror」を緩める必要があり採らない |
 | Q6 | A | 登録済みのメールアドレスでも`202`で同じ応答を返し、そのアドレスへログイン・再設定を案内するメールを送る。日記アプリを使っていること自体を第三者に明かさない。メールの文面はTASK-006 |
+| Q7 | A | 完全削除・退会で処理の記録とDotを消すと、attemptの期限内に同じattemptで再送されたときDotが作り直され、TASK-004の「1つのattemptは1件のDot生成にしか使えない」が崩れる（レビュー4回目）。使用済みattemptの`id`と期限だけを期限（最大2時間）まで残し、再送を`attempt_invalid`にする。利用者・本文・音声を含まず、privacy.md §5-1に行を足す。Q2の「attemptをserverに残さない」の、完全削除・退会の後の短い間だけの例外。何も残さず既知の制限とする案（B）は、消した日記が戻る事故を許すため採らない |

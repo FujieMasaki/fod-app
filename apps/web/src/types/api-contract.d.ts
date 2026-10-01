@@ -220,7 +220,9 @@ export interface paths {
          * @description 録音開始操作の直前に呼ぶ。serverが受理した時刻が`started_at`になり、Dotの`date`はここから
          *     決まる。Webは`attempt_token`をmemoryにだけ置き、storageへ書かない。1つのattemptは1件の
          *     Dot生成にしか使えず、録り直しでは新しく発行する。serverはattemptを保存しない
-         *     （一回性は初回送信で処理の記録の一意制約により担保する）。
+         *     （一回性は初回送信で処理の記録の一意制約により担保する）。例外として、Dotの完全削除と退会で
+         *     処理の記録とDotを消すときは、そのattemptの`id`と期限だけを期限まで残し、同じattemptでの
+         *     再送を`attempt_invalid`にする（消したDotが作り直されないようにするため）。
          */
         post: operations["createRecordingAttempt"];
         delete?: never;
@@ -247,8 +249,8 @@ export interface paths {
          *     前にheaderのattemptを検証し、同じattemptで再び送られた場合は、新しい処理を作らず、multipartの
          *     解釈もS3への保存もせずに既存の処理を返す。例外は既存の処理が`failed`かつ
          *     `failure.kind=upload_incomplete`の場合で、attemptの期限内なら音声を受け取り直す。
-         *     同じattemptの処理のDotがゴミ箱の中にある場合は`422 attempt_invalid`を返す（ゴミ箱のendpoint
-         *     以外からゴミ箱の中のDotを返さないため）。
+         *     同じattemptの処理のDotがゴミ箱の中にある場合と、完全削除・退会で消した後の場合は
+         *     `422 attempt_invalid`を返す（ゴミ箱の中のDotを返さず、消したDotを作り直さないため）。
          *
          *     HTTPの本文はPumaが受け取り終えてからアプリへ渡すため、serverの判定では本文の再送信そのものは
          *     防げない。Webは送り直す前に`GET /api/v1/generations/{id}`（idは録音attemptの`id`）で既存の
