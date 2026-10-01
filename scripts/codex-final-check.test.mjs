@@ -22,6 +22,8 @@ test("rejects bases that are flags, local branches, or ranges", () => {
 test("always runs codex exec in the read-only sandbox", () => {
   const args = buildCodexArgs("origin/main", "/tmp/out.md");
   assert.deepEqual(args.slice(0, 3), ["exec", "--sandbox", "read-only"]);
+  assert.ok(args.includes("--ignore-rules"), "execpolicy allow rules would run commands outside the sandbox");
+  assert.equal(args[args.indexOf("-c") + 1], 'approval_policy="never"');
   assert.ok(args.at(-1).includes("origin/main...HEAD"));
   assert.ok(!args.some((arg) => arg.startsWith("--dangerously")));
 });

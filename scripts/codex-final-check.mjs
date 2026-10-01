@@ -33,7 +33,21 @@ export function validateArgs(args) {
 export function buildCodexArgs(base, outputFile) {
   const prompt =
     `docs/code-review/final-check.md を読み、その手順で ${base}...HEAD の差分を最終チェックしてください。`;
-  return ["exec", "--sandbox", "read-only", "--cd", repoRoot, "--output-last-message", outputFile, prompt];
+  // execpolicy rules run `allow`-matched commands outside the sandbox, so they are not loaded,
+  // and approvals are disabled so nothing can be escalated during the check.
+  return [
+    "exec",
+    "--sandbox",
+    "read-only",
+    "--ignore-rules",
+    "-c",
+    'approval_policy="never"',
+    "--cd",
+    repoRoot,
+    "--output-last-message",
+    outputFile,
+    prompt,
+  ];
 }
 
 function main(args) {
