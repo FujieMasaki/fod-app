@@ -186,7 +186,9 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | `return_to`（レビュー6回目の「`return_to`の照合」で置き換えた） | 英数字・`-`・`_`・`/`だけの素のpathに限るpattern | `/\evil.example`などをbrowserが別originとして扱うopen redirectを防ぐため（レビュー4回目） |
 | 成功後の再試行期限 | `retry_expires_at`は`succeeded`では返さない | 成功後は後片付けで処理の記録が消え、Dotの項目からは期限を復元できないため（codexレビュー1回目） |
 | 状態ごとの必須項目 | `Session`・`Generation`・`Transcript`は状態ごとのschemaに分け（`oneOf`。`Generation`と`Transcript`は`status`のdiscriminator）、必ず返す項目を`required`にする。Webは`z.discriminatedUnion`で同じ形にする | 説明文だけに書いた必須は、両側の検証で欠落を検出できないため（codexレビュー3回目） |
-| 日時の形式 | `Z`で終わるUTCだけ（全date-timeにpatternを付ける）。`+00:00`は契約外 | OpenAPIの`date-time`は`+00:00`を許すが、Zodの`z.iso.datetime()`は許さず、契約上正しい値をWebが拒否し得たため。境界値を両側のtestで確かめる（codexレビュー3回目） |
+| 今日の記録 | `Today`を記録あり（`latest_dot`必須・`dot_count`が1以上）と記録なし（`dot_count`が0）のoneOfに分ける | 記録があるのに`latest_dot`が欠けたresponseを検証で拾えなかったため（codexレビュー8回目） |
+| 日時の形式 | `Z`で終わるUTCだけ（全date-timeにpatternを付ける）。`+00:00`は契約外。patternの端は`^`・`$`ではなく`(?<![\s\S])`・`(?![\s\S])`（日付も同じ） | Rubyの`$`は末尾の改行の前でも一致し、改行付きの値をAPI側だけが通していたため（codexレビュー8回目） |
+| 日時の形式（当初） | `Z`で終わるUTCだけ（全date-timeにpatternを付ける）。`+00:00`は契約外 | OpenAPIの`date-time`は`+00:00`を許すが、Zodの`z.iso.datetime()`は許さず、契約上正しい値をWebが拒否し得たため。境界値を両側のtestで確かめる（codexレビュー3回目） |
 | 登録 | 登録済みかにかかわらず`202`。登録済みならログインと再設定を案内するメールを送る | Q6 |
 | ゴミ箱へ移したとき | `deletion_begins_at`（削除処理を始める日時）を返す | TASK-002の「示すなら消え終わる時刻として読めない形」。項目名で「始める」を表す |
 | Google callbackの失敗 | `/login?auth_error=`に`google_email_conflict`または`google_auth_failed`を付けてredirect | browserのredirectなのでJSONのerrorを返せない |

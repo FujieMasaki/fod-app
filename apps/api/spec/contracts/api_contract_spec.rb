@@ -48,6 +48,20 @@ RSpec.describe ApiContract do
     expect { described_class.validate_response!(problem, **location) }.to raise_error(OpenAPIParser::OpenAPIError)
   end
 
+  it "rejects a timestamp with a trailing newline" do
+    generation = generation_base.merge("status" => "expired", "retry_expires_at" => "2026-09-29T13:20:11Z\n")
+
+    expect { described_class.validate_response!(generation, **generation_location) }
+      .to raise_error(OpenAPIParser::OpenAPIError)
+  end
+
+  it "rejects a recorded today without its latest dot" do
+    location = { path: "/api/v1/days/today", http_method: "get", status: "200", content_type: "application/json" }
+
+    expect { described_class.validate_response!({ "date" => "2026-09-28", "dot_count" => 1 }, **location) }
+      .to raise_error(OpenAPIParser::OpenAPIError)
+  end
+
   it "rejects a timestamp that does not end with Z" do
     generation = generation_base.merge("status" => "expired", "retry_expires_at" => "2026-09-29T13:20:11+00:00")
 

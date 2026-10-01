@@ -888,12 +888,19 @@ export interface components {
             items: components["schemas"]["DaySummary"][];
             next_cursor: string | null;
         };
-        Today: {
+        /** @description 今日の記録の有無で形が分かれる。記録があれば最新のDotを必ず返す */
+        Today: components["schemas"]["TodayRecorded"] | components["schemas"]["TodayNotRecorded"];
+        TodayRecorded: {
             /** Format: date */
             date: string;
             dot_count: number;
-            /** @description 今日の最新のDot。今日の記録が無ければ項目ごと省く（`dot_count`は0） */
-            latest_dot?: components["schemas"]["Dot"];
+            latest_dot: components["schemas"]["Dot"];
+        };
+        TodayNotRecorded: {
+            /** Format: date */
+            date: string;
+            /** @enum {integer} */
+            dot_count: 0;
         };
         DayDetail: {
             /** Format: date */

@@ -80,10 +80,11 @@ PRのレビューでは「この変更は古いWeb・古いAPIのどちらと組
 - 日時は`Z`で終わるUTCのISO 8601（`+00:00`の形は使わない。契約のpatternとWebのZodの両方で
   拒否する）、日付はAsia/Tokyoの暦日（`YYYY-MM-DD`）で、どちらもserverが決める。画面でJSTに
   直すのはWeb。
-- 状態によって返す項目が変わるresponse（`Session`・`Generation`・`Transcript`・`Problem`）は、
+- 状態によって返す項目が変わるresponse（`Session`・`Generation`・`Transcript`・`Problem`・`Today`）は、
   状態ごとのschemaに分け（`oneOf`）、必ず返す項目を`required`で表す。説明文だけで必須を表さない。
 - serverが正規表現で入力を照合するときは、文字列全体を表す`\A`・`\z`を使う（Rubyの`^`・`$`は
-  行単位で一致する）。
+  行単位で一致する）。契約のpatternはWeb（JavaScript）とAPI（Ruby）の両方で評価されるので、
+  `^`・`$`ではなく、両方で文字列の端だけに一致する`(?<![\s\S])`・`(?![\s\S])`を使う。
 - 一覧の続きはcursor。`next_cursor`が`null`なら終わり。Webはcursorの中身を解釈しない。
 - 失敗はRFC 9457（`application/problem+json`）。Webは`code`で判定し、`title`・`detail`を
   そのまま画面に出さない。`detail`に日記本文・文字起こし・メールアドレスを入れない。
@@ -148,7 +149,8 @@ TASK-005のレビュー（codex・Claudeで計8回）で繰り返し見つかっ
   消えた後に同じ値で作り直されないか。
 - **外部認証の結果を、いまの利用者と照合しているか。**再認証などで、外部が返した主体がsessionの利用者と
   同じであることを確かめているか。
-- **入力の照合は文字列全体か。**serverの正規表現は`\A`・`\z`を使う。redirect先などは、合わない値を
+- **入力の照合は文字列全体か。**serverの正規表現は`\A`・`\z`、契約のpatternは`(?<![\s\S])`・
+  `(?![\s\S])`を使う（`^`・`$`はRubyで改行の前後にも一致する）。redirect先などは、合わない値を
   安全な既定値に置き換える。
 - **WebとAPIで同じ値を同じに判定するか。**日時の表記（`Z`）、制約値（`maxLength`・`minimum`など）、
   enumの値が、契約・Zod・committeeで一致しているか。制約値は境界testで契約から読んで確かめる。

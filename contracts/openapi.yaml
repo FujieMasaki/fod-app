@@ -15,7 +15,8 @@ info:
     - 他人のresourceと存在しないresourceは区別せず`404 not_found`を返す。ゴミ箱の中のDotは
       ゴミ箱のendpoint以外から`404 not_found`になる。
     - 日時は`Z`で終わるUTCのISO 8601（`2026-09-28T13:04:05Z`。`+00:00`の形は使わない）、日付は
-      Asia/Tokyoの暦日（`YYYY-MM-DD`）で、どちらもserverが決める。
+      Asia/Tokyoの暦日（`YYYY-MM-DD`）で、どちらもserverが決める。前後に改行などを含む値は契約外
+      （patternの`(?<![\s\S])`・`(?![\s\S])`は、JavaScriptでもRubyでも文字列の端だけに一致する）。
     - 失敗はRFC 9457（`application/problem+json`）で返し、Webは`code`で判定する。
     - 退会を受理した利用者には、login（passwordと、Googleの`intent=sign_in`）・logout
       （`DELETE /api/v1/session`）・`GET /api/v1/session`・`GET /api/v1/account/deletion`・
@@ -817,6 +818,7 @@ paths:
           schema:
             type: string
             format: date
+            pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
           example: "2026-09-28"
         - $ref: "#/components/parameters/Cursor"
         - name: limit
@@ -1301,7 +1303,7 @@ components:
         retry_expires_at:
           type: string
           format: date-time
-          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
     FieldError:
       type: object
       required: [field, code]
@@ -1332,7 +1334,7 @@ components:
         expires_at:
           type: string
           format: date-time
-          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
           description: 認証成功から7日。利用では延長しない
         user:
           $ref: "#/components/schemas/SessionUser"
@@ -1464,12 +1466,12 @@ components:
         started_at:
           type: string
           format: date-time
-          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
           description: 録音開始操作をserverが受理した時刻。Dotの`date`の根拠
         expires_at:
           type: string
           format: date-time
-          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
           description: このattemptで送信できる期限（発行から2時間）。受理後の再試行期限とは別
     DotUpload:
       type: object
@@ -1522,7 +1524,7 @@ components:
         started_at:
           type: string
           format: date-time
-          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
         retryable:
           type: boolean
           enum: [false]
@@ -1548,7 +1550,7 @@ components:
         started_at:
           type: string
           format: date-time
-          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
         retryable:
           type: boolean
           enum: [false]
@@ -1569,7 +1571,7 @@ components:
         started_at:
           type: string
           format: date-time
-          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
         retryable:
           type: boolean
           description: 期限内かつ録り直さずにやり直せるときだけ`true`
@@ -1590,7 +1592,7 @@ components:
         started_at:
           type: string
           format: date-time
-          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
         retryable:
           type: boolean
           enum: [false]
@@ -1599,7 +1601,7 @@ components:
     RetryExpiresAt:
       type: string
       format: date-time
-      pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+      pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
       description: |
         受理から24時間の再試行期限。音声が残っている間だけ画面に出す。消え終わる時刻ではない。
     GenerationFailure:
@@ -1657,11 +1659,12 @@ components:
         date:
           type: string
           format: date
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
           description: "`started_at`から算出したAsia/Tokyoの暦日"
         started_at:
           type: string
           format: date-time
-          pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
           description: 録音開始操作をserverが受理した時刻（UTC）。並びと同日の区別に使う
         duration_seconds:
           type: integer
@@ -1695,11 +1698,11 @@ components:
             trashed_at:
               type: string
               format: date-time
-              pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+              pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
             deletion_begins_at:
               type: string
               format: date-time
-              pattern: '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$'
+              pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
               description: 削除処理を始める日時（受理から7日）。消え終わる時刻ではない
     TrashedDotList:
       type: object
@@ -1720,6 +1723,7 @@ components:
         date:
           type: string
           format: date
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
         dot_count:
           type: integer
           minimum: 1
@@ -1735,6 +1739,7 @@ components:
         today:
           type: string
           format: date
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
           description: serverが決めた今日の日付（「今日」のラベルに使う）
         items:
           type: array
@@ -1744,19 +1749,34 @@ components:
           type: string
           nullable: true
     Today:
+      description: 今日の記録の有無で形が分かれる。記録があれば最新のDotを必ず返す
+      oneOf:
+        - $ref: "#/components/schemas/TodayRecorded"
+        - $ref: "#/components/schemas/TodayNotRecorded"
+    TodayRecorded:
+      type: object
+      required: [date, dot_count, latest_dot]
+      properties:
+        date:
+          type: string
+          format: date
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
+        dot_count:
+          type: integer
+          minimum: 1
+        latest_dot:
+          $ref: "#/components/schemas/Dot"
+    TodayNotRecorded:
       type: object
       required: [date, dot_count]
       properties:
         date:
           type: string
           format: date
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
         dot_count:
           type: integer
-          minimum: 0
-        latest_dot:
-          description: 今日の最新のDot。今日の記録が無ければ項目ごと省く（`dot_count`は0）
-          allOf:
-            - $ref: "#/components/schemas/Dot"
+          enum: [0]
     DayDetail:
       type: object
       required: [date, dots, next_cursor]
@@ -1764,6 +1784,7 @@ components:
         date:
           type: string
           format: date
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
         dots:
           type: array
           items:

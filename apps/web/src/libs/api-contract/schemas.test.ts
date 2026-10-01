@@ -100,6 +100,8 @@ describe("Webのschemaが契約外の値を拒否する", () => {
       summary: "",
     };
     expect(dotSchema.safeParse(dot).success).toBe(false);
+    expect(dotSchema.safeParse({ ...dot, started_at: "2026-09-28T13:04:05Z\n" }).success).toBe(false);
+    expect(dotSchema.safeParse({ ...dot, date: "2026-09-28\n", started_at: "2026-09-28T13:04:05Z" }).success).toBe(false);
     expect(dotSchema.safeParse({ ...dot, started_at: "2026-09-28T13:04:05.123Z" }).success).toBe(true);
   });
 
