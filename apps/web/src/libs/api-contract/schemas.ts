@@ -15,7 +15,8 @@ type Schemas = components["schemas"];
 type TypeMatches<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
 
-const errorCodes = [
+// codeごとに必ず返す拡張項目が違う（契約のProblemのoneOf）。拡張項目を持たないcodeの一覧。
+const generalErrorCodes = [
   "unauthenticated",
   "session_expired",
   "email_unconfirmed",
@@ -23,8 +24,6 @@ const errorCodes = [
   "invalid_credentials",
   "reauthentication_failed",
   "google_reauthentication_required",
-  "rate_limited",
-  "validation_failed",
   "token_invalid",
   "token_expired",
   "cursor_invalid",
@@ -34,20 +33,23 @@ const errorCodes = [
   "attempt_expired",
   "audio_too_large",
   "unsupported_audio_type",
-  "retry_expired",
   "retry_not_allowed",
+  "generation_completed",
   "deletion_failed",
   "internal_error",
-] as const satisfies readonly Schemas["ErrorCode"][];
+] as const satisfies readonly Schemas["ProblemGeneral"]["code"][];
 
-export const errorCodeSchema = z.enum(errorCodes);
-
-export const problemSchema = z.object({
+const problemBase = {
   type: z.string(),
   title: z.string(),
   status: z.number().int().min(400).max(599),
   detail: z.string().optional(),
-  code: errorCodeSchema,
+};
+
+const generalProblemSchema = z.object({ ...problemBase, code: z.enum(generalErrorCodes) });
+const validationFailedProblemSchema = z.object({
+  ...problemBase,
+  code: z.literal("validation_failed"),
   errors: z
     .array(
       z.object({
@@ -55,10 +57,25 @@ export const problemSchema = z.object({
         code: z.enum(["required", "too_long", "invalid_format", "out_of_range", "not_allowed", "taken"]),
       }),
     )
-    .optional(),
-  retry_expires_at: z.iso.datetime().optional(),
-  retry_after_seconds: z.number().int().min(1).optional(),
+    .min(1),
 });
+const rateLimitedProblemSchema = z.object({
+  ...problemBase,
+  code: z.literal("rate_limited"),
+  retry_after_seconds: z.number().int().min(1),
+});
+const retryExpiredProblemSchema = z.object({
+  ...problemBase,
+  code: z.literal("retry_expired"),
+  retry_expires_at: z.iso.datetime(),
+});
+
+export const problemSchema = z.union([
+  generalProblemSchema,
+  validationFailedProblemSchema,
+  rateLimitedProblemSchema,
+  retryExpiredProblemSchema,
+]);
 
 export const dotSchema = z.object({
   id: z.uuid(),
@@ -119,6 +136,13 @@ export type Generation = z.infer<typeof generationSchema>;
 // 契約とZodの型がずれたら、ここで型検査が失敗する。
 export const contractTypeChecks = {
   problem: true satisfies TypeMatches<Problem, Schemas["Problem"]>,
+  generalProblem: true satisfies TypeMatches<z.infer<typeof generalProblemSchema>, Schemas["ProblemGeneral"]>,
+  validationFailedProblem: true satisfies TypeMatches<
+    z.infer<typeof validationFailedProblemSchema>,
+    Schemas["ProblemValidationFailed"]
+  >,
+  rateLimitedProblem: true satisfies TypeMatches<z.infer<typeof rateLimitedProblemSchema>, Schemas["ProblemRateLimited"]>,
+  retryExpiredProblem: true satisfies TypeMatches<z.infer<typeof retryExpiredProblemSchema>, Schemas["ProblemRetryExpired"]>,
   dot: true satisfies TypeMatches<Dot, Schemas["Dot"]>,
   generation: true satisfies TypeMatches<Generation, Schemas["Generation"]>,
 } as const;

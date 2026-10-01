@@ -40,6 +40,14 @@ RSpec.describe ApiContract do
       .to raise_error(OpenAPIParser::OpenAPIError)
   end
 
+  it "rejects a rate_limited problem without retry_after_seconds" do
+    problem = { "type" => "urn:focus-on-dot:problem:rate_limited", "title" => "x", "status" => 429,
+                "code" => "rate_limited" }
+    location = { path: "/api/v1/session", http_method: "post", status: "429", content_type: "application/problem+json" }
+
+    expect { described_class.validate_response!(problem, **location) }.to raise_error(OpenAPIParser::OpenAPIError)
+  end
+
   it "rejects a timestamp that does not end with Z" do
     generation = generation_base.merge("status" => "expired", "retry_expires_at" => "2026-09-29T13:20:11+00:00")
 

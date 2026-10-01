@@ -21,7 +21,9 @@ export interface paths {
         /**
          * メールアドレスとpasswordでloginする
          * @description 成功するとsessionを更新し、新しいCSRF tokenを返す。認証成功から7日で失効し、利用では
-         *     延長しない（`expires_at`）。退会を受理した利用者もloginでき、
+         *     延長しない（`expires_at`）。`email_unconfirmed`はpasswordが一致したときだけ返し、一致しなければ
+         *     登録の有無やメール確認の状態にかかわらず`invalid_credentials`を返す（登録の有無を明かさない）。
+         *     退会を受理した利用者もloginでき、
          *     `account_status=deletion_in_progress`のSessionを返す（Webは退会の状況画面へ進める）。
          */
         post: operations["createSession"];
@@ -124,6 +126,8 @@ export interface paths {
          *     `intent=reauthenticate`は、Google専用の利用者が退会の前に再認証するときに使う
          *     （有効時間はTASK-006で決める）。退会を受理した利用者も`intent=sign_in`でloginでき、
          *     callbackは`/`へ戻す（Webは`account_status`で退会の状況画面へ進める）。
+         *     試行回数の制限に掛かった場合は、JSONの`429`ではなく`/login?auth_error=rate_limited`へ
+         *     redirectする（form POSTでbrowserが遷移するため）。
          */
         post: operations["startGoogleAuth"];
         delete?: never;
@@ -142,8 +146,13 @@ export interface paths {
         /**
          * Googleからのcallback
          * @description JSON APIではない。認証応答とstateを検証し、SPAへredirectする。成功時は`return_to`
-         *     （省略時は`/`）へ、失敗時は`/login?auth_error=<理由>`へ戻す。理由は
-         *     `google_email_conflict`と`google_auth_failed`の2つ（`contracts/README.md`）。
+         *     （省略時は`/`）へ、失敗時は`/login?auth_error=<理由>`へ戻す（理由の一覧は`contracts/README.md`）。
+         *
+         *     `intent=reauthenticate`では、**Googleが返した利用者（検証済みのprovider/uid）が、いまlogin
+         *     している利用者に紐づくGoogleの利用者と一致することを必ず確かめる。**一致しなければsessionも
+         *     再認証の時刻も変えず、`return_to`（省略時は`/`）へ`auth_error=google_reauthentication_mismatch`を
+         *     付けて戻す。loginしていない状態の`reauthenticate`は`google_auth_failed`にする。盗まれたsessionに
+         *     別のGoogle利用者で再認証を通し、退会まで進められないようにするため。
          *     Googleが確認済みと返したメールが、メール＋passwordの利用者と一致した場合は
          *     `google_email_conflict`を返し、既存の利用者へも新しい利用者へも接続しない。
          */
@@ -168,8 +177,9 @@ export interface paths {
         post?: never;
         /**
          * 退会を受け付ける
-         * @description password利用者は`current_password`が必須。Google専用の利用者は直近のGoogle再認証が必要で、
-         *     無ければ`403 google_reauthentication_required`を返す。
+         * @description password利用者は`current_password`が必須で、送られなければ`422 validation_failed`、違っていれば
+         *     `403 reauthentication_failed`を返す。Google専用の利用者（passwordを持たない）は送らず、代わりに
+         *     直近のGoogle再認証が必要で、無ければ`403 google_reauthentication_required`を返す。
          *
          *     受理の時点で新しい保存・再試行・結果の確定を止め、ゴミ箱の中も含めて本人のデータを消す。
          *     **進行中の処理が0になり、削除が終わるまで完了を返さない。**受理後もsessionは完了まで残し、
@@ -220,9 +230,9 @@ export interface paths {
          * @description 録音開始操作の直前に呼ぶ。serverが受理した時刻が`started_at`になり、Dotの`date`はここから
          *     決まる。Webは`attempt_token`をmemoryにだけ置き、storageへ書かない。1つのattemptは1件の
          *     Dot生成にしか使えず、録り直しでは新しく発行する。serverはattemptを保存しない
-         *     （一回性は初回送信で処理の記録の一意制約により担保する）。例外として、Dotの完全削除と退会で
-         *     処理の記録とDotを消すときは、そのattemptの`id`と期限だけを期限まで残し、同じattemptでの
-         *     再送を`attempt_invalid`にする（消したDotが作り直されないようにするため）。
+         *     （一回性は初回送信で処理の記録の一意制約により担保する）。例外として、Dotの完全削除・退会・
+         *     処理の取り消しで処理の記録とDotを消すときは、そのattemptの`id`と期限だけを期限まで残し、
+         *     同じattemptでの再送を`attempt_invalid`にする（消したものが作り直されないようにするため）。
          */
         post: operations["createRecordingAttempt"];
         delete?: never;
@@ -249,8 +259,8 @@ export interface paths {
          *     前にheaderのattemptを検証し、同じattemptで再び送られた場合は、新しい処理を作らず、multipartの
          *     解釈もS3への保存もせずに既存の処理を返す。例外は既存の処理が`failed`かつ
          *     `failure.kind=upload_incomplete`の場合で、attemptの期限内なら音声を受け取り直す。
-         *     同じattemptの処理のDotがゴミ箱の中にある場合と、完全削除・退会で消した後の場合は
-         *     `422 attempt_invalid`を返す（ゴミ箱の中のDotを返さず、消したDotを作り直さないため）。
+         *     同じattemptの処理のDotがゴミ箱の中にある場合と、完全削除・退会・処理の取り消しで消した後の
+         *     場合は`422 attempt_invalid`を返す（ゴミ箱の中のDotを返さず、消したものを作り直さないため）。
          *
          *     HTTPの本文はPumaが受け取り終えてからアプリへ渡すため、serverの判定では本文の再送信そのものは
          *     防げない。Webは送り直す前に`GET /api/v1/generations/{id}`（idは録音attemptの`id`）で既存の
@@ -291,7 +301,18 @@ export interface paths {
         get: operations["getGeneration"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Dotになる前の処理を取り消し、預けた音声などを消す
+         * @description Dotがまだ無い処理（`processing` / `failed` / `expired`）を取り消す。生成へは進めず、預けた
+         *     音声・文字起こし結果・文字起こしのjob・処理の記録の削除処理を始める（`privacy.md` §5-1の
+         *     「処理の取り消し」）。`202`は削除を受け付けたことを表し、消え終わったことは表さない
+         *     （文字起こしのjobが終わるまで消せないなど、完了は遅れ得る）。受理以降、この処理の照会は`404`。
+         *     外部へ既に渡った分は取り消せない。
+         *
+         *     Dotの保存まで終わっている処理は取り消せず`409 generation_completed`を返す（Webは
+         *     `DELETE /api/v1/dots/{dot_id}`での完全削除へ案内する）。存在しない・他人の・受理済みの処理は`404`。
+         */
+        delete: operations["cancelGeneration"];
         options?: never;
         head?: never;
         patch?: never;
@@ -511,30 +532,54 @@ export interface components {
         /**
          * @description RFC 9457のProblem Details。`code`は拡張項目で、Webはこれで判定する。`title`と`detail`を
          *     そのまま画面に出さない。`detail`に日記本文・文字起こし・メールアドレスなどの個人データを
-         *     入れない。
+         *     入れない。`code`によって必ず返す拡張項目が違うので、codeごとのschemaに分ける
+         *     （codeの集合は重ならない）。codeの意味とHTTP statusの対応は`contracts/README.md`の表。
          */
-        Problem: {
-            /** @description `urn:focus-on-dot:problem:<code>`の形のURI（識別子であり、取得できなくてよい） */
+        Problem: components["schemas"]["ProblemGeneral"] | components["schemas"]["ProblemValidationFailed"] | components["schemas"]["ProblemRateLimited"] | components["schemas"]["ProblemRetryExpired"];
+        /** @description 拡張項目を持たないcode */
+        ProblemGeneral: {
+            /** @description `urn:focus-on-dot:problem:<code>`の形のURN（識別子。実domainが未確定のため取得可能なURLにしない） */
             type: string;
             title: string;
             status: number;
             detail?: string;
-            code: components["schemas"]["ErrorCode"];
-            /** @description `validation_failed`のときだけ。項目ごとの理由 */
-            errors?: components["schemas"]["FieldError"][];
-            /**
-             * Format: date-time
-             * @description `retry_expired`のときだけ。過ぎた期限
-             */
-            retry_expires_at?: string;
-            /** @description `rate_limited`のときだけ */
-            retry_after_seconds?: number;
+            /** @enum {string} */
+            code: "unauthenticated" | "session_expired" | "email_unconfirmed" | "csrf_invalid" | "invalid_credentials" | "reauthentication_failed" | "google_reauthentication_required" | "token_invalid" | "token_expired" | "cursor_invalid" | "not_found" | "account_deletion_in_progress" | "attempt_invalid" | "attempt_expired" | "audio_too_large" | "unsupported_audio_type" | "retry_not_allowed" | "generation_completed" | "deletion_failed" | "internal_error";
         };
-        /**
-         * @description 一覧と意味・HTTP statusの対応は`contracts/README.md`の表
-         * @enum {string}
-         */
-        ErrorCode: "unauthenticated" | "session_expired" | "email_unconfirmed" | "csrf_invalid" | "invalid_credentials" | "reauthentication_failed" | "google_reauthentication_required" | "rate_limited" | "validation_failed" | "token_invalid" | "token_expired" | "cursor_invalid" | "not_found" | "account_deletion_in_progress" | "attempt_invalid" | "attempt_expired" | "audio_too_large" | "unsupported_audio_type" | "retry_expired" | "retry_not_allowed" | "deletion_failed" | "internal_error";
+        /** @description `validation_failed`。項目ごとの理由を必ず返す */
+        ProblemValidationFailed: {
+            /** @description `urn:focus-on-dot:problem:<code>`の形のURN（識別子。実domainが未確定のため取得可能なURLにしない） */
+            type: string;
+            title: string;
+            status: number;
+            detail?: string;
+            /** @enum {string} */
+            code: "validation_failed";
+            errors: components["schemas"]["FieldError"][];
+        };
+        /** @description `rate_limited`。待つ秒数を必ず返す */
+        ProblemRateLimited: {
+            /** @description `urn:focus-on-dot:problem:<code>`の形のURN（識別子。実domainが未確定のため取得可能なURLにしない） */
+            type: string;
+            title: string;
+            status: number;
+            detail?: string;
+            /** @enum {string} */
+            code: "rate_limited";
+            retry_after_seconds: number;
+        };
+        /** @description `retry_expired`。過ぎた再試行期限を必ず返す */
+        ProblemRetryExpired: {
+            /** @description `urn:focus-on-dot:problem:<code>`の形のURN（識別子。実domainが未確定のため取得可能なURLにしない） */
+            type: string;
+            title: string;
+            status: number;
+            detail?: string;
+            /** @enum {string} */
+            code: "retry_expired";
+            /** Format: date-time */
+            retry_expires_at: string;
+        };
         FieldError: {
             /** @example sentence */
             field: string;
@@ -604,8 +649,11 @@ export interface components {
              */
             intent: "sign_in" | "reauthenticate";
             /**
-             * @description ログイン後に戻るSPAの画面のpath。英数字・`-`・`_`・`/`だけからなる素のpathに限り、
-             *     query・`%`・`\`・`//`を含む値は受け付けない（open redirectを防ぐ。合わなければ`/`へ戻す）
+             * @description ログイン後に戻るSPAの画面のpath。英数字・`-`・`_`・`/`だけからなる素のpath
+             *     （正規表現`/(?:[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*)?`）に**文字列全体で**一致するものだけを
+             *     使う。serverは行単位で一致する`^`・`$`ではなく、文字列全体を表す`\A`・`\z`で照合する
+             *     （Rubyの`^`・`$`は改行の前後でも一致し、`/\n/evil.example`を通してしまうため）。合わない値は
+             *     拒否せず無視し、`/`へ戻す（open redirectを防ぎつつ、ログインそのものは失敗させない）
              */
             return_to?: string;
         };
@@ -1132,6 +1180,7 @@ export interface operations {
             };
             403: components["responses"]["CsrfInvalid"];
             422: components["responses"]["TokenRejected"];
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -1197,6 +1246,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -1281,6 +1331,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            422: components["responses"]["ValidationFailed"];
             429: components["responses"]["RateLimited"];
             500: components["responses"]["InternalError"];
         };
@@ -1425,6 +1476,43 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["AccountDeletionInProgress"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    cancelGeneration: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description `GET /api/v1/session`（login後は`POST /api/v1/session`）のresponseで受け取ったtoken */
+                "X-CSRF-Token": components["parameters"]["CsrfToken"];
+            };
+            path: {
+                /** @description 処理ID（＝録音attemptのid） */
+                generation_id: components["parameters"]["GenerationId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 取り消しを受け付けた（本文なし） */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description `generation_completed` / `account_deletion_in_progress` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             500: components["responses"]["InternalError"];
         };
     };

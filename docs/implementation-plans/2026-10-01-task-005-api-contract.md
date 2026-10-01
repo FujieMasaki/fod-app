@@ -174,7 +174,11 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | ゴミ箱の中のDotの処理への再送 | `422 attempt_invalid` | ゴミ箱のendpoint以外からゴミ箱の中のDotを返さないため（レビュー4回目） |
 | 完全削除・退会の後の再送 | 使用済みattemptの`id`と期限だけを期限まで残し、`422 attempt_invalid` | 消したDotを作り直さないため（Q7） |
 | 退会中のlogout | 退会中も`DELETE /api/v1/session`は`409`にしない。sessionを使わないendpointは退会中の制限の対象外 | 共有端末で退会中のsessionを消せなくなるため（レビュー5回目） |
-| 費用がかかる操作の`429` | 録音attemptの発行・送信・再試行に`429 rate_limited`を予約する。具体値と採否はTASK-009 | 後からresponseを足すと古いWebが扱えない変更になるため、先に枠だけ置く（レビュー5回目） |
+| Googleの再認証の一致 | `intent=reauthenticate`では、Googleが返したprovider/uidがloginしている利用者のものと一致しなければ、sessionを変えず`auth_error=google_reauthentication_mismatch` | 盗まれたsessionに別のGoogle利用者で再認証を通し、退会まで進める経路を塞ぐため（レビュー6回目） |
+| `return_to`の照合 | 契約のpatternは外し、serverが文字列全体（`\A`〜`\z`）で照合して、合わなければ`/`へ戻す | Rubyの`^`・`$`は行単位で一致し、改行を挟んだ値を通すため。拒否するとログインそのものが失敗するので、無視して`/`へ戻す（レビュー6回目）。改行を含む値のtestはTASK-006で書く |
+| codeごとに必須の拡張項目 | `Problem`を`ProblemGeneral`・`ProblemValidationFailed`（`errors`）・`ProblemRateLimited`（`retry_after_seconds`）・`ProblemRetryExpired`（`retry_expires_at`）のoneOfに分ける | 説明文だけの必須では、欠けたresponseを両側の検証で検出できないため（レビュー6回目） |
+| 処理の取り消し | `DELETE /api/v1/generations/{id}`（Dotになる前の処理だけ。`202`は受理であって完了ではない）。Dotができていれば`409 generation_completed` | Q10 |
+| 費用がかかる操作の`429` | 録音attemptの発行・送信・再試行に`429 rate_limited`を予約する。具体値と採否はTASK-009。確認・再設定のtoken消費にも`429`を置き、Googleログインの開始は`auth_error=rate_limited`へのredirectで表す | 後からresponseを足すと古いWebが扱えない変更になるため、先に枠だけ置く（レビュー5回目） |
 | `return_to` | 英数字・`-`・`_`・`/`だけの素のpathに限るpattern | `/\evil.example`などをbrowserが別originとして扱うopen redirectを防ぐため（レビュー4回目） |
 | 成功後の再試行期限 | `retry_expires_at`は`succeeded`では返さない | 成功後は後片付けで処理の記録が消え、Dotの項目からは期限を復元できないため（codexレビュー1回目） |
 | 状態ごとの必須項目 | `Session`・`Generation`・`Transcript`は状態ごとのschemaに分け（`oneOf`。`Generation`と`Transcript`は`status`のdiscriminator）、必ず返す項目を`required`にする。Webは`z.discriminatedUnion`で同じ形にする | 説明文だけに書いた必須は、両側の検証で欠落を検出できないため（codexレビュー3回目） |
@@ -390,4 +394,7 @@ DotやProblemを複数のfeatureが使うため（React・route・表示判断�
 | Q4 | A | RFC 9457の外枠に、判定用の`code`を拡張項目として必ず付ける。`detail`に個人データを入れない。画面の文言はWebが`code`から決める |
 | Q5 | A | 退会は受理後もsessionを完了まで残し、Webは`GET /api/v1/account/deletion`で状況を取得する。完了したら1回だけ`completed`を返してsessionを破棄する。失敗は`failed`で示し、やり直せる。通常は数秒で終わるが、長い録音の文字起こし中に退会した場合は数分かかり得るので、TASK-014でその文言を用意する。即時に「退会しました」と出す案（C）は、消えていないのに消えたと表示し得るため採らない。受付だけを示す案（D）はTASK-002の「失敗を成功と区別できるerror」を緩める必要があり採らない |
 | Q6 | A | 登録済みのメールアドレスでも`202`で同じ応答を返し、そのアドレスへログイン・再設定を案内するメールを送る。日記アプリを使っていること自体を第三者に明かさない。メールの文面はTASK-006 |
+| Q8 | A | 退会で`current_password`が送られなければ`422 validation_failed`、違えば`403 reauthentication_failed`。Google専用の利用者はpasswordを持たないので送らず、Googleの再認証で本人確認する |
+| Q9 | A | `email_unconfirmed`はpasswordが一致したときだけ返し、一致しなければ`invalid_credentials`。Q6と同じく登録の有無を明かさない |
+| Q10 | A | Dotになる前の処理を取り消して預けた音声などを消す`DELETE /api/v1/generations/{id}`を足す。`privacy.md`の「処理が終わらずに残っている一時的な音声も削除の対象に含める」を満たすため。TASK-003の「生成のcancel UIはMVPで持たない」は画面の話として、APIはTASK-003のcleanupの「明示削除」の経路を使う。画面に出すかはTASK-011。取り消し後の再送もQ7の使用済みattemptで防ぐ |
 | Q7 | A | 完全削除・退会で処理の記録とDotを消すと、attemptの期限内に同じattemptで再送されたときDotが作り直され、TASK-004の「1つのattemptは1件のDot生成にしか使えない」が崩れる（レビュー4回目）。使用済みattemptの`id`と期限だけを期限（最大2時間）まで残し、再送を`attempt_invalid`にする。利用者・本文・音声を含まず、privacy.md §5-1に行を足す。Q2の「attemptをserverに残さない」の、完全削除・退会の後の短い間だけの例外。何も残さず既知の制限とする案（B）は、消した日記が戻る事故を許すため採らない |

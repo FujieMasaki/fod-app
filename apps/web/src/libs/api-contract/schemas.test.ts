@@ -71,6 +71,13 @@ describe("Webのschemaが契約外の値を拒否する", () => {
     expect(problemSchema.safeParse({ type: "x", title: "x", status: 500, code: "unknown" }).success).toBe(false);
   });
 
+  it("codeごとに必須の拡張項目が欠けたProblemを拒否する", () => {
+    const base = { title: "x" };
+    expect(problemSchema.safeParse({ ...base, type: "x", status: 429, code: "rate_limited" }).success).toBe(false);
+    expect(problemSchema.safeParse({ ...base, type: "x", status: 409, code: "retry_expired" }).success).toBe(false);
+    expect(problemSchema.safeParse({ ...base, type: "x", status: 422, code: "validation_failed", errors: [] }).success).toBe(false);
+  });
+
   it("statusごとに必須の項目が欠けたGenerationを拒否する", () => {
     const base = { id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04", started_at: "2026-09-28T13:04:05Z", retryable: false };
     expect(generationSchema.safeParse({ ...base, status: "processing", stage: "transcribing", poll_after_seconds: 3 }).success).toBe(false);
@@ -110,9 +117,36 @@ const limitTargets: { contractSchema: string; schema: z.ZodType; valid: Record<s
     },
   },
   {
-    contractSchema: "Problem",
+    contractSchema: "ProblemGeneral",
+    schema: problemSchema,
+    valid: { type: "urn:focus-on-dot:problem:internal_error", title: "x", status: 500, code: "internal_error" },
+  },
+  {
+    contractSchema: "ProblemValidationFailed",
+    schema: problemSchema,
+    valid: {
+      type: "urn:focus-on-dot:problem:validation_failed",
+      title: "x",
+      status: 422,
+      code: "validation_failed",
+      errors: [{ field: "sentence", code: "too_long" }],
+    },
+  },
+  {
+    contractSchema: "ProblemRateLimited",
     schema: problemSchema,
     valid: { type: "urn:focus-on-dot:problem:rate_limited", title: "x", status: 429, code: "rate_limited", retry_after_seconds: 60 },
+  },
+  {
+    contractSchema: "ProblemRetryExpired",
+    schema: problemSchema,
+    valid: {
+      type: "urn:focus-on-dot:problem:retry_expired",
+      title: "x",
+      status: 409,
+      code: "retry_expired",
+      retry_expires_at: "2026-09-29T13:20:11Z",
+    },
   },
   {
     contractSchema: "GenerationProcessing",
@@ -150,8 +184,11 @@ describe("Zod schemaの制約値が契約と一致する", () => {
       "Dot.sentence",
       "Dot.summary",
       "GenerationProcessing.poll_after_seconds",
-      "Problem.retry_after_seconds",
-      "Problem.status",
+      "ProblemGeneral.status",
+      "ProblemRateLimited.retry_after_seconds",
+      "ProblemRateLimited.status",
+      "ProblemRetryExpired.status",
+      "ProblemValidationFailed.status",
     ]);
   });
 

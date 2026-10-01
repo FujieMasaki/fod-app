@@ -80,8 +80,10 @@ PRのレビューでは「この変更は古いWeb・古いAPIのどちらと組
 - 日時は`Z`で終わるUTCのISO 8601（`+00:00`の形は使わない。契約のpatternとWebのZodの両方で
   拒否する）、日付はAsia/Tokyoの暦日（`YYYY-MM-DD`）で、どちらもserverが決める。画面でJSTに
   直すのはWeb。
-- 状態によって返す項目が変わるresponse（`Session`・`Generation`・`Transcript`）は、状態ごとの
-  schemaに分け（`oneOf`）、必ず返す項目を`required`で表す。説明文だけで必須を表さない。
+- 状態によって返す項目が変わるresponse（`Session`・`Generation`・`Transcript`・`Problem`）は、
+  状態ごとのschemaに分け（`oneOf`）、必ず返す項目を`required`で表す。説明文だけで必須を表さない。
+- serverが正規表現で入力を照合するときは、文字列全体を表す`\A`・`\z`を使う（Rubyの`^`・`$`は
+  行単位で一致する）。
 - 一覧の続きはcursor。`next_cursor`が`null`なら終わり。Webはcursorの中身を解釈しない。
 - 失敗はRFC 9457（`application/problem+json`）。Webは`code`で判定し、`title`・`detail`を
   そのまま画面に出さない。`detail`に日記本文・文字起こし・メールアドレスを入れない。
@@ -111,14 +113,18 @@ PRのレビューでは「この変更は古いWeb・古いAPIのどちらと組
 | `unsupported_audio_type` | 415 | 受容しない音声形式 | 対応browserを伝える |
 | `retry_expired` | 409 | 再試行の期限（受理から24時間）切れ | 録り直しを案内 |
 | `retry_not_allowed` | 409 | いまの状態では再試行できない | 状態を取り直す |
+| `generation_completed` | 409 | Dotの保存まで終わった処理は取り消せない | Dotの完全削除へ案内する |
 | `deletion_failed` | 503 | 完全削除の途中で失敗した | 削除済みと表示せず、やり直しを案内 |
 | `internal_error` | 500 | 想定外の失敗 | 一般的な失敗表示 |
 
-Googleのcallbackは失敗理由をJSONではなく`/login?auth_error=<理由>`で渡す。
+Googleのログインは失敗理由をJSONではなく、redirect先の`auth_error=<理由>`で渡す（通常は
+`/login`、再認証の不一致だけは`return_to`）。
 
 | 理由 | 意味 |
 | --- | --- |
 | `google_email_conflict` | Googleが確認済みとしたメールが、メール＋passwordの利用者と一致した。メールでのログインを案内する |
+| `google_reauthentication_mismatch` | 再認証でGoogleが返した利用者が、いまloginしている利用者と一致しない。sessionは変えず、`return_to`へ戻す |
+| `rate_limited` | 試行回数の制限に掛かった |
 | `google_auth_failed` | それ以外の失敗（共通の案内） |
 
 ## 6. lintの例外
