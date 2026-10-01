@@ -7,7 +7,7 @@
 | 対象領域 | Backend |
 | 作業区分 | 実装 |
 | 優先度 | P0 |
-| 状態 | Blocked |
+| 状態 | In progress |
 
 ## 目的と作業範囲
 
@@ -26,7 +26,7 @@
 - TASK-001
 - TASK-005
 
-依存関係の上流にある設計判断・API契約が未確定のためBlocked。確定後は依存先の提供状況を確認して着手する。
+依存先のTASK-001・TASK-005はDone（2026-10-02に確認）。
 
 ## 根拠となる仕様書と見出し
 
@@ -41,7 +41,7 @@
 
 ## 関連Implementation Plan
 
-未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+- [2026-10-02 TASK-006 利用者・認証・認可のBackend基盤](../implementation-plans/2026-10-02-task-006-backend-identity.md)
 
 ## TASK-001から移管した判断（2026-09-25）
 
