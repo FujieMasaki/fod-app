@@ -55,11 +55,36 @@ module ApiContract
   end
 end
 
-# committee-rails 0.10.0は最初のassertionのrequestを覚えたままにするため、1つのexampleで複数回
-# requestすると、後のresponseを最初のendpointの定義で照合してしまう。毎回いまのrequestを包み直す。
-module ApiContractRequestObject
+# committee-railsの照合が黙って通ってしまう2つの場合を塞ぐ。
+module ApiContractAssertions
+  BODYLESS_STATUSES = [204, 304].freeze
+
+  # committee-rails 0.10.0は最初のassertionのrequestを覚えたままにするため、1つのexampleで複数回
+  # requestすると、後のresponseを最初のendpointの定義で照合してしまう。毎回いまのrequestを包み直す。
   def request_object
     Committee::Rails::RequestObject.new(integration_session.request)
+  end
+
+  # committeeは本文の無い204・304で照合を丸ごと飛ばし、そのstatusが契約にあるかも確かめない。
+  # 先に、そのoperationが契約でそのstatusを定義していることを確かめる。
+  def assert_response_schema_confirm(expected_status = nil)
+    status = response_data.first
+    if BODYLESS_STATUSES.include?(status) && !declared_status?(status)
+      raise Committee::InvalidResponse,
+            "`#{status}` is not declared for `#{request_object.request_method} #{request_object.path_info}`."
+    end
+
+    super
+  end
+
+  private
+
+  def declared_status?(status)
+    http_method = request_object.request_method.downcase
+    operation = ApiContract.schema.open_api.request_operation(http_method, request_object.path_info)
+    return false unless operation
+
+    operation.operation_object.responses.response.key?(status.to_s)
   end
 end
 
@@ -73,5 +98,5 @@ RSpec.configure do |config|
     strict_response_content_type: true
   }
   config.include Committee::Rails::Test::Methods, type: :request
-  config.include ApiContractRequestObject, type: :request
+  config.include ApiContractAssertions, type: :request
 end

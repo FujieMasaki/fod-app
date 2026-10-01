@@ -263,7 +263,7 @@ DotやProblemを複数のfeatureが使うため（React・route・表示判断�
 | `@redocly/cli` 2.55.0（root devDependency） | 契約のlint | OpenAPIの標準的なlinterで、examplesのschema検証まで行える。2.56以降は公開から1日未満で、pnpmの`minimumReleaseAge`を緩めないため2.55.0に固定した。telemetryと更新通知は環境変数で止める |
 | `openapi-typescript` 7.13.0（web devDependency） | 契約から型を生成 | runtimeを持たず型だけを出す。`--check`で生成物が最新かを確かめられる |
 | `yaml` 2.9.1（web devDependency） | testで契約を読む | Node標準にYAML parserが無いため |
-| `committee-rails` 0.10.0（api test group） | request specでresponseを照合、examplesの検証 | RailsでOpenAPI 3の照合を行う定番。依存の`committee` 5.6.4・`openapi_parser` 2.3.1も含め、公開から10日以上経っている。最初のrequestを覚えたままにする挙動を上書きし、契約に無いcontent typeを拒否する設定にした（`spec/support/api_contract.rb`。codexレビュー2回目） |
+| `committee-rails` 0.10.0（api test group） | request specでresponseを照合、examplesの検証 | RailsでOpenAPI 3の照合を行う定番。依存の`committee` 5.6.4・`openapi_parser` 2.3.1も含め、公開から10日以上経っている。最初のrequestを覚えたままにする挙動を上書きし、契約に無いcontent typeを拒否する設定にした（`spec/support/api_contract.rb`。codexレビュー2回目）。本文の無い`204`・`304`では照合を丸ごと飛ばすため、そのstatusが契約にあるかを先に確かめるようにした（codexレビュー7回目） |
 
 ## 12. Alternatives Considered
 
