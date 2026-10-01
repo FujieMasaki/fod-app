@@ -77,6 +77,8 @@ PR本文・diff・Plan・CI結果を読む → HTMLを書く → Artifactをpubl
 
 - `.claude/skills/human-review-artifact/SKILL.md`（新規）: ガイドページを作る手順と条件。
 - `.claude/skills/pr-review-cycle/SKILL.md`（変更）: LGTM後にこの skill を呼ぶ手順。
+- `AGENTS.md`（変更）: `pr-review-cycle`の要約に、人間のレビュー用ガイドの作成を加える。
+- `.claude/settings.json`（変更）: CIの結果を読む`gh pr checks`の許可（人間の判断）。
 - 本Plan（新規）。
 
 ## 11. Libraries / APIs
