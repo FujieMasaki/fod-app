@@ -21,7 +21,8 @@ export interface paths {
         /**
          * メールアドレスとpasswordでloginする
          * @description 成功するとsessionを更新し、新しいCSRF tokenを返す。認証成功から7日で失効し、利用では
-         *     延長しない（`expires_at`）。
+         *     延長しない（`expires_at`）。退会を受理した利用者もloginでき、
+         *     `account_status=deletion_in_progress`のSessionを返す（Webは退会の状況画面へ進める）。
          */
         post: operations["createSession"];
         /**
@@ -121,7 +122,8 @@ export interface paths {
          * Googleログインを開始する（form POST）
          * @description JSON APIではない。Webは通常のform submitで送り、browserがGoogleへ遷移する。
          *     `intent=reauthenticate`は、Google専用の利用者が退会の前に再認証するときに使う
-         *     （有効時間はTASK-006で決める）。
+         *     （有効時間はTASK-006で決める）。退会を受理した利用者も`intent=sign_in`でloginでき、
+         *     callbackは`/`へ戻す（Webは`account_status`で退会の状況画面へ進める）。
          */
         post: operations["startGoogleAuth"];
         delete?: never;
@@ -173,8 +175,9 @@ export interface paths {
          *     **進行中の処理が0になり、削除が終わるまで完了を返さない。**受理後もsessionは完了まで残し、
          *     Webは`GET /api/v1/account/deletion`で状況を取得する。既に受理済みなら同じ`202`を返す。
          *     `failed`のあとに呼ぶと削除をやり直す。**受理済みの退会のやり直しでは再認証を求めない**
-         *     （受理の時点で本人確認が済んでおり、やり直しは同じ削除を再開するだけで対象を広げないため。
-         *     退会中はGoogleの再認証の経路も`409`で止まるので、求めると回復できなくなる）。
+         *     （受理の時点で本人確認が済んでおり、やり直しは同じ削除を再開するだけで対象を広げないため）。
+         *     serverも`failed`の削除を自動で再実行するので、利用者がやり直さなくても削除は進む。
+         *     sessionを失った場合は、loginし直せば状況の確認とやり直しへ戻れる。
          */
         delete: operations["deleteAccount"];
         options?: never;
@@ -240,11 +243,16 @@ export interface paths {
          * @description 生成は非同期で、`202`で処理（Generation）を返して終わる。結果は
          *     `GET /api/v1/generations/{generation_id}`で取得する。
          *
-         *     attemptは`X-Recording-Attempt` headerで渡す（bodyに入れない）。serverはbodyを読む前に
-         *     headerのattemptを検証し、同じattemptで再び送られた場合は、新しい処理を作らずbodyを読まずに
-         *     既存の処理を返す（32MBの本文を重複して受け取らないため）。
-         *     例外は既存の処理が`failed`かつ`failure.kind=upload_incomplete`の場合で、attemptの期限内なら
-         *     音声を受け取り直す。
+         *     attemptは`X-Recording-Attempt` headerで渡す（bodyに入れない）。serverはmultipartを解釈する
+         *     前にheaderのattemptを検証し、同じattemptで再び送られた場合は、新しい処理を作らず、multipartの
+         *     解釈もS3への保存もせずに既存の処理を返す。例外は既存の処理が`failed`かつ
+         *     `failure.kind=upload_incomplete`の場合で、attemptの期限内なら音声を受け取り直す。
+         *     同じattemptの処理のDotがゴミ箱の中にある場合は`422 attempt_invalid`を返す（ゴミ箱のendpoint
+         *     以外からゴミ箱の中のDotを返さないため）。
+         *
+         *     HTTPの本文はPumaが受け取り終えてからアプリへ渡すため、serverの判定では本文の再送信そのものは
+         *     防げない。Webは送り直す前に`GET /api/v1/generations/{id}`（idは録音attemptの`id`）で既存の
+         *     処理を確かめ、あれば送り直さない（`404`なら送り直す）。
          *
          *     録音中に認証が失効しても、同じ利用者で入り直せばattemptの期限内は同じattemptで送れる。
          *     別の利用者のattemptは`attempt_invalid`になる。
@@ -593,7 +601,10 @@ export interface components {
              * @enum {string}
              */
             intent: "sign_in" | "reauthenticate";
-            /** @description `/`で始まる同一originのpath（`//`で始まるものは拒否） */
+            /**
+             * @description ログイン後に戻るSPAの画面のpath。英数字・`-`・`_`・`/`だけからなる素のpathに限り、
+             *     query・`%`・`\`・`//`を含む値は受け付けない（open redirectを防ぐ。合わなければ`/`へ戻す）
+             */
             return_to?: string;
         };
         AccountDeletionRequest: {
@@ -606,8 +617,8 @@ export interface components {
         AccountDeletion: {
             /**
              * @description `in_progress`: 進行中の処理の終了と削除を待っている（通常は数秒、長い録音の文字起こし中は
-             *     数分かかり得る）。`failed`: 削除の途中で失敗した。完了とは扱わず、`DELETE /api/v1/account`で
-             *     やり直す。
+             *     数分かかり得る）。`failed`: 削除の途中で失敗した。完了とは扱わない。serverが自動で再実行し、
+             *     Webは`DELETE /api/v1/account`でいますぐやり直すこともできる。
              * @enum {string}
              */
             status: "in_progress" | "completed" | "failed";
@@ -927,8 +938,8 @@ export interface components {
         /** @description 前回のresponseの`next_cursor`。Webは中身を解釈しない */
         Cursor: string;
         /**
-         * @description `POST /api/v1/recording_attempts`で受け取った`attempt_token`。bodyを読む前に検証できるよう
-         *     headerで渡す
+         * @description `POST /api/v1/recording_attempts`で受け取った`attempt_token`。multipartを解釈する前に検証
+         *     できるようheaderで渡す
          */
         RecordingAttempt: string;
         /** @description 処理ID（＝録音attemptのid） */
@@ -1265,6 +1276,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
+            429: components["responses"]["RateLimited"];
             500: components["responses"]["InternalError"];
         };
     };
@@ -1325,8 +1337,8 @@ export interface operations {
                 /** @description `GET /api/v1/session`（login後は`POST /api/v1/session`）のresponseで受け取ったtoken */
                 "X-CSRF-Token": components["parameters"]["CsrfToken"];
                 /**
-                 * @description `POST /api/v1/recording_attempts`で受け取った`attempt_token`。bodyを読む前に検証できるよう
-                 *     headerで渡す
+                 * @description `POST /api/v1/recording_attempts`で受け取った`attempt_token`。multipartを解釈する前に検証
+                 *     できるようheaderで渡す
                  */
                 "X-Recording-Attempt": components["parameters"]["RecordingAttempt"];
             };

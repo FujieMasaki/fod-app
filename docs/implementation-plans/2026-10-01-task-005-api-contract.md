@@ -169,7 +169,10 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | Day | `GET /api/v1/days/today`を専用に持ち、今日の記録が無ければ`dot_count: 0`で`latest_dot`を省く | 取得失敗と区別でき、serverが決めた今日の日付も返せる |
 | 日の詳細の0件 | `200`で`dots: []` | 取得失敗・他人のDotと区別し、Webが一覧を取り直せるようにする |
 | 退会中の操作 | 受理後は`GET /api/v1/session`・`GET /api/v1/account/deletion`・`DELETE /api/v1/account`（失敗後のやり直し）以外を`409 account_deletion_in_progress`。やり直しでは再認証を求めない | Q5でsessionを完了まで残すため、他の操作を明示的に止める。やり直しまで止めると`failed`から回復できない（codexレビュー1回目）。Google専用の利用者に再認証を求めると、退会中は再認証の経路も止まっていて回復できないため、受理時の本人確認で足りるとした（codexレビュー2回目） |
-| 録音attemptの渡し方 | `POST /api/v1/dots`の`X-Recording-Attempt` header（multipartの本文に入れない） | 同じattemptの再送を、32MBの本文を読む前に判定するため（TASK-003 Plan §20の「bodyを受け取らずに既存の状態を返す」。codexレビュー1回目） |
+| 録音attemptの渡し方 | `POST /api/v1/dots`の`X-Recording-Attempt` header（multipartの本文に入れない）。再送の前にWebが`GET /api/v1/generations/{attempt.id}`で既存の処理を確かめる | 同じattemptの再送を、multipartの解釈とS3への保存より前に判定するため（TASK-003 Plan §20。codexレビュー1回目）。ただしPumaは本文を受け取り終えてからアプリへ渡すので、serverの判定では本文の再送信そのものは防げない。そこはWebの事前確認で避ける（レビュー4回目） |
+| 退会中のlogin | 退会を受理した利用者もlogin（password・Googleの`intent=sign_in`）でき、`account_status=deletion_in_progress`を返す。serverは`failed`の削除を自動でも再実行する | 退会中にsessionを失う（7日の期限・logout）と、やり直しの経路が無くなり個人データが残るため（レビュー4回目） |
+| ゴミ箱の中のDotの処理への再送 | `422 attempt_invalid` | ゴミ箱のendpoint以外からゴミ箱の中のDotを返さないため（レビュー4回目） |
+| `return_to` | 英数字・`-`・`_`・`/`だけの素のpathに限るpattern | `/\evil.example`などをbrowserが別originとして扱うopen redirectを防ぐため（レビュー4回目） |
 | 成功後の再試行期限 | `retry_expires_at`は`succeeded`では返さない | 成功後は後片付けで処理の記録が消え、Dotの項目からは期限を復元できないため（codexレビュー1回目） |
 | 状態ごとの必須項目 | `Session`・`Generation`・`Transcript`は状態ごとのschemaに分け（`oneOf`。`Generation`と`Transcript`は`status`のdiscriminator）、必ず返す項目を`required`にする。Webは`z.discriminatedUnion`で同じ形にする | 説明文だけに書いた必須は、両側の検証で欠落を検出できないため（codexレビュー3回目） |
 | 日時の形式 | `Z`で終わるUTCだけ（全date-timeにpatternを付ける）。`+00:00`は契約外 | OpenAPIの`date-time`は`+00:00`を許すが、Zodの`z.iso.datetime()`は許さず、契約上正しい値をWebが拒否し得たため。境界値を両側のtestで確かめる（codexレビュー3回目） |

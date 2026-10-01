@@ -17,9 +17,11 @@ info:
     - 日時は`Z`で終わるUTCのISO 8601（`2026-09-28T13:04:05Z`。`+00:00`の形は使わない）、日付は
       Asia/Tokyoの暦日（`YYYY-MM-DD`）で、どちらもserverが決める。
     - 失敗はRFC 9457（`application/problem+json`）で返し、Webは`code`で判定する。
-    - 退会を受理した利用者には、`GET /api/v1/session`・`GET /api/v1/account/deletion`・
-      `DELETE /api/v1/account`（失敗後のやり直し）以外は`409 account_deletion_in_progress`を返す。
-      退会のやり直しは再認証を求めないので、Googleの再認証へ進む必要はない。
+    - 退会を受理した利用者には、login（passwordと、Googleの`intent=sign_in`）・`GET /api/v1/session`・
+      `GET /api/v1/account/deletion`・`DELETE /api/v1/account`（失敗後のやり直し）以外は
+      `409 account_deletion_in_progress`を返す。loginを許すのは、退会中にsessionを失っても（7日の
+      期限・logout）状況の確認とやり直しへ戻れるようにするため。serverも`failed`の削除を自動で
+      再実行する。
 servers:
   - url: /
 tags:
@@ -69,7 +71,8 @@ paths:
       summary: メールアドレスとpasswordでloginする
       description: |
         成功するとsessionを更新し、新しいCSRF tokenを返す。認証成功から7日で失効し、利用では
-        延長しない（`expires_at`）。
+        延長しない（`expires_at`）。退会を受理した利用者もloginでき、
+        `account_status=deletion_in_progress`のSessionを返す（Webは退会の状況画面へ進める）。
       security: []
       parameters:
         - $ref: "#/components/parameters/CsrfToken"
@@ -287,7 +290,8 @@ paths:
       description: |
         JSON APIではない。Webは通常のform submitで送り、browserがGoogleへ遷移する。
         `intent=reauthenticate`は、Google専用の利用者が退会の前に再認証するときに使う
-        （有効時間はTASK-006で決める）。
+        （有効時間はTASK-006で決める）。退会を受理した利用者も`intent=sign_in`でloginでき、
+        callbackは`/`へ戻す（Webは`account_status`で退会の状況画面へ進める）。
       security: []
       requestBody:
         required: true
@@ -349,8 +353,9 @@ paths:
         **進行中の処理が0になり、削除が終わるまで完了を返さない。**受理後もsessionは完了まで残し、
         Webは`GET /api/v1/account/deletion`で状況を取得する。既に受理済みなら同じ`202`を返す。
         `failed`のあとに呼ぶと削除をやり直す。**受理済みの退会のやり直しでは再認証を求めない**
-        （受理の時点で本人確認が済んでおり、やり直しは同じ削除を再開するだけで対象を広げないため。
-        退会中はGoogleの再認証の経路も`409`で止まるので、求めると回復できなくなる）。
+        （受理の時点で本人確認が済んでおり、やり直しは同じ削除を再開するだけで対象を広げないため）。
+        serverも`failed`の削除を自動で再実行するので、利用者がやり直さなくても削除は進む。
+        sessionを失った場合は、loginし直せば状況の確認とやり直しへ戻れる。
       parameters:
         - $ref: "#/components/parameters/CsrfToken"
       requestBody:
@@ -382,6 +387,8 @@ paths:
                   $ref: "#/components/examples/ProblemReauthenticationFailed"
                 googleReauthenticationRequired:
                   $ref: "#/components/examples/ProblemGoogleReauthenticationRequired"
+        "429":
+          $ref: "#/components/responses/RateLimited"
         "500":
           $ref: "#/components/responses/InternalError"
 
@@ -454,11 +461,16 @@ paths:
         生成は非同期で、`202`で処理（Generation）を返して終わる。結果は
         `GET /api/v1/generations/{generation_id}`で取得する。
 
-        attemptは`X-Recording-Attempt` headerで渡す（bodyに入れない）。serverはbodyを読む前に
-        headerのattemptを検証し、同じattemptで再び送られた場合は、新しい処理を作らずbodyを読まずに
-        既存の処理を返す（32MBの本文を重複して受け取らないため）。
-        例外は既存の処理が`failed`かつ`failure.kind=upload_incomplete`の場合で、attemptの期限内なら
-        音声を受け取り直す。
+        attemptは`X-Recording-Attempt` headerで渡す（bodyに入れない）。serverはmultipartを解釈する
+        前にheaderのattemptを検証し、同じattemptで再び送られた場合は、新しい処理を作らず、multipartの
+        解釈もS3への保存もせずに既存の処理を返す。例外は既存の処理が`failed`かつ
+        `failure.kind=upload_incomplete`の場合で、attemptの期限内なら音声を受け取り直す。
+        同じattemptの処理のDotがゴミ箱の中にある場合は`422 attempt_invalid`を返す（ゴミ箱のendpoint
+        以外からゴミ箱の中のDotを返さないため）。
+
+        HTTPの本文はPumaが受け取り終えてからアプリへ渡すため、serverの判定では本文の再送信そのものは
+        防げない。Webは送り直す前に`GET /api/v1/generations/{id}`（idは録音attemptの`id`）で既存の
+        処理を確かめ、あれば送り直さない（`404`なら送り直す）。
 
         録音中に認証が失効しても、同じ利用者で入り直せばattemptの期限内は同じattemptで送れる。
         別の利用者のattemptは`attempt_invalid`になる。
@@ -977,8 +989,8 @@ components:
       in: header
       required: true
       description: |
-        `POST /api/v1/recording_attempts`で受け取った`attempt_token`。bodyを読む前に検証できるよう
-        headerで渡す
+        `POST /api/v1/recording_attempts`で受け取った`attempt_token`。multipartを解釈する前に検証
+        できるようheaderで渡す
       schema:
         type: string
         maxLength: 1024
@@ -1273,7 +1285,10 @@ components:
           default: sign_in
         return_to:
           type: string
-          description: "`/`で始まる同一originのpath（`//`で始まるものは拒否）"
+          description: |
+            ログイン後に戻るSPAの画面のpath。英数字・`-`・`_`・`/`だけからなる素のpathに限り、
+            query・`%`・`\`・`//`を含む値は受け付けない（open redirectを防ぐ。合わなければ`/`へ戻す）
+          pattern: '^/(?:[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*)?$'
           maxLength: 512
 
     AccountDeletionRequest:
@@ -1293,8 +1308,8 @@ components:
           enum: [in_progress, completed, failed]
           description: |
             `in_progress`: 進行中の処理の終了と削除を待っている（通常は数秒、長い録音の文字起こし中は
-            数分かかり得る）。`failed`: 削除の途中で失敗した。完了とは扱わず、`DELETE /api/v1/account`で
-            やり直す。
+            数分かかり得る）。`failed`: 削除の途中で失敗した。完了とは扱わない。serverが自動で再実行し、
+            Webは`DELETE /api/v1/account`でいますぐやり直すこともできる。
 
     RecordingAttempt:
       type: object

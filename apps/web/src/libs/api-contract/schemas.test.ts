@@ -90,15 +90,39 @@ describe("Webのschemaが契約外の値を拒否する", () => {
     expect(dotSchema.safeParse({ ...dot, started_at: "2026-09-28T13:04:05.123Z" }).success).toBe(true);
   });
 
-  it("上限を超えたsentenceを拒否する", () => {
-    const dot = {
-      id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04",
-      date: "2026-09-28",
-      started_at: "2026-09-28T13:04:05Z",
-      duration_seconds: 312,
-      sentence: "あ".repeat(201),
-      summary: "",
-    };
-    expect(dotSchema.safeParse(dot).success).toBe(false);
+});
+
+// 型の一致検査は制約値（maxLengthなど）を比べないため、契約から読んだ値の境界でZodと一致させる。
+describe("Dotの制約値が契約と一致する", () => {
+  const properties: Record<string, { maxLength?: number; minimum?: number; maximum?: number }> =
+    contract.components.schemas.Dot.properties;
+  const valid = {
+    id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04",
+    date: "2026-09-28",
+    started_at: "2026-09-28T13:04:05Z",
+    duration_seconds: 312,
+    sentence: "",
+    summary: "",
+  };
+  const parses = (field: string, value: unknown) => dotSchema.safeParse({ ...valid, [field]: value }).success;
+
+  const stringLimits = Object.entries(properties).filter(([, p]) => p.maxLength !== undefined);
+  const integerLimits = Object.entries(properties).filter(([, p]) => p.minimum !== undefined);
+
+  it("文字数の上限と整数の範囲を契約に持つ", () => {
+    expect(stringLimits.map(([field]) => field).sort()).toEqual(["sentence", "summary"]);
+    expect(integerLimits.map(([field]) => field)).toEqual(["duration_seconds"]);
+  });
+
+  it.each(stringLimits)("%s は契約のmaxLengthちょうどを受け付け、超えると拒否する", (field, { maxLength }) => {
+    expect(parses(field, "あ".repeat(maxLength!))).toBe(true);
+    expect(parses(field, "あ".repeat(maxLength! + 1))).toBe(false);
+  });
+
+  it.each(integerLimits)("%s は契約のminimum・maximumの外を拒否する", (field, { minimum, maximum }) => {
+    expect(parses(field, minimum)).toBe(true);
+    expect(parses(field, minimum! - 1)).toBe(false);
+    expect(parses(field, maximum)).toBe(true);
+    expect(parses(field, maximum! + 1)).toBe(false);
   });
 });

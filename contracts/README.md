@@ -11,7 +11,7 @@ WebとRails APIの間のrequest / response / errorの約束を置く場所。**[
 | `contracts/openapi.yaml` | 契約の正本（OpenAPI 3.0.3） | 書く |
 | `redocly.yaml`・`.redocly.lint-ignore.yaml` | 契約自体のlint設定と、理由付きの例外 | 書く |
 | `apps/web/src/types/api-contract.d.ts` | 契約から生成したTypeScriptの型 | **書かない**（生成してcommitする） |
-| `apps/web/src/libs/api-contract/schemas.ts` | responseを実行時に検証するZod schema。生成した型と完全一致を型検査で強制する | 書く |
+| `apps/web/src/libs/api-contract/schemas.ts` | responseを実行時に検証するZod schema。生成した型と完全一致を型検査で強制する（一致を確かめられるのは型まで。上限値などの制約値は`schemas.test.ts`が契約から読んで境界値で確かめる） | 書く |
 | `apps/api/spec/support/api_contract.rb` | request specから契約を参照する設定（committee） | 書く |
 
 OpenAPIを3.1ではなく3.0.3で書くのは、API側の検証に使うcommittee（openapi_parser）が3.0を
@@ -32,8 +32,8 @@ OpenAPIを3.1ではなく3.0.3で書くのは、API側の検証に使うcommitte
 | コマンド | 確かめること |
 | --- | --- |
 | `pnpm check`（`lint:contract`） | 契約の書式・参照・examplesがschemaに合うこと（Redocly）、生成した型が最新であること |
-| `pnpm type-check` | Zod schemaが生成した型と完全一致すること |
-| `pnpm test` | 契約のexamplesをWebのZod schemaで読めること |
+| `pnpm type-check` | Zod schemaが生成した型と完全一致すること（型だけ。`maxLength`・`minimum`・`pattern`などの制約値は比べない） |
+| `pnpm test` | 契約のexamplesをWebのZod schemaで読めること。制約値を契約から読み、境界値でZodと一致すること |
 | `bundle exec rspec`（`apps/api`） | 契約のexamplesがAPI側の検証器でもschemaに合うこと。request specのresponseが契約どおりであること |
 
 `contracts/`・`redocly.yaml`の変更ではCIがWebとAPIの両方の検査を実行する。
@@ -73,7 +73,8 @@ PRのレビューでは「この変更は古いWeb・古いAPIのどちらと組
 
 - 認証は同一originのCookie session。状態を変える操作は`X-CSRF-Token`を必須とし、tokenは
   `GET /api/v1/session`（login後は`POST /api/v1/session`）のresponseで受け取る。
-- 個人に関わるresponseはすべて`Cache-Control: no-store`。
+- 個人に関わるresponseはすべて`Cache-Control: no-store`。headerは契約のschemaでは検証しないため、
+  request specで確かめる（`docs/development/backend.md` §3）。
 - 他人のresourceと存在しないresourceは区別せず`404 not_found`。ゴミ箱の中のDotは、ゴミ箱の
   endpoint以外から`404`。
 - 日時は`Z`で終わるUTCのISO 8601（`+00:00`の形は使わない。契約のpatternとWebのZodの両方で
@@ -103,7 +104,7 @@ PRのレビューでは「この変更は古いWeb・古いAPIのどちらと組
 | `token_expired` | 422 | 確認（24時間）・再設定（6時間）の期限切れ | メールの再送へ |
 | `cursor_invalid` | 400 | cursorを解釈できない | 先頭から取り直す |
 | `not_found` | 404 | 存在しない・他人の・ゴミ箱の中 | 一覧を取り直す。別のDotで代わりに表示しない |
-| `account_deletion_in_progress` | 409 | 退会を受理済み（状況の取得と退会のやり直し以外の操作） | 退会の状況画面へ |
+| `account_deletion_in_progress` | 409 | 退会を受理済み（login・状況の取得・退会のやり直し以外の操作） | 退会の状況画面へ |
 | `attempt_invalid` | 422 | 録音attemptが不正・別の利用者のもの | 録り直しを案内 |
 | `attempt_expired` | 422 | 録音attemptの送信期限（発行から2時間）切れ | 録り直しを案内 |
 | `audio_too_large` | 413 | 音声が32MBを超えた | 上限を伝える |
