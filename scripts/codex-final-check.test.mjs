@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildCodexArgs, validateArgs } from "./codex-final-check.mjs";
+import { EXIT_TIMEOUT, TIMEOUT_MS, buildCodexArgs, validateArgs } from "./codex-final-check.mjs";
 
 test("accepts a single origin base branch", () => {
   assert.deepEqual(validateArgs(["origin/main"]), { ok: true, base: "origin/main" });
@@ -24,4 +24,9 @@ test("always runs codex exec in the read-only sandbox", () => {
   assert.deepEqual(args.slice(0, 3), ["exec", "--sandbox", "read-only"]);
   assert.ok(args.at(-1).includes("origin/main...HEAD"));
   assert.ok(!args.some((arg) => arg.startsWith("--dangerously")));
+});
+
+test("a timeout has its own exit code so the caller can retry it once", () => {
+  assert.ok(TIMEOUT_MS > 0);
+  assert.ok(![0, 1, 2].includes(EXIT_TIMEOUT));
 });

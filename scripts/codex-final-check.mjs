@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { closeSync, mkdtempSync, openSync, readFileSync } from "node:fs";
+import { closeSync, existsSync, mkdtempSync, openSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,6 +13,11 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 const basePattern = /^origin\/[A-Za-z0-9][A-Za-z0-9._/-]*$/;
+
+// Background runs have no time limit of their own, so the script carries one. A distinct
+// exit code lets the caller tell a timeout (retry once) from other failures (stop).
+export const TIMEOUT_MS = 20 * 60 * 1000;
+export const EXIT_TIMEOUT = 3;
 
 export function validateArgs(args) {
   if (args.length !== 1) {
@@ -63,11 +68,21 @@ function main(args) {
   const codex = spawnSync("codex", buildCodexArgs(result.base, outputFile), {
     cwd: repoRoot,
     stdio: ["ignore", log, log],
+    timeout: TIMEOUT_MS,
+    killSignal: "SIGTERM",
   });
   closeSync(log);
+  const tail = () => readFileSync(logFile, "utf8").split("\n").slice(-20).join("\n");
+  if (codex.error?.code === "ETIMEDOUT") {
+    console.error(`codex exec timed out after ${TIMEOUT_MS / 60000} minutes\n${tail()}`);
+    return EXIT_TIMEOUT;
+  }
   if (codex.error || codex.status !== 0) {
-    const tail = readFileSync(logFile, "utf8").split("\n").slice(-20).join("\n");
-    console.error(`codex exec failed: ${codex.error?.message ?? `exit ${codex.status}`}\n${tail}`);
+    console.error(`codex exec failed: ${codex.error?.message ?? `exit ${codex.status ?? codex.signal}`}\n${tail()}`);
+    return 1;
+  }
+  if (!existsSync(outputFile)) {
+    console.error(`codex exec wrote no final message\n${tail()}`);
     return 1;
   }
 
