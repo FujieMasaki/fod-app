@@ -30,3 +30,8 @@ group :development, :test do
   # Static analysis for security vulnerabilities [https://brakemanscanner.org/]
   gem "brakeman", require: false
 end
+
+group :test do
+  # Validates request specs against the API contract in contracts/openapi.yaml
+  gem "committee-rails", "~> 0.10"
+end
