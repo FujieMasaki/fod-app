@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中（2026-10-01）。
+完了（2026-10-01）。
 
 ## 2. Goal
 
@@ -119,7 +119,19 @@ Markdownのみの変更のため、自動テストは対象外。pre-commit / pr
 
 ## 16. Completion Record
 
-- 状態:
+- 状態: 2026-10-01 完了。Codexの最終チェックでLGTM（`cadec8e`）。
 - 実装差異:
+  - Codexの指摘で、チェック状態を版付きの項目の識別子に結び付け、内容を変えた項目だけ未確認に戻すようにした。
+  - サブエージェントの指摘で、CIが失敗していたらページを作らずpr-review-cycleの手順6に戻ること、載せる材料の
+    限定と秘密情報を見つけたら止まること、titleを`PR #<番号> レビューガイド`に固定してpublish前に既存の
+    ページを探すこと、引用のエスケープ、Artifact toolが使えないときの扱いを加えた。
+  - AGENTS.mdの`pr-review-cycle`の要約を更新した（新しい参照は足さない）。
+  - `gh pr checks`を`.claude/settings.json`の許可に加えた（人間の判断）。
 - 検証結果:
-- 関連:
+  - 3段レビュー: サブエージェント1回目LGTM → Codex 1回目🟡1件 → サブエージェント3回（上限。3回目の🟡を
+    直した後、人間の判断でLGTMなしに2回目のCodexへ）→ Codex 2回目LGTM。
+  - CI: `cadec8e`で成功（文書のみのため、テストのジョブは対象外）。pre-commit / pre-push hook通過。
+  - 手動検証: 本PRのガイドページを、追加した skill の手順で作った（<https://claude.ai/artifact/K3NoLkDStMPLEKRY6Mz6yH>）。
+    本文の5つの節、上部のレビュー状態、版付きのチェックの識別子を備え、OSの一時ディレクトリからpublishできた。
+  - 対応しなかった指摘: pr-review-cycle 手順2が`/self-review`（解説用）を品質の確認に使っている食い違い（今回の対象外）。
+- 関連: PR #47（<https://github.com/FujieMasaki/fod-app/pull/47>）、PR #45・#46（ガイドページの前例）。
