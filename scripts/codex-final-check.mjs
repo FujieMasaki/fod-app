@@ -31,6 +31,7 @@ export const DISABLED_FEATURES = [
   "computer_use",
   "hooks",
   "in_app_browser",
+  "plugins",
 ];
 
 export function validateArgs(args) {
@@ -63,6 +64,8 @@ export function buildCodexArgs(base, outputFile) {
     MODEL,
     "-c",
     `model_reasoning_effort="${REASONING_EFFORT}"`,
+    "-c",
+    'web_search="disabled"',
     ...DISABLED_FEATURES.flatMap((feature) => ["--disable", feature]),
     "--cd",
     repoRoot,
