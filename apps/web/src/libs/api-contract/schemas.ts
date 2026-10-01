@@ -93,7 +93,7 @@ const retryExpiresAtSchema = z.iso.datetime();
 
 const transcriptSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("available"), text: z.string() }),
-  z.object({ status: z.literal("unavailable"), unavailable_reason: z.enum(["acknowledged", "expired"]) }),
+  z.object({ status: z.literal("unavailable") }),
 ]);
 
 // statusごとに必ず返す項目が違う（契約のGenerationのoneOf）。

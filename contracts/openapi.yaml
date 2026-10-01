@@ -496,7 +496,8 @@ paths:
 
         HTTPの本文はPumaが受け取り終えてからアプリへ渡すため、serverの判定では本文の再送信そのものは
         防げない。Webは送り直す前に`GET /api/v1/generations/{id}`（idは録音attemptの`id`）で既存の
-        処理を確かめ、あれば送り直さない（`404`なら送り直す）。
+        処理を確かめる。`404`なら送り直す。`failed`かつ`failure.kind=upload_incomplete`なら、音声が
+        serverに届いていないので送り直す。それ以外の状態なら送り直さず、その処理を使う。
 
         録音中に認証が失効しても、同じ利用者で入り直せばattemptの期限内は同じattemptで送れる。
         別の利用者のattemptは`attempt_invalid`になる。
@@ -1636,17 +1637,15 @@ components:
           description: 文字起こし全文
     TranscriptUnavailable:
       type: object
-      required: [status, unavailable_reason]
+      description: |
+        serverはもう全文を返さない（受領通知の受理後、または保持期間の経過後）。どちらだったかは
+        返さない。後片付けで処理の記録が消えると、serverにも区別が残らないため。Webは`sessionStorage`に
+        全文があれば表示し、無ければ「この端末には全文がない」と示す。Dotは残っている。
+      required: [status]
       properties:
         status:
           type: string
           enum: [unavailable]
-        unavailable_reason:
-          type: string
-          enum: [acknowledged, expired]
-          description: |
-            `acknowledged`: 受領通知を受理した（Webは`sessionStorage`の分を使う）。
-            `expired`: 保持期間を過ぎた。
 
     Dot:
       type: object
@@ -1855,7 +1854,6 @@ components:
           summary: 午後に予定がひとつ流れて、久しぶりに散歩に出た。帰ってから夕飯を作った。
         transcript:
           status: unavailable
-          unavailable_reason: acknowledged
     GenerationFailedRetryable:
       value:
         id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04

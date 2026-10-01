@@ -162,7 +162,8 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | --- | --- | --- |
 | 生成状態の見せ方 | `status`は`processing` / `succeeded` / `failed` / `expired`の4つ。`processing`の間だけ`stage`（`uploading` / `transcribing` / `generating`）を返す。内部の9状態（TASK-003 Plan §20）とAWSのjob状態は出さない | providerが変わっても契約を変えないため（§13）。進捗表示に要る粒度だけを出す |
 | 失敗の種類 | `failure.kind`は`processing_failed`（`retry`で再試行）、`upload_incomplete`（同じattemptで送り直す）、`empty_recording`（録り直し）の3つ | TASK-003が残した「生成から/文字起こしからの区別をerror契約で出すか」は**出さない**。どちらも録り直し不要で利用者の操作が同じため |
-| 文字起こし全文を返さない理由 | `succeeded`で`transcript.status=unavailable`と`unavailable_reason`（`acknowledged` / `expired`）。完全削除・退会ではDotも残らないので`404` | TASK-003の「理由によってDotが残るかを区別する」を満たす |
+| 文字起こし全文を返さない理由 | `succeeded`で`transcript.status=unavailable`（受領通知の後か期限切れの後かは返さない）。完全削除・退会ではDotも残らないので`404` | TASK-003の「理由によってDotが残るかを区別する」を、`succeeded`と`404`で満たす。当初は`unavailable_reason`（`acknowledged` / `expired`）も返していたが、後片付けで処理の記録が消えるとserverにも区別が残らず、作れないresponseになるため外した。Webは`sessionStorage`の有無で表示を決める（codexレビュー6回目） |
+| 再送前の確認 | `404`なら送り直す。`failed`かつ`upload_incomplete`も送り直す。それ以外は送り直さない | 「既存の処理があれば送り直さない」だけだと、upload途中の失敗から回復できないため（codexレビュー6回目） |
 | 期限切れ後の照会 | 処理の記録がある間は`expired`、後片付けで記録が消えた後は`404` | 記録を残し続けない（privacy.md §5）代わりに、Webは手元の処理IDが`404`になったら「見つからない（期限切れか削除）」と示す |
 | 処理IDの形式 | serverが発行するUUID v4（36文字）。DBでも一意制約を持つ | TASK-003の3条件（AWSアカウント内で一意、`<処理ID>-<試行番号>`がTranscribeのjob名の制約を満たす、推測できる値や個人情報を含まない）を満たす。server発行の別IDは足さない |
 | 生成のpath | `/api/v1/generations/{id}`（TASK-003 Planの`/api/v1/dots/generations/:id`から変更） | `/api/v1/dots/{id}`と曖昧になり、routingで取り違えるため（Redocly lintの指摘） |
@@ -329,7 +330,8 @@ DotやProblemを複数のfeatureが使うため（React・route・表示判断�
   - `pnpm type-check`: 成功。`vitest run src/libs/api-contract`: 153件成功。
   - `bundle exec rubocop`: 違反0。`bundle exec rspec`: 172件成功。
   - レビューは計8回（codex 4回、Claudeのサブエージェント 3回、2つのレビューを統合した外部のレビュー 1回）。
-    指摘はすべて対応し、`b1d4261`でcodex（GPT-6.1 Sol・推論high）がLGTM。内容は§7-4・§11の
+    指摘はすべて対応し、`b1d4261`でcodex（GPT-6.1 Sol・推論high）がLGTM。仕組み化（§7の観点）を
+    足した後のcodexレビューで、その観点に当たる不備が2件見つかり、対応した。内容は§7-4・§11の
     「レビュー」と付けた行。codexの環境ではDBに接続できずRails specを実行できなかったため、同じコミットで
     ローカルに実行した（188件成功）。
   - 再発防止: 繰り返し見つかった種類の不備を`contracts/README.md` §7のレビュー観点にまとめ、
