@@ -35,7 +35,7 @@
       "Bash(git rev-parse *)",
       "Bash(gh pr create *)",
       "Bash(gh pr view *)",
-      "Bash(codex review *)"
+      "Bash(codex exec -s read-only *)"
     ],
     "deny": [
       "Read(./.env*)",
