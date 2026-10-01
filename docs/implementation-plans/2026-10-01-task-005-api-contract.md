@@ -2,8 +2,8 @@
 
 ## 1. Status
 
-実施中（2026-10-01）。作業区分がAPI契約のため、論点ごとに人間と対話で決める。§17のQ1〜Q4は
-2026-10-01に回答済み（すべて推奨案）。
+実施中（2026-10-01）。作業区分がAPI契約のため、論点ごとに人間と対話で決めた（§17のQ1〜Q6、
+すべて推奨案）。契約・検証の仕組み・関連文書の更新を終え、契約の具体例のレビューを人間に依頼する。
 
 依存先のうちTASK-003はIn progressのまま着手した（2026-10-01に人間が判断）。TASK-003に残る完了条件7
 （委託先への9項目の確認。公開前に人間が実施）は、API契約の前提となる判断（provider・実行方式・
@@ -83,17 +83,20 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 
 ### 同じ変更で更新する現行文書
 
-- 新規: 契約の正本（形式は§17 Q1で決める）
+- 新規: 契約の正本`contracts/openapi.yaml`と運用`contracts/README.md`
 - `docs/journaling.md`: §3・§5（契約の正本への参照、pollingの未決定事項の解消）
 - `docs/architecture.md`: 「決定済み」（契約の管理方法）、「未決定」（OpenAPI採否の解消）
 - `docs/dot-history.md` §5: 録音attemptの保存方式・期限・再利用の可否
-- `docs/development/backend.md` §3・`docs/development/frontend.md`: 契約検証の手順（tool採用時）
-- `docs/privacy.md` §5: 録音attemptをserverに保存する方式を採る場合だけ
+- `docs/development/backend.md` §3・`docs/development/frontend.md` §2: 契約の参照と検証の手順
+- `docs/code-review/backend/README.md`・`docs/code-review/frontend/README.md`: 契約との一致と互換性の確認
+- `docs/privacy.md` §4: 録音attemptの保存方式の決定（serverに保存しないため§5の追加は不要）
 - `docs/tasks/TASK-005-product-api-contract.md`: 状態・本Planへのリンク・完了条件
 
-## 7. Proposed Approach（案。§17の回答で確定する）
+## 7. Proposed Approach（採用。正本は`contracts/openapi.yaml`）
 
 ### 7-1. 共通の約束
+
+下表の「案」は採用した内容である（2026-10-01）。
 
 | 項目 | 案 |
 | --- | --- |
@@ -107,7 +110,7 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | 認証 | Cookie session（同一origin）。変更操作はCSRF tokenを`X-CSRF-Token`で送る。tokenは状態確認のresponseで渡す |
 | 所有権 | 他人のresourceと存在しないresourceは同じ`404`。ゴミ箱の中のDotは通常のendpointから`404` |
 | cursor | 不透明な文字列。clientは解釈しない。`next_cursor`が`null`なら終わり |
-| error | §17 Q4で決める形式に、機械判定用の安定した`code`を必ず含める |
+| error | RFC 9457（`application/problem+json`）に、機械判定用の`code`を拡張項目として必ず含める。`type`は`urn:focus-on-dot:problem:<code>` |
 
 ### 7-2. endpointの一覧（案）
 
@@ -122,17 +125,21 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | | `POST /api/v1/passwords` | 再設定メールの送信（共通受付応答） |
 | | `PATCH /api/v1/passwords` | 再設定tokenの消費と新しいpassword |
 | | `POST /auth/google_oauth2`・`GET /auth/google_oauth2/callback` | Google開始（CSRF保護したform POST）・callback（SPAへredirectし結果をcodeで渡す） |
-| | `DELETE /api/v1/account` | 退会（再認証つき） |
+| | `DELETE /api/v1/account` | 退会の受理（再認証つき。202） |
+| | `GET /api/v1/account/deletion` | 退会の状況（`in_progress` / `completed` / `failed`） |
 | 録音 | `POST /api/v1/recording_attempts` | 録音attemptの発行（`started_at`の確定） |
 | 生成 | `POST /api/v1/dots` | 音声・attempt・durationの送信。処理IDと再試行期限を返す（202） |
-| | `GET /api/v1/dots/generations/{id}` | 生成状態のpolling。成功時はDotと文字起こし全文 |
-| | `POST /api/v1/dots/generations/{id}/retry` | 期限内の再試行 |
-| | `POST /api/v1/dots/generations/{id}/transcript_ack` | 文字起こし全文の受領通知（冪等） |
+| | `GET /api/v1/generations/{id}` | 生成状態のpolling。成功時はDotと文字起こし全文 |
+| | `POST /api/v1/generations/{id}/retry` | 期限内の再試行 |
+| | `POST /api/v1/generations/{id}/transcript_ack` | 文字起こし全文の受領通知（冪等） |
 | 履歴 | `GET /api/v1/days` | 日単位の一覧（cursor） |
 | | `GET /api/v1/days/today` | Dayの今日（今日の最新Dotの有無を区別して返す） |
 | | `GET /api/v1/days/{date}` | 日の詳細（その日のゴミ箱外のDot。cursor） |
 | Dot | `PATCH /api/v1/dots/{id}` | `sentence`・`summary`の更新 |
-| ゴミ箱・削除 | §17 Q3で決める | ゴミ箱へ移す・ゴミ箱の一覧・復元・完全削除 |
+| ゴミ箱・削除 | `POST /api/v1/dots/{id}/trash` | ゴミ箱へ移す（`deletion_begins_at`を返す） |
+| | `GET /api/v1/trash/dots` | ゴミ箱の一覧（cursor） |
+| | `POST /api/v1/trash/dots/{id}/restore` | 復元 |
+| | `DELETE /api/v1/dots/{id}` | 完全削除（ゴミ箱の内外を問わない。失敗は`503 deletion_failed`） |
 
 ### 7-3. 既定値として置く値（質問しない。レビューで変えられる）
 
@@ -149,25 +156,104 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | `summary`の上限 | 2,000文字 | 30分の発話の要約が収まる長さ。空文字は許す（TASK-002） |
 | 音声 | `audio/webm`（opus）・`audio/mp4`、最長30分・32MB | TASK-002・TASK-003 Plan §25-7 |
 
+### 7-4. 上流の決定を契約へ写したときの判断
+
+| 項目 | 契約での形 | 理由 |
+| --- | --- | --- |
+| 生成状態の見せ方 | `status`は`processing` / `succeeded` / `failed` / `expired`の4つ。`processing`の間だけ`stage`（`uploading` / `transcribing` / `generating`）を返す。内部の9状態（TASK-003 Plan §20）とAWSのjob状態は出さない | providerが変わっても契約を変えないため（§13）。進捗表示に要る粒度だけを出す |
+| 失敗の種類 | `failure.kind`は`processing_failed`（`retry`で再試行）、`upload_incomplete`（同じattemptで送り直す）、`empty_recording`（録り直し）の3つ | TASK-003が残した「生成から/文字起こしからの区別をerror契約で出すか」は**出さない**。どちらも録り直し不要で利用者の操作が同じため |
+| 文字起こし全文を返さない理由 | `succeeded`で`transcript.status=unavailable`と`unavailable_reason`（`acknowledged` / `expired`）。完全削除・退会ではDotも残らないので`404` | TASK-003の「理由によってDotが残るかを区別する」を満たす |
+| 期限切れ後の照会 | 処理の記録がある間は`expired`、後片付けで記録が消えた後は`404` | 記録を残し続けない（privacy.md §5）代わりに、Webは手元の処理IDが`404`になったら「見つからない（期限切れか削除）」と示す |
+| 処理IDの形式 | serverが発行するUUID v4（36文字）。DBでも一意制約を持つ | TASK-003の3条件（AWSアカウント内で一意、`<処理ID>-<試行番号>`がTranscribeのjob名の制約を満たす、推測できる値や個人情報を含まない）を満たす。server発行の別IDは足さない |
+| 生成のpath | `/api/v1/generations/{id}`（TASK-003 Planの`/api/v1/dots/generations/:id`から変更） | `/api/v1/dots/{id}`と曖昧になり、routingで取り違えるため（Redocly lintの指摘） |
+| Day | `GET /api/v1/days/today`を専用に持ち、今日の記録が無ければ`dot_count: 0`で`latest_dot`を省く | 取得失敗と区別でき、serverが決めた今日の日付も返せる |
+| 日の詳細の0件 | `200`で`dots: []` | 取得失敗・他人のDotと区別し、Webが一覧を取り直せるようにする |
+| 退会中の操作 | 受理後は`GET /api/v1/session`と`GET /api/v1/account/deletion`以外を`409 account_deletion_in_progress` | Q5でsessionを完了まで残すため、他の操作を明示的に止める |
+| 登録 | 登録済みかにかかわらず`202`。登録済みならログインと再設定を案内するメールを送る | Q6 |
+| ゴミ箱へ移したとき | `deletion_begins_at`（削除処理を始める日時）を返す | TASK-002の「示すなら消え終わる時刻として読めない形」。項目名で「始める」を表す |
+| Google callbackの失敗 | `/login?auth_error=`に`google_email_conflict`または`google_auth_failed`を付けてredirect | browserのredirectなのでJSONのerrorを返せない |
+
 ## 8. Why This Approach
 
-後で埋める（§17の回答後）。
+- **契約を先に人が書く（契約ファースト）。**TASK-005は実装より先に約束を決めるタスクで、後続の
+  Backend/Frontendのタスクを並行して進めるため。コードから契約を生成すると、実装が済むまで契約が
+  存在せず、TASK-001〜004で人が決めた意味が実装の都合で黙って変わり得る。
+- **検証は「正本1つ・両側が機械的に縛られる」形にした。**契約自体はRedocly lint、Webは生成した型と
+  Zodの完全一致を型検査、APIはcommitteeでresponseを照合する。さらに契約のexamplesを両側のtestで
+  読み、WebとAPIが同じ具体例を同じ意味で解釈することを確かめる（TASK-005の「必要な検証」）。
+- **生成はWebの型だけに留めた。**endpointは約20で、Zodを手で書く量は小さい。multipart送信・
+  polling・CSRF・`code`ごとの出し分けは生成しにくく、通信関数まで生成するとfeature単位の配置
+  （frontend.md）とも合わない。Rails側の生成は雛形止まりで、中身（認可・状態遷移・排他）は手で書く
+  ことになるため採らない。
+- **OpenAPI 3.0.3にした。**committeeが使うopenapi_parserが3.0を対象にしているため（Q1の時点では
+  3.1を想定していた）。nullを許す項目は`nullable`、または項目を省く形で表す。
+- **契約を`docs/`ではなく`contracts/`に置いた。**既存のCI（`scripts/ci-changes.mjs`）は`docs/`の
+  変更で検査を走らせない。契約の変更ではWebとAPIの両方の検査が走る必要があるため。
 
 ## 9. Data Flow
 
-後で埋める（§17の回答後）。
+契約の変更と検証の流れ（このタスクで作った仕組み）:
+
+```text
+contracts/openapi.yaml（正本・手で書く）
+├─ Redocly lint ─────────────→ 契約自体（書式・参照・examplesとschemaの一致）
+├─ openapi-typescript ──→ apps/web/src/types/api-contract.d.ts（生成・commit）
+│                          └─ libs/api-contract/schemas.ts（Zod）と完全一致を tsc で強制
+│                             └─ schemas.test.ts: examplesをZodで読む
+└─ committee（openapi_parser）
+     ├─ spec/contracts/api_contract_spec.rb: 同じexamplesをAPI側の検証器で読む
+     └─ request spec: assert_response_schema_confirm で実responseを照合（実装タスクで使う）
+```
+
+実行時のデータフローは契約の各operationの説明と、[architecture](../architecture.md)の
+「生成の実行方式」を正とする。生成の主経路は次のとおり。
+
+```text
+録音開始 → POST /api/v1/recording_attempts（started_at確定・tokenを返す）
+→ 録音 → POST /api/v1/dots（音声 + token。202でGeneration）
+→ GET /api/v1/generations/{id} を poll_after_seconds ごとに取得
+→ succeeded（Dot + 文字起こし全文） → 全文を sessionStorage へ保存
+→ POST /api/v1/generations/{id}/transcript_ack
+```
 
 ## 10. Files to Change
 
-§17 Q1の回答で確定する。
+| ファイル | 新規/変更 | 役割 |
+| --- | --- | --- |
+| `contracts/openapi.yaml` | 新規 | 契約の正本 |
+| `contracts/README.md` | 新規 | 変更手順・互換性・error code・lintの例外 |
+| `redocly.yaml`・`.redocly.lint-ignore.yaml` | 新規 | 契約のlint設定と理由付きの例外 |
+| `package.json`・`pnpm-lock.yaml` | 変更 | `@redocly/cli`、`lint:contract`を`pnpm check`へ |
+| `apps/web/package.json` | 変更 | `openapi-typescript`・`yaml`、型の生成と最新確認のscript |
+| `apps/web/src/types/api-contract.d.ts` | 新規（生成） | 契約から生成した型 |
+| `apps/web/src/libs/api-contract/schemas.ts`・`schemas.test.ts` | 新規 | Problem・Dot・GenerationのZodと、examplesのtest |
+| `eslint.config.mjs` | 変更 | 生成した型をlint対象から外す |
+| `apps/api/Gemfile`・`Gemfile.lock` | 変更 | `committee-rails`（test group） |
+| `apps/api/spec/support/api_contract.rb`・`spec/contracts/api_contract_spec.rb`・`spec/rails_helper.rb` | 新規/変更 | committeeの設定、examplesの検証、support読み込み |
+| `docs/architecture.md`・`journaling.md`・`dot-history.md`・`privacy.md` | 変更 | 契約の正本・決定の反映 |
+| `docs/development/*.md`・`docs/code-review/*/README.md` | 変更 | 契約の参照・検証・互換性の確認 |
+
+`libs/`に契約のZodを置くのは、契約が特定のfeatureに属さないSDK相当の低レベル依存であり、
+DotやProblemを複数のfeatureが使うため（React・route・表示判断を含まないので、frontend.md §1の
+「例外」には当たらないと判断した）。schemaは使う機能の実装時に足し、使わないschemaを先回りで
+作らない。
 
 ## 11. Libraries / APIs
 
-§17 Q1の回答で確定する。
+| library | 用途 | 選んだ理由 |
+| --- | --- | --- |
+| `@redocly/cli` 2.55.0（root devDependency） | 契約のlint | OpenAPIの標準的なlinterで、examplesのschema検証まで行える。2.56以降は公開から1日未満で、pnpmの`minimumReleaseAge`を緩めないため2.55.0に固定した。telemetryと更新通知は環境変数で止める |
+| `openapi-typescript` 7.13.0（web devDependency） | 契約から型を生成 | runtimeを持たず型だけを出す。`--check`で生成物が最新かを確かめられる |
+| `yaml` 2.9.1（web devDependency） | testで契約を読む | Node標準にYAML parserが無いため |
+| `committee-rails` 0.10.0（api test group） | request specでresponseを照合、examplesの検証 | RailsでOpenAPI 3の照合を行う定番。依存の`committee` 5.6.4・`openapi_parser` 2.3.1も含め、公開から10日以上経っている |
 
 ## 12. Alternatives Considered
 
-§17の各質問の選択肢を参照。
+- 契約の形式（Markdownのみ、型生成なし）、録音attemptのserver保存、`DELETE`をゴミ箱に使う案、
+  独自のerror形式、退会を即時完了扱いにする案・受付だけを示す案、登録済みを画面で明かす案は
+  §17の各質問を参照。
+- コードから契約を生成する（rswag等）: §8のとおり採らない。
+- Zod・通信関数の生成（orval、openapi-zod-client等）: §8のとおり見送る。再検討の条件はQ1の回答。
 
 ## 13. Risks / Things to Watch
 
@@ -181,8 +267,28 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 
 ## 14. Verification
 
-後で埋める。タスクの「必要な検証」（成功/異常の具体例を契約で検証し、Web/APIで解釈が一致すること。
-一覧の続き・日付境界・再試行・認証失効・削除済みDot・互換性の例のレビュー）を含める。
+### Automated（本タスクで実施）
+
+- `pnpm check`: ESLint・命名・Redocly lint（examplesとschemaの一致を含む）・生成した型が最新であること。
+- `pnpm type-check`: Zod schemaと生成した型の完全一致。
+- `pnpm test`: 契約のexamples（Problem・Dot・Generationを返すresponseのすべて）をWebのZodで読む。
+  未知のerror codeと上限超過を拒否する。
+- `bundle exec rspec`・`rubocop`（`apps/api`）: 契約のすべてのresponse examplesをAPI側の検証器で
+  読む。契約外の値を拒否する。
+- 検査が実際にずれを検出することを確かめる: Zodの必須項目を任意に変えると型検査が失敗する、
+  生成した型を書き換えると`check:api-types`が失敗する。
+
+### Manual（人間のレビュー）
+
+契約のexamplesを読み、次の場面の扱いが意図どおりかを確かめる（TASK-005の「必要な検証」）。
+
+- 一覧の続き（`DayListFirstPage`の`next_cursor`、`cursor_invalid`）
+- 日付境界（`DotMorning`: UTCの23:10は翌日のJST 8:10なので`date`は`2026-09-28`）
+- 再試行（`GenerationFailedRetryable` / `GenerationFailedUploadIncomplete` / `GenerationFailedEmptyRecording` /
+  `GenerationExpired`、`retry_expired`）
+- 認証失効（`session_expired`、退会中の`account_deletion_in_progress`）
+- 削除済みのDot（`DayDetailNoDotsLeft`、ゴミ箱・完全削除・`404`）
+- 互換性（`contracts/README.md` §3の表）
 
 ## 15. Definition of Done
 
@@ -192,7 +298,25 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 
 ## 16. Completion Record
 
-未完了。
+- 状態: 2026-10-01、契約と検証の仕組み・関連文書の更新を完了。人間による契約の具体例のレビュー
+  （§14 Manual）が済むまで、TASK-005はIn progressのままにする。
+- 実装差異:
+  - OpenAPIは3.1ではなく3.0.3（committeeの対応範囲。§8）。
+  - 契約の置き場は`docs/api/`ではなく`contracts/`（CIで両側の検査を走らせるため。§8）。
+  - 生成のpathを`/api/v1/generations/{id}`へ変更（§7-4）。
+  - `Today.latest_dot`は`null`ではなく項目を省く形（OpenAPI 3.0で`nullable`と`$ref`の組み合わせが
+    examplesの検証で正しく扱われないため）。
+  - Redocly CLIは2.57.0ではなく2.55.0（`minimumReleaseAge`。§11）。
+- 検証結果:
+  - `pnpm check`: 成功（Redocly lint 0件。例外4件は`.redocly.lint-ignore.yaml`に理由を記載）。
+  - `pnpm type-check`: 成功。`vitest run src/libs/api-contract`: 151件成功。
+  - `bundle exec rubocop`: 違反0。`bundle exec rspec`: 167件成功。
+  - ずれの検出: Zodの`summary`を任意にすると`tsc`が失敗し、生成した型を書き換えると
+    `check:api-types`が終了コード1になった。いずれも確認後に元へ戻した。
+  - 未実施: endpointの実装が無いため、request specでの実responseの照合
+    （`assert_response_schema_confirm`）は実装タスクで行う。契約の具体例の人間によるレビュー
+    （§14 Manual）はPRで依頼する。
+- 関連: 実装はTASK-006〜014。providerが変わる場合の見直し箇所は§13。
 
 ## 17. 人間に判断を求める項目（2026-10-01）
 
@@ -253,3 +377,5 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | Q2 | A | 録音attemptは「録音開始の受付票」。送られなかった受付票をserverに残さない。privacy.md §5への追記は不要 |
 | Q3 | A | `DELETE`は戻せない削除（完全削除）だけに使う |
 | Q4 | A | RFC 9457の外枠に、判定用の`code`を拡張項目として必ず付ける。`detail`に個人データを入れない。画面の文言はWebが`code`から決める |
+| Q5 | A | 退会は受理後もsessionを完了まで残し、Webは`GET /api/v1/account/deletion`で状況を取得する。完了したら1回だけ`completed`を返してsessionを破棄する。失敗は`failed`で示し、やり直せる。通常は数秒で終わるが、長い録音の文字起こし中に退会した場合は数分かかり得るので、TASK-014でその文言を用意する。即時に「退会しました」と出す案（C）は、消えていないのに消えたと表示し得るため採らない。受付だけを示す案（D）はTASK-002の「失敗を成功と区別できるerror」を緩める必要があり採らない |
+| Q6 | A | 登録済みのメールアドレスでも`202`で同じ応答を返し、そのアドレスへログイン・再設定を案内するメールを送る。日記アプリを使っていること自体を第三者に明かさない。メールの文面はTASK-006 |
