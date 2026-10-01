@@ -9,8 +9,9 @@ Claude Codeのセルフレビューとサブエージェント（[`code-reviewer
 ## 1. 前提
 
 - 他の段階のレビュー結果は受け取らない。差分と仕様から独立して判断する。
-- 読み取り専用のsandboxで実行され、ユーザー設定・MCPサーバ・plugin・web検索・browser等の機能は
-  読み込まれない（`scripts/codex-final-check.mjs`が引数で固定している）。
+- 読み取り専用のsandboxで実行される。`$CODEX_HOME/config.toml`（MCPサーバ・pluginの設定を含む）と
+  execpolicyのrulesは読み込まず、web検索・browser等の機能は無効にしている（`scripts/codex-final-check.mjs`が
+  引数で固定している）。`AGENTS.md`等の指示ファイルは読み込まれる。
   ファイルの変更、コミット、外部への投稿はしない。
 - 秘密情報（`.env*`、`apps/api/config/master.key`、`apps/api/config/credentials/*.key`等）を読まない・
   出力しない。秘密情報が混入していないかは、差分（`git diff`）の内容で判断する。
