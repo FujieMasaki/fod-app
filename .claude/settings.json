@@ -35,6 +35,7 @@
       "Bash(git rev-parse *)",
       "Bash(gh pr create *)",
       "Bash(gh pr view *)",
+      "Bash(gh pr checks *)",
       "Bash(node scripts/codex-final-check.mjs *)"
     ],
     "deny": [
