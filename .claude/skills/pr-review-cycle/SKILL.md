@@ -83,6 +83,11 @@ Railsコードはrspec / rubocop / brakeman等）を実行し、pre-push hookで
    - PRの目的（PR本文の概要）
    - 関連するImplementation Planのパス（あれば）
    セルフレビューで見つけた問題や判断は渡さない。
+
+   `.claude/agents/*.md`はセッション開始時に読み込まれる。`code-reviewer`が使えない場合や、このPRが
+   `.claude/agents/code-reviewer.md`を変更している場合（変更前の定義で動いてしまう）は、読み取りだけを
+   行うagentを起動し、同ファイルを読んでその役割・手順・報告形式に従うよう指示する。ファイルの変更・
+   コミット・push・投稿をしないことも明記する。
 3. 指摘を手順5と同じ基準で分類する。
    - 修正が必要な指摘がある → 手順6のとおり修正・検証・コミット・pushし、手順2のセルフレビューから
      やり直して、再びこの手順3でレビューを受ける。
@@ -101,15 +106,23 @@ Railsコードはrspec / rubocop / brakeman等）を実行し、pre-push hookで
 ### 4. Codexの最終チェック
 
 ```bash
-codex exec -s read-only "docs/code-review/final-check.md を読み、その手順で origin/<ベースブランチ>...HEAD の差分を最終チェックしてください。"
+codex exec -s read-only -o <一時ディレクトリ>/codex-final.md \
+  "docs/code-review/final-check.md を読み、その手順で origin/<ベースブランチ>...HEAD の差分を最終チェックしてください。" \
+  < /dev/null
 ```
+
+- 時間がかかるため、Bash toolのtimeoutを上限（600000ms）にするか、バックグラウンドで実行する。
+- 途中経過の出力は長いので、結果は`-o`で保存した最終メッセージのファイルから読む。
+- `< /dev/null`で、stdinが指示に追記されたり入力待ちになったりするのを防ぐ。
+- timeoutした場合は1回だけ再実行し、それでも終わらなければ「止まる条件」に従う。
 
 `-s read-only`でCodexが実行するコマンドを読み取り専用に限り、最終チェックがファイルを変更しない
 ことを保証する。`codex review --base`は独自の指示と同時に指定できず、`codex review "<指示>"`は
 diffの範囲がCLIの既定判定に任されるため使わない。
 
 結果の冒頭でCodexが報告したdiffの範囲（baseとHEAD）が、push済みの最新コミットと一致しているか
-確認する。サブエージェントの指摘やセルフレビューの結果は渡さない。
+確認する。一致しなければ結果を採用せず、ループの回数に数えずに1回だけ再実行する。それでも一致しなければ
+「止まる条件」に従う。サブエージェントの指摘やセルフレビューの結果は渡さない。
 
 ### 5. 指摘を確認して分類
 
