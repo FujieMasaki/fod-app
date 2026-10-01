@@ -30,10 +30,19 @@
 - アプリケーション機能としてのAI処理はBackend側に置く。
 - 開発支援AIに関する指示・文書・workflowはroot、`docs/`、`.github/` 側で管理する。
 - User、認証、Dot、音声、AI処理は将来の変更で実装する。
-- 最初のプロダクトAPIをWebから利用する変更で、API契約の管理を始める。その時点ではOpenAPIを
-  推奨候補とするが、型生成・生成物の管理・契約検証toolは別の判断とする。
-- API、Web、契約は同じPRで更新する。同一PRでもWebとAPIのデプロイ時差があり得るため、
-  request / responseの互換性と段階的な配布を考慮する。
+- **API契約の正本は手書きのOpenAPI（[`contracts/openapi.yaml`](../contracts/openapi.yaml)）とする**
+  （2026-10-01にTASK-005で採用）。契約を実装より先に人が決め、WebとAPIがそれに合わせる。
+  コードから契約を生成する方式（バックエンドを正にする）は採らない。
+  - 契約自体はRedocly CLIでlintする（書式・参照・examplesとschemaの一致）。
+  - Webは契約から型だけを生成してcommitし（openapi-typescript）、responseを検証するZod schemaを
+    その型と完全一致させる。通信関数やZodの生成は、endpointが大きく増えるか、Zodと契約のずれによる
+    不具合が出たときに再検討する。
+  - APIはコードを生成せず手で書き、request specでresponseを契約と照合する（committee-rails）。
+  - 契約のexamplesを、WebのZodとAPIの検証器の両方で読み、同じ意味で解釈することを確かめる。
+  - 運用・error code・互換性の規則は[`contracts/README.md`](../contracts/README.md)。
+- API、Web、契約は同じPRで更新する。同一PRでもWebとAPIのデプロイ時差（古いタブ、deploy中の
+  新旧タスクの併存）があり得るため、1回のreleaseでは両方向で壊れない変更だけを入れ、それ以外は
+  expand → migrate → contractの段階を踏む（[`contracts/README.md`](../contracts/README.md) §3）。
 
 ### 公開MVPの配信と認証（2026-09-24 Devise採用・未実装）
 
@@ -175,8 +184,10 @@ Browser（音声は memory のみ。storage へ書かない）
   録音attemptの受理時刻であり、認証確認の時刻やclientが計測した値を採用しない。実際に話し始めた
   瞬間との差が残ること（一定の秒数以内とは保証せず、日付境界をまたぐ遅れでは日付がずれ得ること）を
   受け入れる。attemptは本人に紐づき、1件のDot生成にしか使えず、
-  やり直しで新しくなり、別Userでは使えず、未送信には期限がある。保存方式（serverに保存するか
-  署名済みの値を端末のmemoryに置くか）はTASK-005で決める。一覧の並びと「最新」の判定にも
+  やり直しで新しくなり、別Userでは使えず、未送信には期限（発行から2時間）がある。**serverが
+  暗号化・署名したtokenを端末のmemoryにだけ置き、serverには保存しない**（2026-10-01にTASK-005で
+  決定）。例外として、Dotの完全削除・退会・処理の取り消しの後は、同じattemptで消したものが作り直されないよう、
+  attemptの`id`と期限だけを期限まで残す（[privacy.md §5-1](privacy.md)）。一覧の並びと「最新」の判定にも
   `started_at`を使い、同値のときはDotの識別子で決める。
 - **`sentence`と`summary`の更新APIを持つ**（2026-09-29に追加）。`date`・`started_at`・`duration`は
   更新させない。
@@ -215,10 +226,10 @@ Job（非同期。worker は当面 ECS 同一タスク内で Puma と並走）
   → 失敗: 記録を failed で残す。期限内は再試行できる
   → 期限到来: 音声object・文字起こし結果・Transcribe の job・残る記録の削除処理を始める
 
-GET /api/v1/dots/generations/:処理ID（client は polling）
+GET /api/v1/generations/:処理ID（client は polling）
   → **まず dots を見る。**同じ処理ID の Dot があれば成功として返す
     （記録が cleanup 待ちで残っていても「処理中」とは返さない）
-POST .../transcript_ack（client が全文を保存し終えたら送る。冪等）
+DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し終えたら送る受領通知。冪等）
   → 文字起こし結果と Transcribe の job の削除処理を始める
 ```
 
@@ -279,8 +290,19 @@ POST .../transcript_ack（client が全文を保存し終えたら送る。冪�
 - **再試行とcleanupは同じ記録を奪い合うため、どちらも条件付き更新にして片方だけを成功させる。**
   再試行・再upload・cleanupは同じ入口（利用者の行のlock → `active`・世代・期限・現在の状態の
   確認 → 実行権の発行）を通す。自動回収も同じ入口を通る。
+- **処理の取り消し**（Dotになる前の処理。`DELETE /api/v1/generations/{id}`。2026-10-01にTASK-005で
+  追加）も同じ入口を通す。TASK-003 Plan §20の認可表に無い契機なので、ここを正とする。
+  - 認可: 処理の記録の所有者（`current_user`と`(user_id, 処理ID)`）。処理IDを知っていることを
+    権限にしない。
+  - 対象: Dotがまだ無い状態（`uploading`・`upload_failed`・`accepted`・`transcribing`・`generating`・
+    `failed`と、期限到来で`cancel_requested`・`cleanup_pending`にある記録）。`succeeded_cleanup_pending`と
+    Dotがある処理は取り消さない（`generation_completed`）。
+  - 退会・期限到来によるcleanupと同じく、**`active`と期限内を要求しない**（期限を過ぎた処理も取り消せる）。
+  - 受理したら`cancel_requested`へ移し、**その処理の全部**（音声・文字起こし結果・Transcribeのjob・
+    処理の記録）を消す。同じ利用者の他の処理には触れない。使用済みattemptの`id`と期限を残す
+    （[privacy.md §5-1](privacy.md)）。成功の確定（T11）とは条件付き更新で排他し、先に確定した方が勝つ。
 - **Transcribeが終端したあと、Bedrockへ送る前にもう一度この入口を通す。**退会や期限到来を
-  受理していれば生成へ進まず後片付けへ回す。**退会の受理後に新しいBedrockのrequestを開始しない。**
+  受理していれば（処理の取り消しも同じ）生成へ進まず後片付けへ回す。**退会の受理後に新しいBedrockのrequestを開始しない。**
   既に始まっているrequestは止められないので、そこは約束しない。
 - **退会は利用者の行のlockと世代番号で排他する。**状態の確認だけでは、確認を通過したuploadが
   退会の削除処理のあとに完了する経路を塞げない。受理時に利用者の行を`SELECT ... FOR UPDATE`で
@@ -339,8 +361,7 @@ ALB/Fargate/RDS/公開IPv4の小規模例でも、1ドル150円・消費税10%�
 - password再設定後の既存Cookieの実動作（実機検証）
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
   （ログ14日・backup 7日は既定案であり、実値は未確定）
-- API契約でOpenAPIを採用するか、採用時の型生成・生成物管理・検証方法
-- promptの最終文面、Bedrockのmodel idとdata retention mode、pollingの間隔と打ち切り（TASK-005/009で確定）
+- promptの最終文面、Bedrockのmodel idとdata retention mode（TASK-009で確定）
 - 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認結果（公開前に人間が実施）
 - 音声受信時のPuma占有時間の実測（`RAILS_MAX_THREADS`既定3・ECS 1タスク）、presignedでの直接uploadへ移す条件、受容するaudioのcontent typeの確定、S3 bucketとIAMの具体設定
 

@@ -11,8 +11,9 @@
     "dev": "pnpm --filter @focus-on-dot/web dev",
     "build": "pnpm --filter @focus-on-dot/web build",
     "preview": "pnpm --filter @focus-on-dot/web preview",
-    "lint": "eslint . && pnpm lint:naming",
+    "lint": "eslint . && pnpm lint:naming && pnpm lint:contract",
     "lint:naming": "node scripts/check-naming.mjs",
+    "lint:contract": "REDOCLY_TELEMETRY=off REDOCLY_SUPPRESS_UPDATE_NOTICE=true redocly lint main && pnpm --filter @focus-on-dot/web check:api-types",
     "check": "pnpm lint",
     "type-check": "pnpm --filter @focus-on-dot/web type-check",
     "test": "pnpm test:scripts && pnpm --filter @focus-on-dot/web test",
@@ -22,6 +23,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@redocly/cli": "2.55.0",
     "@typescript-eslint/eslint-plugin": "^8.70.1",
     "eslint": "^9",
     "globals": "^17.12.0",

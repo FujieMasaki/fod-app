@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "type-check": "tsc --noEmit --incremental false",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "generate:api-types": "openapi-typescript ../../contracts/openapi.yaml --output src/types/api-contract.d.ts",
+    "check:api-types": "openapi-typescript ../../contracts/openapi.yaml --output src/types/api-contract.d.ts --check"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.103.3",
@@ -29,8 +31,10 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.1.1",
     "jsdom": "^30.1.1",
+    "openapi-typescript": "7.13.0",
     "typescript": "^5",
     "vite": "^8.3.1",
-    "vitest": "^5.0.2"
+    "vitest": "^5.0.2",
+    "yaml": "2.9.1"
   }
 }

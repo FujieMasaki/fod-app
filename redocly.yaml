@@ -1,0 +1,15 @@
+# Redocly CLIの設定。契約の正本 contracts/openapi.yaml を検査する（運用は contracts/README.md）。
+apis:
+  main:
+    root: contracts/openapi.yaml
+extends:
+  - recommended
+rules:
+  # 全operationにerror responseの定義を求める（Webがcodeで判定できるようにするため）
+  operation-4xx-response: error
+  operation-operationId: error
+  no-unused-components: error
+  # examplesがschemaに合っていることを確かめる
+  no-invalid-media-type-examples:
+    severity: error
+    allowAdditionalProperties: false

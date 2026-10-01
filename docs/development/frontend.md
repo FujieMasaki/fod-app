@@ -60,6 +60,11 @@
   version・削除契機が定義できる値だけに使う。録音Blob、文字起こし、トークン、認証根拠は保存しない。
 - API失敗、schema不正、権限拒否、ネットワーク中断を区別して安全なUIへ変換する。サーバーの
   エラー本文、録音内容、秘密情報をそのまま表示・ログ出力しない。
+- Rails APIのresponseは、[`contracts/openapi.yaml`](../../contracts/openapi.yaml)から生成した型
+  （`types/api-contract.d.ts`）と完全一致するZod schemaで検証する。schemaは
+  `libs/api-contract/schemas.ts`に置き、使う機能の実装時に追加する。失敗は`code`で判定し、
+  `title`・`detail`をそのまま表示しない。responseのschema検証に失敗したら、古いタブの可能性があるため
+  壊れた表示をせず再読み込みを案内する。契約の変更手順は[`contracts/README.md`](../../contracts/README.md)。
 
 ### 推奨
 

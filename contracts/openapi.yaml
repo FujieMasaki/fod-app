@@ -1,0 +1,2149 @@
+openapi: 3.0.3
+info:
+  title: Focus on Dot API
+  version: 1.0.0
+  license:
+    name: UNLICENSED
+    url: https://github.com/FujieMasaki/fod-app
+  description: |
+    Focus on DotのWeb（React SPA）とRails APIの契約の正本。運用規則・error code表・互換性の方針は
+    `contracts/README.md`、判断の経緯は`docs/implementation-plans/2026-10-01-task-005-api-contract.md`。
+
+    共通の約束:
+    - 同一originのCookie sessionで認証する。状態を変える操作は`X-CSRF-Token`を必須とする。
+    - 個人に関わるresponseはすべて`Cache-Control: no-store`を付ける。
+    - 他人のresourceと存在しないresourceは区別せず`404 not_found`を返す。ゴミ箱の中のDotは
+      ゴミ箱のendpoint以外から`404 not_found`になる。
+    - 日時は`Z`で終わるUTCのISO 8601（`2026-09-28T13:04:05Z`。`+00:00`の形は使わない）、日付は
+      Asia/Tokyoの暦日（`YYYY-MM-DD`）で、どちらもserverが決める。前後に改行などを含む値は契約外
+      （patternの`(?<![\s\S])`・`(?![\s\S])`は、JavaScriptでもRubyでも文字列の端だけに一致する）。
+    - 失敗はRFC 9457（`application/problem+json`）で返し、Webは`code`で判定する。
+    - 退会を受理した利用者には、login（passwordと、Googleの`intent=sign_in`）・logout
+      （`DELETE /api/v1/session`）・`GET /api/v1/session`・`GET /api/v1/account/deletion`・
+      `DELETE /api/v1/account`（失敗後のやり直し）以外は`409 account_deletion_in_progress`を返す。
+      sessionを使わないendpoint（登録・確認・password再設定）はこの対象外で、通常どおり扱う。loginを許すのは、退会中にsessionを失っても（7日の
+      期限・logout）状況の確認とやり直しへ戻れるようにするため。serverも`failed`の削除を自動で
+      再実行する。
+servers:
+  - url: /
+tags:
+  - name: session
+    description: 認証状態・login・logout・登録・メール確認・password再設定
+  - name: google
+    description: Googleログイン（browserのredirectで遷移する。JSON APIではない）
+  - name: account
+    description: 退会
+  - name: generation
+    description: 録音attempt・音声の送信・生成状態・再試行・文字起こし全文の受領通知
+  - name: history
+    description: Day・日単位の一覧・日の詳細
+  - name: dot
+    description: Dotの更新・ゴミ箱・完全削除
+security:
+  - sessionCookie: []
+paths:
+  /api/v1/session:
+    get:
+      tags: [session]
+      operationId: getSession
+      summary: 認証状態とCSRF tokenを取得する
+      description: |
+        未認証でも`200`を返す（取得失敗と未認証を区別するため）。WebはこのresponseのCSRF tokenを
+        以後の変更操作で`X-CSRF-Token`に付ける。
+      security: []
+      responses:
+        "200":
+          description: 認証状態
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+              examples:
+                authenticated:
+                  $ref: "#/components/examples/SessionAuthenticated"
+                anonymous:
+                  $ref: "#/components/examples/SessionAnonymous"
+                deletionInProgress:
+                  $ref: "#/components/examples/SessionDeletionInProgress"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    post:
+      tags: [session]
+      operationId: createSession
+      summary: メールアドレスとpasswordでloginする
+      description: |
+        成功するとsessionを更新し、新しいCSRF tokenを返す。認証成功から7日で失効し、利用では
+        延長しない（`expires_at`）。`email_unconfirmed`はpasswordが一致したときだけ返し、一致しなければ
+        登録の有無やメール確認の状態にかかわらず`invalid_credentials`を返す（登録の有無を明かさない）。
+        退会を受理した利用者もloginでき、
+        `account_status=deletion_in_progress`のSessionを返す（Webは退会の状況画面へ進める）。
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "200":
+          description: login成功
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+              examples:
+                authenticated:
+                  $ref: "#/components/examples/SessionAuthenticated"
+        "401":
+          description: "`invalid_credentials`: メールアドレスまたはpasswordが違う"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                invalidCredentials:
+                  $ref: "#/components/examples/ProblemInvalidCredentials"
+        "403":
+          description: "`email_unconfirmed`（メール未確認）または`csrf_invalid`"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                emailUnconfirmed:
+                  $ref: "#/components/examples/ProblemEmailUnconfirmed"
+                csrfInvalid:
+                  $ref: "#/components/examples/ProblemCsrfInvalid"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [session]
+      operationId: deleteSession
+      summary: logoutする
+      description: |
+        sessionを破棄しCookieを消す。CookieStoreのため、コピー済みCookieの即時失効は保証しない。
+        未認証で呼んでも`204`を返す。
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "204":
+          description: logoutした
+        "403":
+          $ref: "#/components/responses/CsrfInvalid"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/registration:
+    post:
+      tags: [session]
+      operationId: createRegistration
+      summary: メールアドレスとpasswordで登録する
+      description: |
+        登録済みかどうかにかかわらず同じ`202`を返す（登録の有無を明かさない）。未登録なら確認メールを、
+        登録済みならログインとpassword再設定を案内するメールを送る。password方針の具体値はTASK-006。
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "202":
+          description: 受け付けた（本文なし）
+        "403":
+          $ref: "#/components/responses/CsrfInvalid"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/confirmation:
+    post:
+      tags: [session]
+      operationId: resendConfirmation
+      summary: 確認メールを再送する
+      description: |
+        宛先の制限（60秒に1回・1時間5回）に掛かった場合も、登録の有無にかかわらず同じ`202`を返す。
+        IPごとの制限（1時間20回）だけ`429`を返す。
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailOnly"
+      responses:
+        "202":
+          description: 受け付けた（本文なし）
+        "403":
+          $ref: "#/components/responses/CsrfInvalid"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [session]
+      operationId: confirmEmail
+      summary: 確認tokenを使ってメールアドレスを確認する
+      description: |
+        確認tokenの有効期限は24時間で、使用後は再利用できない。成功してもloginはしない
+        （Webはログイン画面へ戻す）。
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TokenOnly"
+      responses:
+        "204":
+          description: 確認した
+        "403":
+          $ref: "#/components/responses/CsrfInvalid"
+        "422":
+          $ref: "#/components/responses/TokenRejected"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/password:
+    post:
+      tags: [session]
+      operationId: requestPasswordReset
+      summary: password再設定メールを送る
+      description: |
+        確認メールの再送と同じ制限・同じ共通応答。Google専用の利用者には再設定tokenを発行せず、
+        Googleでのログインを案内するメールを送る（応答は同じ`202`）。
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EmailOnly"
+      responses:
+        "202":
+          description: 受け付けた（本文なし）
+        "403":
+          $ref: "#/components/responses/CsrfInvalid"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    patch:
+      tags: [session]
+      operationId: resetPassword
+      summary: 再設定tokenと新しいpasswordで再設定する
+      description: |
+        再設定tokenの有効期限は6時間で、使用後は再利用できない。成功してもloginはしない
+        （Webはログイン画面へ戻す）。
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordReset"
+      responses:
+        "204":
+          description: 再設定した
+        "403":
+          $ref: "#/components/responses/CsrfInvalid"
+        "422":
+          description: "`token_invalid` / `token_expired` / `validation_failed`（password方針）"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                tokenExpired:
+                  $ref: "#/components/examples/ProblemTokenExpired"
+                validationFailed:
+                  $ref: "#/components/examples/ProblemValidationFailed"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/google_oauth2:
+    post:
+      tags: [google]
+      operationId: startGoogleAuth
+      summary: Googleログインを開始する（form POST）
+      description: |
+        JSON APIではない。Webは通常のform submitで送り、browserがGoogleへ遷移する。
+        `intent=reauthenticate`は、Google専用の利用者が退会の前に再認証するときに使う
+        （有効時間はTASK-006で決める）。退会を受理した利用者も`intent=sign_in`でloginでき、
+        callbackは`/`へ戻す（Webは`account_status`で退会の状況画面へ進める）。
+        試行回数の制限に掛かった場合は、JSONの`429`ではなく`auth_error=rate_limited`を付けてredirectする
+        （form POSTでbrowserが遷移するため）。戻り先は`intent=sign_in`なら`/login`、`reauthenticate`なら
+        `return_to`（省略時は`/`。loginしたまま退会などの流れへ戻れるようにするため）。
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/GoogleAuthStart"
+      responses:
+        "302":
+          description: Googleの認証画面へredirectする
+          headers:
+            Location:
+              schema:
+                type: string
+        "403":
+          $ref: "#/components/responses/CsrfInvalid"
+
+  /auth/google_oauth2/callback:
+    get:
+      tags: [google]
+      operationId: googleAuthCallback
+      summary: Googleからのcallback
+      description: |
+        JSON APIではない。認証応答とstateを検証し、SPAへredirectする。成功時は`return_to`
+        （省略時は`/`）へ戻す。失敗時は`auth_error=<理由>`を付けて、`intent=sign_in`なら`/login`へ、
+        loginしたままの`intent=reauthenticate`なら`return_to`（省略時は`/`）へ戻す（理由の一覧は
+        `contracts/README.md`）。
+
+        `intent=reauthenticate`では、**Googleが返した利用者（検証済みのprovider/uid）が、いまlogin
+        している利用者に紐づくGoogleの利用者と一致することを必ず確かめる。**一致しなければsessionも
+        再認証の時刻も変えず、`return_to`（省略時は`/`）へ`auth_error=google_reauthentication_mismatch`を
+        付けて戻す。loginしていない状態の`reauthenticate`は`/login?auth_error=google_auth_failed`にする。盗まれたsessionに
+        別のGoogle利用者で再認証を通し、退会まで進められないようにするため。
+        Googleが確認済みと返したメールが、メール＋passwordの利用者と一致した場合は
+        `google_email_conflict`を返し、既存の利用者へも新しい利用者へも接続しない。
+      security: []
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: SPAへredirectする
+          headers:
+            Location:
+              schema:
+                type: string
+
+  /api/v1/account:
+    delete:
+      tags: [account]
+      operationId: deleteAccount
+      summary: 退会を受け付ける
+      description: |
+        **まだ受理していない退会では**、password利用者は`current_password`が必須で、送られなければ
+        `422 validation_failed`、違っていれば`403 reauthentication_failed`を返す。Google専用の利用者
+        （passwordを持たない）は送らず、代わりに直近のGoogle再認証が必要で、無ければ
+        `403 google_reauthentication_required`を返す。**受理済みの退会のやり直しでは、bodyを見ずに
+        （`current_password`の有無も確かめずに）`202`を返す。**
+
+        受理の時点で新しい保存・再試行・結果の確定を止め、ゴミ箱の中も含めて本人のデータを消す。
+        **進行中の処理が0になり、削除が終わるまで完了を返さない。**受理後もsessionは完了まで残し、
+        Webは`GET /api/v1/account/deletion`で状況を取得する。既に受理済みなら同じ`202`を返す。
+        `failed`のあとに呼ぶと削除をやり直す。**受理済みの退会のやり直しでは再認証を求めない**
+        （受理の時点で本人確認が済んでおり、やり直しは同じ削除を再開するだけで対象を広げないため）。
+        serverも`failed`の削除を自動で再実行するので、利用者がやり直さなくても削除は進む。
+        sessionを失った場合は、loginし直せば状況の確認とやり直しへ戻れる。
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountDeletionRequest"
+      responses:
+        "202":
+          description: 受け付けた
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeletion"
+              examples:
+                inProgress:
+                  $ref: "#/components/examples/AccountDeletionInProgress"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          description: "`reauthentication_failed` / `google_reauthentication_required` / `csrf_invalid`"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                reauthenticationFailed:
+                  $ref: "#/components/examples/ProblemReauthenticationFailed"
+                googleReauthenticationRequired:
+                  $ref: "#/components/examples/ProblemGoogleReauthenticationRequired"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/account/deletion:
+    get:
+      tags: [account]
+      operationId: getAccountDeletion
+      summary: 退会の状況を取得する
+      description: |
+        `completed`は1回だけ返し、同じresponseでsessionを破棄する。以後は`401`になる。
+        受理していなければ`404`。
+      responses:
+        "200":
+          description: 退会の状況
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountDeletion"
+              examples:
+                inProgress:
+                  $ref: "#/components/examples/AccountDeletionInProgress"
+                completed:
+                  $ref: "#/components/examples/AccountDeletionCompleted"
+                failed:
+                  $ref: "#/components/examples/AccountDeletionFailed"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/recording_attempts:
+    post:
+      tags: [generation]
+      operationId: createRecordingAttempt
+      summary: 録音attemptを発行する（録音開始の受付票）
+      description: |
+        録音開始操作の直前に呼ぶ。serverが受理した時刻が`started_at`になり、Dotの`date`はここから
+        決まる。Webは`attempt_token`をmemoryにだけ置き、storageへ書かない。1つのattemptは1件の
+        Dot生成にしか使えず、録り直しでは新しく発行する。serverはattemptを保存しない
+        （一回性は初回送信で処理の記録の一意制約により担保する）。例外として、Dotの完全削除・退会・
+        処理の取り消しで処理の記録とDotを消すときは、そのattemptの`id`と期限だけを期限まで残し、
+        同じattemptでの再送を`attempt_invalid`にする（消したものが作り直されないようにするため）。
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "201":
+          description: 発行した
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecordingAttempt"
+              examples:
+                issued:
+                  $ref: "#/components/examples/RecordingAttemptIssued"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/AccountDeletionInProgress"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/dots:
+    post:
+      tags: [generation]
+      operationId: createDot
+      summary: 録音した音声を送り、Dotの生成を始める
+      description: |
+        生成は非同期で、`202`で処理（Generation）を返して終わる。結果は
+        `GET /api/v1/generations/{generation_id}`で取得する。
+
+        attemptは`X-Recording-Attempt` headerで渡す（bodyに入れない）。serverはmultipartを解釈する
+        前にheaderのattemptを検証し、同じattemptで再び送られた場合は、新しい処理を作らず、multipartの
+        解釈もS3への保存もせずに既存の処理を返す。例外は既存の処理が`failed`かつ
+        `failure.kind=upload_incomplete`の場合で、attemptの期限内なら音声を受け取り直す。
+        同じattemptの処理のDotがゴミ箱の中にある場合と、完全削除・退会・処理の取り消しで消した後の
+        場合は`422 attempt_invalid`を返す（ゴミ箱の中のDotを返さず、消したものを作り直さないため）。
+
+        HTTPの本文はPumaが受け取り終えてからアプリへ渡すため、serverの判定では本文の再送信そのものは
+        防げない。Webは送り直す前に`GET /api/v1/generations/{id}`（idは録音attemptの`id`）で既存の
+        処理を確かめる。`404`なら送り直す。`failed`かつ`failure.kind=upload_incomplete`なら、音声が
+        serverに届いていないので送り直す。それ以外の状態なら送り直さず、その処理を使う。
+
+        録音中に認証が失効しても、同じ利用者で入り直せばattemptの期限内は同じattemptで送れる。
+        別の利用者のattemptは`attempt_invalid`になる。
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/RecordingAttempt"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/DotUpload"
+            encoding:
+              audio:
+                contentType: audio/webm, audio/mp4
+      responses:
+        "202":
+          description: 受け付けた（または同じattemptの既存の処理）
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Generation"
+              examples:
+                accepted:
+                  $ref: "#/components/examples/GenerationProcessing"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/AccountDeletionInProgress"
+        "413":
+          description: "`audio_too_large`: 32MBを超えた"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                audioTooLarge:
+                  $ref: "#/components/examples/ProblemAudioTooLarge"
+        "415":
+          description: "`unsupported_audio_type`: 受容しない音声形式"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                unsupportedAudioType:
+                  $ref: "#/components/examples/ProblemUnsupportedAudioType"
+        "422":
+          description: "`attempt_expired` / `attempt_invalid` / `validation_failed`"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                attemptExpired:
+                  $ref: "#/components/examples/ProblemAttemptExpired"
+                attemptInvalid:
+                  $ref: "#/components/examples/ProblemAttemptInvalid"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/generations/{generation_id}:
+    parameters:
+      - $ref: "#/components/parameters/GenerationId"
+    get:
+      tags: [generation]
+      operationId: getGeneration
+      summary: 生成の状態を取得する（polling）
+      description: |
+        serverは先にDotの有無を見る。同じ処理のDotがあれば、後片付けが残っていても`succeeded`を返す。
+
+        `processing`の間は`poll_after_seconds`秒あけて次を取得する。Webは自動の取得を15分で止め、
+        再表示や利用者の操作で再開する（打ち切っても処理は止まらない）。
+
+        文字起こし全文は、受領通知（ACK）の受理後、保持期間の経過後、そのDotの完全削除の受理後、
+        退会の受理後は返さない。ACK後と期間経過後はDotが残るので`succeeded`と
+        `transcript.status=unavailable`を返す。完全削除と退会ではDotも残らないので`404`になる。
+        ゴミ箱の中のDotの処理も`404`。
+      responses:
+        "200":
+          description: 生成の状態
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Generation"
+              examples:
+                processing:
+                  $ref: "#/components/examples/GenerationProcessing"
+                succeeded:
+                  $ref: "#/components/examples/GenerationSucceeded"
+                succeededTranscriptAcknowledged:
+                  $ref: "#/components/examples/GenerationSucceededTranscriptAcknowledged"
+                failedRetryable:
+                  $ref: "#/components/examples/GenerationFailedRetryable"
+                failedUploadIncomplete:
+                  $ref: "#/components/examples/GenerationFailedUploadIncomplete"
+                failedEmptyRecording:
+                  $ref: "#/components/examples/GenerationFailedEmptyRecording"
+                expired:
+                  $ref: "#/components/examples/GenerationExpired"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AccountDeletionInProgress"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [generation]
+      operationId: cancelGeneration
+      summary: Dotになる前の処理を取り消し、預けた音声などを消す
+      description: |
+        Dotがまだ無い処理（`processing` / `failed` / `expired`）を取り消す。認可・対象の状態・消す範囲は
+        `docs/architecture.md`「生成の実行方式」の「処理の取り消し」を正とする。生成へは進めず、預けた
+        音声・文字起こし結果・文字起こしのjob・処理の記録の削除処理を始める（`privacy.md` §5-1の
+        「処理の取り消し」）。`202`は削除を受け付けたことを表し、消え終わったことは表さない
+        （文字起こしのjobが終わるまで消せないなど、完了は遅れ得る）。受理以降、この処理の照会は`404`。
+        外部へ既に渡った分は取り消せない。
+
+        Dotの保存まで終わっている処理は取り消せず`409 generation_completed`を返す（Webは
+        `DELETE /api/v1/dots/{dot_id}`での完全削除へ案内する）。ただしそのDotがゴミ箱の中なら、照会と
+        同じく`404`を返す（ゴミ箱のendpoint以外からゴミ箱の中のDotの存在を示さないため）。
+        存在しない処理・他人の処理・取り消しを受理済みの処理は`404`。応答を失ってDELETEを送り直した
+        場合も`404`になるので、Webは自分が送った取り消しの再送で`404`を受けたら取り消し済みとして扱う。
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "202":
+          description: 取り消しを受け付けた（本文なし）
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`generation_completed` / `account_deletion_in_progress`"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                generationCompleted:
+                  $ref: "#/components/examples/ProblemGenerationCompleted"
+                accountDeletionInProgress:
+                  $ref: "#/components/examples/ProblemAccountDeletionInProgress"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/generations/{generation_id}/retry:
+    parameters:
+      - $ref: "#/components/parameters/GenerationId"
+    post:
+      tags: [generation]
+      operationId: retryGeneration
+      summary: 失敗した生成を、録り直さずに再試行する
+      description: |
+        `failed`かつ`retryable=true`のときだけ受け付ける。serverが預かっている音声（または文字起こし
+        結果）から再開するので音声は送らない。`started_at`は変わらない。
+        `failure.kind=upload_incomplete`の場合は音声がserverに無いため、ここではなく
+        `POST /api/v1/dots`へ同じattemptで送り直す。
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "202":
+          description: 再試行を受け付けた
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Generation"
+              examples:
+                processing:
+                  $ref: "#/components/examples/GenerationProcessing"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: "`retry_expired` / `retry_not_allowed` / `account_deletion_in_progress`"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                retryExpired:
+                  $ref: "#/components/examples/ProblemRetryExpired"
+                retryNotAllowed:
+                  $ref: "#/components/examples/ProblemRetryNotAllowed"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/generations/{generation_id}/transcript:
+    parameters:
+      - $ref: "#/components/parameters/GenerationId"
+    delete:
+      tags: [generation]
+      operationId: deleteTranscript
+      summary: 端末へ保存し終えた文字起こし全文を、server側から消す
+      description: |
+        文字起こし全文の受領通知（ACK）。Webは全文を`sessionStorage`へ保存し**終えてから**呼ぶ。
+        serverは文字起こし結果のobjectと文字起こしのjobの削除処理を始め、以後この処理の照会では
+        全文を返さない（`transcript.status=unavailable`）。server側の全文は戻せない。
+        `202`は削除を受け付けたことを表し、消え終わったことは表さない。何度呼んでも結果は変わらず、
+        対象が既に無くても本人の処理なら`202`を返す。Dotそのものは消さない。
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "202":
+          description: 削除を受け付けた（本文なし）
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AccountDeletionInProgress"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/days:
+    get:
+      tags: [history]
+      operationId: listDays
+      summary: 記録のある日を新しい順に取得する
+      description: |
+        1日を1要素に集約して返す。記録のない日と、すべてのDotがゴミ箱にある日は要素を返さない。
+        件数にゴミ箱の中のDotを数えない。続きは`next_cursor`で取得し、`null`なら終わり。
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - name: limit
+          in: query
+          required: false
+          description: 1回に返す日数
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 30
+      responses:
+        "200":
+          description: 日単位の一覧
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DayList"
+              examples:
+                firstPage:
+                  $ref: "#/components/examples/DayListFirstPage"
+                empty:
+                  $ref: "#/components/examples/DayListEmpty"
+        "400":
+          $ref: "#/components/responses/CursorInvalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/AccountDeletionInProgress"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/days/today:
+    get:
+      tags: [history]
+      operationId: getToday
+      summary: 今日（Asia/Tokyo）の最新のDotを取得する
+      description: |
+        Dayの表示に使う。今日の記録が無ければ`dot_count: 0`で`latest_dot`を省く（取得失敗とは別）。
+        `date`はserverが決めた今日の日付。
+      responses:
+        "200":
+          description: 今日の状態
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Today"
+              examples:
+                recorded:
+                  $ref: "#/components/examples/TodayRecorded"
+                notRecorded:
+                  $ref: "#/components/examples/TodayNotRecorded"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/AccountDeletionInProgress"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/days/{date}:
+    get:
+      tags: [history]
+      operationId: getDay
+      summary: 指定した日のDotを取得する
+      description: |
+        その時点でゴミ箱の外にある、その日の本人のDotを`started_at`の降順（同値ならidの降順）で返す。
+        先頭が既定表示する最新のDot。0件でも`200`で`dots: []`を返す（一覧の取得後にその日のDotが
+        すべてゴミ箱へ移るか完全削除された場合）。Webは「その日に振り返れるDotがない」と示し、
+        一覧を取り直す。
+      parameters:
+        - name: date
+          in: path
+          required: true
+          description: Asia/Tokyoの暦日
+          schema:
+            type: string
+            format: date
+            pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
+          example: "2026-09-28"
+        - $ref: "#/components/parameters/Cursor"
+        - name: limit
+          in: query
+          required: false
+          description: 1回に返すDotの件数
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: その日のDot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DayDetail"
+              examples:
+                twoDots:
+                  $ref: "#/components/examples/DayDetailTwoDots"
+                noDotsLeft:
+                  $ref: "#/components/examples/DayDetailNoDotsLeft"
+        "400":
+          $ref: "#/components/responses/CursorInvalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/AccountDeletionInProgress"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/dots/{dot_id}:
+    parameters:
+      - $ref: "#/components/parameters/DotId"
+    patch:
+      tags: [dot]
+      operationId: updateDot
+      summary: Dotの`sentence`と`summary`を編集する
+      description: |
+        編集前の値は残さない（戻せない）。空文字は許す。`date`・`started_at`・`duration_seconds`は
+        編集できない（送られても無視せず`422`にする）。ゴミ箱の中のDotは`404`。
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DotUpdate"
+      responses:
+        "200":
+          description: 編集後のDot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dot"
+              examples:
+                updated:
+                  $ref: "#/components/examples/DotEvening"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AccountDeletionInProgress"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    delete:
+      tags: [dot]
+      operationId: deleteDotPermanently
+      summary: Dotを完全削除する（戻せない）
+      description: |
+        ゴミ箱の内外を問わず受け付ける。そのDotの行と、そのDotを作った処理の音声・文字起こし結果・
+        文字起こしのjob・処理の記録を消し終えてから`204`を返す。一部だけ消えた状態は成功にせず
+        `503 deletion_failed`を返す（同じ要求でやり直せる）。RDS自動backupと外部providerに残り得る分は
+        対象外。存在しない・他人のDotは`404`（応答を失って再送した場合も`404`になる）。
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "204":
+          description: 完全削除した
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AccountDeletionInProgress"
+        "500":
+          $ref: "#/components/responses/InternalError"
+        "503":
+          description: "`deletion_failed`: 削除の途中で失敗した。Dotは残っている扱い"
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+              examples:
+                deletionFailed:
+                  $ref: "#/components/examples/ProblemDeletionFailed"
+
+  /api/v1/dots/{dot_id}/trash:
+    parameters:
+      - $ref: "#/components/parameters/DotId"
+    post:
+      tags: [dot]
+      operationId: trashDot
+      summary: Dotをゴミ箱へ移す（戻せる）
+      description: |
+        Day・一覧・日の詳細から外れ、`deletion_begins_at`から削除処理を始める（受理から7日）。
+        これは削除処理を**始める**日時で、消え終わる時刻ではない。既にゴミ箱の中なら`404`。
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "200":
+          description: ゴミ箱へ移した
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrashedDot"
+              examples:
+                trashed:
+                  $ref: "#/components/examples/TrashedDotMorning"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AccountDeletionInProgress"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/trash/dots:
+    get:
+      tags: [dot]
+      operationId: listTrashedDots
+      summary: ゴミ箱の中のDotを、ゴミ箱へ移した新しい順に取得する
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: ゴミ箱の中のDot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrashedDotList"
+              examples:
+                oneDot:
+                  $ref: "#/components/examples/TrashedDotListOne"
+        "400":
+          $ref: "#/components/responses/CursorInvalid"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/AccountDeletionInProgress"
+        "422":
+          $ref: "#/components/responses/ValidationFailed"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /api/v1/trash/dots/{dot_id}/restore:
+    parameters:
+      - $ref: "#/components/parameters/DotId"
+    post:
+      tags: [dot]
+      operationId: restoreDot
+      summary: ゴミ箱の中のDotを元へ戻す
+      description: |
+        元の`date`の日へ戻る。ゴミ箱に無い、または削除処理が始まったDotは`404`。
+      parameters:
+        - $ref: "#/components/parameters/CsrfToken"
+      responses:
+        "200":
+          description: 戻したDot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Dot"
+              examples:
+                restored:
+                  $ref: "#/components/examples/DotMorning"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/AccountDeletionInProgress"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: _focus_on_dot_session
+      description: |
+        Rails CookieStoreの暗号化session（HttpOnly / Secure / SameSite=Lax）。Cookie名は実装で
+        変わり得る。Webはこの値を読まない。
+
+  parameters:
+    CsrfToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: "`GET /api/v1/session`（login後は`POST /api/v1/session`）のresponseで受け取ったtoken"
+      schema:
+        type: string
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: 前回のresponseの`next_cursor`。Webは中身を解釈しない
+      schema:
+        type: string
+        maxLength: 512
+    RecordingAttempt:
+      name: X-Recording-Attempt
+      in: header
+      required: true
+      description: |
+        `POST /api/v1/recording_attempts`で受け取った`attempt_token`。multipartを解釈する前に検証
+        できるようheaderで渡す
+      schema:
+        type: string
+        maxLength: 1024
+    GenerationId:
+      name: generation_id
+      in: path
+      required: true
+      description: 処理ID（＝録音attemptのid）
+      schema:
+        type: string
+        format: uuid
+    DotId:
+      name: dot_id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Unauthenticated:
+      description: "`unauthenticated`（未login）または`session_expired`（7日の期限切れ）"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            unauthenticated:
+              $ref: "#/components/examples/ProblemUnauthenticated"
+            sessionExpired:
+              $ref: "#/components/examples/ProblemSessionExpired"
+    Forbidden:
+      description: "`email_unconfirmed`（メール未確認の利用者はDotを扱えない）または`csrf_invalid`"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            emailUnconfirmed:
+              $ref: "#/components/examples/ProblemEmailUnconfirmed"
+            csrfInvalid:
+              $ref: "#/components/examples/ProblemCsrfInvalid"
+    CsrfInvalid:
+      description: "`csrf_invalid`: CSRF tokenが無いか一致しない。Webは`GET /api/v1/session`で取り直して1回だけ再送してよい"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            csrfInvalid:
+              $ref: "#/components/examples/ProblemCsrfInvalid"
+    NotFound:
+      description: "`not_found`: 存在しない・他人の・ゴミ箱の中（ゴミ箱のendpoint以外）のresource"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            notFound:
+              $ref: "#/components/examples/ProblemNotFound"
+    AccountDeletionInProgress:
+      description: "`account_deletion_in_progress`: 退会を受理済み"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            accountDeletionInProgress:
+              $ref: "#/components/examples/ProblemAccountDeletionInProgress"
+    ValidationFailed:
+      description: "`validation_failed`: 入力が不正。`errors`に項目ごとの理由"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            validationFailed:
+              $ref: "#/components/examples/ProblemValidationFailed"
+    TokenRejected:
+      description: "`token_invalid`（不正・使用済み）または`token_expired`"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            tokenInvalid:
+              $ref: "#/components/examples/ProblemTokenInvalid"
+            tokenExpired:
+              $ref: "#/components/examples/ProblemTokenExpired"
+    CursorInvalid:
+      description: "`cursor_invalid`: cursorを解釈できない。Webは先頭から取り直す"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            cursorInvalid:
+              $ref: "#/components/examples/ProblemCursorInvalid"
+    RateLimited:
+      description: |
+        `rate_limited`: 試行回数の制限。認証まわりの具体値はTASK-006、録音・送信・再試行
+        （外部の文字起こし・生成の費用がかかる操作）の具体値と採否はTASK-009で決める
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            rateLimited:
+              $ref: "#/components/examples/ProblemRateLimited"
+    InternalError:
+      description: "`internal_error`: 想定外の失敗"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          examples:
+            internalError:
+              $ref: "#/components/examples/ProblemInternalError"
+
+  schemas:
+    Problem:
+      description: |
+        RFC 9457のProblem Details。`code`は拡張項目で、Webはこれで判定する。`title`と`detail`を
+        そのまま画面に出さない。`detail`に日記本文・文字起こし・メールアドレスなどの個人データを
+        入れない。`code`によって必ず返す拡張項目が違うので、codeごとのschemaに分ける
+        （codeの集合は重ならない）。codeの意味とHTTP statusの対応は`contracts/README.md`の表。
+      oneOf:
+        - $ref: "#/components/schemas/ProblemGeneral"
+        - $ref: "#/components/schemas/ProblemValidationFailed"
+        - $ref: "#/components/schemas/ProblemRateLimited"
+        - $ref: "#/components/schemas/ProblemRetryExpired"
+    ProblemGeneral:
+      type: object
+      description: 拡張項目を持たないcode
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          description: "`urn:focus-on-dot:problem:<code>`の形のURN（識別子。実domainが未確定のため取得可能なURLにしない）"
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        code:
+          type: string
+          enum:
+            - unauthenticated
+            - session_expired
+            - email_unconfirmed
+            - csrf_invalid
+            - invalid_credentials
+            - reauthentication_failed
+            - google_reauthentication_required
+            - token_invalid
+            - token_expired
+            - cursor_invalid
+            - not_found
+            - account_deletion_in_progress
+            - attempt_invalid
+            - attempt_expired
+            - audio_too_large
+            - unsupported_audio_type
+            - retry_not_allowed
+            - generation_completed
+            - deletion_failed
+            - internal_error
+    ProblemValidationFailed:
+      type: object
+      description: "`validation_failed`。項目ごとの理由を必ず返す"
+      required: [type, title, status, code, errors]
+      properties:
+        type:
+          type: string
+          description: "`urn:focus-on-dot:problem:<code>`の形のURN（識別子。実domainが未確定のため取得可能なURLにしない）"
+        title:
+          type: string
+        status:
+          type: integer
+          enum: [422]
+        detail:
+          type: string
+        code:
+          type: string
+          enum:
+            - validation_failed
+        errors:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/FieldError"
+    ProblemRateLimited:
+      type: object
+      description: "`rate_limited`。待つ秒数を必ず返す"
+      required: [type, title, status, code, retry_after_seconds]
+      properties:
+        type:
+          type: string
+          description: "`urn:focus-on-dot:problem:<code>`の形のURN（識別子。実domainが未確定のため取得可能なURLにしない）"
+        title:
+          type: string
+        status:
+          type: integer
+          enum: [429]
+        detail:
+          type: string
+        code:
+          type: string
+          enum:
+            - rate_limited
+        retry_after_seconds:
+          type: integer
+          minimum: 1
+    ProblemRetryExpired:
+      type: object
+      description: "`retry_expired`。過ぎた再試行期限を必ず返す"
+      required: [type, title, status, code, retry_expires_at]
+      properties:
+        type:
+          type: string
+          description: "`urn:focus-on-dot:problem:<code>`の形のURN（識別子。実domainが未確定のため取得可能なURLにしない）"
+        title:
+          type: string
+        status:
+          type: integer
+          enum: [409]
+        detail:
+          type: string
+        code:
+          type: string
+          enum:
+            - retry_expired
+        retry_expires_at:
+          type: string
+          format: date-time
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
+    FieldError:
+      type: object
+      required: [field, code]
+      properties:
+        field:
+          type: string
+          example: sentence
+        code:
+          type: string
+          enum: [required, too_long, invalid_format, out_of_range, not_allowed, taken]
+          description: "`taken`は使わない予約値（登録の有無を明かさないため）"
+
+    Session:
+      description: |
+        `authenticated`で形が分かれる。未認証でもCSRF tokenは返す。
+      oneOf:
+        - $ref: "#/components/schemas/SessionAuthenticated"
+        - $ref: "#/components/schemas/SessionAnonymous"
+    SessionAuthenticated:
+      type: object
+      required: [authenticated, csrf_token, expires_at, user, account_status]
+      properties:
+        authenticated:
+          type: boolean
+          enum: [true]
+        csrf_token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
+          description: 認証成功から7日。利用では延長しない
+        user:
+          $ref: "#/components/schemas/SessionUser"
+        account_status:
+          type: string
+          enum: [active, deletion_in_progress]
+          description: "`deletion_in_progress`なら退会の状況画面へ"
+    SessionAnonymous:
+      type: object
+      required: [authenticated, csrf_token]
+      properties:
+        authenticated:
+          type: boolean
+          enum: [false]
+        csrf_token:
+          type: string
+    SessionUser:
+      type: object
+      required: [id, email, email_confirmed, sign_in_methods]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        email_confirmed:
+          type: boolean
+        sign_in_methods:
+          type: array
+          items:
+            type: string
+            enum: [password, google]
+    Credentials:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          maxLength: 128
+          description: 方針（最小長など）はTASK-006
+    EmailOnly:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+    TokenOnly:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+          maxLength: 256
+    PasswordReset:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          maxLength: 256
+        password:
+          type: string
+          format: password
+          maxLength: 128
+    GoogleAuthStart:
+      type: object
+      required: [authenticity_token]
+      properties:
+        authenticity_token:
+          type: string
+        intent:
+          type: string
+          enum: [sign_in, reauthenticate]
+          default: sign_in
+        return_to:
+          type: string
+          description: |
+            ログイン後に戻るSPAの画面のpath。英数字・`-`・`_`・`/`だけからなる素のpath
+            （正規表現`/(?:[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*)?`）に**文字列全体で**一致するものだけを
+            使う。serverは行単位で一致する`^`・`$`ではなく、文字列全体を表す`\A`・`\z`で照合する
+            （Rubyの`^`・`$`は改行の前後でも一致し、`/\n/evil.example`を通してしまうため）。合わない値は
+            拒否せず無視し、`/`へ戻す（open redirectを防ぎつつ、ログインそのものは失敗させない）
+          maxLength: 512
+
+    AccountDeletionRequest:
+      type: object
+      properties:
+        current_password:
+          type: string
+          format: password
+          maxLength: 128
+          description: password利用者は必須
+    AccountDeletion:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [in_progress, completed, failed]
+          description: |
+            `in_progress`: 進行中の処理の終了と削除を待っている（通常は数秒、長い録音の文字起こし中は
+            数分かかり得る）。`failed`: 削除の途中で失敗した。完了とは扱わない。serverが自動で再実行し、
+            Webは`DELETE /api/v1/account`でいますぐやり直すこともできる。
+
+    RecordingAttempt:
+      type: object
+      required: [id, attempt_token, started_at, expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: |
+            処理ID・冪等性key・録音attemptの識別子を兼ねる。serverが発行するUUID v4で、AWSアカウント内で
+            一意（DBでも一意制約を持つ）。利用者・日付などの推測できる値を含まない。
+        attempt_token:
+          type: string
+          description: |
+            serverが暗号化・署名した値（id・利用者・started_at・期限を含む）。Webは解釈せず、memoryに
+            だけ置いて`POST /api/v1/dots`の`X-Recording-Attempt` headerで返す。
+          maxLength: 1024
+        started_at:
+          type: string
+          format: date-time
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
+          description: 録音開始操作をserverが受理した時刻。Dotの`date`の根拠
+        expires_at:
+          type: string
+          format: date-time
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
+          description: このattemptで送信できる期限（発行から2時間）。受理後の再試行期限とは別
+    DotUpload:
+      type: object
+      required: [audio, duration_seconds]
+      properties:
+        audio:
+          type: string
+          format: binary
+          description: "`audio/webm`（opus）または`audio/mp4`。32MBまで"
+        duration_seconds:
+          type: integer
+          minimum: 1
+          maximum: 1800
+          description: Webが計測した録音の長さ（最長30分）
+
+    Generation:
+      description: |
+        生成の状態。`status`で形が分かれ、状態ごとに必ず返す項目が決まっている。
+        `processing`: 送信・文字起こし・生成のいずれかの途中。
+        `succeeded`: Dotを保存した。
+        `failed`: 失敗した。`retryable`と`failure`で次の操作が決まる。
+        `expired`: 再試行の期限を過ぎ、預かっていた音声の削除処理に入った。録り直しが必要。
+          後片付けが終わると処理の記録が消え、以後は`404`になる。
+      oneOf:
+        - $ref: "#/components/schemas/GenerationProcessing"
+        - $ref: "#/components/schemas/GenerationSucceeded"
+        - $ref: "#/components/schemas/GenerationFailed"
+        - $ref: "#/components/schemas/GenerationExpired"
+      discriminator:
+        propertyName: status
+        mapping:
+          processing: "#/components/schemas/GenerationProcessing"
+          succeeded: "#/components/schemas/GenerationSucceeded"
+          failed: "#/components/schemas/GenerationFailed"
+          expired: "#/components/schemas/GenerationExpired"
+    GenerationProcessing:
+      type: object
+      required: [id, status, stage, started_at, retryable, retry_expires_at, poll_after_seconds]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [processing]
+        stage:
+          type: string
+          enum: [uploading, transcribing, generating]
+          description: 画面の進捗表示に使う
+        started_at:
+          type: string
+          format: date-time
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
+        retryable:
+          type: boolean
+          enum: [false]
+        retry_expires_at:
+          $ref: "#/components/schemas/RetryExpiresAt"
+        poll_after_seconds:
+          type: integer
+          minimum: 1
+          maximum: 60
+          description: 次に取得するまでの秒数
+    GenerationSucceeded:
+      type: object
+      description: |
+        成功後は後片付けで処理の記録が消え、期限を持たないため`retry_expires_at`を返さない。
+      required: [id, status, started_at, retryable, dot, transcript]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [succeeded]
+        started_at:
+          type: string
+          format: date-time
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
+        retryable:
+          type: boolean
+          enum: [false]
+        dot:
+          $ref: "#/components/schemas/Dot"
+        transcript:
+          $ref: "#/components/schemas/Transcript"
+    GenerationFailed:
+      type: object
+      required: [id, status, started_at, retryable, retry_expires_at, failure]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [failed]
+        started_at:
+          type: string
+          format: date-time
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
+        retryable:
+          type: boolean
+          description: 期限内かつ録り直さずにやり直せるときだけ`true`
+        retry_expires_at:
+          $ref: "#/components/schemas/RetryExpiresAt"
+        failure:
+          $ref: "#/components/schemas/GenerationFailure"
+    GenerationExpired:
+      type: object
+      required: [id, status, started_at, retryable, retry_expires_at]
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [expired]
+        started_at:
+          type: string
+          format: date-time
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
+        retryable:
+          type: boolean
+          enum: [false]
+        retry_expires_at:
+          $ref: "#/components/schemas/RetryExpiresAt"
+    RetryExpiresAt:
+      type: string
+      format: date-time
+      pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
+      description: |
+        受理から24時間の再試行期限。音声が残っている間だけ画面に出す。消え終わる時刻ではない。
+    GenerationFailure:
+      type: object
+      required: [kind]
+      properties:
+        kind:
+          type: string
+          enum: [processing_failed, upload_incomplete, empty_recording]
+          description: |
+            `processing_failed`: 文字起こし・生成・保存のいずれかで失敗。`retry`で再試行できる
+              （どこから再開するかはserverが決め、契約には出さない）。
+            `upload_incomplete`: 音声が届ききらなかった。録音画面にいる間だけ、同じattemptで
+              `POST /api/v1/dots`へ送り直せる。
+            `empty_recording`: 無音・極端に短い。再試行できず、録り直しを案内する。
+    Transcript:
+      description: 文字起こし全文。`status`で形が分かれる
+      oneOf:
+        - $ref: "#/components/schemas/TranscriptAvailable"
+        - $ref: "#/components/schemas/TranscriptUnavailable"
+      discriminator:
+        propertyName: status
+        mapping:
+          available: "#/components/schemas/TranscriptAvailable"
+          unavailable: "#/components/schemas/TranscriptUnavailable"
+    TranscriptAvailable:
+      type: object
+      required: [status, text]
+      properties:
+        status:
+          type: string
+          enum: [available]
+        text:
+          type: string
+          description: 文字起こし全文
+    TranscriptUnavailable:
+      type: object
+      description: |
+        serverはもう全文を返さない（受領通知の受理後、または保持期間の経過後）。どちらだったかは
+        返さない。後片付けで処理の記録が消えると、serverにも区別が残らないため。Webは`sessionStorage`に
+        全文があれば表示し、無ければ「この端末には全文がない」と示す。Dotは残っている。
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [unavailable]
+
+    Dot:
+      type: object
+      required: [id, date, started_at, duration_seconds, sentence, summary]
+      properties:
+        id:
+          type: string
+          format: uuid
+        date:
+          type: string
+          format: date
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
+          description: "`started_at`から算出したAsia/Tokyoの暦日"
+        started_at:
+          type: string
+          format: date-time
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
+          description: 録音開始操作をserverが受理した時刻（UTC）。並びと同日の区別に使う
+        duration_seconds:
+          type: integer
+          minimum: 1
+          maximum: 1800
+        sentence:
+          type: string
+          maxLength: 200
+          description: 今日の一文。空文字を許す
+        summary:
+          type: string
+          maxLength: 2000
+          description: 話した内容の要約。空文字を許す
+    DotUpdate:
+      type: object
+      minProperties: 1
+      additionalProperties: false
+      properties:
+        sentence:
+          type: string
+          maxLength: 200
+        summary:
+          type: string
+          maxLength: 2000
+    TrashedDot:
+      allOf:
+        - $ref: "#/components/schemas/Dot"
+        - type: object
+          required: [trashed_at, deletion_begins_at]
+          properties:
+            trashed_at:
+              type: string
+              format: date-time
+              pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
+            deletion_begins_at:
+              type: string
+              format: date-time
+              pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z(?![\s\S])'
+              description: 削除処理を始める日時（受理から7日）。消え終わる時刻ではない
+    TrashedDotList:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TrashedDot"
+        next_cursor:
+          type: string
+          nullable: true
+
+    DaySummary:
+      type: object
+      required: [date, dot_count, latest_dot_id]
+      properties:
+        date:
+          type: string
+          format: date
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
+        dot_count:
+          type: integer
+          minimum: 1
+          description: その日のゴミ箱外のDotの件数
+        latest_dot_id:
+          type: string
+          format: uuid
+          description: その日の最新のDot。日の詳細へ行くキーには`date`を使う
+    DayList:
+      type: object
+      required: [today, items, next_cursor]
+      properties:
+        today:
+          type: string
+          format: date
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
+          description: serverが決めた今日の日付（「今日」のラベルに使う）
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DaySummary"
+        next_cursor:
+          type: string
+          nullable: true
+    Today:
+      description: 今日の記録の有無で形が分かれる。記録があれば最新のDotを必ず返す
+      oneOf:
+        - $ref: "#/components/schemas/TodayRecorded"
+        - $ref: "#/components/schemas/TodayNotRecorded"
+    TodayRecorded:
+      type: object
+      required: [date, dot_count, latest_dot]
+      properties:
+        date:
+          type: string
+          format: date
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
+        dot_count:
+          type: integer
+          minimum: 1
+        latest_dot:
+          $ref: "#/components/schemas/Dot"
+    TodayNotRecorded:
+      type: object
+      required: [date, dot_count]
+      properties:
+        date:
+          type: string
+          format: date
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
+        dot_count:
+          type: integer
+          enum: [0]
+    DayDetail:
+      type: object
+      required: [date, dots, next_cursor]
+      properties:
+        date:
+          type: string
+          format: date
+          pattern: '(?<![\s\S])\d{4}-\d{2}-\d{2}(?![\s\S])'
+        dots:
+          type: array
+          items:
+            $ref: "#/components/schemas/Dot"
+        next_cursor:
+          type: string
+          nullable: true
+
+  examples:
+    SessionAuthenticated:
+      value:
+        authenticated: true
+        csrf_token: q8m3Zk1x-example-token
+        expires_at: "2026-10-08T03:00:00Z"
+        account_status: active
+        user:
+          id: 0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10
+          email: user@example.com
+          email_confirmed: true
+          sign_in_methods: [password]
+    SessionAnonymous:
+      value:
+        authenticated: false
+        csrf_token: q8m3Zk1x-example-token
+    SessionDeletionInProgress:
+      value:
+        authenticated: true
+        csrf_token: q8m3Zk1x-example-token
+        expires_at: "2026-10-08T03:00:00Z"
+        account_status: deletion_in_progress
+        user:
+          id: 0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10
+          email: user@example.com
+          email_confirmed: true
+          sign_in_methods: [google]
+    AccountDeletionInProgress:
+      value:
+        status: in_progress
+    AccountDeletionCompleted:
+      value:
+        status: completed
+    AccountDeletionFailed:
+      value:
+        status: failed
+    RecordingAttemptIssued:
+      value:
+        id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+        attempt_token: eyJfcmFpbHMiOnsiZGF0YSI6ImV4YW1wbGUifX0=--example
+        started_at: "2026-09-28T13:04:05Z"
+        expires_at: "2026-09-28T15:04:05Z"
+    GenerationProcessing:
+      value:
+        id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+        status: processing
+        stage: transcribing
+        started_at: "2026-09-28T13:04:05Z"
+        retryable: false
+        retry_expires_at: "2026-09-29T13:20:11Z"
+        poll_after_seconds: 3
+    GenerationSucceeded:
+      value:
+        id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+        status: succeeded
+        started_at: "2026-09-28T13:04:05Z"
+        retryable: false
+        dot:
+          id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+          date: "2026-09-28"
+          started_at: "2026-09-28T13:04:05Z"
+          duration_seconds: 312
+          sentence: 思っていたより、ちゃんと休めた一日だった。
+          summary: 午後に予定がひとつ流れて、久しぶりに散歩に出た。帰ってから夕飯を作った。
+        transcript:
+          status: available
+          text: えっと、今日は午後の予定がなくなって……
+    GenerationSucceededTranscriptAcknowledged:
+      value:
+        id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+        status: succeeded
+        started_at: "2026-09-28T13:04:05Z"
+        retryable: false
+        dot:
+          id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+          date: "2026-09-28"
+          started_at: "2026-09-28T13:04:05Z"
+          duration_seconds: 312
+          sentence: 思っていたより、ちゃんと休めた一日だった。
+          summary: 午後に予定がひとつ流れて、久しぶりに散歩に出た。帰ってから夕飯を作った。
+        transcript:
+          status: unavailable
+    GenerationFailedRetryable:
+      value:
+        id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+        status: failed
+        started_at: "2026-09-28T13:04:05Z"
+        retryable: true
+        retry_expires_at: "2026-09-29T13:20:11Z"
+        failure:
+          kind: processing_failed
+    GenerationFailedUploadIncomplete:
+      value:
+        id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+        status: failed
+        started_at: "2026-09-28T13:04:05Z"
+        retryable: false
+        retry_expires_at: "2026-09-29T13:20:11Z"
+        failure:
+          kind: upload_incomplete
+    GenerationFailedEmptyRecording:
+      value:
+        id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+        status: failed
+        started_at: "2026-09-28T13:04:05Z"
+        retryable: false
+        retry_expires_at: "2026-09-29T13:20:11Z"
+        failure:
+          kind: empty_recording
+    GenerationExpired:
+      value:
+        id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+        status: expired
+        started_at: "2026-09-28T13:04:05Z"
+        retryable: false
+        retry_expires_at: "2026-09-29T13:20:11Z"
+    DotMorning:
+      value:
+        id: 2c4e8a10-1b3d-4f5a-9c7e-0d2b4f6a8c13
+        date: "2026-09-28"
+        started_at: "2026-09-27T23:10:00Z"
+        duration_seconds: 95
+        sentence: 少し早く起きられた。
+        summary: ""
+    DotEvening:
+      value:
+        id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+        date: "2026-09-28"
+        started_at: "2026-09-28T13:04:05Z"
+        duration_seconds: 312
+        sentence: 思っていたより、ちゃんと休めた一日だった。
+        summary: 午後に予定がひとつ流れて、散歩に出た。
+    TrashedDotMorning:
+      value:
+        id: 2c4e8a10-1b3d-4f5a-9c7e-0d2b4f6a8c13
+        date: "2026-09-28"
+        started_at: "2026-09-27T23:10:00Z"
+        duration_seconds: 95
+        sentence: 少し早く起きられた。
+        summary: ""
+        trashed_at: "2026-10-01T02:00:00Z"
+        deletion_begins_at: "2026-10-08T02:00:00Z"
+    TrashedDotListOne:
+      value:
+        items:
+          - id: 2c4e8a10-1b3d-4f5a-9c7e-0d2b4f6a8c13
+            date: "2026-09-28"
+            started_at: "2026-09-27T23:10:00Z"
+            duration_seconds: 95
+            sentence: 少し早く起きられた。
+            summary: ""
+            trashed_at: "2026-10-01T02:00:00Z"
+            deletion_begins_at: "2026-10-08T02:00:00Z"
+        next_cursor: null
+    DayListFirstPage:
+      value:
+        today: "2026-10-01"
+        items:
+          - date: "2026-10-01"
+            dot_count: 1
+            latest_dot_id: 9a7c5e31-2d4f-4b6a-8c0e-1f3a5b7d9e24
+          - date: "2026-09-28"
+            dot_count: 2
+            latest_dot_id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+        next_cursor: djE6MjAyNi0wOS0yOA
+    DayListEmpty:
+      value:
+        today: "2026-10-01"
+        items: []
+        next_cursor: null
+    TodayRecorded:
+      value:
+        date: "2026-10-01"
+        dot_count: 1
+        latest_dot:
+          id: 9a7c5e31-2d4f-4b6a-8c0e-1f3a5b7d9e24
+          date: "2026-10-01"
+          started_at: "2026-10-01T11:30:00Z"
+          duration_seconds: 240
+          sentence: 雨の音を聞きながら作業した。
+          summary: 一日家で作業をした。夕方に雨が強くなった。
+    TodayNotRecorded:
+      value:
+        date: "2026-10-01"
+        dot_count: 0
+    DayDetailTwoDots:
+      value:
+        date: "2026-09-28"
+        dots:
+          - id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
+            date: "2026-09-28"
+            started_at: "2026-09-28T13:04:05Z"
+            duration_seconds: 312
+            sentence: 思っていたより、ちゃんと休めた一日だった。
+            summary: 午後に予定がひとつ流れて、散歩に出た。
+          - id: 2c4e8a10-1b3d-4f5a-9c7e-0d2b4f6a8c13
+            date: "2026-09-28"
+            started_at: "2026-09-27T23:10:00Z"
+            duration_seconds: 95
+            sentence: 少し早く起きられた。
+            summary: ""
+        next_cursor: null
+    DayDetailNoDotsLeft:
+      value:
+        date: "2026-09-28"
+        dots: []
+        next_cursor: null
+
+    ProblemUnauthenticated:
+      value:
+        type: urn:focus-on-dot:problem:unauthenticated
+        title: ログインが必要です
+        status: 401
+        code: unauthenticated
+    ProblemSessionExpired:
+      value:
+        type: urn:focus-on-dot:problem:session_expired
+        title: ログインの有効期限が切れました
+        status: 401
+        code: session_expired
+    ProblemEmailUnconfirmed:
+      value:
+        type: urn:focus-on-dot:problem:email_unconfirmed
+        title: メールアドレスの確認が済んでいません
+        status: 403
+        code: email_unconfirmed
+    ProblemCsrfInvalid:
+      value:
+        type: urn:focus-on-dot:problem:csrf_invalid
+        title: 操作を確認できませんでした
+        status: 403
+        code: csrf_invalid
+    ProblemInvalidCredentials:
+      value:
+        type: urn:focus-on-dot:problem:invalid_credentials
+        title: メールアドレスまたはパスワードが違います
+        status: 401
+        code: invalid_credentials
+    ProblemReauthenticationFailed:
+      value:
+        type: urn:focus-on-dot:problem:reauthentication_failed
+        title: 現在のパスワードが違います
+        status: 403
+        code: reauthentication_failed
+    ProblemGoogleReauthenticationRequired:
+      value:
+        type: urn:focus-on-dot:problem:google_reauthentication_required
+        title: Googleで再度ログインしてください
+        status: 403
+        code: google_reauthentication_required
+    ProblemRateLimited:
+      value:
+        type: urn:focus-on-dot:problem:rate_limited
+        title: しばらく時間をおいてお試しください
+        status: 429
+        code: rate_limited
+        retry_after_seconds: 60
+    ProblemValidationFailed:
+      value:
+        type: urn:focus-on-dot:problem:validation_failed
+        title: 入力内容を確認してください
+        status: 422
+        code: validation_failed
+        errors:
+          - field: sentence
+            code: too_long
+    ProblemTokenInvalid:
+      value:
+        type: urn:focus-on-dot:problem:token_invalid
+        title: このリンクは使えません
+        status: 422
+        code: token_invalid
+    ProblemTokenExpired:
+      value:
+        type: urn:focus-on-dot:problem:token_expired
+        title: このリンクの有効期限が切れました
+        status: 422
+        code: token_expired
+    ProblemCursorInvalid:
+      value:
+        type: urn:focus-on-dot:problem:cursor_invalid
+        title: 続きを取得できませんでした
+        status: 400
+        code: cursor_invalid
+    ProblemNotFound:
+      value:
+        type: urn:focus-on-dot:problem:not_found
+        title: 見つかりません
+        status: 404
+        code: not_found
+    ProblemAccountDeletionInProgress:
+      value:
+        type: urn:focus-on-dot:problem:account_deletion_in_progress
+        title: 退会の手続き中です
+        status: 409
+        code: account_deletion_in_progress
+    ProblemAttemptInvalid:
+      value:
+        type: urn:focus-on-dot:problem:attempt_invalid
+        title: この録音は送信できません
+        status: 422
+        code: attempt_invalid
+    ProblemAttemptExpired:
+      value:
+        type: urn:focus-on-dot:problem:attempt_expired
+        title: 録音の送信期限を過ぎました
+        status: 422
+        code: attempt_expired
+    ProblemAudioTooLarge:
+      value:
+        type: urn:focus-on-dot:problem:audio_too_large
+        title: 録音が大きすぎます
+        status: 413
+        code: audio_too_large
+    ProblemUnsupportedAudioType:
+      value:
+        type: urn:focus-on-dot:problem:unsupported_audio_type
+        title: この形式の録音は受け付けていません
+        status: 415
+        code: unsupported_audio_type
+    ProblemRetryExpired:
+      value:
+        type: urn:focus-on-dot:problem:retry_expired
+        title: 再試行の期限を過ぎました
+        status: 409
+        code: retry_expired
+        retry_expires_at: "2026-09-29T13:20:11Z"
+    ProblemGenerationCompleted:
+      value:
+        type: urn:focus-on-dot:problem:generation_completed
+        title: この録音はDotになっています
+        status: 409
+        code: generation_completed
+    ProblemRetryNotAllowed:
+      value:
+        type: urn:focus-on-dot:problem:retry_not_allowed
+        title: いまは再試行できません
+        status: 409
+        code: retry_not_allowed
+    ProblemDeletionFailed:
+      value:
+        type: urn:focus-on-dot:problem:deletion_failed
+        title: 削除できませんでした
+        status: 503
+        code: deletion_failed
+    ProblemInternalError:
+      value:
+        type: urn:focus-on-dot:problem:internal_error
+        title: 問題が発生しました
+        status: 500
+        code: internal_error

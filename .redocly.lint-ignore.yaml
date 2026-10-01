@@ -1,0 +1,11 @@
+# Redocly lintの例外。追加するときは理由を書く（contracts/README.md「lintの例外」）。
+contracts/openapi.yaml:
+  # GET /api/v1/session は未認証でも200を返す設計で、返す4xxが無い。
+  # Google callbackはどの結果もSPAへの302で返し、4xxを返さない。
+  operation-4xx-response:
+    - '#/paths/~1api~1v1~1session/get/responses'
+    - '#/paths/~1auth~1google_oauth2~1callback/get/responses'
+  # Googleログインの開始とcallbackはbrowserのredirect（302）で遷移する。2xxを返さない。
+  operation-2xx-response:
+    - '#/paths/~1auth~1google_oauth2/post/responses'
+    - '#/paths/~1auth~1google_oauth2~1callback/get/responses'
