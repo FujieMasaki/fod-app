@@ -99,8 +99,8 @@ Railsコードはrspec / rubocop / brakeman等）を実行し、pre-push hookで
 - LGTMは、Critical・High・Mediumの指摘が残っていない状態とする。
 - 誤検知など対応不要と判断した指摘は、理由をPRか会話に記録すれば解消済みとして扱える。ただし
   securityの指摘を対応不要とする場合は、自分で判断せず「止まる条件」に従う。
-- 人間が対応不要と判断したsecurityの指摘は、その判断と理由をPlan（Planがなければ PR本文）の
-  「人間が判断したsecurityの指摘」に記録する。以後のサブエージェント・Codexが**同じ内容**を再び
+- 人間が対応不要と判断したsecurityの指摘は、その判断と理由をPlanの「5. Scope and Non-goals」の
+  決定済み事項（Planがなければ PR本文）に記録する。以後のサブエージェント・Codexが**同じ内容**を再び
   指摘した場合は、解消済みとして扱い止まらない。対象・前提・影響のどれかが少しでも違えば別の指摘として
   扱い、改めて止まる。
 - サブエージェントには毎回、最新のdiffを保存し直して渡す。前回の指摘や対応は渡さない。
@@ -117,16 +117,20 @@ Codexは必ずこのスクリプト経由で実行し、`codex exec`を直接実
 前方一致のため、`codex exec -s read-only *`を許可すると、後ろにsandboxを外すオプション
 （`--dangerously-bypass-approvals-and-sandbox`等）を足しても確認なしで通ってしまう。スクリプトは
 baseだけを受け取り（形式を検査し、余分な引数は拒否する）、`codex exec --sandbox read-only`の引数を
-すべて自分で組み立てる。execpolicyの`allow`に一致したコマンドはsandbox外で実行されるため、
-`--ignore-rules`でrulesを読み込まず、承認も`never`に固定する。許可ルールもこのスクリプトだけにしている。
+すべて自分で組み立てる。`--sandbox`が閉じ込めるのはモデルが実行するshellコマンドだけで、execpolicyの
+`allow`に一致したコマンド、ユーザー設定のMCPサーバ・plugin、browser・computer use等の機能はsandboxの
+外で動く。そのためrules・ユーザー設定を読み込まず、それらの機能を無効にし、承認も`never`に固定する
+（ユーザー設定を読まないので、modelと推論の強さもスクリプトで固定している）。許可ルールもこのスクリプトだけにしている。
 
 - 時間がかかるため、Bash toolのバックグラウンド実行（`run_in_background`）で実行し、終了の通知を待つ。
   スクリプトは20分で打ち切る。
 - repo rootから実行する（許可ルールもスクリプトのパスも、repo root基準の相対パスのため）。手順1・6で
   `cd apps/api`した後は作業ディレクトリが残るので、実行前に`git rev-parse --show-toplevel`と一致するか
   確かめる。
-- 自分以外が作成したブランチでは、実行前に`git diff origin/<ベースブランチ> -- scripts/codex-final-check.mjs`
-  が空であることを確かめる（許可ルールにより、ブランチ上のスクリプトが確認なしで実行されるため）。
+- 実行前に`git diff origin/<ベースブランチ> -- .codex`が空であることを確かめる（ブランチがCodexの
+  プロジェクト設定を追加・変更すると、MCPサーバ等がsandboxの外で動きうるため）。自分以外が作成した
+  ブランチでは、`scripts/codex-final-check.mjs`の差分も空であることを確かめる（許可ルールにより、
+  ブランチ上のスクリプトが確認なしで実行されるため）。どちらかが空でなければ実行せず「止まる条件」に従う。
 - 最初にbase・merge-base・HEADのSHAと保存先を出し、途中経過はログファイルに書き、Codexの最終メッセージ
   だけを出力する。失敗時はログの末尾を出す。
 - 終了コードで判断する。`0`は結果を読む。`3`はtimeoutで、1回だけ再実行する（Codexのループ回数には

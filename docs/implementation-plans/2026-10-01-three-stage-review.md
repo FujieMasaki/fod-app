@@ -78,8 +78,10 @@
    ならなければ止まる。誤検知と判断した指摘は理由を記録すれば解消済みとできるが、securityの指摘は
    人間の判断を仰ぐ。
 4. `scripts/codex-final-check.mjs`を追加する。baseだけを受け取り、形式を検査し、余分な引数を拒否して、
-   `codex exec --sandbox read-only --ignore-rules -c approval_policy="never"`の引数をすべて自分で組み立てる
-   （execpolicyの`allow`に一致したコマンドはsandbox外で実行されるため、rulesを読み込まない）。20分で打ち切り、timeoutは専用の終了コード
+   `codex exec --sandbox read-only`の引数をすべて自分で組み立てる。`--sandbox`はモデルが実行するshell
+   コマンドしか閉じ込めないため、execpolicyのrules（Codexの最終チェックの指摘）とユーザー設定のMCP
+   サーバ・plugin（サブエージェントのレビューの指摘）を読み込まず、browser・computer use等の機能を無効に
+   し、承認を`never`に固定する。ユーザー設定を読まないので、modelと推論の強さもスクリプトで固定する。20分で打ち切り、timeoutは専用の終了コード
    （3）で返す。`.claude/settings.json`の
    `codex review`の許可を、このスクリプトの許可に置き換える。
 5. `AGENTS.md`と`README.md`の記述を3段のレビューに合わせる。
@@ -156,6 +158,8 @@ node scripts/codex-final-check.mjs → codex exec --sandbox read-only（final-ch
   完了報告の段階ごとの指摘件数で観察する。
 - サブエージェントの誤検知を「対応不要」として解消済みにする判断が甘くなると、LGTMの意味が薄れる。
   対応不要とした理由は必ず記録し、securityの指摘は人間が判断する。
+- スクリプトでmodel（`gpt-6.1-sol`）と推論の強さ（`high`）を固定したため、Codexの設定を変えても
+  最終チェックには反映されない。modelを変えるときはスクリプトを直す。
 - 「記録済みの人間の判断と同じ内容か」はClaudeが判断する。広く解釈すると、別のsecurityの指摘を
   見過ごす。少しでも違えば止まる、と手順に書いている。
 - サブエージェントは確かめきれない論点も挙げるため、推測にとどまるsecurityの要確認が出るたびに
