@@ -10,14 +10,16 @@ Claude Codeのセルフレビューとサブエージェント（[`code-reviewer
 
 - 他の段階のレビュー結果は受け取らない。差分と仕様から独立して判断する。
 - 読み取り専用のsandboxで実行される。ファイルの変更、コミット、外部への投稿はしない。
+- 秘密情報（`.env*`、`apps/api/config/master.key`、`apps/api/config/credentials/*.key`等）を読まない・
+  出力しない。秘密情報が混入していないかは、差分（`git diff`）の内容で判断する。
 
 ## 2. 手順
 
 1. 指示されたbase（例: `origin/main`）に対し、`git diff <base>...HEAD`でレビュー対象の差分を取得する。
    冒頭で、確認した差分の範囲（baseとHEADのコミット）を報告する。
-2. 変更された領域の`security.md`を必ず読む（`apps/web/`は[`frontend/security.md`](./frontend/security.md)、
-   `apps/api/`は[`backend/security.md`](./backend/security.md)、`contracts/`・両方にまたがる変更・
-   どちらにも当てはまらない変更は両方）。
+2. 変更された領域の`security.md`と、同じディレクトリの`README.md`（報告形式の出典）を必ず読む
+   （`apps/web/`は[`frontend/`](./frontend/README.md)、`apps/api/`は[`backend/`](./backend/README.md)、
+   `contracts/`・両方にまたがる変更・どちらにも当てはまらない変更は両方）。
 3. 差分と、判断に必要な関連実装・test・仕様を読む。
 4. 次の観点を優先して確認する。
    - security（認証・認可、入力の検証、open redirect、CSRF、秘密情報・個人データの扱い）
@@ -33,7 +35,7 @@ Claude Codeのセルフレビューとサブエージェント（[`code-reviewer
 ## 3. 報告
 
 各指摘は、領域のREADMEの「レビュー出力」の形式（重大度・場所・根拠・影響・修正案・区分・確信度）に、
-次の1行を加えて書く。
+次の1行を加えて書く。両方のREADMEを読んだ場合は、frontendの形式を使う。
 
 ```text
 確かめ方: 再現した（実行したコマンドと結果） / 経路を追った（入力と壊れる経路） / 未確認
