@@ -75,7 +75,7 @@ export const generationSchema = z.object({
   stage: z.enum(["uploading", "transcribing", "generating"]).optional(),
   started_at: z.iso.datetime(),
   retryable: z.boolean(),
-  retry_expires_at: z.iso.datetime(),
+  retry_expires_at: z.iso.datetime().optional(),
   failure: z
     .object({ kind: z.enum(["processing_failed", "upload_incomplete", "empty_recording"]) })
     .optional(),

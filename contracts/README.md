@@ -100,7 +100,7 @@ PRのレビューでは「この変更は古いWeb・古いAPIのどちらと組
 | `token_expired` | 422 | 確認（24時間）・再設定（6時間）の期限切れ | メールの再送へ |
 | `cursor_invalid` | 400 | cursorを解釈できない | 先頭から取り直す |
 | `not_found` | 404 | 存在しない・他人の・ゴミ箱の中 | 一覧を取り直す。別のDotで代わりに表示しない |
-| `account_deletion_in_progress` | 409 | 退会を受理済み | 退会の状況画面へ |
+| `account_deletion_in_progress` | 409 | 退会を受理済み（状況の取得と退会のやり直し以外の操作） | 退会の状況画面へ |
 | `attempt_invalid` | 422 | 録音attemptが不正・別の利用者のもの | 録り直しを案内 |
 | `attempt_expired` | 422 | 録音attemptの送信期限（発行から2時間）切れ | 録り直しを案内 |
 | `audio_too_large` | 413 | 音声が32MBを超えた | 上限を伝える |

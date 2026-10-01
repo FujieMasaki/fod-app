@@ -238,7 +238,9 @@ export interface paths {
          * @description 生成は非同期で、`202`で処理（Generation）を返して終わる。結果は
          *     `GET /api/v1/generations/{generation_id}`で取得する。
          *
-         *     同じattemptで再び送られた場合は、新しい処理を作らずbodyを読まずに既存の処理を返す。
+         *     attemptは`X-Recording-Attempt` headerで渡す（bodyに入れない）。serverはbodyを読む前に
+         *     headerのattemptを検証し、同じattemptで再び送られた場合は、新しい処理を作らずbodyを読まずに
+         *     既存の処理を返す（32MBの本文を重複して受け取らないため）。
          *     例外は既存の処理が`failed`かつ`failure.kind=upload_incomplete`の場合で、attemptの期限内なら
          *     音声を受け取り直す。
          *
@@ -609,7 +611,7 @@ export interface components {
             id: string;
             /**
              * @description serverが暗号化・署名した値（id・利用者・started_at・期限を含む）。Webは解釈せず、memoryに
-             *     だけ置いて`POST /api/v1/dots`で返す。
+             *     だけ置いて`POST /api/v1/dots`の`X-Recording-Attempt` headerで返す。
              */
             attempt_token: string;
             /**
@@ -624,7 +626,6 @@ export interface components {
             expires_at: string;
         };
         DotUpload: {
-            attempt_token: string;
             /**
              * Format: binary
              * @description `audio/webm`（opus）または`audio/mp4`。32MBまで
@@ -656,9 +657,11 @@ export interface components {
             retryable: boolean;
             /**
              * Format: date-time
-             * @description 受理から24時間の再試行期限。音声が残っている間だけ画面に出す。消え終わる時刻ではない。
+             * @description 受理から24時間の再試行期限。`processing` / `failed` / `expired`では必ず返し、`succeeded`では
+             *     返さない（成功後は後片付けで処理の記録が消え、期限を持たないため）。音声が残っている間だけ
+             *     画面に出す。消え終わる時刻ではない。
              */
-            retry_expires_at: string;
+            retry_expires_at?: string;
             failure?: components["schemas"]["GenerationFailure"];
             /** @description `processing`のときだけ。次に取得するまでの秒数 */
             poll_after_seconds?: number;
@@ -857,6 +860,11 @@ export interface components {
         CsrfToken: string;
         /** @description 前回のresponseの`next_cursor`。Webは中身を解釈しない */
         Cursor: string;
+        /**
+         * @description `POST /api/v1/recording_attempts`で受け取った`attempt_token`。bodyを読む前に検証できるよう
+         *     headerで渡す
+         */
+        RecordingAttempt: string;
         /** @description 処理ID（＝録音attemptのid） */
         GenerationId: string;
         DotId: string;
@@ -1250,6 +1258,11 @@ export interface operations {
             header: {
                 /** @description `GET /api/v1/session`（login後は`POST /api/v1/session`）のresponseで受け取ったtoken */
                 "X-CSRF-Token": components["parameters"]["CsrfToken"];
+                /**
+                 * @description `POST /api/v1/recording_attempts`で受け取った`attempt_token`。bodyを読む前に検証できるよう
+                 *     headerで渡す
+                 */
+                "X-Recording-Attempt": components["parameters"]["RecordingAttempt"];
             };
             path?: never;
             cookie?: never;

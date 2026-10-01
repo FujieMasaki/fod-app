@@ -168,7 +168,9 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | 生成のpath | `/api/v1/generations/{id}`（TASK-003 Planの`/api/v1/dots/generations/:id`から変更） | `/api/v1/dots/{id}`と曖昧になり、routingで取り違えるため（Redocly lintの指摘） |
 | Day | `GET /api/v1/days/today`を専用に持ち、今日の記録が無ければ`dot_count: 0`で`latest_dot`を省く | 取得失敗と区別でき、serverが決めた今日の日付も返せる |
 | 日の詳細の0件 | `200`で`dots: []` | 取得失敗・他人のDotと区別し、Webが一覧を取り直せるようにする |
-| 退会中の操作 | 受理後は`GET /api/v1/session`と`GET /api/v1/account/deletion`以外を`409 account_deletion_in_progress` | Q5でsessionを完了まで残すため、他の操作を明示的に止める |
+| 退会中の操作 | 受理後は`GET /api/v1/session`・`GET /api/v1/account/deletion`・`DELETE /api/v1/account`（失敗後のやり直し）以外を`409 account_deletion_in_progress` | Q5でsessionを完了まで残すため、他の操作を明示的に止める。やり直しまで止めると`failed`から回復できない（codexレビュー1回目） |
+| 録音attemptの渡し方 | `POST /api/v1/dots`の`X-Recording-Attempt` header（multipartの本文に入れない） | 同じattemptの再送を、32MBの本文を読む前に判定するため（TASK-003 Plan §20の「bodyを受け取らずに既存の状態を返す」。codexレビュー1回目） |
+| 成功後の再試行期限 | `retry_expires_at`は`succeeded`では返さない | 成功後は後片付けで処理の記録が消え、Dotの項目からは期限を復元できないため（codexレビュー1回目） |
 | 登録 | 登録済みかにかかわらず`202`。登録済みならログインと再設定を案内するメールを送る | Q6 |
 | ゴミ箱へ移したとき | `deletion_begins_at`（削除処理を始める日時）を返す | TASK-002の「示すなら消え終わる時刻として読めない形」。項目名で「始める」を表す |
 | Google callbackの失敗 | `/login?auth_error=`に`google_email_conflict`または`google_auth_failed`を付けてredirect | browserのredirectなのでJSONのerrorを返せない |

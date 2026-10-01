@@ -17,8 +17,8 @@ info:
     - 日時はUTCのISO 8601（`2026-09-28T13:04:05Z`）、日付はAsia/Tokyoの暦日（`YYYY-MM-DD`）で、
       どちらもserverが決める。
     - 失敗はRFC 9457（`application/problem+json`）で返し、Webは`code`で判定する。
-    - 退会を受理した利用者には、`GET /api/v1/session`と`GET /api/v1/account/deletion`以外は
-      `409 account_deletion_in_progress`を返す。
+    - 退会を受理した利用者には、`GET /api/v1/session`・`GET /api/v1/account/deletion`・
+      `DELETE /api/v1/account`（失敗後のやり直し）以外は`409 account_deletion_in_progress`を返す。
 servers:
   - url: /
 tags:
@@ -451,7 +451,9 @@ paths:
         生成は非同期で、`202`で処理（Generation）を返して終わる。結果は
         `GET /api/v1/generations/{generation_id}`で取得する。
 
-        同じattemptで再び送られた場合は、新しい処理を作らずbodyを読まずに既存の処理を返す。
+        attemptは`X-Recording-Attempt` headerで渡す（bodyに入れない）。serverはbodyを読む前に
+        headerのattemptを検証し、同じattemptで再び送られた場合は、新しい処理を作らずbodyを読まずに
+        既存の処理を返す（32MBの本文を重複して受け取らないため）。
         例外は既存の処理が`failed`かつ`failure.kind=upload_incomplete`の場合で、attemptの期限内なら
         音声を受け取り直す。
 
@@ -459,6 +461,7 @@ paths:
         別の利用者のattemptは`attempt_invalid`になる。
       parameters:
         - $ref: "#/components/parameters/CsrfToken"
+        - $ref: "#/components/parameters/RecordingAttempt"
       requestBody:
         required: true
         content:
@@ -966,6 +969,16 @@ components:
       schema:
         type: string
         maxLength: 512
+    RecordingAttempt:
+      name: X-Recording-Attempt
+      in: header
+      required: true
+      description: |
+        `POST /api/v1/recording_attempts`で受け取った`attempt_token`。bodyを読む前に検証できるよう
+        headerで渡す
+      schema:
+        type: string
+        maxLength: 1024
     GenerationId:
       name: generation_id
       in: path
@@ -1276,7 +1289,7 @@ components:
           type: string
           description: |
             serverが暗号化・署名した値（id・利用者・started_at・期限を含む）。Webは解釈せず、memoryに
-            だけ置いて`POST /api/v1/dots`で返す。
+            だけ置いて`POST /api/v1/dots`の`X-Recording-Attempt` headerで返す。
           maxLength: 1024
         started_at:
           type: string
@@ -1288,11 +1301,8 @@ components:
           description: このattemptで送信できる期限（発行から2時間）。受理後の再試行期限とは別
     DotUpload:
       type: object
-      required: [attempt_token, audio, duration_seconds]
+      required: [audio, duration_seconds]
       properties:
-        attempt_token:
-          type: string
-          maxLength: 1024
         audio:
           type: string
           format: binary
@@ -1305,7 +1315,7 @@ components:
 
     Generation:
       type: object
-      required: [id, status, started_at, retryable, retry_expires_at]
+      required: [id, status, started_at, retryable]
       properties:
         id:
           type: string
@@ -1333,7 +1343,9 @@ components:
           type: string
           format: date-time
           description: |
-            受理から24時間の再試行期限。音声が残っている間だけ画面に出す。消え終わる時刻ではない。
+            受理から24時間の再試行期限。`processing` / `failed` / `expired`では必ず返し、`succeeded`では
+            返さない（成功後は後片付けで処理の記録が消え、期限を持たないため）。音声が残っている間だけ
+            画面に出す。消え終わる時刻ではない。
         failure:
           $ref: "#/components/schemas/GenerationFailure"
         poll_after_seconds:
@@ -1556,7 +1568,6 @@ components:
         status: succeeded
         started_at: "2026-09-28T13:04:05Z"
         retryable: false
-        retry_expires_at: "2026-09-29T13:20:11Z"
         dot:
           id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
           date: "2026-09-28"
@@ -1573,7 +1584,6 @@ components:
         status: succeeded
         started_at: "2026-09-28T13:04:05Z"
         retryable: false
-        retry_expires_at: "2026-09-29T13:20:11Z"
         dot:
           id: 6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04
           date: "2026-09-28"
