@@ -2,8 +2,7 @@
 
 ## 1. Status
 
-計画中（2026-10-02）。TASK-001から移管された4つの判断（§12-1〜§12-4）について人間の判断待ち。
-判断に依存しない部分（§7のStep 1〜3）の方針はここで確定し、判断後に実装へ進む。
+実施中（2026-10-02）。TASK-001から移管された4つの判断は、2026-10-02に人間が決めた（§12-5）。
 
 ## 2. Goal
 
@@ -214,6 +213,31 @@ Google
 | --- | --- | --- |
 | A（推奨） | RDSに`rate_limit_counters(key_digest, window_started_at, count)`を作り、1つのUPSERTで原子的に加算する小さなServiceにする。keyはHMACでdigestにし、生のメールを保存しない。期限切れの行は定期的に削除する | 依存を足さない。evictionが起きないので制限が緩まない。controllerをまたいだ合算（確認＋再設定）も自然に書ける。掃除の処理は自前で持つ |
 | B | Solid Cache（RDS）＋Railsの`rate_limit` | 標準の仕組みに乗れる。一方で次のコストがある。<br>- gemとcache用tableが増える。<br>- 容量超過時のevictionでcounterが消え得る。<br>- `rate_limit`のkeyがcontrollerごとに分かれるため、確認＋再設定の合算や「制限時も202」には独自のcallbackが必要 |
+
+### 12-5. 人間の判断（2026-10-02）
+
+| 判断 | 選択 | 内容 |
+| --- | --- | --- |
+| 12-1 | B | password 8〜128文字（文字種の強制なし）、Lockable採用 |
+| 12-2 | A | `email_verified=true`のGoogleだけ確認済みとして新規作成 |
+| 12-3 | A | `max_age=0`と`auth_time`の検証。有効時間5分 |
+| 12-4 | A | RDSの専用tableで原子的に加算 |
+
+12-1のBを契約と実装に落とすため、次の3点はPlan作成者（Claude）が既定値として決めた。
+変えるときは人間が判断する。
+
+- **ロック中のlogin**: password一致でも`401 invalid_credentials`を返す。
+  - ロックの有無を応答に出さないため（未登録・不一致と同じ応答）。
+  - 解除メールはロックした時点で1回だけ送る。
+- **解除の方法**: Deviseの`unlock_strategy = :both`、`unlock_in = 1時間`、`maximum_attempts = 10`。
+  - 1時間で自動解除し、メールのリンクからも解除できる。
+  - リンク用に`PATCH /api/v1/unlock`（body `{token}`、成功`204`、`422 token_invalid`）を契約に足す。
+  - endpointの追加なので、1回のreleaseで入れてよい変更にあたる（`contracts/README.md` §3）。
+  - 解除メールの再送endpointは作らない。1時間で自動解除されるため。
+- **IPごとの制限の併用**: login失敗がIPごとに1時間50回を超えたら`429 rate_limited`。
+  - Lockableはアカウント単位なので、多数のアカウントへ順に試す攻撃を止められないため。
+  - IPの制限は他人を締め出さない。
+  - 数え方は12-4の共有counterを使う。
 
 ## 13. Risks / Things to Watch
 
