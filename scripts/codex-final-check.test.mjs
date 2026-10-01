@@ -1,0 +1,27 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { buildCodexArgs, validateArgs } from "./codex-final-check.mjs";
+
+test("accepts a single origin base branch", () => {
+  assert.deepEqual(validateArgs(["origin/main"]), { ok: true, base: "origin/main" });
+  assert.deepEqual(validateArgs(["origin/release/1.2"]), { ok: true, base: "origin/release/1.2" });
+});
+
+test("rejects extra arguments so sandbox flags cannot be appended", () => {
+  assert.equal(validateArgs(["origin/main", "--dangerously-bypass-approvals-and-sandbox"]).ok, false);
+  assert.equal(validateArgs(["origin/main", "-s", "workspace-write"]).ok, false);
+  assert.equal(validateArgs([]).ok, false);
+});
+
+test("rejects bases that are flags, local branches, or ranges", () => {
+  for (const base of ["--add-dir=/", "main", "origin/main..HEAD", "origin/-x", "origin/main;ls", "origin/main\n"]) {
+    assert.equal(validateArgs([base]).ok, false, base);
+  }
+});
+
+test("always runs codex exec in the read-only sandbox", () => {
+  const args = buildCodexArgs("origin/main", "/tmp/out.md");
+  assert.deepEqual(args.slice(0, 3), ["exec", "--sandbox", "read-only"]);
+  assert.ok(args.at(-1).includes("origin/main...HEAD"));
+  assert.ok(!args.some((arg) => arg.startsWith("--dangerously")));
+});
