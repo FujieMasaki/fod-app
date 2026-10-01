@@ -65,14 +65,15 @@
    具体的な壊れ方で確かめる、確かめられないものは要確認、という最終チェックの役割を定める。
    レビュー観点の本文は複製せず、各領域のsecurity.mdを読ませる。
 3. `pr-review-cycle`を次の順にする。セルフレビュー → サブエージェントのレビュー → 指摘の修正 →
-   `codex exec -s read-only`の最終チェック → 指摘の修正 → 再セルフレビュー → 再サブエージェント →
+   `scripts/codex-final-check.mjs`経由の最終チェック → 指摘の修正 → 再セルフレビュー → 再サブエージェント →
    再Codex。サブエージェントのLGTM（Critical・High・Mediumなし）が出るまでCodexへ進まない。
    サブエージェントにもCodexにも、他段階のレビュー結果は渡さない。Codexとのループは実行回数で数え、
    上限5回は変えない。サブエージェントとの往復は別に数え、1回の段階で3回レビューしてもLGTMに
    ならなければ止まる。誤検知と判断した指摘は理由を記録すれば解消済みとできるが、securityの指摘は
    人間の判断を仰ぐ。
 4. `scripts/codex-final-check.mjs`を追加する。baseだけを受け取り、形式を検査し、余分な引数を拒否して、
-   `codex exec --sandbox read-only`の引数をすべて自分で組み立てる。`.claude/settings.json`の
+   `codex exec --sandbox read-only`の引数をすべて自分で組み立てる。20分で打ち切り、timeoutは専用の終了コード
+   （3）で返す。`.claude/settings.json`の
    `codex review`の許可を、このスクリプトの許可に置き換える。
 5. `AGENTS.md`と`README.md`の記述を3段のレビューに合わせる。
 
@@ -158,7 +159,7 @@ node scripts/codex-final-check.mjs → codex exec --sandbox read-only（final-ch
 ### Manual
 
 - 本PR自体を、更新後の`pr-review-cycle`の手順どおりにレビューして回す。
-- `codex exec -s read-only`が、指示どおりのdiff範囲を読み、ファイルを変更しないことを確認する。
+- `scripts/codex-final-check.mjs`経由のCodexが、指示どおりのdiff範囲を読み、ファイルを変更しないことを確認する。
 
 ### Automated
 
