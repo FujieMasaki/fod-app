@@ -46,8 +46,12 @@ publishが拒否された場合も、ページを作らずにその旨を完了�
 ### 1. 材料を集める
 
 - `gh pr view <番号> --json number,title,body,headRefOid,url` と `gh pr diff <番号>`
-- `gh pr checks <番号>`（CIの結果）と、実行したtestの件数。CIが実行中なら終わるまで待つ
-  （`gh pr checks <番号> --watch`）。CIが動かないブランチなら、そのことを書く。
+- `gh pr checks <番号>`（CIの結果）。CIが実行中なら、`gh pr checks <番号> --watch`をBash toolの
+  バックグラウンド実行で走らせ、終わるまで待つ。CIが動かないブランチなら、そのことを書く。
+  - **CIが失敗していたら、ページを作らない。** `pr-review-cycle`から呼ばれた場合は、同skillの手順6
+    （修正）に戻り、手順2・3・4のレビューを経てからこの手順に戻る。単独で頼まれた場合は、失敗を報告して止まる。
+- testの件数は、CIのジョブ出力か、このセッションで実行したコマンドの出力から取る。取れない場合や
+  testの対象外（Markdownだけの変更など）の場合は、そう書く。
 - 関連するImplementation Plan（判断の経緯、人間が判断したQ1〜Qn、実装差異、未対応の指摘）
 - レビューの結果（どのコミットでLGTMか、LGTM後に入ったコミットとその内容）
 
@@ -94,6 +98,7 @@ Artifact toolの規約に従う。最初に`action: "quickstart"`（intentは`ot
   チェック状態も残る）。上部のレビュー状態を更新し、内容が変わった確認項目は版を上げて未確認に戻す。
   CIが後から終わった場合も、結果を反映して再publishする。
 - 別の会話から更新する場合は、ArtifactのURLを`url`に渡し、先に`action: "read"`で読んでから更新する。
+  URLが手元になければ、Artifact toolの`action: "list"`でタイトルから探す（同じURLを保つため、新しく作らない）。
 
 ### 4. 渡す
 
