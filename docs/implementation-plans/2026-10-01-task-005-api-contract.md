@@ -168,7 +168,7 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 | 生成のpath | `/api/v1/generations/{id}`（TASK-003 Planの`/api/v1/dots/generations/:id`から変更） | `/api/v1/dots/{id}`と曖昧になり、routingで取り違えるため（Redocly lintの指摘） |
 | Day | `GET /api/v1/days/today`を専用に持ち、今日の記録が無ければ`dot_count: 0`で`latest_dot`を省く | 取得失敗と区別でき、serverが決めた今日の日付も返せる |
 | 日の詳細の0件 | `200`で`dots: []` | 取得失敗・他人のDotと区別し、Webが一覧を取り直せるようにする |
-| 退会中の操作 | 受理後は`GET /api/v1/session`・`GET /api/v1/account/deletion`・`DELETE /api/v1/account`（失敗後のやり直し）以外を`409 account_deletion_in_progress` | Q5でsessionを完了まで残すため、他の操作を明示的に止める。やり直しまで止めると`failed`から回復できない（codexレビュー1回目） |
+| 退会中の操作 | 受理後は`GET /api/v1/session`・`GET /api/v1/account/deletion`・`DELETE /api/v1/account`（失敗後のやり直し）以外を`409 account_deletion_in_progress`。やり直しでは再認証を求めない | Q5でsessionを完了まで残すため、他の操作を明示的に止める。やり直しまで止めると`failed`から回復できない（codexレビュー1回目）。Google専用の利用者に再認証を求めると、退会中は再認証の経路も止まっていて回復できないため、受理時の本人確認で足りるとした（codexレビュー2回目） |
 | 録音attemptの渡し方 | `POST /api/v1/dots`の`X-Recording-Attempt` header（multipartの本文に入れない） | 同じattemptの再送を、32MBの本文を読む前に判定するため（TASK-003 Plan §20の「bodyを受け取らずに既存の状態を返す」。codexレビュー1回目） |
 | 成功後の再試行期限 | `retry_expires_at`は`succeeded`では返さない | 成功後は後片付けで処理の記録が消え、Dotの項目からは期限を復元できないため（codexレビュー1回目） |
 | 登録 | 登録済みかにかかわらず`202`。登録済みならログインと再設定を案内するメールを送る | Q6 |
@@ -247,7 +247,7 @@ DotやProblemを複数のfeatureが使うため（React・route・表示判断�
 | `@redocly/cli` 2.55.0（root devDependency） | 契約のlint | OpenAPIの標準的なlinterで、examplesのschema検証まで行える。2.56以降は公開から1日未満で、pnpmの`minimumReleaseAge`を緩めないため2.55.0に固定した。telemetryと更新通知は環境変数で止める |
 | `openapi-typescript` 7.13.0（web devDependency） | 契約から型を生成 | runtimeを持たず型だけを出す。`--check`で生成物が最新かを確かめられる |
 | `yaml` 2.9.1（web devDependency） | testで契約を読む | Node標準にYAML parserが無いため |
-| `committee-rails` 0.10.0（api test group） | request specでresponseを照合、examplesの検証 | RailsでOpenAPI 3の照合を行う定番。依存の`committee` 5.6.4・`openapi_parser` 2.3.1も含め、公開から10日以上経っている |
+| `committee-rails` 0.10.0（api test group） | request specでresponseを照合、examplesの検証 | RailsでOpenAPI 3の照合を行う定番。依存の`committee` 5.6.4・`openapi_parser` 2.3.1も含め、公開から10日以上経っている。最初のrequestを覚えたままにする挙動を上書きし、契約に無いcontent typeを拒否する設定にした（`spec/support/api_contract.rb`。codexレビュー2回目） |
 
 ## 12. Alternatives Considered
 

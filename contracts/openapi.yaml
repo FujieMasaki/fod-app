@@ -19,6 +19,7 @@ info:
     - 失敗はRFC 9457（`application/problem+json`）で返し、Webは`code`で判定する。
     - 退会を受理した利用者には、`GET /api/v1/session`・`GET /api/v1/account/deletion`・
       `DELETE /api/v1/account`（失敗後のやり直し）以外は`409 account_deletion_in_progress`を返す。
+      退会のやり直しは再認証を求めないので、Googleの再認証へ進む必要はない。
 servers:
   - url: /
 tags:
@@ -347,7 +348,9 @@ paths:
         受理の時点で新しい保存・再試行・結果の確定を止め、ゴミ箱の中も含めて本人のデータを消す。
         **進行中の処理が0になり、削除が終わるまで完了を返さない。**受理後もsessionは完了まで残し、
         Webは`GET /api/v1/account/deletion`で状況を取得する。既に受理済みなら同じ`202`を返す。
-        `failed`のあとに呼ぶと削除をやり直す。
+        `failed`のあとに呼ぶと削除をやり直す。**受理済みの退会のやり直しでは再認証を求めない**
+        （受理の時点で本人確認が済んでおり、やり直しは同じ削除を再開するだけで対象を広げないため。
+        退会中はGoogleの再認証の経路も`409`で止まるので、求めると回復できなくなる）。
       parameters:
         - $ref: "#/components/parameters/CsrfToken"
       requestBody:
