@@ -7,7 +7,7 @@
 | 対象領域 | 共通 |
 | 作業区分 | API契約 |
 | 優先度 | P0 |
-| 状態 | Blocked |
+| 状態 | In progress |
 
 ## 目的と作業範囲
 
@@ -45,7 +45,9 @@
 
 ## 関連Implementation Plan
 
-未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+[2026-10-01-task-005-api-contract.md](../implementation-plans/2026-10-01-task-005-api-contract.md)
+
+2026-10-01に着手した。TASK-003はIn progressのままだが、残る完了条件7（委託先への9項目の確認。公開前に人間が実施）はAPI契約の前提となる判断を変えないため、人間の判断で先に着手した。providerが変わった場合に見直す箇所はPlan §13に記録する。
 
 ### 上流の採用決定と残る論点（2026-09-24 Devise切替）
 
