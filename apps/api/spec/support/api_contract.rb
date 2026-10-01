@@ -55,12 +55,23 @@ module ApiContract
   end
 end
 
+# committee-rails 0.10.0は最初のassertionのrequestを覚えたままにするため、1つのexampleで複数回
+# requestすると、後のresponseを最初のendpointの定義で照合してしまう。毎回いまのrequestを包み直す。
+module ApiContractRequestObject
+  def request_object
+    Committee::Rails::RequestObject.new(integration_session.request)
+  end
+end
+
 RSpec.configure do |config|
   config.add_setting :committee_options
   config.committee_options = {
     schema_path: ApiContract::SCHEMA_PATH,
     strict_reference_validation: true,
-    parse_response_by_content_type: true
+    parse_response_by_content_type: true,
+    # 契約に無いcontent typeのresponseを、schemaの照合を飛ばして通さない
+    strict_response_content_type: true
   }
   config.include Committee::Rails::Test::Methods, type: :request
+  config.include ApiContractRequestObject, type: :request
 end
