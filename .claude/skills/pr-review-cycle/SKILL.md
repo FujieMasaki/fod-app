@@ -106,19 +106,21 @@ Railsコードはrspec / rubocop / brakeman等）を実行し、pre-push hookで
 ### 4. Codexの最終チェック
 
 ```bash
-codex exec -s read-only -o <一時ディレクトリ>/codex-final.md \
-  "docs/code-review/final-check.md を読み、その手順で origin/<ベースブランチ>...HEAD の差分を最終チェックしてください。" \
-  < /dev/null
+node scripts/codex-final-check.mjs origin/<ベースブランチ>
 ```
 
+Codexは必ずこのスクリプト経由で実行し、`codex exec`を直接実行しない。Claude Codeの許可ルールは
+前方一致のため、`codex exec -s read-only *`を許可すると、後ろにsandboxを外すオプション
+（`--dangerously-bypass-approvals-and-sandbox`等）を足しても確認なしで通ってしまう。スクリプトは
+baseだけを受け取り（形式を検査し、余分な引数は拒否する）、`codex exec --sandbox read-only`の引数を
+すべて自分で組み立てる。許可ルールもこのスクリプトだけにしている。
+
 - 時間がかかるため、Bash toolのtimeoutを上限（600000ms）にするか、バックグラウンドで実行する。
-- 途中経過の出力は長いので、結果は`-o`で保存した最終メッセージのファイルから読む。
-- `< /dev/null`で、stdinが指示に追記されたり入力待ちになったりするのを防ぐ。
+- 途中経過は捨て、Codexの最終メッセージだけを標準出力に出す（保存先は標準エラーに表示される）。
 - timeoutした場合は1回だけ再実行し、それでも終わらなければ「止まる条件」に従う。
 
-`-s read-only`でCodexが実行するコマンドを読み取り専用に限り、最終チェックがファイルを変更しない
-ことを保証する。`codex review --base`は独自の指示と同時に指定できず、`codex review "<指示>"`は
-diffの範囲がCLIの既定判定に任されるため使わない。
+`codex review --base`は独自の指示と同時に指定できず、`codex review "<指示>"`はdiffの範囲がCLIの
+既定判定に任されるため使わない。
 
 結果の冒頭でCodexが報告したdiffの範囲（baseとHEAD）が、push済みの最新コミットと一致しているか
 確認する。一致しなければ結果を採用せず、ループの回数に数えずに1回だけ再実行する。それでも一致しなければ
@@ -186,7 +188,7 @@ Codexの指摘を修正したら、修正の大小にかかわらず、手順2�
 - securityの指摘を、誤検知などの理由で対応不要と判断したい。
 - サブエージェント・codexの指摘が仕様・設計判断に関わり、人間の判断が必要。
 - 秘密情報・外部サービスの設定・課金が必要になった。
-- `codex exec` 自体が実行できない（未ログイン、認証切れ、ネットワークエラーなど）。原因を
+- `scripts/codex-final-check.mjs`（`codex exec`）自体が実行できない（未ログイン、認証切れ、ネットワークエラーなど）。原因を
   解消できない場合はリトライを重ねず、その場で止まる。
 - 無関係な変更（未コミット・コミット済み問わず）が見つかり、ユーザーに確認できない、
   または対応方針が決まらない。

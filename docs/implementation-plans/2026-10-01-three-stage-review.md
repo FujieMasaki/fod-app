@@ -37,6 +37,10 @@
   PR作成前の実装手順（`run-task`）。個人環境のサブエージェント定義。
 - 決定済み（2026-10-01、人間の判断）:
   - Q1 Codexの呼び出し: `codex exec -s read-only`で、diffの範囲と指示の両方を固定する。
+    サブエージェントのレビューで、許可ルール`Bash(codex exec -s read-only *)`が前方一致のため
+    sandboxを外すオプションを足しても通る、と指摘された。人間の判断で、決まった引数でcodexを呼ぶ
+    `scripts/codex-final-check.mjs`を作り、許可ルールをそのスクリプトだけにする方式とした
+    （拒否リスト方式のguard拡張、毎回の確認は不採用）。
   - Q2 修正後の再レビュー: 当初は「設計・仕様に関わる修正のときだけサブエージェントもやり直す」と
     決めたが、同日に人間の判断で次へ変更した。Codexとの修正の往復をできるだけ減らすため。
     - サブエージェントのLGTMが出るまでCodexへ進まない。
@@ -67,7 +71,9 @@
    上限5回は変えない。サブエージェントとの往復は別に数え、1回の段階で3回レビューしてもLGTMに
    ならなければ止まる。誤検知と判断した指摘は理由を記録すれば解消済みとできるが、securityの指摘は
    人間の判断を仰ぐ。
-4. `.claude/settings.json`の`codex review`の許可を`codex exec -s read-only`に置き換える。
+4. `scripts/codex-final-check.mjs`を追加する。baseだけを受け取り、形式を検査し、余分な引数を拒否して、
+   `codex exec --sandbox read-only`の引数をすべて自分で組み立てる。`.claude/settings.json`の
+   `codex review`の許可を、このスクリプトの許可に置き換える。
 5. `AGENTS.md`と`README.md`の記述を3段のレビューに合わせる。
 
 ## 8. Why This Approach
@@ -97,7 +103,7 @@ git diff origin/<base>...HEAD をファイルに保存 → code-reviewer サブ�
 ↓
 指摘があれば修正・push → セルフレビュー → 再サブエージェント（LGTMまで、最大3回）
 ↓
-codex exec -s read-only（final-check.md、独立）
+node scripts/codex-final-check.mjs → codex exec --sandbox read-only（final-check.md、独立）
 ↓
 指摘があれば修正 → 再セルフレビュー → 再サブエージェント（LGTMまで）→ 再Codex
 ↓
@@ -109,7 +115,8 @@ codex exec -s read-only（final-check.md、独立）
 - `.claude/agents/code-reviewer.md`（新規）: 広いレビューを担うサブエージェント。
 - `docs/code-review/final-check.md`（新規）: Codexの最終チェックの役割と手順。
 - `.claude/skills/pr-review-cycle/SKILL.md`（変更）: 3段のレビュー、再レビューの範囲、止まる条件。
-- `.claude/settings.json`（変更）: `codex exec -s read-only`の許可。
+- `scripts/codex-final-check.mjs`・`.test.mjs`（新規）: 読み取り専用のCodexを決まった引数で呼ぶ。
+- `.claude/settings.json`（変更）: `codex-final-check.mjs`の許可。
 - `AGENTS.md`（変更）: Pull Requests節のレビューの説明。
 - `README.md`（変更）: 文書一覧の`docs/code-review/`の説明。
 - 本Plan（新規）。
