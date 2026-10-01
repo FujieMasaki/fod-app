@@ -19,6 +19,20 @@ const basePattern = /^origin\/[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 export const TIMEOUT_MS = 20 * 60 * 1000;
 export const EXIT_TIMEOUT = 3;
 
+// The user config is not loaded (its MCP servers and plugins run outside the sandbox), so the
+// model it would have chosen is pinned here.
+export const MODEL = "gpt-6.1-sol";
+export const REASONING_EFFORT = "high";
+// Features that reach outside the sandbox (browser, desktop, app integrations, hooks).
+export const DISABLED_FEATURES = [
+  "apps",
+  "browser_use",
+  "browser_use_external",
+  "computer_use",
+  "hooks",
+  "in_app_browser",
+];
+
 export function validateArgs(args) {
   if (args.length !== 1) {
     return { ok: false, error: "base branch only: node scripts/codex-final-check.mjs origin/<base>" };
@@ -33,15 +47,23 @@ export function validateArgs(args) {
 export function buildCodexArgs(base, outputFile) {
   const prompt =
     `docs/code-review/final-check.md を読み、その手順で ${base}...HEAD の差分を最終チェックしてください。`;
-  // execpolicy rules run `allow`-matched commands outside the sandbox, so they are not loaded,
-  // and approvals are disabled so nothing can be escalated during the check.
+  // --sandbox only confines shell commands the model runs. execpolicy `allow` rules, MCP servers
+  // and plugins from the user config, and the features below all act outside it, so none are
+  // loaded, and approvals are disabled so nothing can be escalated during the check.
   return [
     "exec",
     "--sandbox",
     "read-only",
     "--ignore-rules",
+    "--ignore-user-config",
+    "--ephemeral",
     "-c",
     'approval_policy="never"',
+    "-m",
+    MODEL,
+    "-c",
+    `model_reasoning_effort="${REASONING_EFFORT}"`,
+    ...DISABLED_FEATURES.flatMap((feature) => ["--disable", feature]),
     "--cd",
     repoRoot,
     "--output-last-message",

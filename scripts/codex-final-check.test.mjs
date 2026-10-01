@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { EXIT_TIMEOUT, TIMEOUT_MS, buildCodexArgs, validateArgs } from "./codex-final-check.mjs";
+import { DISABLED_FEATURES, EXIT_TIMEOUT, TIMEOUT_MS, buildCodexArgs, validateArgs } from "./codex-final-check.mjs";
 
 test("accepts a single origin base branch", () => {
   assert.deepEqual(validateArgs(["origin/main"]), { ok: true, base: "origin/main" });
@@ -23,7 +23,12 @@ test("always runs codex exec in the read-only sandbox", () => {
   const args = buildCodexArgs("origin/main", "/tmp/out.md");
   assert.deepEqual(args.slice(0, 3), ["exec", "--sandbox", "read-only"]);
   assert.ok(args.includes("--ignore-rules"), "execpolicy allow rules would run commands outside the sandbox");
-  assert.equal(args[args.indexOf("-c") + 1], 'approval_policy="never"');
+  assert.ok(args.includes('approval_policy="never"'));
+  assert.ok(args.includes("--ignore-user-config"), "user MCP servers and plugins run outside the sandbox");
+  for (const feature of ["apps", "browser_use", "computer_use", "hooks"]) {
+    assert.ok(DISABLED_FEATURES.includes(feature), feature);
+    assert.equal(args[args.indexOf(feature) - 1], "--disable", feature);
+  }
   assert.ok(args.at(-1).includes("origin/main...HEAD"));
   assert.ok(!args.some((arg) => arg.startsWith("--dangerously")));
 });
