@@ -31,14 +31,15 @@
 - 今回の対象: `human-review-artifact` skillの追加と、`pr-review-cycle`からの呼び出し。
 - 今回の対象外: アプリのコード。全プロジェクト共通のコマンド（`/review-guide`・`/self-review`）の変更。
   ページの見た目のテンプレートをリポジトリに置くこと（Artifactの規約とPR #45のページを参考にする）。
-- AGENTS.mdへの参照は足さない。この skill は`pr-review-cycle`から呼ばれ、単独でも skill の
-  descriptionで起動するため。
+- AGENTS.mdへ新しい参照は足さない。この skill は`pr-review-cycle`から呼ばれ、単独でも skill の
+  descriptionで起動するため。ただし、AGENTS.mdにある`pr-review-cycle`の要約は、最後にガイドを作る
+  ことが分かるよう同じ変更で更新する。
 
 ## 6. References and Documents to Update
 
 - 参照: `.claude/skills/pr-review-cycle/SKILL.md`、`.claude/skills/run-task/SKILL.md`（skillの書き方）、
   `/review-guide`・`/self-review`、PR #45・#46のガイドページ。
-- 更新: `.claude/skills/pr-review-cycle/SKILL.md`。
+- 更新: `.claude/skills/pr-review-cycle/SKILL.md`、`AGENTS.md`（`pr-review-cycle`の要約）。
 - 新規: `.claude/skills/human-review-artifact/SKILL.md`。
 
 ## 7. Proposed Approach
