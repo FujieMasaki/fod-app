@@ -50,6 +50,8 @@
 - [ ] passwordのhashに長さの制限がないか。bcryptは先頭72 byteだけで照合する（TASK-006では前処理で対応）。
 - [ ] middlewareでpathを比べる処理が、frameworkと同じ正規化（大文字小文字・末尾の`/`）をしているか。
   表記を変えて制限・検証を迂回できないか。
+- [ ] 回数の制限を「確かめてから数える」形にしていないか。同時のrequestがどちらも上限の手前で通る。
+  先に原子的に数えて枠を予約し、数えなくてよかったら戻す（TASK-006の`RateLimiter#release`）。
 - [ ] 「検索してから保存」の間に同じ値が保存される競合で、一意制約（`RecordNotUnique`）だけでなく
   uniqueness validation（`RecordInvalid`）の失敗も扱っているか。
 - [ ] test環境の設定が、検証したいsecurityの仕組みを無効にしていないか（例: `allow_forgery_protection`を
