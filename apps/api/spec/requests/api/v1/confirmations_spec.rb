@@ -48,7 +48,7 @@ RSpec.describe "Confirmation" do
   describe "POST /api/v1/confirmation" do
     def resend(email) = json_request(:post, "/api/v1/confirmation", { email: })
 
-    it "未確認の利用者には、60秒後なら確認メールを再送する" do
+    it "未確認の利用者には、60秒後なら確認メールを再送する", :fixed_time do
       register_and_take_token
       travel 61.seconds
 
@@ -67,7 +67,7 @@ RSpec.describe "Confirmation" do
       expect(ActionMailer::Base.deliveries).to be_empty
     end
 
-    it "同じ宛先は確認と再設定を合わせて1時間5回まで" do
+    it "同じ宛先は確認と再設定を合わせて1時間5回まで", :fixed_time do
       user = create(:user, :unconfirmed)
       6.times do
         resend(user.email)

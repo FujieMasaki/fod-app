@@ -93,7 +93,7 @@ RSpec.describe "Google login" do
       expect(problem_code).to eq("csrf_invalid")
     end
 
-    it "開始がIPごとに1時間50回を超えたら、Googleへ進まず/login?auth_error=rate_limited" do
+    it "開始がIPごとに1時間50回を超えたら、Googleへ進まず/login?auth_error=rate_limited", :fixed_time do
       token = csrf_token
       50.times do
         post("/auth/google_oauth2", params: { authenticity_token: token })
@@ -105,7 +105,7 @@ RSpec.describe "Google login" do
       expect(response.headers["Cache-Control"]).to eq("no-store")
     end
 
-    it "再認証の開始が制限に掛かったら、return_toへauth_error=rate_limitedを付けて戻す" do
+    it "再認証の開始が制限に掛かったら、return_toへauth_error=rate_limitedを付けて戻す", :fixed_time do
       token = csrf_token
       50.times { post("/auth/google_oauth2", params: { authenticity_token: token }) }
 

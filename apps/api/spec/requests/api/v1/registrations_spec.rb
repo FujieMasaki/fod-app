@@ -46,7 +46,7 @@ RSpec.describe "Registration" do
     expect(response).to have_http_status(:accepted)
   end
 
-  it "同じ宛先へのメールは60秒に1回まで（2回目も202で、メールは送らない）" do
+  it "同じ宛先へのメールは60秒に1回まで（2回目も202で、メールは送らない）", :fixed_time do
     token = csrf_token
     register("new@example.com", token:)
     register("new@example.com", token:)
@@ -55,7 +55,7 @@ RSpec.describe "Registration" do
     expect(ActionMailer::Base.deliveries.size).to eq(1)
   end
 
-  it "IPの制限に掛かったら、passwordのhashを計算しない" do
+  it "IPの制限に掛かったら、passwordのhashを計算しない", :fixed_time do
     allow(User).to receive(:new).and_call_original
     token = csrf_token
     20.times { |n| register("user#{n}@example.com", token:) }
@@ -65,7 +65,7 @@ RSpec.describe "Registration" do
     expect(User).to have_received(:new).exactly(20).times
   end
 
-  it "IPごとに1時間20回を超えたら429 rate_limited" do
+  it "IPごとに1時間20回を超えたら429 rate_limited", :fixed_time do
     token = csrf_token
     20.times { |n| register("user#{n}@example.com", token:) }
 

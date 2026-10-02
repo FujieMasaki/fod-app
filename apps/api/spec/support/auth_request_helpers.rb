@@ -33,6 +33,12 @@ RSpec.configure do |config|
   config.include ActiveJob::TestHelper
   config.before { ActionMailer::Base.deliveries.clear }
   # メールはjobで送るので、request specではenqueueしたjobをその場で実行して結果を確かめる。
+  # 試行回数は固定の時間枠（60秒・1時間）で数える。実行した時刻が枠の境目に近いと途中で枠が変わり、
+  # 結果が変わるため、回数を確かめるexampleは`fixed_time: true`で枠の頭に時刻を固定する。
+  config.around(:each, :fixed_time) do |example|
+    travel_to(Time.zone.parse("2026-10-02 10:00:00")) { example.run }
+  end
+
   # `perform_jobs: false`を付けたexampleでは実行せず、enqueueだけを確かめる。
   config.around(type: :request) do |example|
     example.metadata[:perform_jobs] == false ? example.run : perform_enqueued_jobs { example.run }

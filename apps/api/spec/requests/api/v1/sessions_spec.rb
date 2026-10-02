@@ -156,7 +156,7 @@ RSpec.describe "Session" do
       end
     end
 
-    it "失敗がIPごとに1時間50回を超えたら429 rate_limited（未登録のメールアドレスも数える）" do
+    it "失敗がIPごとに1時間50回を超えたら429 rate_limited（未登録のメールアドレスも数える）", :fixed_time do
       token = csrf_token
       50.times do |n|
         json_request(:post, "/api/v1/session", { email: "nobody#{n}@example.com", password: "wrong password" }, token:)
