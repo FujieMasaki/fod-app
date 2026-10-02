@@ -61,7 +61,8 @@
 2. **着手済みの判定**: 次のどれかがあるタスクを着手済みとして除外する。
    - `git worktree list`のworktreeで、ディレクトリ名が`task-NNN`のもの、またはブランチ名が`task-NNN`を含むもの。
      `/run-task`は別のworktreeでブランチを切ることもあるため、`.claude/worktrees/`の直下だけを見ない。
-   - head branchが`task-NNN`を含むopen PRがある。
+   - head branchが`task-NNN`を含むopen PRがある。repositoryは公開でfork PRのbranch名は誰でも決められるため、
+     このrepositoryのbranchから出たPR（`isCrossRepository: false`）だけを数える。
    - 加えて、mainで`In progress`のタスクは除外する（作業中か、人間の確認待ちのため）。
 3. **起動順**: 実行可能なタスクを、未完了の後続タスク数（推移的）が多い順に並べ、上限
    （既定3、`FOD_TASK_MAX_PARALLEL`で変更）まで起動する。
@@ -70,6 +71,9 @@
    そのworktreeで`claude -p "/run-task TASK-NNN" --permission-mode auto`を起動する。
    `git`の同時実行によるlock競合を避けるため、起動は30秒ずつずらす。1セッションは4時間で打ち切る
    （launchdは前回のジョブが動いている間は次を起動しないため、1件のハングで翌朝以降が止まらないようにする）。
+   SIGTERMで終わらなければ60秒後にSIGKILLする。`git` / `gh`の呼び出しは2分、`git fetch`は低速が60秒続いたら
+   打ち切る。セッションが一度も起動しなかった場合はworktreeを削除し、翌日以降に着手済みと扱われないようにする。
+   結果のPRは、セッションが残したworktreeのbranch名と完全一致する、このrepositoryのPRとする。
 5. **テストDBの分離**: `database.yml`のtest DB名に`TEST_ENV_NUMBER`を付ける（parallel_testsと同じ慣例）。
    定期実行は`TEST_ENV_NUMBER=_task_NNN`を渡し、`/run-task`はapiを変える場合にtest DBを準備する。
 6. **通知**: 全セッションの終了後、タスクごとの結果（PR URL、止まった理由）をレポートに書き、
@@ -172,8 +176,11 @@ PR作成 / 停止理由
   - `/run-task`は、定期実行では変更範囲にかかわらずtest DBを準備する（品質ゲートはapps/api以外の変更でも
     RSpecを実行するため）。
   - `claude --help`（2.1.280）で`--name`と`--permission-mode auto`があることを確認した。
+  - 2回目のレビューを反映: fork PRを着手済みの判定と結果の紐付けから外し、結果のPRはbranch名の完全一致で
+    照合する。SIGKILLへの切り替え、外部コマンドとfetchの打ち切り、起動しなかったセッションのworktree削除、
+    Node scriptが通知済みの失敗（終了コード3）をshで二重に通知しない処理を追加した。
 - 検証結果:
-  - `pnpm test:scripts`: 156件成功（`task-scheduler.test.mjs`の7件を含む）。`pnpm lint`: 成功。
+  - `pnpm test:scripts`: 成功（`task-scheduler.test.mjs`は10件）。`pnpm lint`: 成功。
   - `node scripts/task-scheduler.mjs plan --root <repo>`: 起動0件。origin/mainではTASK-005がDoneで
     TASK-006は実行可能だが、ローカルに`.claude/worktrees/task-006`（PR未作成）があるため着手済みとして
     除外された。ボトルネックとしてTASK-006（後続10件）、TASK-003（後続8件）が出た。
@@ -183,5 +190,6 @@ PR作成 / 停止理由
     拒否することを確認した。plistのコマンドはマージ前のorigin/mainにscriptがないため、取得失敗の分岐に入る
     （通知して終了コード1）ことを確認した。`task-scheduler.sh`はNode scriptが見つからない場合に失敗を通知する
     ことを確認した（この確認で、全角括弧の直前の`$status`が変数名として誤って解釈される不具合を見つけ、修正した）。
-  - 未実施: `run`モードでの実際のセッション起動と、launchdからの起動・通知。マージ後に登録して確認する。
+  - 未実施: `run`モードでの実際のセッション起動（起動失敗時のworktree削除、打ち切りを含む）と、launchdからの
+    起動・通知。マージ後に登録して確認する。
 - 関連: [自動実行の仕組み](2026-09-26-autonomous-task-runner.md)。
