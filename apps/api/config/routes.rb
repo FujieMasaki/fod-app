@@ -16,4 +16,7 @@ Rails.application.routes.draw do
       resource :unlock, only: :update
     end
   end
+
+  # Googleログインの開始（POST /auth/google_oauth2）はOmniAuthのmiddlewareが受ける。
+  get "auth/google_oauth2/callback", to: "auth/google_callbacks#create"
 end

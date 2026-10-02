@@ -25,8 +25,9 @@ Rails.application.configure do
   # Render exception templates for rescuable exceptions and raise for other exceptions.
   config.action_dispatch.show_exceptions = :rescuable
 
-  # Disable request forgery protection in test environment.
-  config.action_controller.allow_forgery_protection = false
+  # CSRF保護を本番と同じく有効にする。Googleログインの開始POSTを検証するomniauth-rails_csrf_protectionは
+  # この値を読むため、無効にすると開始POSTのCSRF検証がtestで素通りになる（TASK-006）。
+  config.action_controller.allow_forgery_protection = true
 
   # Store uploaded files on the local file system in a temporary directory.
   config.active_storage.service = :test
