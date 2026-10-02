@@ -87,7 +87,7 @@ PRのレビューでは「この変更は古いWeb・古いAPIのどちらと組
   `^`・`$`ではなく、両方で文字列の端だけに一致する`(?<![\s\S])`・`(?![\s\S])`を使う。
 - `DELETE`は、そのresourceをserverから消す（戻せない）操作だけに使う。Dotをゴミ箱へ移すような戻せる
   操作には使わない（`POST /api/v1/dots/{dot_id}/trash`）。path名は、利用者にとって1つしかない
-  resource（`session`・`registration`・`confirmation`・`password`・`account`）を単数形にする。
+  resource（`session`・`registration`・`confirmation`・`password`・`unlock`・`account`）を単数形にする。
 - 一覧の続きはcursor。`next_cursor`が`null`なら終わり。Webはcursorの中身を解釈しない。
 - 失敗はRFC 9457（`application/problem+json`）。Webは`code`で判定し、`title`・`detail`を
   そのまま画面に出さない。`detail`に日記本文・文字起こし・メールアドレスを入れない。
@@ -101,12 +101,12 @@ PRのレビューでは「この変更は古いWeb・古いAPIのどちらと組
 | `session_expired` | 401 | 認証から7日が過ぎた | 期限切れを伝えてログイン画面へ。録音画面にいれば録音は保持したまま |
 | `email_unconfirmed` | 403 | メール確認が済んでいない | 確認メールの案内へ |
 | `csrf_invalid` | 403 | CSRF tokenが無い・一致しない | `GET /api/v1/session`で取り直して1回だけ再送 |
-| `invalid_credentials` | 401 | メールアドレスかpasswordが違う | どちらが違うかは示さない |
+| `invalid_credentials` | 401 | メールアドレスかpasswordが違う。ロック中（不一致10回で1時間）もこれを返す | どちらが違うかもロックの有無も示さない |
 | `reauthentication_failed` | 403 | 退会時のpasswordが違う | 入力し直し |
 | `google_reauthentication_required` | 403 | Google専用の利用者の再認証が古い | Googleの再認証（`intent=reauthenticate`）へ |
 | `rate_limited` | 429 | 試行が多すぎる（認証・退会・録音の発行・送信・再試行） | `retry_after_seconds`後に再度。録音は手元に残したまま待つ |
 | `validation_failed` | 422 | 入力が不正 | `errors`の項目ごとに示す |
-| `token_invalid` | 422 | 確認・再設定のtokenが不正か使用済み | メールの再送へ |
+| `token_invalid` | 422 | 確認・再設定・ロック解除のtokenが不正か使用済み | メールの再送へ（ロック解除なら1時間待つかloginし直す） |
 | `token_expired` | 422 | 確認（24時間）・再設定（6時間）の期限切れ | メールの再送へ |
 | `cursor_invalid` | 400 | cursorを解釈できない | 先頭から取り直す |
 | `not_found` | 404 | 存在しない・他人の・ゴミ箱の中 | 一覧を取り直す。別のDotで代わりに表示しない |
