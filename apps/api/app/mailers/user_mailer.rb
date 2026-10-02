@@ -3,6 +3,8 @@
 class UserMailer < Devise::Mailer
   TEMPLATE_PATH = "user_mailer".freeze
 
+  self.delivery_job = AuthMailDeliveryJob
+
   def confirmation_instructions(record, token, opts = {})
     @url = app_url("/confirmation", token)
     super(record, token, mail_options(opts, "メールアドレスの確認"))

@@ -32,12 +32,10 @@ class User < ApplicationRecord
 
   protected
 
-  # メールの配送に失敗しても応答を変えない（登録の有無が応答から分からないようにするため）。
-  # 失敗はerror reportへ送り、宛先などの個人データは含めない。
+  # メールはrequestの外（AuthMailDeliveryJob）で配送する。配送の時間や失敗で応答が変わり、
+  # 登録の有無やロックの有無が分かるのを防ぐため。
   def send_devise_notification(notification, *)
-    devise_mailer.send(notification, self, *).deliver_now
-  rescue StandardError => e
-    Rails.error.report(e, handled: true, context: { notification: })
+    devise_mailer.send(notification, self, *).deliver_later
   end
 
   private

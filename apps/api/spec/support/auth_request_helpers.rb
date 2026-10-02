@@ -30,5 +30,11 @@ end
 RSpec.configure do |config|
   config.include AuthRequestHelpers, type: :request
   config.include ActiveSupport::Testing::TimeHelpers
+  config.include ActiveJob::TestHelper
   config.before { ActionMailer::Base.deliveries.clear }
+  # メールはjobで送るので、request specではenqueueしたjobをその場で実行して結果を確かめる。
+  # `perform_jobs: false`を付けたexampleでは実行せず、enqueueだけを確かめる。
+  config.around(type: :request) do |example|
+    example.metadata[:perform_jobs] == false ? example.run : perform_enqueued_jobs { example.run }
+  end
 end
