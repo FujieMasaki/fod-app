@@ -35,6 +35,13 @@ class User < ApplicationRecord
 
   def self.prehash_password(password) = Base64.strict_encode64(OpenSSL::Digest::SHA256.digest(password))
 
+  # Deviseは`present?`のときだけhashを保存するため、空白だけのpasswordではhashが保存されず、passwordを
+  # 持たない利用者ができてしまう。passwordは文字種を問わないので、空文字以外は必ずhashを保存する。
+  def password=(new_password)
+    @password = new_password
+    self.encrypted_password = password_digest(new_password) unless new_password.to_s.empty?
+  end
+
   # 保存の失敗の理由が、emailの重複（taken）だけか。同時の登録・Googleの初回loginで、検索の後に
   # 別のrequestが同じメールアドレスを保存したときに当たる。
   def self.email_taken_only?(errors)

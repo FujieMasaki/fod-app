@@ -38,11 +38,12 @@ RSpec.describe "Registration" do
     assert_response_schema_confirm(422)
   end
 
-  it "空白だけのpasswordも、8文字以上なら受け付ける" do
+  it "空白だけのpasswordも、8文字以上なら受け付け、確認後にそのpasswordでloginできる" do
     register("spaces@example.com", password: " " * 8)
-
     expect(response).to have_http_status(:accepted)
-    expect(User.find_by(email: "spaces@example.com")).to be_present
+
+    json_request(:patch, "/api/v1/confirmation", { token: token_from(last_mail) })
+    sign_in_with_password(User.find_by!(email: "spaces@example.com"), password: " " * 8)
   end
 
   it "passwordが129文字なら422 too_long。128文字は受け付ける" do

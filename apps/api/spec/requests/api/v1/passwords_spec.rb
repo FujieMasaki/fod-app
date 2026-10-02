@@ -111,6 +111,16 @@ RSpec.describe "Password reset" do
       expect(unconfirmed.reload).not_to be_confirmed
     end
 
+    it "空白だけの新しいpasswordでも、hashを変えてtokenを消費し、そのpasswordでloginできる" do
+      token = take_reset_token
+
+      reset(token, password: " " * 8)
+      expect(response).to have_http_status(:no_content)
+      expect(user.reload.reset_password_token).to be_nil
+
+      sign_in_with_password(user, password: " " * 8)
+    end
+
     it "ロック中の利用者は、再設定するとロックも解ける" do
       token = take_reset_token
       user.lock_access!(send_instructions: false)

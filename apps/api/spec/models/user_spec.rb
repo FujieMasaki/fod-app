@@ -34,6 +34,13 @@ RSpec.describe User do
     expect([build(:user, password: " " * 8).valid?, build(:user, password: "").valid?]).to eq([true, false])
   end
 
+  it "空白だけのpasswordもhashを保存し、そのpasswordで照合できる" do
+    user = create(:user, password: " " * 8)
+
+    expect(user.reload).to be_password_user
+    expect([user.valid_password?(" " * 8), user.valid_password?(" " * 9)]).to eq([true, false])
+  end
+
   it "Googleの利用者だけはpasswordなしで作れる" do
     expect(build(:user, :google_only)).to be_valid
     expect(build(:user, password: nil)).not_to be_valid
