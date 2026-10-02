@@ -72,10 +72,13 @@
    `git`の同時実行によるlock競合を避けるため、起動は30秒ずつずらす。1セッションは4時間で打ち切る
    （launchdは前回のジョブが動いている間は次を起動しないため、1件のハングで翌朝以降が止まらないようにする）。
    SIGTERMで終わらなければ60秒後にSIGKILLする。`git` / `gh`の呼び出しは2分、`git fetch`は低速が60秒続いたら
-   打ち切る。セッションが一度も起動しなかった場合はworktreeを削除し、翌日以降に着手済みと扱われないようにする。
+   打ち切る。打ち切りはプロセスグループごと行い、セッションが起動したrspec等も止める。セッションが一度も
+   起動しなかった場合と、作成時のcommitにdetachされたまま変更もブランチもない場合はworktreeを削除し、
+   翌日以降に着手済みと扱われないようにする（認証切れなど一時的な障害で全タスクが止まり続けないように）。
    結果のPRは、セッションが残したworktreeのbranch名と完全一致する、このrepositoryのPRとする。
-5. **テストDBの分離**: `database.yml`のtest DB名に`TEST_ENV_NUMBER`を付ける（parallel_testsと同じ慣例）。
-   定期実行は`TEST_ENV_NUMBER=_task_NNN`を渡し、`/run-task`はapiを変える場合にtest DBを準備する。
+5. **DBの分離**: `database.yml`のdevelopment / test DB名に`FOD_DB_SUFFIX`を付ける。定期実行は
+   `FOD_DB_SUFFIX=_task_NNN`を渡し、`/run-task`は変更範囲にかかわらず両方のDBを準備する。testだけでなく
+   developmentも分けるのは、並列で動く別タスクのmigrationが`schema.rb`のdumpに混ざらないようにするため。
 6. **通知**: 全セッションの終了後、タスクごとの結果（PR URL、止まった理由）をレポートに書き、
    macOSの通知を出す。起動対象がない日は、残っているタスクと理由、最初に解消すべきボトルネックを通知する。
    scriptの取得・worktreeの準備・Node scriptが失敗した場合も通知し、「起動対象がない日」と区別できるようにする。
@@ -112,7 +115,7 @@ PR作成 / 停止理由
 - 新規 `scripts/task-scheduler.test.mjs`: 着手済み判定、起動順、通知文のtest。
 - 新規 `scripts/task-scheduler.sh`: launchdから実行する起動script。
 - 新規 `scripts/install-task-scheduler.sh`: launchdへの登録・解除。
-- 変更 `apps/api/config/database.yml`: test DB名に`TEST_ENV_NUMBER`を付ける。
+- 変更 `apps/api/config/database.yml`: development / test DB名に`FOD_DB_SUFFIX`を付ける。
 - 変更 `.claude/skills/run-task/SKILL.md`: detachされたworktreeから始める場合とtest DBの準備。
 - 変更 `docs/tasks/README.md`、`README.md`、`docs/architecture.md`。
 
@@ -179,13 +182,19 @@ PR作成 / 停止理由
   - 2回目のレビューを反映: fork PRを着手済みの判定と結果の紐付けから外し、結果のPRはbranch名の完全一致で
     照合する。SIGKILLへの切り替え、外部コマンドとfetchの打ち切り、起動しなかったセッションのworktree削除、
     Node scriptが通知済みの失敗（終了コード3）をshで二重に通知しない処理を追加した。
+  - 3回目のレビューでLGTMにならず停止し、人間の判断（2026-10-02: Q1〜Q3すべてA）で次を反映した。
+    - claudeを起動できないと`error`と`close`の両方が発火し、ログのfdを二重にcloseして落ちる不具合を、
+      最初の1回だけ扱うガードで修正した（実際のspawnで再現と修正を確認）。
+    - 作業のないworktree（作成時のcommitにdetachされたまま、変更・ブランチなし）を自動で削除する。
+    - development DBも分けるため、接尾辞の環境変数を`TEST_ENV_NUMBER`から`FOD_DB_SUFFIX`にまとめた。
+    - 打ち切りをプロセスグループ単位にし、spawn・gitを差し替えて起動失敗などの経路をtestした。
 - 検証結果:
-  - `pnpm test:scripts`: 成功（`task-scheduler.test.mjs`は10件）。`pnpm lint`: 成功。
+  - `pnpm test:scripts`: 成功（`task-scheduler.test.mjs`は14件）。`pnpm lint`: 成功。
   - `node scripts/task-scheduler.mjs plan --root <repo>`: 起動0件。origin/mainではTASK-005がDoneで
     TASK-006は実行可能だが、ローカルに`.claude/worktrees/task-006`（PR未作成）があるため着手済みとして
     除外された。ボトルネックとしてTASK-006（後続10件）、TASK-003（後続8件）が出た。
-  - `TEST_ENV_NUMBER=_probe`で`db:prepare`とRSpecを実行し、`focus_on_dot_api_test_probe`で192件成功。
-    削除後、既定のtest DBでも192件成功。
+  - `FOD_DB_SUFFIX=_probe`でdevelopment / testの`db:prepare`とRSpecを実行し、`focus_on_dot_api_test_probe`で
+    192件成功。両DBの削除後、既定のtest DBでも192件成功。rubocop・brakemanも成功。
   - 偽の`launchctl`でinstall scriptを実行し、生成したplistが`plutil -lint`を通ること、`FOD_TASK_MAX_PARALLEL=0`を
     拒否することを確認した。plistのコマンドはマージ前のorigin/mainにscriptがないため、取得失敗の分岐に入る
     （通知して終了コード1）ことを確認した。`task-scheduler.sh`はNode scriptが見つからない場合に失敗を通知する
