@@ -24,6 +24,16 @@ class User < ApplicationRecord
     methods
   end
 
+  # bcryptは先頭72 byteだけで照合するため、passwordをSHA-256にかけてからbcryptへ渡す
+  # （TASK-006 Plan §12-6）。8〜128文字の全文を照合に使う。保存と照合の両方で同じ変換をする。
+  def valid_password?(password)
+    return false unless password.is_a?(String)
+
+    super(self.class.prehash_password(password))
+  end
+
+  def self.prehash_password(password) = Base64.strict_encode64(OpenSSL::Digest::SHA256.digest(password))
+
   # 登録済みのメールアドレスに登録が届いたときの、ログインと再設定の案内。
   def send_already_registered_notice = send_devise_notification(:already_registered)
 
@@ -37,6 +47,9 @@ class User < ApplicationRecord
   def send_devise_notification(notification, *)
     devise_mailer.send(notification, self, *).deliver_later
   end
+
+  # valid_password?と同じ変換をしてから保存する。
+  def password_digest(password) = super(self.class.prehash_password(password))
 
   private
 

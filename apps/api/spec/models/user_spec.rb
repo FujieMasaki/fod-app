@@ -13,6 +13,23 @@ RSpec.describe User do
     expect([build(:user, password: "a" * 128).valid?, build(:user, password: "a" * 129).valid?]).to eq([true, false])
   end
 
+  it "72 byteより後ろだけが違うpasswordを一致させない（bcryptの切り詰め）" do
+    user = create(:user, password: "#{'a' * 72}secret")
+
+    expect(user.valid_password?("#{'a' * 72}wrong!")).to be(false)
+    expect(user.valid_password?("#{'a' * 72}secret")).to be(true)
+  end
+
+  it "日本語でも25文字目以降の違いを区別する" do
+    user = create(:user, password: "#{'あ' * 24}秘密")
+
+    expect([user.valid_password?("#{'あ' * 24}別物"), user.valid_password?("#{'あ' * 24}秘密")]).to eq([false, true])
+  end
+
+  it "passwordでない値は一致させない" do
+    expect([nil, 123].map { create(:user).valid_password?(it) }).to eq([false, false])
+  end
+
   it "Googleの利用者だけはpasswordなしで作れる" do
     expect(build(:user, :google_only)).to be_valid
     expect(build(:user, password: nil)).not_to be_valid
