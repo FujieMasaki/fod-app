@@ -7,6 +7,7 @@ import {
   parseMaxParallel,
   parseWorktrees,
   planRun,
+  pullRequestFor,
   sessionSummary,
   waitingCounts,
 } from "./task-scheduler.mjs";
@@ -15,7 +16,7 @@ function task(id, { status = "Blocked", category = "実装", dependencies = [], 
   return { id, title, category, status, dependencies, runnable, reasons: [] };
 }
 
-test("claims come from worktrees named after or on a task branch, and open PR branches", () => {
+test("claims come from worktrees named after or on a task branch, and open PRs from this repository", () => {
   const worktrees = parseWorktrees(
     [
       "worktree /repo\nHEAD aaa\nbranch refs/heads/main",
@@ -29,8 +30,10 @@ test("claims come from worktrees named after or on a task branch, and open PR br
   const claims = findClaims({
     worktrees,
     pullRequests: [
-      { number: 50, headRefName: "feat/task-008-dot-history" },
-      { number: 51, headRefName: "docs/review-flow" },
+      { number: 50, headRefName: "feat/task-008-dot-history", isCrossRepository: false },
+      { number: 51, headRefName: "docs/review-flow", isCrossRepository: false },
+      // Anyone can open a fork PR with any branch name; it must not block a task.
+      { number: 52, headRefName: "feat/task-009-anything", isCrossRepository: true },
     ],
   });
 
@@ -148,4 +151,16 @@ test("summarizes a session by the last line of its final message", () => {
 test("parallelism accepts only positive integers", () => {
   assert.equal(parseMaxParallel("5"), 5);
   for (const value of ["0", "-2", "1.5", "abc", undefined]) assert.equal(parseMaxParallel(value), 3);
+});
+
+test("a session's PR is the one on its exact branch from this repository", () => {
+  const pullRequests = [
+    { number: 52, headRefName: "feat/task-006-backend-identity", isCrossRepository: true },
+    { number: 51, headRefName: "feat/task-006-other", isCrossRepository: false },
+    { number: 50, headRefName: "feat/task-006-backend-identity", isCrossRepository: false },
+  ];
+
+  assert.equal(pullRequestFor("feat/task-006-backend-identity", pullRequests).number, 50);
+  assert.equal(pullRequestFor("feat/task-006-missing", pullRequests), undefined);
+  assert.equal(pullRequestFor("", pullRequests), undefined);
 });

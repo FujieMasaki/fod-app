@@ -13,6 +13,11 @@ export const DEFAULT_MAX_PARALLEL = 3;
 // launchd will not start the next morning's run while this one is alive, so a
 // stuck session must not hold the whole run.
 const SESSION_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+const KILL_GRACE_MS = 60 * 1000;
+const COMMAND_TIMEOUT_MS = 2 * 60 * 1000;
+// Exit code after the Node script has notified the failure itself, so
+// scripts/task-scheduler.sh does not notify it a second time.
+export const NOTIFIED_FAILURE_EXIT_CODE = 3;
 // Staggered so concurrent sessions do not race on git's ref and index locks.
 const LAUNCH_INTERVAL_MS = 30 * 1000;
 const NOTIFICATION_LINES = 8;
@@ -53,11 +58,22 @@ export function findClaims({ worktrees = [], pullRequests = [] }) {
       path.basename(worktree.path).match(worktreeNamePattern)?.[1] ?? worktree.branch?.match(branchTaskPattern)?.[1];
     if (number) claims.set(`TASK-${number}`, `worktree ${path.basename(worktree.path)}`);
   }
-  for (const pr of pullRequests) {
+  for (const pr of ownPullRequests(pullRequests)) {
     const number = pr.headRefName.match(branchTaskPattern)?.[1];
     if (number) claims.set(`TASK-${number}`, `PR #${pr.number}`);
   }
   return claims;
+}
+
+// The repository is public: a fork PR can carry any branch name, so only PRs
+// from branches in this repository (pushable by its collaborators) count.
+export function ownPullRequests(pullRequests) {
+  return pullRequests.filter((pr) => pr.isCrossRepository === false);
+}
+
+// The PR a session opened is the one on the exact branch it left checked out.
+export function pullRequestFor(branch, pullRequests) {
+  return branch ? ownPullRequests(pullRequests).find((pr) => pr.headRefName === branch) : undefined;
 }
 
 // Number of unfinished tasks that wait on each task, directly or through others.
@@ -191,14 +207,13 @@ export function formatReport(plan, results = [], { date } = {}) {
 }
 
 function command(cmd, args, options = {}) {
-  const result = spawnSync(cmd, args, { encoding: "utf8", ...options });
+  const result = spawnSync(cmd, args, { encoding: "utf8", timeout: COMMAND_TIMEOUT_MS, ...options });
   return { ok: result.status === 0, stdout: result.stdout ?? "", stderr: result.stderr ?? result.error?.message ?? "" };
 }
 
 function openPullRequests(root) {
-  const result = command("gh", ["pr", "list", "--state", "open", "--limit", "200", "--json", "number,url,headRefName"], {
-    cwd: root,
-  });
+  const fields = "number,url,headRefName,isCrossRepository";
+  const result = command("gh", ["pr", "list", "--state", "open", "--limit", "200", "--json", fields], { cwd: root });
   if (!result.ok) throw new Error(`gh pr list failed: ${result.stderr.trim()}`);
   return JSON.parse(result.stdout);
 }
@@ -240,12 +255,7 @@ export function sessionSummary(output) {
   }
 }
 
-function runTask(task, { root, logDir }) {
-  const worktree = path.join(root, ".claude", "worktrees", `task-${task.id.slice(5)}`);
-  // Fails when the path exists, so a session that got here first keeps the task.
-  const added = command("git", ["-C", root, "worktree", "add", "--detach", worktree, "origin/main"]);
-  if (!added.ok) return Promise.resolve({ id: task.id, detail: `worktreeを作れません: ${added.stderr.trim()}` });
-
+function startSession(task, worktree, logDir) {
   const outPath = path.join(logDir, `${task.id}.json`);
   const errPath = path.join(logDir, `${task.id}.log`);
   const out = openSync(outPath, "w");
@@ -262,23 +272,50 @@ function runTask(task, { root, logDir }) {
   );
 
   let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    child.kill("SIGTERM");
-  }, SESSION_TIMEOUT_MS);
+  const timers = [
+    setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      timers.push(setTimeout(() => child.kill("SIGKILL"), KILL_GRACE_MS));
+    }, SESSION_TIMEOUT_MS),
+  ];
 
   return new Promise((resolve) => {
-    child.on("close", (code) => {
-      clearTimeout(timer);
+    const finish = (result) => {
+      timers.forEach(clearTimeout);
       closeSync(out);
       closeSync(err);
-      const detail = timedOut
-        ? `${SESSION_TIMEOUT_MS / 3600000}時間で打ち切り。${errPath}を参照`
-        : (sessionSummary(readFileSync(outPath, "utf8")) ?? `claudeが終了コード${code}で終了。${errPath}を参照`);
-      resolve({ id: task.id, detail });
-    });
-    child.on("error", (error) => resolve({ id: task.id, detail: `claudeを起動できません: ${error.message}` }));
+      resolve(result);
+    };
+    child.on("close", (code) =>
+      finish({
+        started: true,
+        detail: timedOut
+          ? `${SESSION_TIMEOUT_MS / 3600000}時間で打ち切り。${errPath}を参照`
+          : (sessionSummary(readFileSync(outPath, "utf8")) ?? `claudeが終了コード${code}で終了。${errPath}を参照`),
+      }),
+    );
+    child.on("error", (error) => finish({ started: false, detail: `claudeを起動できません: ${error.message}` }));
   });
+}
+
+async function runTask(task, { root, logDir }) {
+  const worktree = path.join(root, ".claude", "worktrees", `task-${task.id.slice(5)}`);
+  // Fails when the path exists, so a session that got here first keeps the task.
+  const added = command("git", ["-C", root, "worktree", "add", "--detach", worktree, "origin/main"]);
+  if (!added.ok) return { id: task.id, detail: `worktreeを作れません: ${added.stderr.trim()}` };
+
+  let session;
+  try {
+    session = await startSession(task, worktree, logDir);
+  } catch (error) {
+    session = { started: false, detail: `セッションを準備できません: ${error.message}` };
+  }
+  // A session that never ran must not leave the task looking taken tomorrow.
+  if (!session.started) command("git", ["-C", root, "worktree", "remove", "--force", worktree]);
+
+  const branch = command("git", ["-C", worktree, "branch", "--show-current"]).stdout.trim();
+  return { id: task.id, branch, detail: session.detail };
 }
 
 export async function run({ root, dryRun = false, maxParallel = DEFAULT_MAX_PARALLEL, now = new Date() }) {
@@ -309,10 +346,7 @@ export async function run({ root, dryRun = false, maxParallel = DEFAULT_MAX_PARA
   } catch (error) {
     console.error(error);
   }
-  const results = finished.map((result) => ({
-    ...result,
-    pr: pullRequests.find((pr) => pr.headRefName.match(branchTaskPattern)?.[1] === result.id.slice(5)),
-  }));
+  const results = finished.map((result) => ({ ...result, pr: pullRequestFor(result.branch, pullRequests) }));
 
   const reportPath = path.join(logDir, "report.md");
   writeFileSync(reportPath, formatReport(plan, results, { date: timestamp(now) }));
@@ -336,6 +370,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   run({ root: path.resolve(root), dryRun: mode === "plan", maxParallel }).catch((error) => {
     console.error(error);
     notify(`定期実行に失敗しました: ${error.message}`);
-    process.exitCode = 1;
+    process.exitCode = NOTIFIED_FAILURE_EXIT_CODE;
   });
 }
