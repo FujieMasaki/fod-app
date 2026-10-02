@@ -1,11 +1,9 @@
 # 観点: バックエンドセキュリティ 🔴
 
 この文書は、Rails APIのsecurity reviewで必ず確認する観点である。個人データの扱いは
-[`../../privacy.md`](../../privacy.md)を仕様の正本として確認する。現在はRails基盤と`GET /up`のみで、
-プロダクトAPI・認証・配信は未実装である。認証方式と公開配信構成に加え、session期限とメールの
-期限・再送制限を含む認証詳細も[architecture](../../architecture.md)で採用済み・未実装である。
-AI provider、password方針とログイン試行制限の具体値は未決定。採用決定と実装・実機検証を区別し、
-実装される変更で適切な確認を行う。
+[`../../privacy.md`](../../privacy.md)を仕様の正本として確認する。認証はRails側をTASK-006で実装した
+（[architecture](../../architecture.md)「認証詳細」）。Dotなどのプロダクト API・Webの接続・公開配信は
+未実装である。採用決定と実装・実機検証を区別し、実装される変更で適切な確認を行う。
 
 ## 1. 認証・認可とresource所有権 🔴
 
@@ -47,10 +45,26 @@ AI provider、password方針とログイン試行制限の具体値は未決定�
 - [ ] CookieStoreのlogoutとコピー済みCookieの失効を区別し、未採用のDB session相当の保証をしていないか。
   有効期限、User削除/停止、password再設定後のCookie、Google専用Userの扱いを採用versionで確認したか。
 - [ ] password、確認/再設定token、Google code/token、Cookieがproxy・メール導線・監視を含むログへ漏れないか。
+- [ ] 登録の有無を明かさない応答で、**応答時間**にも差が出ないか。利用者がいるときだけtoken生成・メール送信・
+  DB更新をrequestの中で行っていないか（jobへ移す。TASK-006で指摘）。
+- [ ] passwordのhashに長さの制限がないか。bcryptは先頭72 byteだけで照合する（TASK-006では前処理で対応）。
+- [ ] middlewareでpathを比べる処理が、frameworkと同じ正規化（大文字小文字・末尾の`/`）をしているか。
+  表記を変えて制限・検証を迂回できないか。
+- [ ] 空白だけの値を、framework がどう扱うかを確かめたか。Rails・Deviseは`present?`/`blank?`で空白だけの値を
+  「空」とみなし、検証で拒否したり保存を飛ばしたりする（Deviseの`password=`はhashを保存しない。TASK-006）。
+- [ ] 回数の制限を「確かめてから数える」形にしていないか。同時のrequestがどちらも上限の手前で通る。
+  先に原子的に数えて枠を予約し、数えなくてよかったら戻す（TASK-006の`RateLimiter#release`）。
+- [ ] 「検索してから保存」の間に同じ値が保存される競合で、一意制約（`RecordNotUnique`）だけでなく
+  uniqueness validation（`RecordInvalid`）の失敗も扱っているか。
+- [ ] test環境の設定が、検証したいsecurityの仕組みを無効にしていないか（例: `allow_forgery_protection`を
+  falseにすると、Google開始POSTのCSRF検証がtestで素通りになる）。固定の時間枠で数える制限のspecは、
+  時刻を枠の頭に固定しているか（`spec/support`の`:fixed_time`）。
 
 ## 6. 現在の構成での補足
 
-- RailsはAPI-onlyで、`GET /up`以外のプロダクトrouteはない。`/up`への変更でも不要な内部情報を
+- RailsはAPI-onlyで、routeは`GET /up`と認証（`/api/v1/session`等、`/auth/google_oauth2`）だけ。
+  保護するendpointは`before_action :authenticate_user!`と`current_user`を使い、JSONの項目はbodyからだけ
+  受け取る（`JsonParams`。password・tokenをURLに載せない）。`/up`への変更でも不要な内部情報を
   responseへ追加しない。
 - `apps/api/config/initializers/filter_parameter_logging.rb`は防御の補助であり、将来追加する音声・
   生成データの安全なログ運用を保証しない。

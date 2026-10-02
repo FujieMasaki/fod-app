@@ -122,8 +122,15 @@ MVP全体の範囲は[product](./product.md)を正本とする。
   未送信attemptの保存は生じない。ただし、Dotの完全削除と退会で処理の記録とDotを消した後も同じ
   attemptで作り直されないよう、**使用済みattemptの`id`と期限だけを期限まで残す**（§5-1に行を追加。
   2026-10-01にTASK-005で決定）。tokenは端末のstorageへ書かない。契約は[`contracts/openapi.yaml`](../contracts/openapi.yaml)の`POST /api/v1/recording_attempts`。
-- TASK-006: 採用済み認証方式に従う認証情報の保存・送信・失効を実装し、
-  [architecture](./architecture.md)とTASK-001 Planの経路に照らして検証する。
+- TASK-006（2026-10-02に実装）: 認証情報はRDSの`users`（正規化したメール、password hash、
+  確認・再設定・解除のtokenと送信時刻、失敗回数・ロック時刻）と`user_identities`（Googleのsub）に置く。
+  Deviseの仕様で、確認tokenは平文、再設定・解除tokenはdigestで保存される。試行回数の
+  `rate_limit_counters`はメールアドレス・IPをHMACのdigestで持ち、1時間以内に失効する。行を消すのは
+  定期削除（`rails rate_limits:purge`。実行の設定は公開基盤の構築時）で、それまでは失効した行も残る。
+  Cookieは暗号化sessionで、User IDとsalt・認証時刻・CSRF tokenを持つ。Googleログインの途中は、
+  開始時のintent・戻り先のpath・OAuthのstateも持ち、Google再認証の時刻も持つ（どれも個人データではない）。password・token・
+  メールアドレス・Google callbackの`code`/`state`はログから除く（request specで確認）。
+  これらの保持期間と退会時の削除はTASK-013で§5-1に揃える。
 - TASK-009/010/011: 決定した経路と、送信・保存前の利用者操作・失敗時の挙動を実装する。
 - TASK-013/015: 削除と外部先・端末・ログを含む実サービスの残存、利用者間の分離を検証する。
 - TASK-017: 要配慮個人情報に当たる範囲、漏えい等の報告・本人通知の要否と手順、公開範囲と

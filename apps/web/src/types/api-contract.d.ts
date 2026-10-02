@@ -23,6 +23,9 @@ export interface paths {
          * @description 成功するとsessionを更新し、新しいCSRF tokenを返す。認証成功から7日で失効し、利用では
          *     延長しない（`expires_at`）。`email_unconfirmed`はpasswordが一致したときだけ返し、一致しなければ
          *     登録の有無やメール確認の状態にかかわらず`invalid_credentials`を返す（登録の有無を明かさない）。
+         *     passwordの不一致が10回続くとアカウントをロックし、解除メールを送る。ロック中はpasswordが
+         *     一致しても`invalid_credentials`を返す（ロックの有無を明かさない）。ロックは1時間で自動で解け、
+         *     解除メールのリンク（`PATCH /api/v1/unlock`）でも解ける。失敗がIPごとに1時間50回を超えると`429`。
          *     退会を受理した利用者もloginでき、
          *     `account_status=deletion_in_progress`のSessionを返す（Webは退会の状況画面へ進める）。
          */
@@ -50,7 +53,8 @@ export interface paths {
         /**
          * メールアドレスとpasswordで登録する
          * @description 登録済みかどうかにかかわらず同じ`202`を返す（登録の有無を明かさない）。未登録なら確認メールを、
-         *     登録済みならログインとpassword再設定を案内するメールを送る。password方針の具体値はTASK-006。
+         *     登録済みならログインとpassword再設定を案内するメールを送る。passwordは8〜128文字（文字種は問わない）。
+         *     確認メール・案内メールは、確認メールの再送と同じ宛先・IPの制限を受ける。
          */
         post: operations["createRegistration"];
         delete?: never;
@@ -70,7 +74,8 @@ export interface paths {
         put?: never;
         /**
          * 確認メールを再送する
-         * @description 宛先の制限（60秒に1回・1時間5回）に掛かった場合も、登録の有無にかかわらず同じ`202`を返す。
+         * @description 宛先の制限（送信元IPと宛先の組ごとに60秒に1回・1時間5回、宛先ごとに1時間20回）に掛かった場合も、
+         *     登録の有無にかかわらず同じ`202`を返す。
          *     IPごとの制限（1時間20回）だけ`429`を返す。
          */
         post: operations["resendConfirmation"];
@@ -105,10 +110,33 @@ export interface paths {
         head?: never;
         /**
          * 再設定tokenと新しいpasswordで再設定する
-         * @description 再設定tokenの有効期限は6時間で、使用後は再利用できない。成功してもloginはしない
+         * @description 再設定tokenの有効期限は6時間で、使用後は再利用できない。メール未確認の利用者は、再設定に成功すると
+         *     確認済みになる（再設定のメールを受け取れたことでメールの所有が示されるため）。成功してもloginはしない
          *     （Webはログイン画面へ戻す）。
          */
         patch: operations["resetPassword"];
+        trace?: never;
+    };
+    "/api/v1/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * 解除tokenを使ってアカウントのロックを解く
+         * @description loginの失敗が続いてロックしたときに送る解除メールのリンクから使う。成功してもloginはしない
+         *     （Webはログイン画面へ戻す）。ロックは1時間で自動でも解ける。解除tokenは1回だけ使える。
+         *     token_expiredは返さない（期限が来る前にロックが自動で解けるため）。
+         */
+        patch: operations["unlockAccount"];
         trace?: never;
     };
     "/auth/google_oauth2": {
@@ -126,7 +154,7 @@ export interface paths {
          *     `intent=reauthenticate`は、Google専用の利用者が退会の前に再認証するときに使う
          *     （有効時間はTASK-006で決める）。退会を受理した利用者も`intent=sign_in`でloginでき、
          *     callbackは`/`へ戻す（Webは`account_status`で退会の状況画面へ進める）。
-         *     試行回数の制限に掛かった場合は、JSONの`429`ではなく`auth_error=rate_limited`を付けてredirectする
+         *     試行回数の制限（開始がIPごとに1時間50回）に掛かった場合は、JSONの`429`ではなく`auth_error=rate_limited`を付けてredirectする
          *     （form POSTでbrowserが遷移するため）。戻り先は`intent=sign_in`なら`/login`、`reauthenticate`なら
          *     `return_to`（省略時は`/`。loginしたまま退会などの流れへ戻れるようにするため）。
          */
@@ -641,7 +669,16 @@ export interface components {
             email: string;
             /**
              * Format: password
-             * @description 方針（最小長など）はTASK-006
+             * @description loginでは長さを確かめない（登録・再設定の方針はNewCredentials）
+             */
+            password: string;
+        };
+        NewCredentials: {
+            /** Format: email */
+            email: string;
+            /**
+             * Format: password
+             * @description 8〜128文字。文字種は問わない。合わなければ`validation_failed`で、8文字未満は`out_of_range`、128文字超は`too_long`
              */
             password: string;
         };
@@ -654,7 +691,10 @@ export interface components {
         };
         PasswordReset: {
             token: string;
-            /** Format: password */
+            /**
+             * Format: password
+             * @description 8〜128文字。文字種は問わない。合わなければ`validation_failed`で、8文字未満は`out_of_range`、128文字超は`too_long`
+             */
             password: string;
         };
         GoogleAuthStart: {
@@ -986,7 +1026,8 @@ export interface components {
             };
         };
         /**
-         * @description `rate_limited`: 試行回数の制限。認証まわりの具体値はTASK-006、録音・送信・再試行
+         * @description `rate_limited`: 試行回数の制限。認証まわりはloginの失敗がIPごとに1時間50回、メール
+         *     （登録・確認の再送・password再設定）の送信がIPごとに1時間20回。録音・送信・再試行
          *     （外部の文字起こし・生成の費用がかかる操作）の具体値と採否はTASK-009で決める
          */
         RateLimited: {
@@ -1131,7 +1172,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Credentials"];
+                "application/json": components["schemas"]["NewCredentials"];
             };
         };
         responses: {
@@ -1260,6 +1301,43 @@ export interface operations {
             };
             403: components["responses"]["CsrfInvalid"];
             /** @description `token_invalid` / `token_expired` / `validation_failed`（password方針） */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            429: components["responses"]["RateLimited"];
+            500: components["responses"]["InternalError"];
+        };
+    };
+    unlockAccount: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description `GET /api/v1/session`（login後は`POST /api/v1/session`）のresponseで受け取ったtoken */
+                "X-CSRF-Token": components["parameters"]["CsrfToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenOnly"];
+            };
+        };
+        responses: {
+            /** @description 解除した */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["CsrfInvalid"];
+            /** @description `token_invalid`: 不正・使用済み */
             422: {
                 headers: {
                     [name: string]: unknown;

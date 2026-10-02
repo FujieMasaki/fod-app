@@ -189,8 +189,7 @@ promptの最終文面と委託先の確認は残っている。この設計採�
 - promptの最終文面（TASK-009で確定）。`sentence`・`summary`の上限は2026-10-01にTASK-005で
   200文字・2,000文字と決めた（契約の`Dot`）。生成側の上限はTASK-009でこれ以下に揃える
 - 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認結果（公開前に人間が実施）
-- password再設定後の既存Cookieの実動作
-- password方針・ログイン試行制限の具体値、Googleの確認情報とConfirmableの関係（TASK-006で決定）
+- password再設定後の既存Cookieの実機での動作（request specでは拒否を確認済み。TASK-006）
 - 将来候補である検索・カテゴリ・期間フィルタの仕様と導入段階
 
 これらは、最初のプロダクトAPIとWeb接続を設計するImplementation Planで選択肢、脅威、運用コストを

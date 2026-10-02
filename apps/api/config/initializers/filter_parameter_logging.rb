@@ -6,3 +6,5 @@
 Rails.application.config.filter_parameters += %i[
   passw email secret token _key crypt salt certificate otp ssn cvv cvc
 ]
+# Google callbackのquery（認可codeとOAuthのstate）。部分一致だとerror_codeなどまで隠すので完全一致にする。
+Rails.application.config.filter_parameters += [/\Acode\z/, /\Astate\z/]
