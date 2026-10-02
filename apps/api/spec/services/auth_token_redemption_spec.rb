@@ -23,6 +23,14 @@ RSpec.describe AuthTokenRedemption do
       expect(user.valid_password?("brand new password")).to be(true)
     end
 
+    it "ロックしていなくても、それまでの失敗回数を0に戻す" do
+      user.update_columns(failed_attempts: 9) # rubocop:disable Rails/SkipsModelValidations
+
+      described_class.new(token:).reset_password("brand new password")
+
+      expect(user.reload.failed_attempts).to eq(0)
+    end
+
     it "空のtokenは、tokenを持たない利用者に一致しない" do
       user
 

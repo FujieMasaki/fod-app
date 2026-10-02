@@ -142,6 +142,12 @@ RSpec.describe "Google login" do
       expect(response).to redirect_to("http://www.example.com/settings/account?auth_error=rate_limited")
     end
 
+    it "開始時に、使わないorigin（RefererのURL）をsessionへ控えさせない" do
+      strategy = OmniAuth::Strategies::FocusGoogleOauth2.new(->(_env) { [200, {}, []] }, "id", "secret")
+
+      expect(strategy.options.origin_param).to be(false)
+    end
+
     it "GETでは開始できない" do
       get "/auth/google_oauth2"
 

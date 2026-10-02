@@ -9,6 +9,9 @@ module OmniAuth
       option :name, "google_oauth2"
       # requestのparameterからprompt・redirect_uri・hdなどを上書きさせない。
       option :overridable_authorize_options, []
+      # 戻り先はGoogleAuthIntentのreturn_toで決める。OmniAuthが既定でsessionへ控えるorigin
+      # （Refererの完全なURL）は使わないので、保存させない。
+      option :origin_param, false
 
       def authorize_params
         super.tap do |params|

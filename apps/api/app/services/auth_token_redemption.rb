@@ -45,7 +45,9 @@ class AuthTokenRedemption
     user.skip_confirmation! unless user.confirmed?
     return AuthResult.validation_failed(user.errors) unless user.save
 
-    user.unlock_access! if user.access_locked?
+    # 新しいpasswordで始め直すので、ロックを解き、それまでの失敗回数も0に戻す
+    # （残すと、再設定の直後に1回打ち間違えただけでロックし得る）。
+    user.access_locked? ? user.unlock_access! : user.reset_failed_attempts!
     AuthResult.of(:ok)
   end
 
