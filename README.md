@@ -169,6 +169,12 @@ Production BuildはローカルでのPushを遅くしないため、CI側で実�
 
 無人で進めるため、セッションは `acceptEdits`（またはauto）のpermission modeで開始してください。`bypassPermissions` は使いません。
 
+### 毎朝の定期実行
+
+`scripts/install-task-scheduler.sh` を実行すると、launchdが毎朝4時に、着手できるタスクをすべて並列で `/run-task` します（既定の上限は3件、`FOD_TASK_MAX_PARALLEL` で変更）。他のセッションが着手済みのタスクは除外し、起動できるタスクがない日は残っているタスクと理由をmacOSの通知で知らせます。結果のレポートは `~/Library/Logs/focus-on-dot/` に出力されます。登録を解除するときは `--uninstall` を付けて実行してください。
+
+起動できるタスクを確認するだけなら、`node scripts/task-scheduler.mjs plan --root .` を実行します。異常終了したセッションの `.claude/worktrees/task-NNN` が残ると、そのタスクは着手済みのまま扱われます。内容を確認してから `git worktree remove` で削除してください。
+
 ## Status
 
 現在MVPを開発中です。

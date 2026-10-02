@@ -20,7 +20,8 @@
 - `apps/api/` の公開APIは将来 `/api/v1` namespaceに追加する。
 - repository全体のコマンド、ESLint、Lefthook、命名チェック、CI、開発文書はrootが管理する。
 - Claude Codeの共有設定（`.claude/settings.json`のhook・permission、`.claude/skills/`）と、hookが
-  呼ぶ`scripts/claude-*.mjs`・`scripts/task-status.mjs`もrootが管理する。
+  呼ぶ`scripts/claude-*.mjs`・`scripts/task-status.mjs`、毎朝タスクを起動する`scripts/task-scheduler.*`も
+  rootが管理する。
 
 ## 決定済み
 
