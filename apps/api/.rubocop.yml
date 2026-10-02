@@ -16,6 +16,15 @@ AllCops:
 Style/FrozenStringLiteralComment:
   Enabled: false
 
+# migrationはclass名と列の定義が説明になり、長さは表の列数で決まるため対象外にする。
+Style/Documentation:
+  Exclude:
+    - db/migrate/**/*
+
+Metrics/MethodLength:
+  Exclude:
+    - db/migrate/**/*
+
 Style/StringLiterals:
   EnforcedStyle: double_quotes
 
@@ -24,3 +33,11 @@ Rails:
 
 RSpec:
   Enabled: true
+
+# request specは1つの操作の結果（status・code・header・契約との照合）をまとめて確かめるため、
+# 1 exampleに複数のexpectationと数行の準備を許す。
+RSpec/MultipleExpectations:
+  Max: 5
+
+RSpec/ExampleLength:
+  Max: 15
