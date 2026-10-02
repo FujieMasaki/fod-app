@@ -44,6 +44,8 @@ cat > "$plist" <<PLIST
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>GIT_HTTP_LOW_SPEED_LIMIT</key><string>1000</string>
+    <key>GIT_HTTP_LOW_SPEED_TIME</key><string>60</string>
     <key>FOD_TASK_MAX_PARALLEL</key><string>$parallel</string>
   </dict>
   <key>StandardOutPath</key><string>$(xml_escape "$logs")/launchd.log</string>

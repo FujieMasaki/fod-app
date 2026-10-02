@@ -13,11 +13,15 @@ export PATH
 # A silent failure would look the same as a morning with nothing to start.
 notify_failure() {
   status=$?
-  [ "$status" -eq 0 ] && return
+  # 0 is success; 3 means scripts/task-scheduler.mjs already notified.
+  case $status in 0 | 3) return ;; esac
   osascript -e 'on run argv' -e 'display notification (item 1 of argv) with title "Focus on Dot タスク"' -e 'end run' \
     "定期実行を開始できませんでした（終了コード${status}）。~/Library/Logs/focus-on-dot/launchd.log を参照" || true
 }
 trap notify_failure EXIT
+
+# Give up on a stalled fetch instead of hanging until the next morning.
+export GIT_HTTP_LOW_SPEED_LIMIT=1000 GIT_HTTP_LOW_SPEED_TIME=60
 
 root=$1
 scheduler="$root/.claude/worktrees/scheduler"
