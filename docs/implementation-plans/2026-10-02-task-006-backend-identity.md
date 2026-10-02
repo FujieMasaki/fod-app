@@ -313,7 +313,7 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
 
 `apps/api`で実行した。
 
-- `bundle exec rspec`: 291 examples, 0 failures（既存の契約spec含む）
+- `bundle exec rspec`: 293 examples, 0 failures（既存の契約spec含む）
 - `bundle exec rubocop`: 74 files, no offenses
 - `bundle exec brakeman --no-pager -q`: Security Warnings 0
 - `bundle exec bundler-audit check --update`: No vulnerabilities found
@@ -328,6 +328,12 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
 | 資格情報の保護、CSRF/CORS | 確認 | Cookie属性（HttpOnly・SameSite=Lax・Domainなし。Secureはproductionの設定）、tokenの欠落・他sessionのtoken・許可外Originで`403`、CORS headerを返さない、Google開始POSTのCSRF |
 | response/ログに秘密を出さない、契約との一致 | 確認 | `requests/sensitive_logging_spec.rb`、全responseを`assert_response_schema_confirm`で照合 |
 | 実装範囲を文書で区別 | 確認 | architecture「認証詳細」、backend.md、product、journaling、privacy |
+
+### セルフレビューで直した点
+
+- 登録でIPの制限をpasswordのhashより先に判定する（制限に掛かったrequestでもbcryptが走っていた）。
+- login中の利用者がロックされても`GET /api/v1/session`は`200`の未認証を返す（Wardenの投げ返しで`401`になっていた）。
+- CSRFで拒否したresponseにも`Cache-Control: no-store`を付ける（CSRFの検証がno-storeの設定より先に動いていた）。
 
 ### 未実施の確認と理由
 
