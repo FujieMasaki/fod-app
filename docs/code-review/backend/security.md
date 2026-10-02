@@ -50,6 +50,8 @@
 - [ ] passwordのhashに長さの制限がないか。bcryptは先頭72 byteだけで照合する（TASK-006では前処理で対応）。
 - [ ] middlewareでpathを比べる処理が、frameworkと同じ正規化（大文字小文字・末尾の`/`）をしているか。
   表記を変えて制限・検証を迂回できないか。
+- [ ] 空白だけの値を、framework がどう扱うかを確かめたか。Rails・Deviseは`present?`/`blank?`で空白だけの値を
+  「空」とみなし、検証で拒否したり保存を飛ばしたりする（Deviseの`password=`はhashを保存しない。TASK-006）。
 - [ ] 回数の制限を「確かめてから数える」形にしていないか。同時のrequestがどちらも上限の手前で通る。
   先に原子的に数えて枠を予約し、数えなくてよかったら戻す（TASK-006の`RateLimiter#release`）。
 - [ ] 「検索してから保存」の間に同じ値が保存される競合で、一意制約（`RecordNotUnique`）だけでなく

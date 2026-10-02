@@ -258,7 +258,7 @@ Codexの最終チェックとサブエージェントのレビューで出た3�
 | --- | --- |
 | 第三者が宛先ごとの送信枠を使い切り、本人宛てのメールを止められる | 送信元IPと宛先の組ごとに60秒1回・1時間5回、宛先ごと（全IPの合計）に1時間20回にした。1つのIPからは本人を締め出せない。複数のIPから1時間20回以上送れば止められる点は残る |
 | `User`が送信制限（Service）を直接呼んでいる | ロック解除メールの送信制限を`UserMailer#unlock_instructions`へ移した |
-| 空白だけのpasswordを`required`として拒否する | 空文字だけを拒否し、空白だけの値も文字として受け付ける（契約の「文字種は問わない」） |
+| 空白だけのpasswordを`required`として拒否する | 空文字だけを拒否し、空白だけの値も文字として受け付ける（契約の「文字種は問わない」）。Deviseの`password=`は`present?`のときだけhashを保存するため、そのままでは空白だけのpasswordでhashが保存されず、passwordを持たない利用者ができた（次のレビューでHigh）。`User#password=`を上書きし、空文字以外は必ずhashを保存する |
 | frontendのsecurity指針に「認証は未実装」とある | 現状に合わせた |
 | `privacy.md`のCookieの中身にGoogleログイン中の値がない | 追記した |
 
@@ -344,7 +344,7 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
 
 `apps/api`で実行した。
 
-- `bundle exec rspec`: 331 examples, 0 failures（既存の契約spec含む）
+- `bundle exec rspec`: 333 examples, 0 failures（既存の契約spec含む）
 - `bundle exec rubocop`: 74 files, no offenses
 - `bundle exec brakeman --no-pager -q`: Security Warnings 0
 - `bundle exec bundler-audit check --update`: No vulnerabilities found
@@ -410,6 +410,8 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
   引数にしてjobへ積む。今は`:async`（メモリ上）だが、TASK-009でSolid Queueへ移すと、jobの表に再設定・解除の
   tokenが平文で残る（完了したjobも一定時間残る）。移すときは、完了したjobをすぐ消すか、jobにはUserのIDだけを
   渡してjobの中でtokenを作る。
+- **送信制限で解除メールを送らなくても、解除tokenは作り直される**: Lockableはtokenを保存してからmailerを
+  呼ぶため、前に届いた解除メールのリンクは`token_invalid`になる。ロックは1時間で自動で解ける。
 - **CloudFrontを前段に置くとき**は、`request.remote_ip`がedgeのIPになり、IPごとの制限を多くの利用者で
   共有してしまう。CloudFrontのIPを信頼するproxyとして登録する（今のALBだけの構成では問題ない）。
 - **CookieStoreのため、コピーされたCookieはlogoutしても7日まで使える**（TASK-001で受け入れ済み）。
