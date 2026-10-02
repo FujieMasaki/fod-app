@@ -1439,7 +1439,7 @@ components:
           format: password
           minLength: 8
           maxLength: 128
-          description: 8〜128文字。文字種は問わない
+          description: 8〜128文字。文字種は問わない。合わなければ`validation_failed`で、8文字未満は`out_of_range`、128文字超は`too_long`
     EmailOnly:
       type: object
       required: [email]
@@ -1467,7 +1467,7 @@ components:
           format: password
           minLength: 8
           maxLength: 128
-          description: 8〜128文字。文字種は問わない
+          description: 8〜128文字。文字種は問わない。合わなければ`validation_failed`で、8文字未満は`out_of_range`、128文字超は`too_long`
     GoogleAuthStart:
       type: object
       required: [authenticity_token]

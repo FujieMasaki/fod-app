@@ -676,7 +676,7 @@ export interface components {
             email: string;
             /**
              * Format: password
-             * @description 8〜128文字。文字種は問わない
+             * @description 8〜128文字。文字種は問わない。合わなければ`validation_failed`で、8文字未満は`out_of_range`、128文字超は`too_long`
              */
             password: string;
         };
@@ -691,7 +691,7 @@ export interface components {
             token: string;
             /**
              * Format: password
-             * @description 8〜128文字。文字種は問わない
+             * @description 8〜128文字。文字種は問わない。合わなければ`validation_failed`で、8文字未満は`out_of_range`、128文字超は`too_long`
              */
             password: string;
         };

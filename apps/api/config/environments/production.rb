@@ -56,6 +56,9 @@ Rails.application.configure do
   # Set host to be used by links generated in mailer templates.
   config.action_mailer.default_url_options = { host: "example.com" }
 
+  # 認証メールのリンク先（SPAのorigin）。未設定ならメールを作る時点で失敗させる（localhostへ向けない）。
+  config.x.app_base_url = ENV.fetch("APP_BASE_URL", nil)
+
   # Specify outgoing SMTP server. Remember to add smtp/* credentials via bin/rails credentials:edit.
   # config.action_mailer.smtp_settings = {
   #   user_name: Rails.application.credentials.dig(:smtp, :user_name),

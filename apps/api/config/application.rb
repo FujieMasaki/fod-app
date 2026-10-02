@@ -27,7 +27,8 @@ module FocusOnDotApi
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
-    config.autoload_lib(ignore: %w[assets tasks])
+    # omniauth/はinitializerでOmniAuthへ登録するため、再読込の対象から外してrequireで読む。
+    config.autoload_lib(ignore: %w[assets tasks omniauth])
 
     # Configuration for the application, engines, and railties goes here.
     #
@@ -41,6 +42,19 @@ module FocusOnDotApi
     # Middleware like session, flash, cookies can be added back manually.
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
+
+    # 認証はRails標準のCookieStore（TASK-001で採用）。API-onlyは既定でsessionを持たないので明示的に足す。
+    # 期限（認証から7日・延長なし）はCookieに任せず、Authentication concernがserverで検証する。
+    config.session_store :cookie_store,
+                         key: "_focus_on_dot_session",
+                         httponly: true,
+                         same_site: :lax,
+                         secure: Rails.env.production?
+    config.middleware.use ActionDispatch::Cookies
+    config.middleware.use config.session_store, config.session_options
+
+    # 確認・再設定・解除のメールに載せるSPAのorigin（例: https://app.example.com）。
+    config.x.app_base_url = ENV.fetch("APP_BASE_URL", "http://localhost:5173")
 
     config.generators do |generator|
       generator.orm :active_record, primary_key_type: :uuid
