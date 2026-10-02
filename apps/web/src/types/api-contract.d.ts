@@ -74,7 +74,8 @@ export interface paths {
         put?: never;
         /**
          * 確認メールを再送する
-         * @description 宛先の制限（60秒に1回・1時間5回）に掛かった場合も、登録の有無にかかわらず同じ`202`を返す。
+         * @description 宛先の制限（送信元IPと宛先の組ごとに60秒に1回・1時間5回、宛先ごとに1時間20回）に掛かった場合も、
+         *     登録の有無にかかわらず同じ`202`を返す。
          *     IPごとの制限（1時間20回）だけ`429`を返す。
          */
         post: operations["resendConfirmation"];
