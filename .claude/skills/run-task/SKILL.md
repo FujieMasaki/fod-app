@@ -73,8 +73,15 @@ worktreeの中で依存を入れ、前回の状態を消す。
 ```bash
 pnpm install --frozen-lockfile
 (cd apps/api && bundle install)   # apps/api を変更する見込みがあるときだけ
-(cd apps/api && RAILS_ENV=test bin/rails db:prepare)   # 同上。TEST_ENV_NUMBER があればこのタスク専用のtest DBになる
 scripts/claude-hook.sh claude-quality-gate.mjs --reset
+```
+
+定期実行から起動された場合（環境変数 `TEST_ENV_NUMBER` がある）は、変更する範囲にかかわらず、このタスク専用の
+test DBを用意する。品質ゲートは `apps/api/` 以外（`scripts/`、`contracts/`、ルートの設定など）の変更でもRSpecを
+実行するため、用意していないと存在しないDBで失敗する。
+
+```bash
+(cd apps/api && bundle install && RAILS_ENV=test bin/rails db:prepare)
 ```
 
 ### 3. 読んでからPlanを作る
