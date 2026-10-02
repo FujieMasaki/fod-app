@@ -15,7 +15,7 @@ class GoogleSignIn
 
   def sign_in
     identity = find_identity
-    return AuthResult.of(:ok, user: identity.user) if identity
+    return signed_in(identity.user) if identity
     return AuthResult.of(:failed) unless verified_email
 
     existing = User.find_for_authentication(email: verified_email)
@@ -25,7 +25,7 @@ class GoogleSignIn
   rescue ActiveRecord::RecordNotUnique
     # 同じGoogleの利用者のcallbackが同時に届いた。先に作られた方へloginする。
     identity = find_identity
-    identity ? AuthResult.of(:ok, user: identity.user) : AuthResult.of(:failed)
+    identity ? signed_in(identity.user) : AuthResult.of(:failed)
   end
 
   # Googleが返した利用者が、いまloginしている利用者に紐づくGoogleの利用者と一致することを必ず確かめる。
@@ -38,6 +38,10 @@ class GoogleSignIn
   end
 
   private
+
+  # loginできない状態の利用者（Devise/Wardenが拒否する）は、sign_inで投げ返される前にここで外す。
+  # 投げ返されると、browserの遷移先にJSONの401が出るため。
+  def signed_in(user) = user.active_for_authentication? ? AuthResult.of(:ok, user:) : AuthResult.of(:failed)
 
   def uid = @auth["uid"].to_s
 

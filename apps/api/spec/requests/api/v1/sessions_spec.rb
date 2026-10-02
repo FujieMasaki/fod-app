@@ -107,6 +107,14 @@ RSpec.describe "Session" do
       expect(problem_code).to eq("invalid_credentials")
     end
 
+    it "email・passwordをquery stringからは受け取らない（URLに秘密を載せない）" do
+      post "/api/v1/session?#{{ email: user.email, password: AuthRequestHelpers::DEFAULT_PASSWORD }.to_query}",
+           headers: { "X-CSRF-Token" => csrf_token }
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(response.parsed_body["errors"].pluck("field")).to contain_exactly("email", "password")
+    end
+
     it "入力が足りなければ422 validation_failed" do
       json_request(:post, "/api/v1/session", { email: user.email })
 

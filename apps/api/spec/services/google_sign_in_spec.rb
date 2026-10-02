@@ -20,6 +20,13 @@ RSpec.describe GoogleSignIn do
       expect(result.user).to eq(winner)
     end
 
+    it "loginできない状態の利用者には、identityが一致してもloginしない" do
+      user = create(:user, :google_only, google_uid: "google-uid")
+      user.lock_access!(send_instructions: false)
+
+      expect(described_class.new(auth).sign_in.status).to eq(:failed)
+    end
+
     it "一意制約に当たったのがメールアドレスなら、どの利用者にもloginしない" do
       allow(User).to receive(:create!).and_raise(ActiveRecord::RecordNotUnique)
 
