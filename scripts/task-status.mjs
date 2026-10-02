@@ -3,11 +3,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const defaultTasksDir = path.join(repoRoot, "docs", "tasks");
+export const defaultTasksDir = path.join(repoRoot, "docs", "tasks");
 
 // Design decisions and API contracts need a human to choose between options,
 // so they are worked through interactively rather than by /run-task.
-const interactiveCategories = new Set(["設計判断", "API契約"]);
+export const interactiveCategories = new Set(["設計判断", "API契約"]);
 
 const taskIdPattern = /^TASK-\d{3}$/;
 
