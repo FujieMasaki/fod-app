@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -139,7 +139,7 @@ test("truncates long notifications and points to the report", () => {
     status: "Blocked",
     reason: "依存待ち",
   }));
-  const lines = notificationText({ remaining, bottlenecks: [] }).split("\n");
+  const lines = notificationText({ start: [], remaining, bottlenecks: [] }).split("\n");
 
   assert.equal(lines.length, 9);
   assert.equal(lines.at(-1), "ほか3行はレポートを参照");
@@ -254,3 +254,38 @@ test("a worktree that already exists means another session holds the task", () =
 
     assert.equal(result.detail, "worktreeを作れません: already exists");
   }));
+
+test("a session with uncommitted work keeps its worktree", () =>
+  withLogDir(async (logDir) => {
+    const { git, calls } = fakeGit({ status: " M apps/api/Gemfile\n" });
+    const spawn = fakeSpawn([["close", 1]], logDir);
+
+    await runTask({ id: "TASK-006" }, { root: "/repo", logDir, deps: { git, spawn } });
+
+    assert.ok(!removed(calls));
+  }));
+
+test("a running session is recorded for manual /run-task and the record is removed after", () =>
+  withLogDir(async (logDir) => {
+    const lockDir = path.join(logDir, "scheduled-sessions");
+    const lockPath = path.join(lockDir, "TASK-006.json");
+    const { git } = fakeGit({ branch: "feat/task-006-x" });
+    let recorded;
+    const spawn = (...args) => {
+      const child = fakeSpawn([["close", 0]], logDir)(...args);
+      assert.equal(args[2].env.FOD_SCHEDULED_TASK, "TASK-006");
+      queueMicrotask(() => (recorded = JSON.parse(readFileSync(lockPath, "utf8"))));
+      return child;
+    };
+
+    await runTask({ id: "TASK-006" }, { root: "/repo", logDir, lockDir, deps: { git, spawn } });
+
+    assert.deepEqual(recorded, { pid: 999999, worktree: "/repo/.claude/worktrees/task-006" });
+    assert.ok(!existsSync(lockPath));
+  }));
+
+test("plan mode lists what would start instead of saying nothing can", () => {
+  const plan = { start: [{ id: "TASK-006", title: "認証基盤" }], remaining: [], bottlenecks: [] };
+
+  assert.equal(notificationText(plan), "1件を起動予定\nTASK-006: 認証基盤");
+});

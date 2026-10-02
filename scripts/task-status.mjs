@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +11,36 @@ export const defaultTasksDir = path.join(repoRoot, "docs", "tasks");
 export const interactiveCategories = new Set(["設計判断", "API契約"]);
 
 const taskIdPattern = /^TASK-\d{3}$/;
+
+// scripts/task-scheduler.mjs records the pid of each session it runs here, in
+// the git dir every worktree shares, so a manual /run-task can see it.
+export function scheduledSessionsDir(cwd = repoRoot) {
+  const result = spawnSync("git", ["rev-parse", "--path-format=absolute", "--git-common-dir"], { cwd, encoding: "utf8" });
+  return result.status === 0 ? path.join(result.stdout.trim(), "scheduled-sessions") : undefined;
+}
+
+export function scheduledSessionPath(taskId, lockDir) {
+  return path.join(lockDir, `${taskId}.json`);
+}
+
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error.code === "EPERM";
+  }
+}
+
+export function scheduledSessionPid(taskId, lockDir) {
+  if (!lockDir) return undefined;
+  try {
+    const { pid } = JSON.parse(readFileSync(scheduledSessionPath(taskId, lockDir), "utf8"));
+    return Number.isInteger(pid) && isAlive(pid) ? pid : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function section(markdown, heading) {
   const lines = markdown.split("\n");
@@ -50,7 +81,9 @@ export function findTaskFile(taskId, tasksDir = defaultTasksDir) {
   return fileName ? path.join(tasksDir, fileName) : undefined;
 }
 
-export function evaluateTask(taskId, { tasksDir = defaultTasksDir } = {}) {
+// env.FOD_SCHEDULED_TASK names the task a scheduled session was started for,
+// so that session does not see its own record as another session's.
+export function evaluateTask(taskId, { tasksDir = defaultTasksDir, lockDir, env = process.env } = {}) {
   if (!taskIdPattern.test(taskId ?? "")) {
     return { id: taskId, runnable: false, reasons: [`Invalid task ID: ${taskId} (expected TASK-000)`] };
   }
@@ -73,6 +106,11 @@ export function evaluateTask(taskId, { tasksDir = defaultTasksDir } = {}) {
     const dependencyPath = findTaskFile(dependencyId, tasksDir);
     const dependencyStatus = dependencyPath ? parseTask(readFileSync(dependencyPath, "utf8")).status : "missing";
     if (dependencyStatus !== "Done") reasons.push(`${dependencyId} is ${dependencyStatus}`);
+  }
+
+  if (env.FOD_SCHEDULED_TASK !== taskId) {
+    const pid = scheduledSessionPid(taskId, lockDir === undefined ? scheduledSessionsDir() : lockDir);
+    if (pid) reasons.push(`${taskId} is being worked on by a scheduled session (pid ${pid})`);
   }
 
   return {

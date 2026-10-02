@@ -30,7 +30,8 @@ CI相当の検査・コミット・push・PRの有無を確かめ、満たすま
 node scripts/task-status.mjs $ARGUMENTS
 ```
 
-- `runnable: false` なら、`reasons` を日本語で示して止まる。作業区分が設計判断・API契約なら、
+- `runnable: false` なら、`reasons` を日本語で示して止まる。定期実行のセッションが同じタスクを進めている間も
+  `runnable: false` になる（同じworktreeで2つのセッションが作業しないように）。作業区分が設計判断・API契約なら、
   対話で一緒に進めることを提案する。ここではworktreeを作らない。
 - `unblocking: true`（Blockedで依存がすべてDone）なら、依存先の判断・契約がこのタスクの前提を
   満たすか確認してから進む。満たさなければ止まる条件として扱う。

@@ -1,9 +1,15 @@
 import { spawn, spawnSync } from "node:child_process";
-import { closeSync, mkdirSync, openSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { defaultTasksDir, evaluateTask, interactiveCategories } from "./task-status.mjs";
+import {
+  defaultTasksDir,
+  evaluateTask,
+  interactiveCategories,
+  scheduledSessionPath,
+  scheduledSessionsDir,
+} from "./task-status.mjs";
 
 // Starts every task /run-task can take on, in parallel, from launchd every
 // morning (see scripts/task-scheduler.sh). Tasks another session already holds
@@ -167,6 +173,9 @@ export function notificationText(plan, results = []) {
   const lines = [];
   if (results.length) {
     lines.push(`${results.length}件を進めました`, ...results.map(resultLine));
+  } else if (plan.start.length) {
+    // Only `plan` mode gets here: a real run reports results for what it started.
+    lines.push(`${plan.start.length}件を起動予定`, ...plan.start.map((task) => `${task.id}: ${task.title}`));
   } else {
     lines.push("着手できるタスクはありません。残っているタスクはこちらです");
     if (plan.bottlenecks[0]) lines.push(`先に進める: ${plan.bottlenecks[0].id}（${plan.bottlenecks[0].category}）`);
@@ -260,7 +269,7 @@ export function databaseSuffix(taskId) {
 }
 
 // deps.spawn is node:child_process spawn; injectable so the failure paths are testable.
-export function startSession(task, worktree, logDir, deps = { spawn }) {
+export function startSession(task, worktree, { logDir, lockDir }, deps = { spawn }) {
   const outPath = path.join(logDir, `${task.id}.json`);
   const errPath = path.join(logDir, `${task.id}.log`);
   const out = openSync(outPath, "w");
@@ -271,12 +280,19 @@ export function startSession(task, worktree, logDir, deps = { spawn }) {
     {
       cwd: worktree,
       // Each session gets its own databases (see apps/api/config/database.yml).
-      env: { ...process.env, FOD_DB_SUFFIX: databaseSuffix(task.id) },
+      env: { ...process.env, FOD_DB_SUFFIX: databaseSuffix(task.id), FOD_SCHEDULED_TASK: task.id },
       stdio: ["ignore", out, err],
       // Its own process group, so a timeout also stops rspec, pnpm and the like it started.
       detached: true,
     },
   );
+
+  // A manual /run-task of the same task checks this record and stops (task-status.mjs).
+  const lockPath = lockDir && child.pid ? scheduledSessionPath(task.id, lockDir) : undefined;
+  if (lockPath) {
+    mkdirSync(lockDir, { recursive: true });
+    writeFileSync(lockPath, `${JSON.stringify({ pid: child.pid, worktree })}\n`);
+  }
 
   const stop = (signal) => {
     try {
@@ -301,19 +317,27 @@ export function startSession(task, worktree, logDir, deps = { spawn }) {
       if (settled) return;
       settled = true;
       timers.forEach(clearTimeout);
+      if (lockPath) rmSync(lockPath, { force: true });
       closeSync(out);
       closeSync(err);
       resolve(result);
     };
     child.on("error", (error) => finish({ started: false, detail: `claudeを起動できません: ${error.message}` }));
-    child.on("close", (code) =>
+    child.on("close", (code) => {
+      // Also ends what the session left behind (a dev server, or a child that
+      // ignored SIGTERM after a timeout); the group is usually gone already.
+      try {
+        process.kill(-child.pid, "SIGKILL");
+      } catch {
+        // Nothing left in the group.
+      }
       finish({
         started: true,
         detail: timedOut
           ? `${SESSION_TIMEOUT_MS / 3600000}時間で打ち切り。${errPath}を参照`
           : (sessionSummary(readFileSync(outPath, "utf8")) ?? `claudeが終了コード${code}で終了。${errPath}を参照`),
-      }),
-    );
+      });
+    });
   });
 }
 
@@ -327,7 +351,7 @@ function untouched(worktree, base, git) {
 }
 
 // deps: git(args) → { ok, stdout, stderr }, spawn. Injectable for the failure-path tests.
-export async function runTask(task, { root, logDir, deps = { git: (args) => command("git", args), spawn } }) {
+export async function runTask(task, { root, logDir, lockDir, deps = { git: (args) => command("git", args), spawn } }) {
   const worktree = path.join(root, ".claude", "worktrees", `task-${task.id.slice(5)}`);
   const base = deps.git(["-C", root, "rev-parse", "origin/main"]).stdout.trim();
   // Fails when the path exists, so a session that got here first keeps the task.
@@ -336,7 +360,7 @@ export async function runTask(task, { root, logDir, deps = { git: (args) => comm
 
   let session;
   try {
-    session = await startSession(task, worktree, logDir, deps);
+    session = await startSession(task, worktree, { logDir, lockDir }, deps);
   } catch (error) {
     session = { started: false, detail: `セッションを準備できません: ${error.message}` };
   }
@@ -361,12 +385,13 @@ export async function run({ root, dryRun = false, maxParallel = DEFAULT_MAX_PARA
   }
 
   const logDir = path.join(homedir(), "Library", "Logs", "focus-on-dot", timestamp(now));
+  const lockDir = scheduledSessionsDir(root);
   mkdirSync(logDir, { recursive: true });
 
   const sessions = [];
   for (const [index, task] of plan.start.entries()) {
     if (index > 0) await sleep(LAUNCH_INTERVAL_MS);
-    sessions.push(runTask(task, { root, logDir }));
+    sessions.push(runTask(task, { root, logDir, lockDir }));
   }
   const finished = await Promise.all(sessions);
 
