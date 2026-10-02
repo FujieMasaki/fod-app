@@ -10,6 +10,9 @@ OmniAuth.config.logger = Rails.logger
 OmniAuth.config.before_request_phase = lambda do |env|
   request = Rack::Request.new(env)
   env["rack.session"][GoogleAuthIntent::SESSION_KEY] = GoogleAuthIntent.from_params(request.POST).to_session
+  # sessionを書き直すとCookieが書き直されるので、login中ならcontrollerと同じ有効期限を付け直す
+  # （付けないと、再認証の途中でブラウザを閉じたときにCookieが消える）。
+  Authentication.keep_cookie_expiry(env["rack.session"], env["rack.session.options"])
 end
 
 # omniauth-rails_csrf_protectionはCSRFの不一致でRailsの例外を投げるが、OmniAuthが失敗として扱うのは

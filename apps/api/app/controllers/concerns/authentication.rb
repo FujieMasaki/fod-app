@@ -17,6 +17,16 @@ module Authentication
   # Google専用の利用者の再認証を「直近」とみなす時間（TASK-006 Plan §12-3）
   GOOGLE_REAUTHENTICATION_WINDOW = 5.minutes
 
+  # Cookieの有効期限を、認証の時刻から決める（利用では延長しない）。controllerを通らずにsessionを
+  # 書き直す処理（Googleログインの開始）からも使う。
+  def self.keep_cookie_expiry(session, session_options)
+    authenticated_at = session[AUTHENTICATED_AT_KEY]
+    return unless authenticated_at.is_a?(Integer)
+
+    expires_at = Time.zone.at(authenticated_at) + SESSION_LIFETIME + COOKIE_GRACE_PERIOD
+    session_options[:expire_after] = [(expires_at - Time.current).ceil, 0].max
+  end
+
   included do
     # loginで期限が決まるのでactionの後に設定する。途中で止まったrequest（CSRFの拒否など）でも
     # sessionのCookieは書き直されるため、actionの前にも設定する。
@@ -93,10 +103,5 @@ module Authentication
   end
 
   # sessionを書き直すたびに、Cookieの有効期限を認証の時刻から決める（利用では延長しない）。
-  def keep_cookie_expiry
-    expires_at = session_expires_at
-    return unless expires_at
-
-    request.session_options[:expire_after] = [(expires_at + COOKIE_GRACE_PERIOD - Time.current).ceil, 0].max
-  end
+  def keep_cookie_expiry = Authentication.keep_cookie_expiry(session, request.session_options)
 end

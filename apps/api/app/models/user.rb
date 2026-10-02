@@ -51,7 +51,12 @@ class User < ApplicationRecord
   # メールはrequestの外（AuthMailDeliveryJob）で配送する。配送の時間や失敗で応答が変わり、
   # 登録の有無やロックの有無が分かるのを防ぐため。
   def send_devise_notification(notification, *)
-    devise_mailer.send(notification, self, *).deliver_later
+    mail = -> { devise_mailer.send(notification, self, *).deliver_later }
+    # ロック解除のメールは、第三者がloginに失敗するだけで送らせられるので、宛先ごとの送信制限を通す
+    # （届かなくても、ロックは1時間で自動で解ける）。
+    return AuthMailThrottle.new(ip: nil).deliver(email, &mail) if notification == :unlock_instructions
+
+    mail.call
   end
 
   # valid_password?と同じ変換をしてから保存する。

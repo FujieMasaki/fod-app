@@ -178,6 +178,17 @@ RSpec.describe "Google login" do
       expect(response.parsed_body["google_reauthenticated"]).to be(true)
     end
 
+    it "再認証を開始してもCookieの有効期限を保つ（ブラウザを閉じても消えるCookieにしない）" do
+      freeze_time do
+        sign_in_with_google
+        expires = 8.days.from_now.utc.httpdate
+
+        post("/auth/google_oauth2", params: { intent: "reauthenticate", authenticity_token: csrf_token })
+
+        expect(response.headers["Set-Cookie"]).to include("expires=#{expires}")
+      end
+    end
+
     it "再認証の記録は5分で古くなる" do
       sign_in_with_google
       start_google(intent: "reauthenticate")

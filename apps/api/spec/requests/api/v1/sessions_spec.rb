@@ -140,6 +140,15 @@ RSpec.describe "Session" do
         expect(problem_code).to eq("invalid_credentials")
       end
 
+      it "解除メールも宛先ごとの送信制限を通り、60秒以内に2回ロックしても1通だけ送る", :fixed_time do
+        fail_login(10)
+        user.reload.unlock_access!
+        fail_login(10)
+
+        expect(user.reload).to be_access_locked
+        expect(ActionMailer::Base.deliveries.count { it.subject.include?("ロック") }).to eq(1)
+      end
+
       it "ロックは1時間で自動で解ける" do
         fail_login(10)
         travel 1.hour + 1.second
