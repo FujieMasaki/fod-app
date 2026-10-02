@@ -63,6 +63,9 @@
      `/run-task`は別のworktreeでブランチを切ることもあるため、`.claude/worktrees/`の直下だけを見ない。
    - head branchが`task-NNN`を含むopen PRがある。repositoryは公開でfork PRのbranch名は誰でも決められるため、
      このrepositoryのbranchから出たPR（`isCrossRepository: false`）だけを数える。
+   - 逆方向（手動の`/run-task`が定期実行のセッションを避ける）のため、定期実行はセッションのpidを
+     共有のgit dir（`<git-common-dir>/scheduled-sessions/TASK-NNN.json`）に記録し、`task-status.mjs`は
+     そのpidが生きている間はタスクを実行不可と判定する。定期実行のセッション自身は`FOD_SCHEDULED_TASK`で除外する。
    - 加えて、mainで`In progress`のタスクは除外する（作業中か、人間の確認待ちのため）。
 3. **起動順**: 実行可能なタスクを、未完了の後続タスク数（推移的）が多い順に並べ、上限
    （既定3、`FOD_TASK_MAX_PARALLEL`で変更）まで起動する。
@@ -188,8 +191,12 @@ PR作成 / 停止理由
     - 作業のないworktree（作成時のcommitにdetachされたまま、変更・ブランチなし）を自動で削除する。
     - development DBも分けるため、接尾辞の環境変数を`TEST_ENV_NUMBER`から`FOD_DB_SUFFIX`にまとめた。
     - 打ち切りをプロセスグループ単位にし、spawn・gitを差し替えて起動失敗などの経路をtestした。
+  - 新しいサブエージェント段階の1回目を反映: 定期実行中のタスクを手動の`/run-task`が実行不可と判定する記録、
+    `plan`モードで起動予定を表示する通知文、セッション終了時のプロセスグループへのSIGKILL、未コミットの
+    worktreeを削除しないことのtestを追加した。手順1で止まったタスクが翌朝も起動される点は、通知に停止理由が
+    出るため今回は扱わない（毎日同じ停止が続く場合は人間が判断する）。
 - 検証結果:
-  - `pnpm test:scripts`: 成功（`task-scheduler.test.mjs`は14件）。`pnpm lint`: 成功。
+  - `pnpm test:scripts`: 成功（`task-scheduler.test.mjs`は17件、`task-status.test.mjs`に2件追加）。`pnpm lint`: 成功。
   - `node scripts/task-scheduler.mjs plan --root <repo>`: 起動0件。origin/mainではTASK-005がDoneで
     TASK-006は実行可能だが、ローカルに`.claude/worktrees/task-006`（PR未作成）があるため着手済みとして
     除外された。ボトルネックとしてTASK-006（後続10件）、TASK-003（後続8件）が出た。
