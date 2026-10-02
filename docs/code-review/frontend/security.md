@@ -62,6 +62,7 @@ Focus on Dot は現時点で Vite によるクライアントSPAである。し�
   [`../../journaling.md`](../../journaling.md)「3. モックと実サービスの区別」が同じ差異を記録しており、
   解消は表示文言と保持・再試行仕様を同時に更新する変更で行う。文言だけを直して
   実際の保持仕様と合わない状態を作らない。
-- Rails API基盤は存在するが、プロダクトAPI、認証、外部AI連携は未実装である。backendの
+- 認証はRails側をTASK-006で実装した（Webの接続はTASK-007）。Dotなどのプロダクト API と外部AI連携は
+  未実装である。backendの
   認証・認可・CSRF・CORS・レート制限は、実装変更時に
   [`../backend/security.md`](../backend/security.md)の観点と実際の認証・配信構成に沿って確認する。

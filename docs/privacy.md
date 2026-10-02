@@ -127,7 +127,8 @@ MVP全体の範囲は[product](./product.md)を正本とする。
   Deviseの仕様で、確認tokenは平文、再設定・解除tokenはdigestで保存される。試行回数の
   `rate_limit_counters`はメールアドレス・IPをHMACのdigestで持ち、1時間以内に失効する。行を消すのは
   定期削除（`rails rate_limits:purge`。実行の設定は公開基盤の構築時）で、それまでは失効した行も残る。
-  Cookieは暗号化sessionで、User IDとsalt・認証時刻・CSRF tokenだけを持つ。password・token・
+  Cookieは暗号化sessionで、User IDとsalt・認証時刻・CSRF tokenを持つ。Googleログインの途中は、
+  開始時のintent・戻り先のpath・OAuthのstateも持ち、Google再認証の時刻も持つ（どれも個人データではない）。password・token・
   メールアドレス・Google callbackの`code`/`state`はログから除く（request specで確認）。
   これらの保持期間と退会時の削除はTASK-013で§5-1に揃える。
 - TASK-009/010/011: 決定した経路と、送信・保存前の利用者操作・失敗時の挙動を実装する。

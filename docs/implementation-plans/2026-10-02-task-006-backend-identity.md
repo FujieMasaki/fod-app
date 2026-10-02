@@ -249,6 +249,19 @@ Codexの最終チェックとサブエージェントのレビューで出た3�
 | Google開始の試行制限 | A | 開始POSTをIPごとに1時間50回に制限し、超えたら`auth_error=rate_limited`でredirectする（契約どおり） |
 | 再設定成功時の確認 | A | 未確認の利用者は、password再設定に成功したら確認済みにする |
 
+### 12-7. 最後のレビューの軽微な指摘への判断（2026-10-02）
+
+サブエージェントの最後のレビュー（LGTM後のLow 5件）を、人間の判断でこのPRで直した。
+宛先ごとの送信制限は、人間がAを選んだ（TASK-001 Plan §56の値の数え方を変える）。
+
+| 指摘 | 対応 |
+| --- | --- |
+| 第三者が宛先ごとの送信枠を使い切り、本人宛てのメールを止められる | 送信元IPと宛先の組ごとに60秒1回・1時間5回、宛先ごと（全IPの合計）に1時間20回にした。1つのIPからは本人を締め出せない。複数のIPから1時間20回以上送れば止められる点は残る |
+| `User`が送信制限（Service）を直接呼んでいる | ロック解除メールの送信制限を`UserMailer#unlock_instructions`へ移した |
+| 空白だけのpasswordを`required`として拒否する | 空文字だけを拒否し、空白だけの値も文字として受け付ける（契約の「文字種は問わない」） |
+| frontendのsecurity指針に「認証は未実装」とある | 現状に合わせた |
+| `privacy.md`のCookieの中身にGoogleログイン中の値がない | 追記した |
+
 ## 13. Risks / Things to Watch
 
 - API-onlyへのsession・CSRFの組込み漏れ。GET以外のすべてで`csrf_invalid`になることをspecで確かめる。
@@ -323,7 +336,7 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
 | JSONの項目はbody（`request.request_parameters`）からだけ読む | `params`はquery stringも含み、client実装の誤りでpassword・tokenがURL（proxyのaccess log）に載り得るため（サブエージェント2回目） |
 | Googleで、loginできない状態の利用者にはloginさせない | Wardenの投げ返しでbrowserにJSONの401が出るのを防ぐ（サブエージェント2回目。今はGoogle専用の利用者はロックされないが、TASK-013で退会状態が加わるため） |
 | loginの失敗回数は照合の前に予約し、passwordが一致したら戻す（`RateLimiter#release`） | 確かめてから数えると、同時のrequestがどちらも上限の手前で照合へ進み、上限を超えて試せた（Codexの最終チェック） |
-| ロック解除のメールも、宛先ごとの送信制限を通す | 第三者がloginに失敗するだけで送らせられるため（サブエージェント）。届かなくても1時間で自動で解ける |
+| ロック解除のメールも、送信制限を通す（`UserMailer#unlock_instructions`） | 第三者がloginに失敗するだけで送らせられるため（サブエージェント）。届かなくても1時間で自動で解ける |
 | `authenticate_user!`は`403 email_unconfirmed`を返さない（§5との差異） | 未確認の利用者はloginできずsessionを持てない。sessionから復元した利用者が未確認・ロック中ならWardenが外し、`401 unauthenticated`になる。`email_unconfirmed`はloginの応答で返す |
 | rubocopで、migrationのDocumentation・MethodLengthを除外し、specのexpectation数（5）と長さ（15行）を緩めた | migrationは列の定義が説明になる。request specは1操作の結果（status・code・header・契約）をまとめて確かめるため |
 
@@ -331,7 +344,7 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
 
 `apps/api`で実行した。
 
-- `bundle exec rspec`: 325 examples, 0 failures（既存の契約spec含む）
+- `bundle exec rspec`: 331 examples, 0 failures（既存の契約spec含む）
 - `bundle exec rubocop`: 74 files, no offenses
 - `bundle exec brakeman --no-pager -q`: Security Warnings 0
 - `bundle exec bundler-audit check --update`: No vulnerabilities found
