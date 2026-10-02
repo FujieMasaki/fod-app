@@ -76,7 +76,7 @@
    （launchdは前回のジョブが動いている間は次を起動しないため、1件のハングで翌朝以降が止まらないようにする）。
    SIGTERMで終わらなければ60秒後にSIGKILLする。`git` / `gh`の呼び出しは2分、`git fetch`は低速が60秒続いたら
    打ち切る。打ち切りはプロセスグループごと行い、セッションが起動したrspec等も止める。セッションが一度も
-   起動しなかった場合と、作成時のcommitにdetachされたまま変更もブランチもない場合はworktreeを削除し、
+   起動しなかった場合と、作成時のcommitのまま変更もpush済みのブランチもない場合はworktree（と未pushのブランチ）を削除し、
    翌日以降に着手済みと扱われないようにする（認証切れなど一時的な障害で全タスクが止まり続けないように）。
    結果のPRは、セッションが残したworktreeのbranch名と完全一致する、このrepositoryのPRとする。
 5. **DBの分離**: `database.yml`のdevelopment / test DB名に`FOD_DB_SUFFIX`を付ける。定期実行は
@@ -201,8 +201,14 @@ PR作成 / 停止理由
     （既存のtestが実環境の記録を読まない）、timeoutした外部コマンドの理由を通知に残す、とした。
   - 要確認として残す: 定期実行のセッションがDB準備の複合コマンドをauto modeで許可されるか。allowlistへの追加は
     許可設定の変更になるため、実際の起動で確かめてから人間が判断する。
+  - Codex後のサブエージェント（Medium 1件）を反映: ブランチ作成直後に依存・DBの準備で止まったセッションの
+    worktreeが残り続けないよう、作業なしの判定を「作成時のcommitのまま・変更なし・ブランチが未push」に広げ、
+    未pushのブランチも削除する。`/run-task`は定期実行では依存・DBの準備をブランチ作成より先に行う。
+    あわせて、再開前の`task-status.mjs`の再確認、定期実行のworktreeを手動で再開するときの`FOD_DB_SUFFIX`、
+    `plan`モードの失敗では通知しないことを反映した。`run()`全体を通すtestは、部品のtestで主要な分岐を
+    押さえているため今回は追加しない。
 - 検証結果:
-  - `pnpm test:scripts`: 成功（`task-scheduler.test.mjs`は18件、`task-status.test.mjs`に2件追加）。`pnpm lint`: 成功。
+  - `pnpm test:scripts`: 成功（`task-scheduler.test.mjs`は20件、`task-status.test.mjs`に2件追加）。`pnpm lint`: 成功。
   - `node scripts/task-scheduler.mjs plan --root <repo>`: 起動0件。origin/mainではTASK-005がDoneで
     TASK-006は実行可能だが、ローカルに`.claude/worktrees/task-006`（PR未作成）があるため着手済みとして
     除外された。ボトルネックとしてTASK-006（後続10件）、TASK-003（後続8件）が出た。
