@@ -13,12 +13,20 @@ RSpec.describe RateLimiter do
     end
   end
 
-  it "checkは数えずに、次の1回が通るかを返す" do
+  it "releaseで、hitで数えた1回分を戻す" do
     limiter.hit("a")
+    second = limiter.hit("a")
+    limiter.release(second)
 
-    expect(limiter.check("a")).to be_allowed
-    limiter.hit("a")
-    expect(limiter.check("a")).not_to be_allowed
+    expect(limiter.hit("a")).to be_allowed
+    expect(limiter.hit("a")).not_to be_allowed
+  end
+
+  it "releaseは0より小さくしない" do
+    first = limiter.hit("a")
+    2.times { limiter.release(first) }
+
+    expect(RateLimitCounter.pick(:count)).to eq(0)
   end
 
   it "keyごと・名前ごとに別に数える" do

@@ -12,15 +12,20 @@ class PasswordSignIn
     @ip = ip
   end
 
+  # 照合の前に失敗1回分を原子的に数えて枠を予約し、passwordが一致したら戻す。確かめてから数えると、
+  # 同時に届いたrequestがどちらも上限の手前で照合へ進み、上限を超えて試せてしまうため。
   def call
-    limit = FAILURES_BY_IP.check(@ip)
-    return AuthResult.rate_limited(limit) unless limit.allowed?
+    reservation = FAILURES_BY_IP.hit(@ip)
+    unless reservation.allowed?
+      FAILURES_BY_IP.release(reservation)
+      return AuthResult.rate_limited(reservation)
+    end
 
     user = User.find_for_authentication(email: @email)
-    return authenticated(user) if password_matches?(user)
+    return AuthResult.of(:invalid_credentials) unless password_matches?(user)
 
-    FAILURES_BY_IP.hit(@ip)
-    AuthResult.of(:invalid_credentials)
+    FAILURES_BY_IP.release(reservation)
+    authenticated(user)
   end
 
   private
