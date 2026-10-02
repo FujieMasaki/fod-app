@@ -354,10 +354,14 @@ Webの接続（TASK-007）、退会（TASK-013）、本番のメール配送とG
   メールはjob（`deliver_later`）で送り、確認の再送・再設定は利用者の検索からjobで行う（応答時間から
   登録の有無を分からなくするため）。jobは当面Rails既定の`:async`で、TASK-009でSolid Queueへ移る。
   ログをdebugにするとActionMailerがメール本文（token）を出すため、productionでdebugにしない。
-- passwordは8〜128文字で文字種は問わない。不一致が10回続いたらアカウントをロックし（Lockable）、
+- passwordは8〜128文字で文字種は問わない。bcryptは先頭72 byteだけで照合するため、SHA-256にかけてから
+  bcryptへ渡し、全文を照合に使う。不一致が10回続いたらアカウントをロックし（Lockable）、
   1時間で自動解除、解除メールのリンク（`PATCH /api/v1/unlock`）でも解ける。ロック中もloginの応答は
   `invalid_credentials`で、ロックの有無を明かさない。多数のアカウントへ順に試す攻撃に備え、
-  loginの失敗がIPごとに1時間50回を超えたら`429`。
+  loginの失敗がIPごとに1時間50回を超えたら`429`。Googleログインの開始もIPごとに1時間50回で、超えたら
+  `auth_error=rate_limited`を付けてredirectする。
+- password再設定に成功したら、メール未確認の利用者は確認済みにする（再設定メールを受け取れたため）。
+- JSONの項目はbodyからだけ受け取り、password・tokenをquery stringで受けない。
 - 試行回数はRDSの`rate_limit_counters`に固定の時間枠で数える（keyはHMACのdigest。1つのUPSERTで
   原子的に加算）。期限切れの行は`rails rate_limits:purge`で消す。定期実行は公開基盤の構築時に設定する。
 - Googleは、Googleが確認済み（`email_verified`）としたメールだけで新規作成し、確認済みとして扱う。

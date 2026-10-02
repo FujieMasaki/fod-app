@@ -1,11 +1,9 @@
 # 観点: バックエンドセキュリティ 🔴
 
 この文書は、Rails APIのsecurity reviewで必ず確認する観点である。個人データの扱いは
-[`../../privacy.md`](../../privacy.md)を仕様の正本として確認する。現在はRails基盤と`GET /up`のみで、
-プロダクトAPI・認証・配信は未実装である。認証方式と公開配信構成に加え、session期限とメールの
-期限・再送制限を含む認証詳細も[architecture](../../architecture.md)で採用済み・未実装である。
-AI provider、password方針とログイン試行制限の具体値は未決定。採用決定と実装・実機検証を区別し、
-実装される変更で適切な確認を行う。
+[`../../privacy.md`](../../privacy.md)を仕様の正本として確認する。認証はRails側をTASK-006で実装した
+（[architecture](../../architecture.md)「認証詳細」）。Dotなどのプロダクト API・Webの接続・公開配信は
+未実装である。採用決定と実装・実機検証を区別し、実装される変更で適切な確認を行う。
 
 ## 1. 認証・認可とresource所有権 🔴
 
@@ -50,7 +48,9 @@ AI provider、password方針とログイン試行制限の具体値は未決定�
 
 ## 6. 現在の構成での補足
 
-- RailsはAPI-onlyで、`GET /up`以外のプロダクトrouteはない。`/up`への変更でも不要な内部情報を
+- RailsはAPI-onlyで、routeは`GET /up`と認証（`/api/v1/session`等、`/auth/google_oauth2`）だけ。
+  保護するendpointは`before_action :authenticate_user!`と`current_user`を使い、JSONの項目はbodyからだけ
+  受け取る（`JsonParams`。password・tokenをURLに載せない）。`/up`への変更でも不要な内部情報を
   responseへ追加しない。
 - `apps/api/config/initializers/filter_parameter_logging.rb`は防御の補助であり、将来追加する音声・
   生成データの安全なログ運用を保証しない。
