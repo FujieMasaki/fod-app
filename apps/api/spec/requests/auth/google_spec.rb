@@ -77,6 +77,15 @@ RSpec.describe "Google login" do
       expect(response).to redirect_to("http://www.example.com/login?auth_error=google_auth_failed")
     end
 
+    it "stateが合わないcallbackは/login?auth_error=google_auth_failed（test modeを外し、本物のstrategyで確かめる）" do
+      OmniAuth.config.test_mode = false
+
+      get "/auth/google_oauth2/callback", params: { state: "forged-state", code: "any-code" }
+
+      expect(response).to redirect_to("http://www.example.com/login?auth_error=google_auth_failed")
+      expect(User.count).to eq(0)
+    end
+
     it "CSRF tokenが無い開始POSTは403 csrf_invalid" do
       start_google(token: :none)
 
