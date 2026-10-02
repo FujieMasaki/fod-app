@@ -188,7 +188,7 @@ function fakeSpawn(events, logDir) {
 }
 
 // A git stand-in answering the calls runTask makes; records every call.
-function fakeGit({ addOk = true, branch = "", head = "base", status = "" } = {}) {
+function fakeGit({ addOk = true, branch = "", head = "base", status = "", pushed = false } = {}) {
   const calls = [];
   const git = (args) => {
     calls.push(args.join(" "));
@@ -196,6 +196,7 @@ function fakeGit({ addOk = true, branch = "", head = "base", status = "" } = {})
     if (args.includes("rev-parse") && args.includes("origin/main")) return ok("base\n");
     if (args.includes("add")) return addOk ? ok() : { ok: false, stdout: "", stderr: "already exists" };
     if (args.includes("--show-current")) return ok(`${branch}\n`);
+    if (args.some((arg) => arg.endsWith("@{upstream}"))) return pushed ? ok("origin/x\n") : { ok: false, stdout: "", stderr: "no upstream" };
     if (args.includes("HEAD")) return ok(`${head}\n`);
     if (args.includes("status")) return ok(status);
     return ok();
@@ -295,10 +296,33 @@ test("a session keeps running and keeps its worktree when it cannot be recorded"
     // A file where the record directory should be makes recording fail.
     const lockDir = path.join(logDir, "not-a-directory");
     writeFileSync(lockDir, "");
-    const { git, calls } = fakeGit({ branch: "feat/task-006-x" });
+    const { git, calls } = fakeGit({ branch: "feat/task-006-x", head: "committed" });
     const spawn = fakeSpawn([["close", 0]], logDir);
 
     const result = await runTask({ id: "TASK-006" }, { root: "/repo", logDir, lockDir, deps: { git, spawn } });
+
+    assert.equal(result.branch, "feat/task-006-x");
+    assert.ok(!removed(calls));
+  }));
+
+test("a session that stopped right after creating its branch gives the task back", () =>
+  withLogDir(async (logDir) => {
+    const { git, calls } = fakeGit({ branch: "feat/task-006-x" });
+    const spawn = fakeSpawn([["output", JSON.stringify({ result: "bundle installに失敗" })], ["close", 1]], logDir);
+
+    const result = await runTask({ id: "TASK-006" }, { root: "/repo", logDir, deps: { git, spawn } });
+
+    assert.equal(result.branch, "");
+    assert.ok(removed(calls));
+    assert.ok(calls.includes("-C /repo branch -D feat/task-006-x"));
+  }));
+
+test("a pushed branch is kept even without new commits or changes", () =>
+  withLogDir(async (logDir) => {
+    const { git, calls } = fakeGit({ branch: "feat/task-006-x", pushed: true });
+    const spawn = fakeSpawn([["close", 0]], logDir);
+
+    const result = await runTask({ id: "TASK-006" }, { root: "/repo", logDir, deps: { git, spawn } });
 
     assert.equal(result.branch, "feat/task-006-x");
     assert.ok(!removed(calls));

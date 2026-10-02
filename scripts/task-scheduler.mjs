@@ -349,13 +349,15 @@ export function startSession(task, worktree, { logDir, lockDir }, deps = { spawn
   });
 }
 
-// A worktree still detached at the commit it was created from, with no changes,
-// holds no work: keeping it would only make the task look taken tomorrow.
-function untouched(worktree, base, git) {
+// A worktree still at the commit it was created from, with no changes and no
+// pushed branch, holds no work: keeping it would only make the task look taken
+// tomorrow. A session can stop right after creating its branch (installing
+// dependencies, preparing databases), so an unpushed branch alone is not work.
+function untouched(worktree, base, branch, git) {
   const head = git(["-C", worktree, "rev-parse", "HEAD"]);
-  const branch = git(["-C", worktree, "branch", "--show-current"]);
   const status = git(["-C", worktree, "status", "--porcelain"]);
-  return head.ok && branch.ok && status.ok && head.stdout.trim() === base && !branch.stdout.trim() && !status.stdout.trim();
+  const pushed = branch && git(["-C", worktree, "rev-parse", "--abbrev-ref", `${branch}@{upstream}`]).ok;
+  return head.ok && status.ok && head.stdout.trim() === base && !status.stdout.trim() && !pushed;
 }
 
 // deps: git(args) → { ok, stdout, stderr }, spawn. Injectable for the failure-path tests.
@@ -374,8 +376,9 @@ export async function runTask(task, { root, logDir, lockDir, deps = { git: (args
   }
 
   const branch = deps.git(["-C", worktree, "branch", "--show-current"]).stdout.trim();
-  if (!session.started || untouched(worktree, base, deps.git)) {
+  if (!session.started || untouched(worktree, base, branch, deps.git)) {
     deps.git(["-C", root, "worktree", "remove", "--force", worktree]);
+    if (branch) deps.git(["-C", root, "branch", "-D", branch]);
     return { id: task.id, branch: "", detail: `${session.detail}（作業がなかったためworktreeを削除）` };
   }
   return { id: task.id, branch, detail: session.detail };
@@ -433,7 +436,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   const maxParallel = parseMaxParallel(process.env.FOD_TASK_MAX_PARALLEL ?? DEFAULT_MAX_PARALLEL);
   run({ root: path.resolve(root), dryRun: mode === "plan", maxParallel }).catch((error) => {
     console.error(error);
-    notify(`定期実行に失敗しました: ${error.message}`);
-    process.exitCode = NOTIFIED_FAILURE_EXIT_CODE;
+    // A failed `plan` is a manual check; only the scheduled run notifies.
+    if (mode === "run") notify(`定期実行に失敗しました: ${error.message}`);
+    process.exitCode = mode === "run" ? NOTIFIED_FAILURE_EXIT_CODE : 1;
   });
 }
