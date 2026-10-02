@@ -255,38 +255,57 @@ export function sessionSummary(output) {
   }
 }
 
-function startSession(task, worktree, logDir) {
+export function databaseSuffix(taskId) {
+  return `_${taskId.toLowerCase().replace("-", "_")}`;
+}
+
+// deps.spawn is node:child_process spawn; injectable so the failure paths are testable.
+export function startSession(task, worktree, logDir, deps = { spawn }) {
   const outPath = path.join(logDir, `${task.id}.json`);
   const errPath = path.join(logDir, `${task.id}.log`);
   const out = openSync(outPath, "w");
   const err = openSync(errPath, "w");
-  const child = spawn(
+  const child = deps.spawn(
     "claude",
     ["-p", `/run-task ${task.id}`, "--permission-mode", "auto", "--output-format", "json", "--name", `run-task ${task.id}`],
     {
       cwd: worktree,
-      // Each session gets its own RSpec database (see apps/api/config/database.yml).
-      env: { ...process.env, TEST_ENV_NUMBER: `_${task.id.toLowerCase().replace("-", "_")}` },
+      // Each session gets its own databases (see apps/api/config/database.yml).
+      env: { ...process.env, FOD_DB_SUFFIX: databaseSuffix(task.id) },
       stdio: ["ignore", out, err],
+      // Its own process group, so a timeout also stops rspec, pnpm and the like it started.
+      detached: true,
     },
   );
 
+  const stop = (signal) => {
+    try {
+      process.kill(-child.pid, signal);
+    } catch {
+      child.kill(signal);
+    }
+  };
   let timedOut = false;
   const timers = [
     setTimeout(() => {
       timedOut = true;
-      child.kill("SIGTERM");
-      timers.push(setTimeout(() => child.kill("SIGKILL"), KILL_GRACE_MS));
+      stop("SIGTERM");
+      timers.push(setTimeout(() => stop("SIGKILL"), KILL_GRACE_MS));
     }, SESSION_TIMEOUT_MS),
   ];
 
   return new Promise((resolve) => {
+    // A failed spawn emits both "error" and "close"; the first one settles.
+    let settled = false;
     const finish = (result) => {
+      if (settled) return;
+      settled = true;
       timers.forEach(clearTimeout);
       closeSync(out);
       closeSync(err);
       resolve(result);
     };
+    child.on("error", (error) => finish({ started: false, detail: `claudeを起動できません: ${error.message}` }));
     child.on("close", (code) =>
       finish({
         started: true,
@@ -295,26 +314,38 @@ function startSession(task, worktree, logDir) {
           : (sessionSummary(readFileSync(outPath, "utf8")) ?? `claudeが終了コード${code}で終了。${errPath}を参照`),
       }),
     );
-    child.on("error", (error) => finish({ started: false, detail: `claudeを起動できません: ${error.message}` }));
   });
 }
 
-async function runTask(task, { root, logDir }) {
+// A worktree still detached at the commit it was created from, with no changes,
+// holds no work: keeping it would only make the task look taken tomorrow.
+function untouched(worktree, base, git) {
+  const head = git(["-C", worktree, "rev-parse", "HEAD"]);
+  const branch = git(["-C", worktree, "branch", "--show-current"]);
+  const status = git(["-C", worktree, "status", "--porcelain"]);
+  return head.ok && branch.ok && status.ok && head.stdout.trim() === base && !branch.stdout.trim() && !status.stdout.trim();
+}
+
+// deps: git(args) → { ok, stdout, stderr }, spawn. Injectable for the failure-path tests.
+export async function runTask(task, { root, logDir, deps = { git: (args) => command("git", args), spawn } }) {
   const worktree = path.join(root, ".claude", "worktrees", `task-${task.id.slice(5)}`);
+  const base = deps.git(["-C", root, "rev-parse", "origin/main"]).stdout.trim();
   // Fails when the path exists, so a session that got here first keeps the task.
-  const added = command("git", ["-C", root, "worktree", "add", "--detach", worktree, "origin/main"]);
+  const added = deps.git(["-C", root, "worktree", "add", "--detach", worktree, base]);
   if (!added.ok) return { id: task.id, detail: `worktreeを作れません: ${added.stderr.trim()}` };
 
   let session;
   try {
-    session = await startSession(task, worktree, logDir);
+    session = await startSession(task, worktree, logDir, deps);
   } catch (error) {
     session = { started: false, detail: `セッションを準備できません: ${error.message}` };
   }
-  // A session that never ran must not leave the task looking taken tomorrow.
-  if (!session.started) command("git", ["-C", root, "worktree", "remove", "--force", worktree]);
 
-  const branch = command("git", ["-C", worktree, "branch", "--show-current"]).stdout.trim();
+  const branch = deps.git(["-C", worktree, "branch", "--show-current"]).stdout.trim();
+  if (!session.started || untouched(worktree, base, deps.git)) {
+    deps.git(["-C", root, "worktree", "remove", "--force", worktree]);
+    return { id: task.id, branch: "", detail: `${session.detail}（作業がなかったためworktreeを削除）` };
+  }
   return { id: task.id, branch, detail: session.detail };
 }
 

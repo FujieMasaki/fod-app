@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import test from "node:test";
 import {
   findClaims,
@@ -8,6 +12,7 @@ import {
   parseWorktrees,
   planRun,
   pullRequestFor,
+  runTask,
   sessionSummary,
   waitingCounts,
 } from "./task-scheduler.mjs";
@@ -164,3 +169,88 @@ test("a session's PR is the one on its exact branch from this repository", () =>
   assert.equal(pullRequestFor("feat/task-006-missing", pullRequests), undefined);
   assert.equal(pullRequestFor("", pullRequests), undefined);
 });
+
+// A spawn stand-in: emits the given events on the next tick, like a real child.
+function fakeSpawn(events, logDir) {
+  return (_command, _args, options) => {
+    const child = new EventEmitter();
+    child.pid = 999999;
+    child.kill = () => {};
+    setImmediate(() => {
+      for (const [event, value] of events) {
+        if (event === "output") writeFileSync(path.join(logDir, "TASK-006.json"), value);
+        else child.emit(event, value);
+      }
+    });
+    assert.equal(options.env.FOD_DB_SUFFIX, "_task_006");
+    return child;
+  };
+}
+
+// A git stand-in answering the calls runTask makes; records every call.
+function fakeGit({ addOk = true, branch = "", head = "base", status = "" } = {}) {
+  const calls = [];
+  const git = (args) => {
+    calls.push(args.join(" "));
+    const ok = (stdout = "") => ({ ok: true, stdout, stderr: "" });
+    if (args.includes("rev-parse") && args.includes("origin/main")) return ok("base\n");
+    if (args.includes("add")) return addOk ? ok() : { ok: false, stdout: "", stderr: "already exists" };
+    if (args.includes("--show-current")) return ok(`${branch}\n`);
+    if (args.includes("HEAD")) return ok(`${head}\n`);
+    if (args.includes("status")) return ok(status);
+    return ok();
+  };
+  return { git, calls };
+}
+
+function withLogDir(callback) {
+  const logDir = mkdtempSync(path.join(tmpdir(), "task-scheduler-"));
+  return callback(logDir).finally(() => rmSync(logDir, { recursive: true, force: true }));
+}
+
+const removed = (calls) => calls.some((call) => call.includes("worktree remove"));
+
+test("a session claude could not start settles once and gives the task back", () =>
+  withLogDir(async (logDir) => {
+    const { git, calls } = fakeGit();
+    // A failed spawn emits both events; closing the log files twice would crash.
+    const spawn = fakeSpawn([["error", new Error("spawn claude ENOENT")], ["close", -2]], logDir);
+
+    const result = await runTask({ id: "TASK-006" }, { root: "/repo", logDir, deps: { git, spawn } });
+
+    assert.match(result.detail, /^claudeを起動できません: spawn claude ENOENT/);
+    assert.equal(result.branch, "");
+    assert.ok(removed(calls));
+  }));
+
+test("a session that ended without any work gives the task back", () =>
+  withLogDir(async (logDir) => {
+    const { git, calls } = fakeGit();
+    const spawn = fakeSpawn([["output", JSON.stringify({ result: "認証が必要です" })], ["close", 1]], logDir);
+
+    const result = await runTask({ id: "TASK-006" }, { root: "/repo", logDir, deps: { git, spawn } });
+
+    assert.equal(result.detail, "認証が必要です（作業がなかったためworktreeを削除）");
+    assert.ok(removed(calls));
+  }));
+
+test("a session that left a branch keeps its worktree and reports the branch", () =>
+  withLogDir(async (logDir) => {
+    const { git, calls } = fakeGit({ branch: "feat/task-006-backend-identity", head: "other" });
+    const spawn = fakeSpawn([["output", JSON.stringify({ result: "PRを作成しました" })], ["close", 0]], logDir);
+
+    const result = await runTask({ id: "TASK-006" }, { root: "/repo", logDir, deps: { git, spawn } });
+
+    assert.deepEqual(result, { id: "TASK-006", branch: "feat/task-006-backend-identity", detail: "PRを作成しました" });
+    assert.ok(!removed(calls));
+  }));
+
+test("a worktree that already exists means another session holds the task", () =>
+  withLogDir(async (logDir) => {
+    const { git } = fakeGit({ addOk: false });
+    const spawn = () => assert.fail("must not start a session");
+
+    const result = await runTask({ id: "TASK-006" }, { root: "/repo", logDir, deps: { git, spawn } });
+
+    assert.equal(result.detail, "worktreeを作れません: already exists");
+  }));
