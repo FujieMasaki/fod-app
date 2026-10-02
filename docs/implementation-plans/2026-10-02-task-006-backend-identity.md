@@ -329,7 +329,7 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
 
 `apps/api`で実行した。
 
-- `bundle exec rspec`: 317 examples, 0 failures（既存の契約spec含む）
+- `bundle exec rspec`: 319 examples, 0 failures（既存の契約spec含む）
 - `bundle exec rubocop`: 74 files, no offenses
 - `bundle exec brakeman --no-pager -q`: Security Warnings 0
 - `bundle exec bundler-audit check --update`: No vulnerabilities found
@@ -391,6 +391,10 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
 - **`config.hosts`は未設定**: redirect先・OAuthの`redirect_uri`はrequestのhostから作る。実domainを決めるとき
   （公開基盤の構築時）に設定する。
 - **契約の`PATCH /api/v1/unlock`の`429`は予約**: 今は制限していない（解除tokenは推測できない長さ）。
+- **jobの引数に生のtokenが入る（TASK-009への申し送り）**: Deviseのメール（確認・再設定・解除）は生のtokenを
+  引数にしてjobへ積む。今は`:async`（メモリ上）だが、TASK-009でSolid Queueへ移すと、jobの表に再設定・解除の
+  tokenが平文で残る（完了したjobも一定時間残る）。移すときは、完了したjobをすぐ消すか、jobにはUserのIDだけを
+  渡してjobの中でtokenを作る。
 - **CloudFrontを前段に置くとき**は、`request.remote_ip`がedgeのIPになり、IPごとの制限を多くの利用者で
   共有してしまう。CloudFrontのIPを信頼するproxyとして登録する（今のALBだけの構成では問題ない）。
 - **CookieStoreのため、コピーされたCookieはlogoutしても7日まで使える**（TASK-001で受け入れ済み）。
