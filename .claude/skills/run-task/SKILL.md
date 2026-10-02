@@ -64,12 +64,16 @@ git worktree list
   `EnterWorktree` に `path` を渡して入る。
 - 既にこのセッションが別のworktreeにいて作業ツリーがcleanなら、そこで
   `git switch -c <type>/task-008-<slug> origin/main` としてよい。
+- 定期実行（`scripts/task-scheduler.mjs`）から起動された場合は、`.claude/worktrees/task-008` が
+  origin/mainにdetachされた状態で、セッションは既にその中にいる。そのまま
+  `git switch -c <type>/task-008-<slug>` でブランチを作る。
 
 worktreeの中で依存を入れ、前回の状態を消す。
 
 ```bash
 pnpm install --frozen-lockfile
 (cd apps/api && bundle install)   # apps/api を変更する見込みがあるときだけ
+(cd apps/api && RAILS_ENV=test bin/rails db:prepare)   # 同上。TEST_ENV_NUMBER があればこのタスク専用のtest DBになる
 scripts/claude-hook.sh claude-quality-gate.mjs --reset
 ```
 

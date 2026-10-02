@@ -56,7 +56,8 @@ development:
 # Do not set this db to the same as development or production.
 test:
   <<: *default
-  database: focus_on_dot_api_test
+  # Parallel sessions (scripts/task-scheduler.mjs) each set TEST_ENV_NUMBER to get their own database.
+  database: focus_on_dot_api_test<%= ENV["TEST_ENV_NUMBER"] %>
 
 # As with config/credentials.yml, you never want to store sensitive information,
 # like your database password, in your source code. If your source code is
