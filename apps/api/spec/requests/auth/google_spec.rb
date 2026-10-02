@@ -105,6 +105,34 @@ RSpec.describe "Google login" do
       expect(response.headers["Cache-Control"]).to eq("no-store")
     end
 
+    it "pathの表記（末尾の/・大文字）を変えても制限を迂回できない", :fixed_time do
+      token = csrf_token
+      50.times { post("/auth/google_oauth2", params: { authenticity_token: token }) }
+
+      ["/auth/google_oauth2/", "/AUTH/GOOGLE_OAUTH2"].each do |path|
+        post(path, params: { authenticity_token: token })
+
+        expect(response).to redirect_to("http://www.example.com/login?auth_error=rate_limited")
+      end
+    end
+
+    it "表記を変えたpathも同じ回数として数える", :fixed_time do
+      token = csrf_token
+      25.times { post("/auth/google_oauth2/", params: { authenticity_token: token }) }
+      25.times { post("/AUTH/GOOGLE_OAUTH2", params: { authenticity_token: token }) }
+
+      post("/auth/google_oauth2", params: { authenticity_token: token })
+
+      expect(response).to redirect_to("http://www.example.com/login?auth_error=rate_limited")
+    end
+
+    it "通常の開始の応答（Googleへのredirect）もcacheさせない" do
+      post("/auth/google_oauth2", params: { authenticity_token: csrf_token })
+
+      expect(response).to have_http_status(:found)
+      expect(response.headers["Cache-Control"]).to eq("no-store")
+    end
+
     it "再認証の開始が制限に掛かったら、return_toへauth_error=rate_limitedを付けて戻す", :fixed_time do
       token = csrf_token
       50.times { post("/auth/google_oauth2", params: { authenticity_token: token }) }
