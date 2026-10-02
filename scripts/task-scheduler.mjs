@@ -217,7 +217,8 @@ export function formatReport(plan, results = [], { date } = {}) {
 
 function command(cmd, args, options = {}) {
   const result = spawnSync(cmd, args, { encoding: "utf8", timeout: COMMAND_TIMEOUT_MS, ...options });
-  return { ok: result.status === 0, stdout: result.stdout ?? "", stderr: result.stderr ?? result.error?.message ?? "" };
+  // A timed-out command has empty stderr; the reason is then only in error.
+  return { ok: result.status === 0, stdout: result.stdout ?? "", stderr: result.stderr || result.error?.message || "" };
 }
 
 function openPullRequests(root) {
@@ -288,10 +289,17 @@ export function startSession(task, worktree, { logDir, lockDir }, deps = { spawn
   );
 
   // A manual /run-task of the same task checks this record and stops (task-status.mjs).
-  const lockPath = lockDir && child.pid ? scheduledSessionPath(task.id, lockDir) : undefined;
-  if (lockPath) {
-    mkdirSync(lockDir, { recursive: true });
-    writeFileSync(lockPath, `${JSON.stringify({ pid: child.pid, worktree })}\n`);
+  let lockPath;
+  if (lockDir && child.pid) {
+    // The session is already running: failing to record it only loses that check,
+    // so it must not be treated as a session that never started.
+    try {
+      mkdirSync(lockDir, { recursive: true });
+      writeFileSync(scheduledSessionPath(task.id, lockDir), `${JSON.stringify({ pid: child.pid, worktree })}\n`);
+      lockPath = scheduledSessionPath(task.id, lockDir);
+    } catch (error) {
+      console.error(`could not record the session for ${task.id}: ${error.message}`);
+    }
   }
 
   const stop = (signal) => {
@@ -374,7 +382,8 @@ export async function runTask(task, { root, logDir, lockDir, deps = { git: (args
 }
 
 export async function run({ root, dryRun = false, maxParallel = DEFAULT_MAX_PARALLEL, now = new Date() }) {
-  const tasks = listTaskIds().map((id) => evaluateTask(id));
+  const lockDir = scheduledSessionsDir(root);
+  const tasks = listTaskIds().map((id) => evaluateTask(id, { lockDir }));
   const claims = findClaims({ worktrees: listWorktrees(root), pullRequests: openPullRequests(root) });
   const plan = planRun(tasks, claims, maxParallel);
 
@@ -385,7 +394,6 @@ export async function run({ root, dryRun = false, maxParallel = DEFAULT_MAX_PARA
   }
 
   const logDir = path.join(homedir(), "Library", "Logs", "focus-on-dot", timestamp(now));
-  const lockDir = scheduledSessionsDir(root);
   mkdirSync(logDir, { recursive: true });
 
   const sessions = [];

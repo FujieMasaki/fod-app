@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -35,7 +35,10 @@ function isAlive(pid) {
 export function scheduledSessionPid(taskId, lockDir) {
   if (!lockDir) return undefined;
   try {
-    const { pid } = JSON.parse(readFileSync(scheduledSessionPath(taskId, lockDir), "utf8"));
+    const { pid, worktree } = JSON.parse(readFileSync(scheduledSessionPath(taskId, lockDir), "utf8"));
+    // A record left by a scheduler that died is stale once its worktree is gone,
+    // even if the pid has since been reused by another process.
+    if (worktree && !existsSync(worktree)) return undefined;
     return Number.isInteger(pid) && isAlive(pid) ? pid : undefined;
   } catch {
     return undefined;
@@ -81,8 +84,9 @@ export function findTaskFile(taskId, tasksDir = defaultTasksDir) {
   return fileName ? path.join(tasksDir, fileName) : undefined;
 }
 
-// env.FOD_SCHEDULED_TASK names the task a scheduled session was started for,
-// so that session does not see its own record as another session's.
+// lockDir is where scheduled sessions are recorded (scheduledSessionsDir());
+// without it the check is skipped. env.FOD_SCHEDULED_TASK names the task a
+// scheduled session was started for, so it does not see its own record.
 export function evaluateTask(taskId, { tasksDir = defaultTasksDir, lockDir, env = process.env } = {}) {
   if (!taskIdPattern.test(taskId ?? "")) {
     return { id: taskId, runnable: false, reasons: [`Invalid task ID: ${taskId} (expected TASK-000)`] };
@@ -109,7 +113,7 @@ export function evaluateTask(taskId, { tasksDir = defaultTasksDir, lockDir, env 
   }
 
   if (env.FOD_SCHEDULED_TASK !== taskId) {
-    const pid = scheduledSessionPid(taskId, lockDir === undefined ? scheduledSessionsDir() : lockDir);
+    const pid = scheduledSessionPid(taskId, lockDir);
     if (pid) reasons.push(`${taskId} is being worked on by a scheduled session (pid ${pid})`);
   }
 
@@ -125,7 +129,7 @@ export function evaluateTask(taskId, { tasksDir = defaultTasksDir, lockDir, env 
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  const result = evaluateTask(process.argv[2]);
+  const result = evaluateTask(process.argv[2], { lockDir: scheduledSessionsDir() });
   console.log(JSON.stringify(result, null, 2));
   process.exitCode = result.runnable ? 0 : 1;
 }

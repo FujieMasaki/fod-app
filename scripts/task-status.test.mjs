@@ -164,8 +164,13 @@ test("a record left by a session that is no longer running does not block the ta
   withTasks([{ id: "TASK-006" }], (tasksDir) => {
     const lockDir = path.join(tasksDir, "scheduled-sessions");
     mkdirSync(lockDir);
-    writeFileSync(scheduledSessionPath("TASK-006", lockDir), JSON.stringify({ pid: 2 ** 22 + 1 }));
+    const record = scheduledSessionPath("TASK-006", lockDir);
 
+    writeFileSync(record, JSON.stringify({ pid: 2 ** 22 + 1 }));
+    assert.equal(evaluateTask("TASK-006", { tasksDir, lockDir, env: {} }).runnable, true);
+
+    // A live but reused pid does not count once the recorded worktree is gone.
+    writeFileSync(record, JSON.stringify({ pid: process.pid, worktree: path.join(tasksDir, "removed") }));
     assert.equal(evaluateTask("TASK-006", { tasksDir, lockDir, env: {} }).runnable, true);
   });
 });

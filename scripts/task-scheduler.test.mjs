@@ -289,3 +289,17 @@ test("plan mode lists what would start instead of saying nothing can", () => {
 
   assert.equal(notificationText(plan), "1件を起動予定\nTASK-006: 認証基盤");
 });
+
+test("a session keeps running and keeps its worktree when it cannot be recorded", () =>
+  withLogDir(async (logDir) => {
+    // A file where the record directory should be makes recording fail.
+    const lockDir = path.join(logDir, "not-a-directory");
+    writeFileSync(lockDir, "");
+    const { git, calls } = fakeGit({ branch: "feat/task-006-x" });
+    const spawn = fakeSpawn([["close", 0]], logDir);
+
+    const result = await runTask({ id: "TASK-006" }, { root: "/repo", logDir, lockDir, deps: { git, spawn } });
+
+    assert.equal(result.branch, "feat/task-006-x");
+    assert.ok(!removed(calls));
+  }));
