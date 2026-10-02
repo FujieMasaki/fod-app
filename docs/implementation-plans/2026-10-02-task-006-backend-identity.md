@@ -288,4 +288,62 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
 
 ## 16. Completion Record
 
-未記入。
+- 状態: 2026-10-02、実装・自動検証済み。In progressのまま（§12-5の既定値3点と、下記の実装差異の
+  人間による確認待ち）。
+
+### 実装差異（Planから変えた点と理由）
+
+| 変更 | 理由 |
+| --- | --- |
+| **json gemを`~> 2.21`に固定した** | mainのjson 3.0.2はActiveSupport 8.1.3.1の`JSON.decode`（`JSON.parse(json, options)`）と合わず、JSONのrequest bodyを一切解釈できなかった（mainから続く不具合。これまでJSON bodyを送るspecが無く表に出なかった）。Rails 8.1.4へ上げる案より変更が小さい。Railsが対応したら外す |
+| Deviseの`omniauthable`ではなく、OmniAuthのmiddlewareを直接使う | Deviseのomniauth routeは`/users/auth/...`が前提で、契約のpath（`/auth/google_oauth2`）と合わない。Deviseのmappingは`devise_for :users, skip: :all`でsign_inにだけ使う |
+| Deviseの`validatable`を使わず、Userでvalidationを書く | Google専用Userをpasswordなしで作るため |
+| CSRF不一致の例外を包み直す | omniauth-rails_csrf_protectionはRailsの例外を投げるが、OmniAuthが失敗として扱うのは`OmniAuth::AuthenticityError`だけで、そのままでは契約の`403 csrf_invalid`にならない |
+| test環境の`allow_forgery_protection`をtrueにした | 無効のままだと、Googleログイン開始POSTのCSRF検証がtestで素通りになり、検証の抜けを検出できなかった（実際に一度素通りした） |
+| CSRF検証の前にrequest bodyを解釈しておく | verifierがenvを複製してbodyを読むため、後のbefore_request_phaseでintent・return_toが空になった |
+| Cookieの有効期限を認証から8日にした（判定は7日） | Railsの暗号化Cookieは有効期限を中に持ち、過ぎると読めない。7日ちょうどにすると`session_expired`と`unauthenticated`を区別できない |
+| Googleへ`access_type=online`・scope `openid email`を指定した | gemの既定は`offline`（refresh tokenを求める）と`email profile`。本人の識別と確認済みメール以外は不要 |
+| requestのparameterでGoogleへのauthorize optionsを上書きさせない | gemの既定では`prompt`・`redirect_uri`・`hd`などをrequestから上書きできる |
+| 入力の長さ不足は`validation_failed`の`out_of_range` | 契約のFieldErrorに`too_short`が無い。enumを足すとWebの互換性の段階が要るため、既存の値を使い契約の説明に書いた |
+| JSONとして読めないbodyは`422 validation_failed`（field `body`） | 既定では`500`になっていた |
+| メール配送の失敗は`202`のまま、error reportへ送る | 登録の有無によって応答が変わらないようにするため（配送されたとは約束しない） |
+| rubocopで、migrationのDocumentation・MethodLengthを除外し、specのexpectation数（5）と長さ（15行）を緩めた | migrationは列の定義が説明になる。request specは1操作の結果（status・code・header・契約）をまとめて確かめるため |
+
+### 検証結果
+
+`apps/api`で実行した。
+
+- `bundle exec rspec`: 291 examples, 0 failures（既存の契約spec含む）
+- `bundle exec rubocop`: 74 files, no offenses
+- `bundle exec brakeman --no-pager -q`: Security Warnings 0
+- `bundle exec bundler-audit check --update`: No vulnerabilities found
+- `pnpm lint:contract`（Redocly）・生成した型の最新確認: 通過
+
+完了条件ごとの証跡:
+
+| 完了条件 | 結果 | 証跡（spec） |
+| --- | --- | --- |
+| 識別・開始・終了・失効、未認証の拒否 | 確認 | `requests/api/v1/sessions_spec.rb`、`requests/authentication_spec.rb`（7日ちょうどで`session_expired`、利用で延長しない、改ざん・削除済み・ロック中・再設定後のCookieを拒否） |
+| clientのuser IDを根拠にしない | 確認 | `authentication_spec.rb`（`user_id`を送っても無視、2人を混同しない）。Google（`requests/auth/google_spec.rb`）はprovider/uidで対応付け、emailで接続しない |
+| 資格情報の保護、CSRF/CORS | 確認 | Cookie属性（HttpOnly・SameSite=Lax・Domainなし。Secureはproductionの設定）、tokenの欠落・他sessionのtoken・許可外Originで`403`、CORS headerを返さない、Google開始POSTのCSRF |
+| response/ログに秘密を出さない、契約との一致 | 確認 | `requests/sensitive_logging_spec.rb`、全responseを`assert_response_schema_confirm`で照合 |
+| 実装範囲を文書で区別 | 確認 | architecture「認証詳細」、backend.md、product、journaling、privacy |
+
+### 未実施の確認と理由
+
+- 実Google・実メール配送・HTTPS配信でのCookie（Secure）とCSRF。OAuth clientと配送基盤の設定が
+  必要で、外部サービスの設定は人間が行う。TASK-015で横断検証する。
+- `rate_limit_counters`の定期削除の実行（rake taskだけ用意した）。job基盤・公開基盤が未構築のため。
+
+### 残るリスク（PRで確認してもらう）
+
+- **ロック中のsessionは切れる**: 第三者が10回失敗させると、ロックの間、本人のlogin中のsessionも
+  `401`になる（DeviseのActivatable）。1時間で解け、解除メールでも解ける。
+- **未確認の登録が、同じメールのGoogle新規作成を妨げる**: 他人が本人のメールで登録だけして確認しないと、
+  本人のGoogleログインは`google_email_conflict`になる。本人はpassword再設定と確認メールで取り戻せる。
+- **確認tokenはDBに平文で残る**（Deviseの仕様）。確認だけではloginしないため影響は小さい。
+- **固定の時間枠**のため、枠の境目をまたぐと短時間に上限の2倍まで通り得る。
+- **CookieStoreのため、コピーされたCookieはlogoutしても7日まで使える**（TASK-001で受け入れ済み）。
+
+- 関連: 契約の変更は`contracts/openapi.yaml`（`PATCH /api/v1/unlock`、`NewCredentials`）。
+  退会はTASK-013、Webの接続はTASK-007。

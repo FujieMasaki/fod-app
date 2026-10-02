@@ -70,7 +70,7 @@ Browser
 
 - Rails + Deviseがメールアドレス＋パスワード、Confirmableの確認メール、Recoverableの
   パスワード再設定を担当する。GoogleはOmniAuthで連携する。確認前のメールUserにDot操作を
-  許可しない。確認/再設定の期限は下記「認証詳細」、Googleの確認情報の扱いはTASK-006で決める。
+  許可しない。確認/再設定の期限とGoogleの確認情報の扱いは下記「認証詳細」。
 - 内部User UUIDを所有権の正本とし、Googleは検証済みprovider/uidから一意に対応付ける。
   email一致だけでアカウントを統合しない。衝突時は重複登録せず下記「認証詳細」のとおり案内し、明示的連携は将来対応。
   Google専用Userにpassword resetを通じて無条件に別のログイン手段を追加しない。
@@ -79,7 +79,8 @@ Browser
   通常認証用DB sessionテーブルは作らない。CookieにDot本文・password・Google tokenを保存しない。
 - Cookieは`HttpOnly; Secure; SameSite=Lax; Path=/`、`Domain`なしを基本とする。認証成功時に
   sessionを更新し、変更操作はRailsのCSRF tokenとOriginを検証する。同一originのWeb/API間に
-  CORS許可は不要。API-onlyへのCookie/session/CSRF・Deviseの組込みは未実装。
+  CORS許可は不要。API-onlyへのCookie/session/CSRF・Deviseの組込みはTASK-006で実装した（Rails側のみ。
+  Webの接続はTASK-007、AWSでの配信は未構築）。
 - Google認証開始はCSRF保護したPOSTを基本とし、OmniAuth/strategyでstateと認証応答を検証する。
   Google callbackは必要だが、旧CognitoのOIDC callback/token検証を組み込む設計ではない。
   API/認証responseはno-store、SPA fallbackは画面GET/HEADのみ。Google秘密情報をWebへ渡さない。
@@ -337,17 +338,31 @@ ALB/Fargate/RDS/公開IPv4の小規模例でも、1ドル150円・消費税10%�
 [TASK-001 Plan §45–57](implementation-plans/2026-09-21-task-001-identity-design.md)を参照。
 認証・配信の実装、AWS作成、実機検証は今回行っていない。
 
-### 認証詳細（2026-09-25採用、未実装）
+### 認証詳細（2026-09-25採用、Rails側は2026-10-02にTASK-006で実装）
 
-[TASK-001 Plan §50–54・§56](implementation-plans/2026-09-21-task-001-identity-design.md)で採用した。
-実装済みの設定ではない。
+[TASK-001 Plan §50–54・§56](implementation-plans/2026-09-21-task-001-identity-design.md)で採用し、
+残りの具体値を[TASK-006 Plan §12](implementation-plans/2026-10-02-task-006-backend-identity.md)で決めた。
+Webの接続（TASK-007）、退会（TASK-013）、本番のメール配送とGoogle OAuth clientの設定は未実装。
 
 - 自分専用端末では認証成功から7日の絶対期限。通常操作で延長せず、server側で検証する。
   Rememberableの自動再ログインと別のidle期限は使わない。共有端末向け短期モードはMVP外。
 - 録音前と音声送信時に認証を確認する。別Userへの入り直し後に元の録音を送信しない。
 - メール確認24時間、password再設定6時間、使用後の再利用拒否。確認後・再設定後はログイン画面へ戻す。
   再送は確認/reset合算で宛先60秒に1回・1時間5回、IPごと1時間20回、RDSの共有counterで制限し共通応答。
-  Devise 5.0.4の確認期限は標準では無期限なので変更が必要。導入版は未確定。
+  Devise 5.0.4を導入し、確認期限（標準は無期限）を24時間に設定した。
+  メールのリンクはSPAの画面を指し、tokenはURLのfragment（`#token=`）に載せてserverへ送らせない。
+- passwordは8〜128文字で文字種は問わない。不一致が10回続いたらアカウントをロックし（Lockable）、
+  1時間で自動解除、解除メールのリンク（`PATCH /api/v1/unlock`）でも解ける。ロック中もloginの応答は
+  `invalid_credentials`で、ロックの有無を明かさない。多数のアカウントへ順に試す攻撃に備え、
+  loginの失敗がIPごとに1時間50回を超えたら`429`。
+- 試行回数はRDSの`rate_limit_counters`に固定の時間枠で数える（keyはHMACのdigest。1つのUPSERTで
+  原子的に加算）。期限切れの行は`rails rate_limits:purge`で消す。定期実行は公開基盤の構築時に設定する。
+- Googleは、Googleが確認済み（`email_verified`）としたメールだけで新規作成し、確認済みとして扱う。
+  Google専用Userはpasswordを持たない。求めるscopeは`openid email`だけで、Googleのtokenは保存しない。
+- Google専用Userの再認証は`max_age=0`でGoogleに入力し直しを求め、ID tokenの`auth_time`が5分以内で、
+  かつloginしている利用者のGoogle利用者と一致したときだけ記録する。記録は5分有効。
+- Cookieの有効期限は認証から8日にする。期限の判定は7日でserverが行い、残る1日は`session_expired`を
+  返すためだけに使う（暗号化Cookieは有効期限を中に持ち、過ぎると読めず「未login」と区別できないため）。
 - Google同一メール衝突時は自動統合も重複User作成もしない。Googleが確認済みとしたメールに限り
   登録方法を案内する。将来の連携は既存Userへのログイン/再認証と追加手段の確認後に限定。
 - メール/password変更・退会はcurrent password、Google専用UserはGoogle再認証を要求する。
@@ -357,8 +372,8 @@ ALB/Fargate/RDS/公開IPv4の小規模例でも、1ドル150円・消費税10%�
 ## 未決定
 
 - プロダクト機能を追加する際のRails内部architectureとdirectory構成
-- password方針・ログイン試行制限の具体値、Googleの確認情報とConfirmableの関係、Google再認証の有効時間（TASK-006で決定）
-- password再設定後の既存Cookieの実動作（実機検証）
+- password再設定後の既存Cookieの実機での動作（request specでは、再設定前のCookieが`401`になることを確認済み）
+- `rate_limit_counters`の定期削除の実行基盤、本番のメール配送（SES）とGoogle OAuth clientの設定
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
   （ログ14日・backup 7日は既定案であり、実値は未確定）
 - promptの最終文面、Bedrockのmodel idとdata retention mode（TASK-009で確定）
