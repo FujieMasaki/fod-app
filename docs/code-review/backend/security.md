@@ -45,6 +45,16 @@
 - [ ] CookieStoreのlogoutとコピー済みCookieの失効を区別し、未採用のDB session相当の保証をしていないか。
   有効期限、User削除/停止、password再設定後のCookie、Google専用Userの扱いを採用versionで確認したか。
 - [ ] password、確認/再設定token、Google code/token、Cookieがproxy・メール導線・監視を含むログへ漏れないか。
+- [ ] 登録の有無を明かさない応答で、**応答時間**にも差が出ないか。利用者がいるときだけtoken生成・メール送信・
+  DB更新をrequestの中で行っていないか（jobへ移す。TASK-006で指摘）。
+- [ ] passwordのhashに長さの制限がないか。bcryptは先頭72 byteだけで照合する（TASK-006では前処理で対応）。
+- [ ] middlewareでpathを比べる処理が、frameworkと同じ正規化（大文字小文字・末尾の`/`）をしているか。
+  表記を変えて制限・検証を迂回できないか。
+- [ ] 「検索してから保存」の間に同じ値が保存される競合で、一意制約（`RecordNotUnique`）だけでなく
+  uniqueness validation（`RecordInvalid`）の失敗も扱っているか。
+- [ ] test環境の設定が、検証したいsecurityの仕組みを無効にしていないか（例: `allow_forgery_protection`を
+  falseにすると、Google開始POSTのCSRF検証がtestで素通りになる）。固定の時間枠で数える制限のspecは、
+  時刻を枠の頭に固定しているか（`spec/support`の`:fixed_time`）。
 
 ## 6. 現在の構成での補足
 

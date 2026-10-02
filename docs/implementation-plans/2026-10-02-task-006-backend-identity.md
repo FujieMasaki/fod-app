@@ -329,7 +329,7 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
 
 `apps/api`で実行した。
 
-- `bundle exec rspec`: 312 examples, 0 failures（既存の契約spec含む）
+- `bundle exec rspec`: 317 examples, 0 failures（既存の契約spec含む）
 - `bundle exec rubocop`: 74 files, no offenses
 - `bundle exec brakeman --no-pager -q`: Security Warnings 0
 - `bundle exec bundler-audit check --update`: No vulnerabilities found
@@ -381,6 +381,16 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
   infoでは出ないことをspecで確かめた。productionで`RAILS_LOG_LEVEL=debug`にしない。
 - **jobの失敗のログ**: 配送に失敗したときの例外messageをActive Jobが記録する。SMTPの応答に宛先が
   入ることがある。
+- **Google開始の制限はCSRFの検証より前に数える**: 他サイトからのform POSTでも数が増え、同じIP（NAT・
+  社内網）の利用者のGoogleログインが最大1時間`rate_limited`になり得る（可用性だけの問題）。
+- **再認証はGoogleがID tokenに`auth_time`を入れることを前提にする**: 入らなければ安全側（`google_auth_failed`）に
+  倒れ、Google専用の利用者が退会へ進めない。実Googleでの確認はTASK-015で行い、TASK-013はこれを前提にする。
+- **passwordの前処理は塩なしのSHA-256**: DBが漏れたとき、他所で漏れた塩なしSHA-256の値をbcryptと照合
+  できる（password shucking）。bcryptの強度は保たれる。HMACの鍵を使うと、鍵の交換で全員の再設定が
+  必要になるため採らなかった。
+- **`config.hosts`は未設定**: redirect先・OAuthの`redirect_uri`はrequestのhostから作る。実domainを決めるとき
+  （公開基盤の構築時）に設定する。
+- **契約の`PATCH /api/v1/unlock`の`429`は予約**: 今は制限していない（解除tokenは推測できない長さ）。
 - **CloudFrontを前段に置くとき**は、`request.remote_ip`がedgeのIPになり、IPごとの制限を多くの利用者で
   共有してしまう。CloudFrontのIPを信頼するproxyとして登録する（今のALBだけの構成では問題ない）。
 - **CookieStoreのため、コピーされたCookieはlogoutしても7日まで使える**（TASK-001で受け入れ済み）。

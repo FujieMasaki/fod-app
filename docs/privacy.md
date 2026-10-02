@@ -125,7 +125,8 @@ MVP全体の範囲は[product](./product.md)を正本とする。
 - TASK-006（2026-10-02に実装）: 認証情報はRDSの`users`（正規化したメール、password hash、
   確認・再設定・解除のtokenと送信時刻、失敗回数・ロック時刻）と`user_identities`（Googleのsub）に置く。
   Deviseの仕様で、確認tokenは平文、再設定・解除tokenはdigestで保存される。試行回数の
-  `rate_limit_counters`はメールアドレス・IPをHMACのdigestで持ち、1時間以内に期限切れになる。
+  `rate_limit_counters`はメールアドレス・IPをHMACのdigestで持ち、1時間以内に失効する。行を消すのは
+  定期削除（`rails rate_limits:purge`。実行の設定は公開基盤の構築時）で、それまでは失効した行も残る。
   Cookieは暗号化sessionで、User IDとsalt・認証時刻・CSRF tokenだけを持つ。password・token・
   メールアドレス・Google callbackの`code`/`state`はログから除く（request specで確認）。
   これらの保持期間と退会時の削除はTASK-013で§5-1に揃える。
