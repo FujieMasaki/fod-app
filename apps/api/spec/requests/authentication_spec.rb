@@ -54,7 +54,7 @@ RSpec.describe "Authentication concern" do
       expect(response.headers["Set-Cookie"]).to include("expires=#{expires}")
       travel 1.day
       get path
-      expect(response.headers["Set-Cookie"].to_s).to include("expires=#{expires}").or(be_empty)
+      expect(response.headers["Set-Cookie"]).to include("expires=#{expires}")
     end
   end
 

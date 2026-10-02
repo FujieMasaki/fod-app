@@ -18,6 +18,9 @@ module Authentication
   GOOGLE_REAUTHENTICATION_WINDOW = 5.minutes
 
   included do
+    # loginで期限が決まるのでactionの後に設定する。途中で止まったrequest（CSRFの拒否など）でも
+    # sessionのCookieは書き直されるため、actionの前にも設定する。
+    prepend_before_action :keep_cookie_expiry
     after_action :keep_cookie_expiry
   end
 

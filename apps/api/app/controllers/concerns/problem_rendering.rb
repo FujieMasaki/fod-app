@@ -5,6 +5,8 @@ module ProblemRendering
   included do
     rescue_from StandardError, with: :render_internal_error
     rescue_from ActionController::InvalidAuthenticityToken, with: -> { render_problem(:csrf_invalid) }
+    # current_userのscopeで見つからないresourceは、他人のものか存在しないかを区別せず404にする（契約）。
+    rescue_from ActiveRecord::RecordNotFound, with: -> { render_problem(:not_found) }
     rescue_from ActionDispatch::Http::Parameters::ParseError,
                 with: -> { render_validation_failed([{ field: "body", code: "invalid_format" }]) }
   end

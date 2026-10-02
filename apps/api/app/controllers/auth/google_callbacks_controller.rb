@@ -9,6 +9,12 @@ module Auth
     # failureは開始POSTのCSRF不一致からも呼ばれ、その場合は下で`403 csrf_invalid`を返す。
     skip_forgery_protection
 
+    # browserが遷移してくる画面なので、想定外の失敗もJSONではなくログイン画面へ戻す。
+    rescue_from StandardError do |error|
+      Rails.error.report(error, handled: true)
+      redirect_to "/login?auth_error=google_auth_failed"
+    end
+
     def create
       intent = take_intent
       auth = request.env["omniauth.auth"]

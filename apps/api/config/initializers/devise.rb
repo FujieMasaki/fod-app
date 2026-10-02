@@ -5,7 +5,8 @@ Devise.setup do |config|
   require "devise/orm/active_record"
 
   config.mailer = "UserMailer"
-  config.mailer_sender = ENV.fetch("MAILER_FROM", "no-reply@localhost")
+  # productionでは既定値を使わない（未設定ならメールを作れず、jobが失敗して気づける）。
+  config.mailer_sender = ENV.fetch("MAILER_FROM") { "no-reply@localhost" unless Rails.env.production? }
   config.case_insensitive_keys = [:email]
   config.strip_whitespace_keys = [:email]
   # 応答で登録の有無を区別しない（API側でも同じstatus/bodyに揃える）。
