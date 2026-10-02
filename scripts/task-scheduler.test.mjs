@@ -1,14 +1,33 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findClaims, formatReport, notificationText, planRun, waitingCounts } from "./task-scheduler.mjs";
+import {
+  findClaims,
+  formatReport,
+  notificationText,
+  parseMaxParallel,
+  parseWorktrees,
+  planRun,
+  sessionSummary,
+  waitingCounts,
+} from "./task-scheduler.mjs";
 
 function task(id, { status = "Blocked", category = "実装", dependencies = [], runnable = false, title = "サンプル" } = {}) {
   return { id, title, category, status, dependencies, runnable, reasons: [] };
 }
 
-test("claims come from /run-task worktrees and open PR branches only", () => {
+test("claims come from worktrees named after or on a task branch, and open PR branches", () => {
+  const worktrees = parseWorktrees(
+    [
+      "worktree /repo\nHEAD aaa\nbranch refs/heads/main",
+      "worktree /repo/.claude/worktrees/task-006\nHEAD bbb\ndetached",
+      "worktree /repo/.claude/worktrees/review-flow\nHEAD ccc\nbranch refs/heads/feat/task-007-identity",
+      "worktree /repo/.claude/worktrees/scheduler\nHEAD ddd\ndetached",
+      "worktree /repo/.claude/worktrees/task-scheduler\nHEAD eee\nbranch refs/heads/feat/scheduled-task-runner",
+      "",
+    ].join("\n\n"),
+  );
   const claims = findClaims({
-    worktreeNames: ["task-006", "scheduler", "task-scheduler", "review-flow"],
+    worktrees,
     pullRequests: [
       { number: 50, headRefName: "feat/task-008-dot-history" },
       { number: 51, headRefName: "docs/review-flow" },
@@ -18,7 +37,8 @@ test("claims come from /run-task worktrees and open PR branches only", () => {
   assert.deepEqual(
     [...claims],
     [
-      ["TASK-006", "worktree .claude/worktrees/task-006"],
+      ["TASK-006", "worktree task-006"],
+      ["TASK-007", "worktree review-flow"],
       ["TASK-008", "PR #50"],
     ],
   );
@@ -47,7 +67,7 @@ test("starts unclaimed runnable tasks, the most waited-on first, up to the limit
     task("TASK-006", { runnable: true, status: "Todo" }),
   ];
 
-  const plan = planRun(tasks, findClaims({ worktreeNames: ["task-006"] }), 2);
+  const plan = planRun(tasks, findClaims({ worktrees: [{ path: "/repo/.claude/worktrees/task-006", branch: null }] }), 2);
 
   assert.deepEqual(
     plan.start.map((started) => started.id),
@@ -56,7 +76,7 @@ test("starts unclaimed runnable tasks, the most waited-on first, up to the limit
   const reasons = Object.fromEntries(plan.remaining.map((remaining) => [remaining.id, remaining.reason]));
   assert.equal(reasons["TASK-004"], "並列数の上限のため次回");
   assert.equal(reasons["TASK-005"], "依存待ち: TASK-003");
-  assert.equal(reasons["TASK-006"], "着手済み（worktree .claude/worktrees/task-006）");
+  assert.equal(reasons["TASK-006"], "着手済み（worktree task-006）");
 });
 
 test("does not start In progress tasks, which are being worked or wait for a human", () => {
@@ -115,4 +135,17 @@ test("truncates long notifications and points to the report", () => {
 
   assert.equal(lines.length, 9);
   assert.equal(lines.at(-1), "ほか3行はレポートを参照");
+});
+
+test("summarizes a session by the last line of its final message", () => {
+  const output = JSON.stringify({ result: "作業しました\nPR: https://example.test/pull/50" });
+
+  assert.equal(sessionSummary(output), "PR: https://example.test/pull/50");
+  assert.equal(sessionSummary(""), undefined);
+  assert.equal(sessionSummary(JSON.stringify({ result: "" })), undefined);
+});
+
+test("parallelism accepts only positive integers", () => {
+  assert.equal(parseMaxParallel("5"), 5);
+  for (const value of ["0", "-2", "1.5", "abc", undefined]) assert.equal(parseMaxParallel(value), 3);
 });

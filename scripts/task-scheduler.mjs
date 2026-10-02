@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,12 +10,20 @@ import { defaultTasksDir, evaluateTask, interactiveCategories } from "./task-sta
 // are skipped; when nothing can start, it only notifies what is left and why.
 
 export const DEFAULT_MAX_PARALLEL = 3;
+// launchd will not start the next morning's run while this one is alive, so a
+// stuck session must not hold the whole run.
+const SESSION_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 // Staggered so concurrent sessions do not race on git's ref and index locks.
 const LAUNCH_INTERVAL_MS = 30 * 1000;
 const NOTIFICATION_LINES = 8;
 
 const worktreeNamePattern = /^task-(\d{3})(?:-|$)/;
 const branchTaskPattern = /(?:^|\/)task-(\d{3})(?:-|$)/;
+
+export function parseMaxParallel(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : DEFAULT_MAX_PARALLEL;
+}
 
 export function listTaskIds(tasksDir = defaultTasksDir) {
   return readdirSync(tasksDir)
@@ -24,13 +32,26 @@ export function listTaskIds(tasksDir = defaultTasksDir) {
     .sort();
 }
 
-// A task is held by another session while its /run-task worktree exists or an
-// open PR is on its branch. Remote branches are not used: they outlive merges.
-export function findClaims({ worktreeNames = [], pullRequests = [] }) {
+// Reads `git worktree list --porcelain` into { path, branch } entries.
+export function parseWorktrees(porcelain) {
+  return porcelain
+    .split("\n\n")
+    .map((block) => ({
+      path: block.match(/^worktree (.+)$/m)?.[1],
+      branch: block.match(/^branch refs\/heads\/(.+)$/m)?.[1] ?? null,
+    }))
+    .filter((worktree) => worktree.path);
+}
+
+// A task is held by another session while any worktree is named after it or
+// is on its branch (wherever /run-task created it), or an open PR is on its
+// branch. Remote branches are not used: they outlive merges.
+export function findClaims({ worktrees = [], pullRequests = [] }) {
   const claims = new Map();
-  for (const name of worktreeNames) {
-    const number = name.match(worktreeNamePattern)?.[1];
-    if (number) claims.set(`TASK-${number}`, `worktree .claude/worktrees/${name}`);
+  for (const worktree of worktrees) {
+    const number =
+      path.basename(worktree.path).match(worktreeNamePattern)?.[1] ?? worktree.branch?.match(branchTaskPattern)?.[1];
+    if (number) claims.set(`TASK-${number}`, `worktree ${path.basename(worktree.path)}`);
   }
   for (const pr of pullRequests) {
     const number = pr.headRefName.match(branchTaskPattern)?.[1];
@@ -182,9 +203,10 @@ function openPullRequests(root) {
   return JSON.parse(result.stdout);
 }
 
-function worktreeNames(root) {
-  const dir = path.join(root, ".claude", "worktrees");
-  return existsSync(dir) ? readdirSync(dir) : [];
+function listWorktrees(root) {
+  const result = command("git", ["-C", root, "worktree", "list", "--porcelain"]);
+  if (!result.ok) throw new Error(`git worktree list failed: ${result.stderr.trim()}`);
+  return parseWorktrees(result.stdout);
 }
 
 function notify(message, title = "Focus on Dot タスク") {
@@ -208,6 +230,16 @@ function timestamp(now) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// The last line of the session's final message, from `claude --output-format json`.
+export function sessionSummary(output) {
+  try {
+    const line = String(JSON.parse(output).result ?? "").trim().split("\n").at(-1);
+    return line ? line.slice(0, 200) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function runTask(task, { root, logDir }) {
   const worktree = path.join(root, ".claude", "worktrees", `task-${task.id.slice(5)}`);
   // Fails when the path exists, so a session that got here first keeps the task.
@@ -229,18 +261,20 @@ function runTask(task, { root, logDir }) {
     },
   );
 
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    child.kill("SIGTERM");
+  }, SESSION_TIMEOUT_MS);
+
   return new Promise((resolve) => {
     child.on("close", (code) => {
+      clearTimeout(timer);
       closeSync(out);
       closeSync(err);
-      let detail = `claudeが終了コード${code}で終了。${errPath}を参照`;
-      try {
-        const output = JSON.parse(readFileSync(outPath, "utf8"));
-        const summary = String(output.result ?? "").trim().split("\n").at(-1);
-        if (summary) detail = summary.slice(0, 200);
-      } catch {
-        // Keep the exit-code detail when the session printed no JSON.
-      }
+      const detail = timedOut
+        ? `${SESSION_TIMEOUT_MS / 3600000}時間で打ち切り。${errPath}を参照`
+        : (sessionSummary(readFileSync(outPath, "utf8")) ?? `claudeが終了コード${code}で終了。${errPath}を参照`);
       resolve({ id: task.id, detail });
     });
     child.on("error", (error) => resolve({ id: task.id, detail: `claudeを起動できません: ${error.message}` }));
@@ -249,7 +283,7 @@ function runTask(task, { root, logDir }) {
 
 export async function run({ root, dryRun = false, maxParallel = DEFAULT_MAX_PARALLEL, now = new Date() }) {
   const tasks = listTaskIds().map((id) => evaluateTask(id));
-  const claims = findClaims({ worktreeNames: worktreeNames(root), pullRequests: openPullRequests(root) });
+  const claims = findClaims({ worktrees: listWorktrees(root), pullRequests: openPullRequests(root) });
   const plan = planRun(tasks, claims, maxParallel);
 
   if (dryRun) {
@@ -268,7 +302,13 @@ export async function run({ root, dryRun = false, maxParallel = DEFAULT_MAX_PARA
   }
   const finished = await Promise.all(sessions);
 
-  const pullRequests = finished.length ? openPullRequests(root) : [];
+  // The report must still be written when GitHub is unreachable after the sessions.
+  let pullRequests = [];
+  try {
+    if (finished.length) pullRequests = openPullRequests(root);
+  } catch (error) {
+    console.error(error);
+  }
   const results = finished.map((result) => ({
     ...result,
     pr: pullRequests.find((pr) => pr.headRefName.match(branchTaskPattern)?.[1] === result.id.slice(5)),
@@ -292,7 +332,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     console.error("Usage: node scripts/task-scheduler.mjs <run|plan> --root <repository root>");
     process.exit(64);
   }
-  const maxParallel = Number(process.env.FOD_TASK_MAX_PARALLEL) || DEFAULT_MAX_PARALLEL;
+  const maxParallel = parseMaxParallel(process.env.FOD_TASK_MAX_PARALLEL ?? DEFAULT_MAX_PARALLEL);
   run({ root: path.resolve(root), dryRun: mode === "plan", maxParallel }).catch((error) => {
     console.error(error);
     notify(`定期実行に失敗しました: ${error.message}`);
