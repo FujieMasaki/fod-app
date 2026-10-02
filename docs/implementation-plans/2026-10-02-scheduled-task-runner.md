@@ -195,8 +195,14 @@ PR作成 / 停止理由
     `plan`モードで起動予定を表示する通知文、セッション終了時のプロセスグループへのSIGKILL、未コミットの
     worktreeを削除しないことのtestを追加した。手順1で止まったタスクが翌朝も起動される点は、通知に停止理由が
     出るため今回は扱わない（毎日同じ停止が続く場合は人間が判断する）。
+  - Codexの最終チェック1回目（Medium 1件）を反映: spawn後にpidの記録へ失敗しても、起動しなかったセッションとして
+    worktreeを削除しない（記録の失敗は警告だけにする）。あわせてサブエージェントのLowを反映し、worktreeが
+    なくなった記録はpidが再利用されていても無視する、`evaluateTask`は記録の場所を渡されたときだけ確認する
+    （既存のtestが実環境の記録を読まない）、timeoutした外部コマンドの理由を通知に残す、とした。
+  - 要確認として残す: 定期実行のセッションがDB準備の複合コマンドをauto modeで許可されるか。allowlistへの追加は
+    許可設定の変更になるため、実際の起動で確かめてから人間が判断する。
 - 検証結果:
-  - `pnpm test:scripts`: 成功（`task-scheduler.test.mjs`は17件、`task-status.test.mjs`に2件追加）。`pnpm lint`: 成功。
+  - `pnpm test:scripts`: 成功（`task-scheduler.test.mjs`は18件、`task-status.test.mjs`に2件追加）。`pnpm lint`: 成功。
   - `node scripts/task-scheduler.mjs plan --root <repo>`: 起動0件。origin/mainではTASK-005がDoneで
     TASK-006は実行可能だが、ローカルに`.claude/worktrees/task-006`（PR未作成）があるため着手済みとして
     除外された。ボトルネックとしてTASK-006（後続10件）、TASK-003（後続8件）が出た。

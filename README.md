@@ -173,7 +173,7 @@ Production BuildはローカルでのPushを遅くしないため、CI側で実�
 
 `scripts/install-task-scheduler.sh` を実行すると、launchdが毎朝4時に、着手できるタスクをすべて並列で `/run-task` します（既定の上限は3件。変えるときは `FOD_TASK_MAX_PARALLEL=5 scripts/install-task-scheduler.sh` のように登録し直す）。他のセッションが着手済みのタスクは除外し、起動できるタスクがない日は残っているタスクと理由をmacOSの通知で知らせます。結果のレポートは `~/Library/Logs/focus-on-dot/` に出力されます。登録を解除するときは `--uninstall` を付けて実行してください。
 
-起動できるタスクを確認するだけなら、`node scripts/task-scheduler.mjs plan --root .` を実行します。判定には実行したcheckoutの `docs/tasks` を使うので、origin/mainと同じ結果を見たいときはmainに揃えたcheckoutで実行してください。異常終了したセッションの `.claude/worktrees/task-NNN` が残ると、そのタスクは着手済みのまま扱われます。内容を確認してから `git worktree remove` で削除してください。セッションは4時間で打ち切られます。
+起動できるタスクを確認するだけなら、`node scripts/task-scheduler.mjs plan --root .` を実行します。判定には実行したcheckoutの `docs/tasks` を使うので、origin/mainと同じ結果を見たいときはmainに揃えたcheckoutで実行してください。異常終了したセッションの `.claude/worktrees/task-NNN` が残ると、そのタスクは着手済みのまま扱われます。内容を確認してから `git worktree remove` で削除してください（作業のないworktreeは自動で削除されます）。定期実行のセッションが動いている間、そのタスクは `.git/scheduled-sessions/` の記録によって手動の `/run-task` でも実行不可になります。記録はセッションの終了時に消え、worktreeがなくなった記録は無視されます。セッションは4時間で打ち切られます。
 
 ## Status
 
