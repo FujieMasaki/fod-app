@@ -14,18 +14,15 @@ class GoogleSignIn
   end
 
   def sign_in
-    identity = find_identity
-    return signed_in(identity.user) if identity
-    return AuthResult.of(:failed) unless verified_email
-
-    existing = User.find_for_authentication(email: verified_email)
-    return AuthResult.of(existing.password_user? ? :email_conflict : :failed) if existing
-
-    AuthResult.of(:ok, user: create_user)
+    find_or_create
   rescue ActiveRecord::RecordNotUnique
-    # 同じGoogleの利用者のcallbackが同時に届いた。先に作られた方へloginする。
-    identity = find_identity
-    identity ? signed_in(identity.user) : AuthResult.of(:failed)
+    created_meanwhile
+  rescue ActiveRecord::RecordInvalid => e
+    # 検索の後、保存時のvalidationまでの間に同じメールアドレスが保存されると、一意制約より先に
+    # uniqueness validation（taken）で失敗する。それ以外の失敗は投げ直す。
+    raise unless User.email_taken_only?(e.record.errors)
+
+    created_meanwhile
   end
 
   # Googleが返した利用者が、いまloginしている利用者に紐づくGoogleの利用者と一致することを必ず確かめる。
@@ -38,6 +35,29 @@ class GoogleSignIn
   end
 
   private
+
+  def find_or_create
+    identity = find_identity
+    return signed_in(identity.user) if identity
+    return AuthResult.of(:failed) unless verified_email
+
+    existing = User.find_for_authentication(email: verified_email)
+    return existing_email(existing) if existing
+
+    AuthResult.of(:ok, user: create_user)
+  end
+
+  # Googleが確認済みとしたメールが既存の利用者と一致した。passwordの利用者なら衝突として案内する。
+  def existing_email(user) = AuthResult.of(user.password_user? ? :email_conflict : :failed)
+
+  # 作成が、同時に届いた別のcallback（同じGoogleの利用者）や登録と競合した。先に作られた方に合わせる。
+  def created_meanwhile
+    identity = find_identity
+    return signed_in(identity.user) if identity
+
+    existing = User.find_for_authentication(email: verified_email)
+    existing ? existing_email(existing) : AuthResult.of(:failed)
+  end
 
   # loginできない状態の利用者（Devise/Wardenが拒否する）は、sign_inで投げ返される前にここで外す。
   # 投げ返されると、browserの遷移先にJSONの401が出るため。

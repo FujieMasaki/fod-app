@@ -34,6 +34,12 @@ class User < ApplicationRecord
 
   def self.prehash_password(password) = Base64.strict_encode64(OpenSSL::Digest::SHA256.digest(password))
 
+  # 保存の失敗の理由が、emailの重複（taken）だけか。同時の登録・Googleの初回loginで、検索の後に
+  # 別のrequestが同じメールアドレスを保存したときに当たる。
+  def self.email_taken_only?(errors)
+    errors.attribute_names == [:email] && errors.details[:email].pluck(:error) == [:taken]
+  end
+
   # 登録済みのメールアドレスに登録が届いたときの、ログインと再設定の案内。
   def send_already_registered_notice = send_devise_notification(:already_registered)
 

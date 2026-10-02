@@ -40,7 +40,7 @@ class UserRegistration
   rescue ActiveRecord::RecordInvalid => e
     # 検索の後、保存時のvalidationまでの間に同じメールアドレスが保存されると、一意制約より先に
     # uniqueness validation（taken）で失敗する。これも既登録として扱い、それ以外の失敗は投げ直す。
-    raise unless email_taken_only?(e.record.errors)
+    raise unless User.email_taken_only?(e.record.errors)
 
     notify_registered_meanwhile
   end
@@ -48,11 +48,6 @@ class UserRegistration
   def notify_registered_meanwhile
     existing = User.find_for_authentication(email: @email)
     notify_existing(existing) if existing
-  end
-
-  # 失敗の理由がemailの重複（taken）だけか。
-  def email_taken_only?(errors)
-    errors.attribute_names == [:email] && errors.details[:email].pluck(:error) == [:taken]
   end
 
   def notify_existing(user)
