@@ -92,6 +92,25 @@ RSpec.describe "Password reset" do
       expect(response).to have_http_status(:no_content)
     end
 
+    it "未確認の利用者は、再設定すると確認済みになりloginできる" do
+      unconfirmed = create(:user, :unconfirmed)
+      json_request(:post, "/api/v1/password", { email: unconfirmed.email })
+
+      reset(token_from(last_mail))
+
+      expect(unconfirmed.reload).to be_confirmed
+      sign_in_with_password(unconfirmed, password: new_password)
+    end
+
+    it "passwordが方針に合わず再設定できなければ、確認済みにもしない" do
+      unconfirmed = create(:user, :unconfirmed)
+      json_request(:post, "/api/v1/password", { email: unconfirmed.email })
+
+      reset(token_from(last_mail), password: "short")
+
+      expect(unconfirmed.reload).not_to be_confirmed
+    end
+
     it "ロック中の利用者は、再設定するとロックも解ける" do
       token = take_reset_token
       user.lock_access!(send_instructions: false)

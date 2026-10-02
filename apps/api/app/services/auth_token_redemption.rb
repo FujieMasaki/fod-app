@@ -38,8 +38,11 @@ class AuthTokenRedemption
   private
 
   # 保存するとDeviseが再設定tokenを消す（再利用を拒否できる）。
+  # 再設定のメールを受け取れたことでメールの所有は示されたので、未確認なら確認済みにする
+  # （TASK-006 Plan §12-6。他人に登録だけされたメールを、本人が再設定だけで取り戻せるようにする）。
   def apply_new_password(user, password)
     user.password = password
+    user.skip_confirmation! unless user.confirmed?
     return AuthResult.validation_failed(user.errors) unless user.save
 
     user.unlock_access! if user.access_locked?

@@ -262,7 +262,8 @@ paths:
       operationId: resetPassword
       summary: 再設定tokenと新しいpasswordで再設定する
       description: |
-        再設定tokenの有効期限は6時間で、使用後は再利用できない。成功してもloginはしない
+        再設定tokenの有効期限は6時間で、使用後は再利用できない。メール未確認の利用者は、再設定に成功すると
+        確認済みになる（再設定のメールを受け取れたことでメールの所有が示されるため）。成功してもloginはしない
         （Webはログイン画面へ戻す）。
       security: []
       parameters:
@@ -341,7 +342,7 @@ paths:
         `intent=reauthenticate`は、Google専用の利用者が退会の前に再認証するときに使う
         （有効時間はTASK-006で決める）。退会を受理した利用者も`intent=sign_in`でloginでき、
         callbackは`/`へ戻す（Webは`account_status`で退会の状況画面へ進める）。
-        試行回数の制限に掛かった場合は、JSONの`429`ではなく`auth_error=rate_limited`を付けてredirectする
+        試行回数の制限（開始がIPごとに1時間50回）に掛かった場合は、JSONの`429`ではなく`auth_error=rate_limited`を付けてredirectする
         （form POSTでbrowserが遷移するため）。戻り先は`intent=sign_in`なら`/login`、`reauthenticate`なら
         `return_to`（省略時は`/`。loginしたまま退会などの流れへ戻れるようにするため）。
       security: []

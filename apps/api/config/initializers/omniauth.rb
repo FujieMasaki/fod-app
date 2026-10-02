@@ -1,4 +1,5 @@
 require Rails.root.join("lib/omniauth/strategies/focus_google_oauth2").to_s
+require Rails.root.join("lib/omniauth/google_start_throttle").to_s
 
 # Googleログイン。開始はPOSTだけを受け、omniauth-rails_csrf_protectionがRailsのCSRF tokenを検証する。
 # 失敗（CSRF・state不一致・キャンセルなど）はAuth::GoogleCallbacksController#failureで契約どおりに返す。
@@ -40,3 +41,6 @@ Rails.application.config.middleware.use OmniAuth::Builder do
            ENV.fetch("GOOGLE_CLIENT_SECRET", nil),
            **GoogleOauthOptions::AUTHORIZE
 end
+
+# 開始の試行回数の制限は、CSRFの検証やGoogleへのredirectより先に数える。
+Rails.application.config.middleware.insert_before OmniAuth::Builder, OmniAuth::GoogleStartThrottle

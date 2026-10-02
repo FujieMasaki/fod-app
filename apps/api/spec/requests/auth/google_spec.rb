@@ -93,6 +93,27 @@ RSpec.describe "Google login" do
       expect(problem_code).to eq("csrf_invalid")
     end
 
+    it "開始がIPごとに1時間50回を超えたら、Googleへ進まず/login?auth_error=rate_limited" do
+      token = csrf_token
+      50.times do
+        post("/auth/google_oauth2", params: { authenticity_token: token })
+        expect(response.location).not_to include("auth_error=rate_limited")
+      end
+
+      expect { start_google(token:) }.not_to change(User, :count)
+      expect(response).to redirect_to("http://www.example.com/login?auth_error=rate_limited")
+      expect(response.headers["Cache-Control"]).to eq("no-store")
+    end
+
+    it "再認証の開始が制限に掛かったら、return_toへauth_error=rate_limitedを付けて戻す" do
+      token = csrf_token
+      50.times { post("/auth/google_oauth2", params: { authenticity_token: token }) }
+
+      start_google(intent: "reauthenticate", return_to: "/settings/account", token:)
+
+      expect(response).to redirect_to("http://www.example.com/settings/account?auth_error=rate_limited")
+    end
+
     it "GETでは開始できない" do
       get "/auth/google_oauth2"
 
