@@ -351,6 +351,9 @@ Webの接続（TASK-007）、退会（TASK-013）、本番のメール配送とG
   再送は確認/reset合算で宛先60秒に1回・1時間5回、IPごと1時間20回、RDSの共有counterで制限し共通応答。
   Devise 5.0.4を導入し、確認期限（標準は無期限）を24時間に設定した。
   メールのリンクはSPAの画面を指し、tokenはURLのfragment（`#token=`）に載せてserverへ送らせない。
+  メールはjob（`deliver_later`）で送り、確認の再送・再設定は利用者の検索からjobで行う（応答時間から
+  登録の有無を分からなくするため）。jobは当面Rails既定の`:async`で、TASK-009でSolid Queueへ移る。
+  ログをdebugにするとActionMailerがメール本文（token）を出すため、productionでdebugにしない。
 - passwordは8〜128文字で文字種は問わない。不一致が10回続いたらアカウントをロックし（Lockable）、
   1時間で自動解除、解除メールのリンク（`PATCH /api/v1/unlock`）でも解ける。ロック中もloginの応答は
   `invalid_credentials`で、ロックの有無を明かさない。多数のアカウントへ順に試す攻撃に備え、

@@ -306,14 +306,15 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
 | requestのparameterでGoogleへのauthorize optionsを上書きさせない | gemの既定では`prompt`・`redirect_uri`・`hd`などをrequestから上書きできる |
 | 入力の長さ不足は`validation_failed`の`out_of_range` | 契約のFieldErrorに`too_short`が無い。enumを足すとWebの互換性の段階が要るため、既存の値を使い契約の説明に書いた |
 | JSONとして読めないbodyは`422 validation_failed`（field `body`） | 既定では`500`になっていた |
-| メール配送の失敗は`202`のまま、error reportへ送る | 登録の有無によって応答が変わらないようにするため（配送されたとは約束しない） |
+| 認証メールはjob（`deliver_later`）で送り、確認メールの再送・再設定は利用者の検索からjobへ渡す | 利用者がいるときだけtoken生成・配送の時間がかかり、応答時間から登録の有無が分かるため（サブエージェントのレビュー）。当面はRails既定の`:async`（同じプロセス、再起動で失われ得る）で動き、TASK-009でSolid Queueへ移る |
+| `authenticate_user!`は`403 email_unconfirmed`を返さない（§5との差異） | 未確認の利用者はloginできずsessionを持てない。sessionから復元した利用者が未確認・ロック中ならWardenが外し、`401 unauthenticated`になる。`email_unconfirmed`はloginの応答で返す |
 | rubocopで、migrationのDocumentation・MethodLengthを除外し、specのexpectation数（5）と長さ（15行）を緩めた | migrationは列の定義が説明になる。request specは1操作の結果（status・code・header・契約）をまとめて確かめるため |
 
 ### 検証結果
 
 `apps/api`で実行した。
 
-- `bundle exec rspec`: 293 examples, 0 failures（既存の契約spec含む）
+- `bundle exec rspec`: 303 examples, 0 failures（既存の契約spec含む）
 - `bundle exec rubocop`: 74 files, no offenses
 - `bundle exec brakeman --no-pager -q`: Security Warnings 0
 - `bundle exec bundler-audit check --update`: No vulnerabilities found
@@ -341,6 +342,15 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
   必要で、外部サービスの設定は人間が行う。TASK-015で横断検証する。
 - `rate_limit_counters`の定期削除の実行（rake taskだけ用意した）。job基盤・公開基盤が未構築のため。
 
+### 並行実行の確認の範囲
+
+- 同時callback・同時登録で一意制約に当たったときの回復は、service specで作成時に`RecordNotUnique`を
+  起こして確かめた（`spec/services/google_sign_in_spec.rb`・`user_registration_spec.rb`）。
+- 再設定tokenの消費は、行lockを取ることと2回目が`token_invalid`になることをservice specで確かめた。
+  **2つのrequestを本当に同時に走らせるspecは書いていない**（transactional fixturesの下では信頼できる
+  形にできないため）。直列化は`SELECT … FOR UPDATE`に依っている。
+- Googleのstate不正は、test modeを外した本物のstrategyで確かめた。
+
 ### 残るリスク（PRで確認してもらう）
 
 - **ロック中のsessionは切れる**: 第三者が10回失敗させると、ロックの間、本人のlogin中のsessionも
@@ -349,6 +359,13 @@ TASK-006の完了条件5件をspecと文書で確認し、Completion Recordへ�
   本人のGoogleログインは`google_email_conflict`になる。本人はpassword再設定と確認メールで取り戻せる。
 - **確認tokenはDBに平文で残る**（Deviseの仕様）。確認だけではloginしないため影響は小さい。
 - **固定の時間枠**のため、枠の境目をまたぐと短時間に上限の2倍まで通り得る。
+- **登録だけは応答時間に差が残る**: 未登録なら利用者の行をINSERTする（数ms）。メール送信はjobへ移した。
+- **ログをdebugにすると、ActionMailerがメール本文（宛先・token）を出す**。productionの既定はinfoで、
+  infoでは出ないことをspecで確かめた。productionで`RAILS_LOG_LEVEL=debug`にしない。
+- **jobの失敗のログ**: 配送に失敗したときの例外messageをActive Jobが記録する。SMTPの応答に宛先が
+  入ることがある。
+- **passwordの72 byte**（要判断）: bcryptは72 byteを超える部分を照合に使わない。ASCIIなら73〜128文字目、
+  日本語なら24文字前後より後が無視される。72 byteで拒否すると「8〜128文字」と矛盾するため、変えていない。
 - **CookieStoreのため、コピーされたCookieはlogoutしても7日まで使える**（TASK-001で受け入れ済み）。
 
 - 関連: 契約の変更は`contracts/openapi.yaml`（`PATCH /api/v1/unlock`、`NewCredentials`）。
