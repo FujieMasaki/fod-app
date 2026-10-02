@@ -55,6 +55,16 @@ RSpec.describe "Registration" do
     expect(ActionMailer::Base.deliveries.size).to eq(1)
   end
 
+  it "IPの制限に掛かったら、passwordのhashを計算しない" do
+    allow(User).to receive(:new).and_call_original
+    token = csrf_token
+    20.times { |n| register("user#{n}@example.com", token:) }
+
+    register("one-more@example.com", token:)
+
+    expect(User).to have_received(:new).exactly(20).times
+  end
+
   it "IPごとに1時間20回を超えたら429 rate_limited" do
     token = csrf_token
     20.times { |n| register("user#{n}@example.com", token:) }

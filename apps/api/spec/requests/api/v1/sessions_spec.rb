@@ -29,6 +29,17 @@ RSpec.describe "Session" do
       end
     end
 
+    it "login中の利用者がロックされたら、200の未認証として返す" do
+      sign_in_with_password(user)
+      user.lock_access!(send_instructions: false)
+
+      get "/api/v1/session"
+
+      expect(response).to have_http_status(:ok)
+      expect(response.parsed_body["authenticated"]).to be(false)
+      assert_response_schema_confirm(200)
+    end
+
     it "7日を過ぎたsessionは未認証として扱う" do
       sign_in_with_password(user)
       travel 7.days + 1.second
@@ -157,6 +168,7 @@ RSpec.describe "Session" do
 
       expect(response).to have_http_status(:forbidden)
       expect(problem_code).to eq("csrf_invalid")
+      expect(response.headers["Cache-Control"]).to eq("no-store")
       assert_response_schema_confirm(403)
     end
 

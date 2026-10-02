@@ -8,12 +8,13 @@ class ApplicationController < ActionController::API
   include JsonParams
   include Authentication
 
+  # CSRFの検証より先に付け、CSRFで拒否したresponseもcacheさせない。
+  before_action :prevent_caching
+
   # API-onlyではconfig.action_controllerの値がこのmoduleに渡らないので、ここで明示する。
   self.allow_forgery_protection = true
   self.forgery_protection_origin_check = true
   protect_from_forgery with: :exception
-
-  before_action :prevent_caching
 
   private
 

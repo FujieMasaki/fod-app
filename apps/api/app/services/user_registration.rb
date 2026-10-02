@@ -9,11 +9,12 @@ class UserRegistration
   end
 
   def call
-    user = User.new(email: @email, password: @password)
-    return AuthResult.validation_failed(user.errors) unless valid_except_taken?(user)
-
+    # passwordのhash（bcrypt）より先に数え、制限に掛かったrequestでCPUを使わせない。
     exceeded = @throttle.ip_limit_exceeded
     return AuthResult.rate_limited(exceeded) if exceeded
+
+    user = User.new(email: @email, password: @password)
+    return AuthResult.validation_failed(user.errors) unless valid_except_taken?(user)
 
     existing = User.find_for_authentication(email: @email)
     existing ? notify_existing(existing) : create(user)

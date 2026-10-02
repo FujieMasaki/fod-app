@@ -71,7 +71,13 @@ module Authentication
   end
 
   # params認証などのstrategyを走らせず、sessionだけから利用者を復元する。
-  def session_user = warden.user(:user)
+  # 復元した利用者がロック中などでWardenが投げ返した場合は（sessionは外される）、未認証として扱う。
+  # 投げ返しをそのままにすると、未認証でも200を返す`GET /api/v1/session`まで401になるため。
+  def session_user
+    user = nil
+    catch(:warden) { user = warden.user(:user) }
+    user
+  end
 
   def session_expired?
     expires_at = session_expires_at
