@@ -76,12 +76,13 @@ pnpm install --frozen-lockfile
 scripts/claude-hook.sh claude-quality-gate.mjs --reset
 ```
 
-定期実行から起動された場合（環境変数 `TEST_ENV_NUMBER` がある）は、変更する範囲にかかわらず、このタスク専用の
-test DBを用意する。品質ゲートは `apps/api/` 以外（`scripts/`、`contracts/`、ルートの設定など）の変更でもRSpecを
-実行するため、用意していないと存在しないDBで失敗する。
+定期実行から起動された場合（環境変数 `FOD_DB_SUFFIX` がある）は、変更する範囲にかかわらず、このタスク専用の
+development / test DBを用意する。DB名に接尾辞が付き、並列で動く他のタスクのmigrationが `schema.rb` に混ざらない。
+品質ゲートは `apps/api/` 以外（`scripts/`、`contracts/`、ルートの設定など）の変更でもRSpecを実行するため、
+用意していないと存在しないDBで失敗する。
 
 ```bash
-(cd apps/api && bundle install && RAILS_ENV=test bin/rails db:prepare)
+(cd apps/api && bundle install && bin/rails db:prepare && RAILS_ENV=test bin/rails db:prepare)
 ```
 
 ### 3. 読んでからPlanを作る
