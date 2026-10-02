@@ -17,7 +17,8 @@ module JsonParams
 
   def string_param_error(field, max_length)
     value = body_param(field)
-    return { field: field.to_s, code: "required" } unless value.is_a?(String) && value.present?
+    # 空白だけの値も文字列として受け取る（passwordは文字種を問わない。契約のNewCredentials）。
+    return { field: field.to_s, code: "required" } unless value.is_a?(String) && !value.empty?
 
     { field: field.to_s, code: "too_long" } if value.length > max_length
   end

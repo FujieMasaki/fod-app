@@ -10,7 +10,8 @@ class User < ApplicationRecord
   validates :email, presence: true, length: { maximum: 254 },
                     format: { with: Devise.email_regexp, allow_blank: true },
                     uniqueness: { case_sensitive: false }
-  validates :password, presence: true, if: :password_required?
+  # presenceは空白だけの値も空とみなすので使わない（passwordは文字種を問わない）。
+  validate :password_given, if: :password_required?
   validates :password, length: { within: Devise.password_length }, allow_nil: true
 
   def password_user? = encrypted_password.present?
@@ -51,18 +52,17 @@ class User < ApplicationRecord
   # メールはrequestの外（AuthMailDeliveryJob）で配送する。配送の時間や失敗で応答が変わり、
   # 登録の有無やロックの有無が分かるのを防ぐため。
   def send_devise_notification(notification, *)
-    mail = -> { devise_mailer.send(notification, self, *).deliver_later }
-    # ロック解除のメールは、第三者がloginに失敗するだけで送らせられるので、宛先ごとの送信制限を通す
-    # （届かなくても、ロックは1時間で自動で解ける）。
-    return AuthMailThrottle.new(ip: nil).deliver(email, &mail) if notification == :unlock_instructions
-
-    mail.call
+    devise_mailer.send(notification, self, *).deliver_later
   end
 
   # valid_password?と同じ変換をしてから保存する。
   def password_digest(password) = super(self.class.prehash_password(password))
 
   private
+
+  def password_given
+    errors.add(:password, :blank) if password.to_s.empty?
+  end
 
   # Google専用で作る利用者だけはpasswordなしで作れる。
   def password_required? = new_record? && identities.empty?

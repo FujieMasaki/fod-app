@@ -30,6 +30,10 @@ RSpec.describe User do
     expect([nil, 123].map { create(:user).valid_password?(it) }).to eq([false, false])
   end
 
+  it "空白だけのpasswordも文字として受け付ける（文字種を問わない）。空文字は拒否する" do
+    expect([build(:user, password: " " * 8).valid?, build(:user, password: "").valid?]).to eq([true, false])
+  end
+
   it "Googleの利用者だけはpasswordなしで作れる" do
     expect(build(:user, :google_only)).to be_valid
     expect(build(:user, password: nil)).not_to be_valid

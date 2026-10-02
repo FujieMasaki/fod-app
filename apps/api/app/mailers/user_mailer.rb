@@ -15,7 +15,13 @@ class UserMailer < Devise::Mailer
     super(record, token, mail_options(opts, "パスワードの再設定"))
   end
 
+  # ロック解除のメールは、第三者がloginに失敗するだけで送らせられるので、送信制限を通す。
+  # 制限に掛かったら送らない（mailを呼ばなければ配送されない）。届かなくても1時間で自動で解ける。
   def unlock_instructions(record, token, opts = {})
+    allowed = false
+    AuthMailThrottle.new(ip: nil).deliver(record.email) { allowed = true }
+    return unless allowed
+
     @url = app_url("/unlock", token)
     super(record, token, mail_options(opts, "アカウントのロックについて"))
   end
