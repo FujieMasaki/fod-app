@@ -58,8 +58,9 @@
 ## 7. Proposed Approach
 
 1. **全タスクの判定**: `docs/tasks/TASK-*.md`をすべて`evaluateTask`で判定する。
-2. **着手済みの判定**: 次のどちらかがあるタスクを着手済みとして除外する。
-   - `.claude/worktrees/task-NNN`（`/run-task`と定期実行が作る作業場所）がある。
+2. **着手済みの判定**: 次のどれかがあるタスクを着手済みとして除外する。
+   - `git worktree list`のworktreeで、ディレクトリ名が`task-NNN`のもの、またはブランチ名が`task-NNN`を含むもの。
+     `/run-task`は別のworktreeでブランチを切ることもあるため、`.claude/worktrees/`の直下だけを見ない。
    - head branchが`task-NNN`を含むopen PRがある。
    - 加えて、mainで`In progress`のタスクは除外する（作業中か、人間の確認待ちのため）。
 3. **起動順**: 実行可能なタスクを、未完了の後続タスク数（推移的）が多い順に並べ、上限
@@ -67,11 +68,14 @@
 4. **起動**: タスクごとに`git worktree add --detach .claude/worktrees/task-NNN origin/main`で作業場所を
    確保する。worktreeの作成は既存パスで失敗するため、作成できたことを着手の確保とする。
    そのworktreeで`claude -p "/run-task TASK-NNN" --permission-mode auto`を起動する。
-   `git`の同時実行によるlock競合を避けるため、起動は30秒ずつずらす。
+   `git`の同時実行によるlock競合を避けるため、起動は30秒ずつずらす。1セッションは4時間で打ち切る
+   （launchdは前回のジョブが動いている間は次を起動しないため、1件のハングで翌朝以降が止まらないようにする）。
 5. **テストDBの分離**: `database.yml`のtest DB名に`TEST_ENV_NUMBER`を付ける（parallel_testsと同じ慣例）。
    定期実行は`TEST_ENV_NUMBER=_task_NNN`を渡し、`/run-task`はapiを変える場合にtest DBを準備する。
 6. **通知**: 全セッションの終了後、タスクごとの結果（PR URL、止まった理由）をレポートに書き、
    macOSの通知を出す。起動対象がない日は、残っているタスクと理由、最初に解消すべきボトルネックを通知する。
+   scriptの取得・worktreeの準備・Node scriptが失敗した場合も通知し、「起動対象がない日」と区別できるようにする。
+   終了後のPR取得に失敗しても、レポートは書く。
 7. **最新のscriptで動かす**: launchdは`origin/main`の起動scriptを`git show`で取り出して実行し、
    起動scriptは専用の`.claude/worktrees/scheduler`をorigin/mainへdetachして、そこからNode scriptを動かす。
 
@@ -130,6 +134,13 @@ PR作成 / 停止理由
 - 並列数だけAPI利用量とCPU負荷が増える。上限は環境変数で調整する。
 - タスクごとのtest DBが残る。不要になったら`dropdb`で削除する。
 - 初回の通知はmacOSの許可が必要な場合がある。
+- **信頼境界**: launchdは`origin/main`の起動scriptを毎朝そのまま実行し、各セッションは人間の監視なしに
+  `--permission-mode auto`で`pnpm install` / `bundle install`（依存のlifecycle script）を実行し、`docs/tasks`を
+  promptの入力にする。つまり、mainに入ったコード・タスク文書・依存の更新が、ユーザー権限で無人実行される。
+  2026-10-02時点で、repositoryのcollaboratorは本人だけで、auto-mergeは無効（`allow_auto_merge: false`）。
+  Dependabotのマージも人間が行う。この前提が変わる（collaboratorの追加、auto-mergeの有効化）場合は、
+  定期実行を止めるか、この境界を見直す。PreToolUse hook（mainへのpush・force push・PRのマージの拒否）は
+  無人実行でも有効。
 
 ## 14. Verification
 
@@ -152,7 +163,15 @@ PR作成 / 停止理由
 ## 16. Completion Record
 
 - 状態: 2026-10-02 実装完了、launchd登録はマージ後。
-- 実装差異: なし。
+- 実装差異（サブエージェントのレビュー反映）:
+  - 着手済みの判定を`.claude/worktrees/`のディレクトリ名から`git worktree list`（ディレクトリ名とブランチ名）に変更した。
+  - セッションの4時間の打ち切り、起動前の失敗の通知、PR取得失敗時もレポートを書く処理を追加した。
+  - scheduler用worktreeは`.git`の有無で判定し、事前に`git worktree prune`する（残骸のディレクトリでgitが
+    親のcheckoutを操作しないように）。
+  - `FOD_TASK_MAX_PARALLEL`は正の整数だけを受け付け、登録時の値をplistに書き込む。
+  - `/run-task`は、定期実行では変更範囲にかかわらずtest DBを準備する（品質ゲートはapps/api以外の変更でも
+    RSpecを実行するため）。
+  - `claude --help`（2.1.280）で`--name`と`--permission-mode auto`があることを確認した。
 - 検証結果:
   - `pnpm test:scripts`: 156件成功（`task-scheduler.test.mjs`の7件を含む）。`pnpm lint`: 成功。
   - `node scripts/task-scheduler.mjs plan --root <repo>`: 起動0件。origin/mainではTASK-005がDoneで
@@ -160,5 +179,9 @@ PR作成 / 停止理由
     除外された。ボトルネックとしてTASK-006（後続10件）、TASK-003（後続8件）が出た。
   - `TEST_ENV_NUMBER=_probe`で`db:prepare`とRSpecを実行し、`focus_on_dot_api_test_probe`で192件成功。
     削除後、既定のtest DBでも192件成功。
+  - 偽の`launchctl`でinstall scriptを実行し、生成したplistが`plutil -lint`を通ること、`FOD_TASK_MAX_PARALLEL=0`を
+    拒否することを確認した。plistのコマンドはマージ前のorigin/mainにscriptがないため、取得失敗の分岐に入る
+    （通知して終了コード1）ことを確認した。`task-scheduler.sh`はNode scriptが見つからない場合に失敗を通知する
+    ことを確認した（この確認で、全角括弧の直前の`$status`が変数名として誤って解釈される不具合を見つけ、修正した）。
   - 未実施: `run`モードでの実際のセッション起動と、launchdからの起動・通知。マージ後に登録して確認する。
 - 関連: [自動実行の仕組み](2026-09-26-autonomous-task-runner.md)。
