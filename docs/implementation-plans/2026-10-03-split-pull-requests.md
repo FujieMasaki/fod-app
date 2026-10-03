@@ -63,12 +63,26 @@ LGTMになってから、タスク単位で1回行う。
   分けることも許し、無理に直列にしない。
 - 人間のレビューをタスク単位にまとめると、途中の設計変更による見直しを避けられ、ガイドも1つで済む。
 
+## 9. Data Flow
+
+アプリのデータフローの変更はない。作業の流れは次のとおり。
+
+```text
+Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作成
+→ PRごとに機械のレビュー（前のPRの修正は後ろへmerge） → すべてLGTM
+→ タスク全体のガイド1つ → 人間のレビュー → 1番目から順にマージ
+```
+
 ## 10. Files to Change
 
 - `docs/development/pull-requests.md`（新規）
 - `AGENTS.md`、`.claude/skills/run-task/SKILL.md`、`.claude/skills/pr-review-cycle/SKILL.md`、
   `.claude/skills/human-review-artifact/SKILL.md`（変更）
 - 本Plan（新規）
+
+## 11. Libraries / APIs
+
+追加なし。
 
 ## 12. Alternatives Considered
 
@@ -95,5 +109,7 @@ LGTMになってから、タスク単位で1回行う。
 
 - 状態: 2026-10-03 完了
 - 実装差異: なし
-- 検証結果: 14の確認を実施（結果はPR本文に記載）。
-- 関連: 本変更のPR。
+- 検証結果: `taskBranchPattern`が`feat/task-008-1-dot-model`に一致し、codex-final-checkのbase検査が
+  `origin/feat/task-008-1-dot-model`を受け付けることをnodeで確認した。`pnpm lint:naming`は成功。
+  `docs/development/pull-requests.md`の見出しと、skillからのアンカーリンクの対応を目視で確認した。
+- 関連: PR #50
