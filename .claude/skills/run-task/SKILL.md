@@ -113,8 +113,9 @@ AGENTS.mdの「重大な設計判断または複数の有力案がある場合�
 - 自分で検証できた完了条件だけ `[x]` にする。人間の確認が必要な条件は `[ ]` のまま残し、PRの
   「確認すること」に入れる。
 - 全条件を検証できた場合だけタスクを Done にする。そうでなければ In progress のまま。
-- PRを分けた場合、この記録は最後のブランチでコミットする（Planとタスクファイルは1番目と最後のPRに
-  またがる。[分け方](../../../docs/development/pull-requests.md#分け方)を参照）。
+- PRを分けた場合、この記録は1番目のPRの上に積んだ最後のブランチでコミットする（`main`から分けた互いに
+  依存しないPRには書かない。Planとタスクファイルは1番目と最後のPRにまたがる。
+  [分け方](../../../docs/development/pull-requests.md#分け方)を参照）。
 
 ### 6. self-reviewする
 
@@ -165,7 +166,7 @@ Codex → 仕組み化）を、PRごとに1番目から順に回す。各PRの�
 
 ### 9. 人間のレビュー用ガイドを渡す
 
-すべてのPRがLGTMになり、すべてのブランチで`git rev-parse <ブランチ>`と`git rev-parse <ブランチ>@{u}`が
+すべてのPRがLGTMになり、`git fetch origin <各ブランチ>`の後に、すべてのブランチで`git rev-parse <ブランチ>`と`git rev-parse <ブランチ>@{u}`が
 一致し、`git status`がcleanなら、[`human-review-artifact`](../human-review-artifact/SKILL.md) でタスク全体のガイドを1つ作る。最後に、ガイドのURL、PRの一覧（マージの順番）、Doneにしたか・残した確認事項、
 PRごとのレビューの反復回数を短く報告する。
 
