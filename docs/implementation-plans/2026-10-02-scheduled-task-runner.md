@@ -72,11 +72,13 @@
 4. **起動**: タスクごとに`git worktree add --detach .claude/worktrees/task-NNN origin/main`で作業場所を
    確保する。worktreeの作成は既存パスで失敗するため、作成できたことを着手の確保とする。
    そのworktreeで`claude -p "/run-task TASK-NNN" --permission-mode auto`を起動する。
-   `git`の同時実行によるlock競合を避けるため、起動は30秒ずつずらす。1セッションは4時間で打ち切る
+   `git`の同時実行によるlock競合を避けるため、起動は30秒ずつずらす。待っている間に手動のセッションが着手しうるため、
+   各タスクの起動直前に着手済みを判定し直す（読めなければ起動しない）。判定から`worktree add`までの間に
+   別のworktreeで着手される競合は残るが、秒未満の幅であり受け入れる。1セッションは4時間で打ち切る
    （launchdは前回のジョブが動いている間は次を起動しないため、1件のハングで翌朝以降が止まらないようにする）。
    SIGTERMで終わらなければ60秒後にSIGKILLする。`git` / `gh`の呼び出しは2分、`git fetch`は低速が60秒続いたら
    打ち切る。打ち切りはプロセスグループごと行い、セッションが起動したrspec等も止める。セッションが一度も
-   起動しなかった場合と、作成時のcommitのまま変更もpush済みのブランチもない場合はworktree（と未pushのブランチ）を削除し、
+   起動しなかった場合と、origin/mainにない自分のcommitも変更もpush済みのブランチもない場合はworktree（と未pushのブランチ）を削除し、
    翌日以降に着手済みと扱われないようにする（認証切れなど一時的な障害で全タスクが止まり続けないように）。
    結果のPRは、セッションが残したworktreeのbranch名と完全一致する、このrepositoryのPRとする。
 5. **DBの分離**: `database.yml`のdevelopment / test DB名に`FOD_DB_SUFFIX`を付ける。定期実行は
@@ -207,8 +209,13 @@ PR作成 / 停止理由
     あわせて、再開前の`task-status.mjs`の再確認、定期実行のworktreeを手動で再開するときの`FOD_DB_SUFFIX`、
     `plan`モードの失敗では通知しないことを反映した。`run()`全体を通すtestは、部品のtestで主要な分岐を
     押さえているため今回は追加しない。
+  - Codexの最終チェック2回目（Medium 1件）を反映: 起動を待つ間に手動で着手されたタスクを重複起動しないよう、
+    各タスクの起動直前に着手済みを判定し直す。`run()`の外部I/Oを差し替えられるようにし、この競合をtestした。
+    あわせてサブエージェントのLow（作業なしの判定をorigin/mainとの比較にする、testのpidを実在しない値にする、
+    worktreeの再開では常に`FOD_DB_SUFFIX`を使う、記録で止めたときの理由に記録の場所を出す、launchdの起動scriptを
+    stdinではなく`sh -c`で渡す）を反映した。上の「`run()`全体を通すtestは追加しない」は、この対応で一部を追加した。
 - 検証結果:
-  - `pnpm test:scripts`: 成功（`task-scheduler.test.mjs`は20件、`task-status.test.mjs`に2件追加）。`pnpm lint`: 成功。
+  - `pnpm test:scripts`: 成功（`task-scheduler.test.mjs`は22件、`task-status.test.mjs`に2件追加）。`pnpm lint`: 成功。
   - `node scripts/task-scheduler.mjs plan --root <repo>`: 起動0件。origin/mainではTASK-005がDoneで
     TASK-006は実行可能だが、ローカルに`.claude/worktrees/task-006`（PR未作成）があるため着手済みとして
     除外された。ボトルネックとしてTASK-006（後続10件）、TASK-003（後続8件）が出た。
