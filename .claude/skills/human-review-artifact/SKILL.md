@@ -52,7 +52,7 @@ publishが拒否された場合も、ページを作らずにその旨を完了�
 
 ### 1. 材料を集める
 
-以下はPRごとに集める。分けた場合のdiffは、各サブのPRのbase（統合ブランチか1つ前のブランチ）との差分にする。
+以下はPRごとに集める。先に`git fetch origin <ベースブランチ> <PRのブランチ>`で最新にする。分けた場合のdiffは、各サブのPRのbase（統合ブランチか1つ前のブランチ）との差分にする。
 LGTMのコミットは、メインのPRの本文の一覧から取る。
 
 - `gh pr view <番号> --json number,title,body,baseRefName,headRefOid,url` と `git diff origin/<ベースブランチ>...origin/<PRのブランチ>`
@@ -82,7 +82,8 @@ PRを分けた場合は`TASK-XXX レビューガイド`（タスク外なら`PR 
   base・レビュー対象のファイル数・LGTMのコミット。理由を問わずHEADがLGTMのコミットと違えば、
   HEADと、その間のコミットが何か（前のPRの取り込み、Planの完了の記録など）も並べる）と、[マージの手順](../../../docs/development/pull-requests.md#マージ人間が行う)
   （サブのPRをmerge commitで1番目から順に統合ブランチへマージし、次のPRのbaseを統合ブランチへ付け替える。
-  すべて入ったらメインのPRをReady for reviewにし、CIが通ったら`main`へマージする）
+  すべて入ったらメインのPRをReady for reviewにし、統合ブランチにレビューを経ていないコミットがないことを
+  `git log --first-parent`で確かめ、CIが通ったら`main`へマージする）
 - レビュー状態: どのコミットでLGTMか、CIの結果、testの件数、再確認待ちのもの、人のレビュー待ちであること
 - まだ通っていないもの（CI未実行、再確認待ちなど）は、通ったものと見分けられる表示にする
 - このページは非公開で、ほかの人に見せるときはページの共有メニューから共有すること
