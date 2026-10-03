@@ -13,6 +13,7 @@ PRのタイトル・本文の書き方は[AGENTS.md](../../AGENTS.md)の「Pull 
 - 道具で生成するファイル: `apps/api/db/schema.rb`、`apps/web/src/types/api-contract.d.ts`
   （生成元のmigration・`contracts/openapi.yaml`は数える）
 - タスクファイル（`docs/tasks/TASK-XXX-*.md`）の`状態`・`関連Implementation Plan`だけの更新
+  （完了条件の`[x]`の更新は数える）
 
 test・Implementation Plan・仕様文書は数える。人間がレビューするものだからである。
 
@@ -32,6 +33,9 @@ PR本文の「概要」に、超えた理由と、レビューで見なくてよ
 分け方はImplementation Planの「10. Files to Change」に、PRごとのファイルと順序として書いてから
 実装する。実装中に大きさが変わったら、Planを直してから分け直す。
 
+Planとタスクファイルは、1番目のPRで作成・着手（In progress）にし、完了の記録（Completion Record、
+完了条件の`[x]`、Done）は最後のPRで書く。この2つのファイルだけは、1番目と最後のPRにまたがってよい。
+
 ## 積み重ね（stacked PR）
 
 後のPRが前のPRに依存する場合は、ブランチを積み重ねる。
@@ -47,12 +51,19 @@ origin/main ← <type>/task-008-1-<slug> ← <type>/task-008-2-<slug> ← <type>
 - 互いに依存しないPRは、どれも`main`をbaseにしてよい。
 - PRのタイトルの末尾に`（1/3）`のように順番を付ける。本文の「概要」に、同じタスクのPRの一覧
   （番号・タイトル・base）とマージの順番を書く。
+- pushは`git push origin <ブランチ>:<ブランチ>`の形にする。ブランチを行き来するため、`HEAD:<ブランチ>`だと
+  後ろのブランチにいるまま前のブランチの名前へpushしても、fast-forwardとして通ってしまい、後ろのPRの変更が
+  前のPRに黙って混ざる。
 - 前のPRを直したら、その後ろのブランチへ順に`git merge`で取り込んでpushする。rebase・force pushは
-  しない。取り込みでコンフリクトの解消や追加の修正が入ったPRは、レビューをやり直す。取り込んだだけの
-  PRは、testとCIの確認で足りる（diffは変わらないため）。
+  しない。取り込みでコンフリクトの解消や追加の修正が入ったPRと、前のPRの修正が後ろのPRで使う
+  interface・振る舞いを変えたPRは、レビューをやり直す。それ以外の取り込んだだけのPRは、testとCIの
+  確認で足りる（diffの文面は変わらないため）。人間のレビュー用ガイドには、LGTMのコミットと取り込んだ後の
+  HEADを並べて書く。
 
 ### マージ（人間が行う）
 
+- 積み重ねたPRは「Create a merge commit」でマージする。squash・rebaseでマージすると`main`に元の
+  コミットが入らず、後ろのPRのdiffに前のPRの変更が再び現れ、コンフリクトも起きる。
 - 1番目から順にマージする。
 - マージしたら、次のPRのbaseを`main`へ付け替えてからマージする。GitHubの「マージ後にブランチを自動で
   削除する」設定が有効なら自動で付け替わる。付け替えずにマージすると、`main`ではなく前のブランチへ

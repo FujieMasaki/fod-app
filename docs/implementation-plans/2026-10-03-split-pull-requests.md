@@ -25,18 +25,26 @@ LGTMになってから、タスク単位で1回行う。
 - `.claude/skills/pr-review-cycle/SKILL.md`: 1つのPRについてレビューを回し、LGTM後にガイドを作る。
 - `.claude/skills/human-review-artifact/SKILL.md`: PRごとに1ページ（`PR #<番号> レビューガイド`）。
 - `scripts/claude-quality-gate.mjs`: `<type>/task-NNN(-…)`のブランチで、検査・push・PRの有無を確かめる。
-  ブランチごとに状態を持つため、分けたブランチでもそのまま働く。
+  分けたブランチ名にも一致する。ただし、状態ファイルはworktreeに1つで、ブランチが変わると初期化される
+  （修正5回・差し戻し40回の上限が数え直しになる）。push・PRの有無は今いるブランチしか見ない。差し戻しの
+  文言は「PRを作ってURLを出す」までで、機械のレビュー・ガイドの作成は確かめない。
+- `scripts/claude-guard.mjs`: pushの送信先が`main`か省略されているかを確かめる。`HEAD:<別のPRのブランチ>`の
+  ように、送信先は明示されているが今いるブランチと違うpushは検出しない。
 - `scripts/codex-final-check.mjs`: baseに`origin/<任意のブランチ>`を受け付けるため、積み重ねたPRでも使える。
 
 ## 5. Scope and Non-goals
 
 - 対象: 分割の規約の新設、`run-task`・`pr-review-cycle`・`human-review-artifact`の手順、AGENTS.mdの要約。
-- 対象外: hook・scriptの変更（現状で分けたブランチに対応しているため）。マージの自動化（マージは人間が行う）。
+- 対象外: hook・scriptの変更。ブランチ名・baseの形式は現状で通るため、上記の制約は手順（`<ブランチ>:<ブランチ>`
+  の形のpush、すべてのブランチのpush状態の確認）で補い、hookの改修は必要になったら別のPRで行う。
+  マージの自動化（マージは人間が行う）。
 - 決定済み:
   - 上限は「レビュー対象のファイル20個」。lockfile・生成物（`schema.rb`、`api-contract.d.ts`）、
     タスクファイルの状態だけの更新は数えない。testとPlan・仕様文書は数える。
   - 依存するPRは積み重ね（stacked PR）にし、前のPRの修正は`git merge`で後ろへ取り込む（rebase・force pushは
     既存の規則で禁止のため）。
+  - 積み重ねたPRはmerge commitでマージする（既存のPRもmerge commitでマージしている）。
+  - Planとタスクファイルは1番目のPRで作り、完了の記録は最後のPRで書く。
   - 人間のレビューはタスク単位で、すべてのPRがLGTMになってから1回。仕様・設計・securityの判断が必要なときは
     待たずに止まって聞く（既存の止まる条件のまま）。
 
@@ -97,6 +105,10 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
   規約とガイドに書いた。GitHubの「マージ後にheadブランチを自動で削除」を有効にすると自動で付け替わる。
 - 前のPRの修正を取り込み忘れると、後ろのPRが古い前提でレビューされる。取り込みを手順に入れた。
 - `run-task`の範囲が機械のレビューまで広がるため、1回の実行が長くなる。
+- squashでマージすると、後ろのPRのdiffに前のPRの変更が再び現れる。merge commitでマージすると規約に書いた。
+- Stop hookはブランチを切り替えると状態が初期化され、今いるブランチしか確かめない。すべてのブランチの
+  push状態の確認を`run-task`の手順9に入れた。
+- `HEAD:<ブランチ>`のpushで別のPRの変更が混ざりうる。積み重ねたPRでは`<ブランチ>:<ブランチ>`の形にした。
 
 ## 14. Verification
 
@@ -104,6 +116,12 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
 - 各skillの相互参照・リンク先の見出しアンカー、`scripts/claude-quality-gate.mjs`のブランチ名の正規表現
   （`^(feat|…)/task-\\d{3}(?:-|$)`）が`feat/task-008-1-dot-model`に一致すること、
   `scripts/codex-final-check.mjs`のbaseの正規表現が`origin/feat/task-008-1-dot-model`を受け付けることを確認する。
+
+## 15. Definition of Done
+
+- 規約の正本が1つで、各skillとAGENTS.mdがそれを参照し、本文を複製していない。
+- skill同士・規約との手順（分割、push、取り込み、ガイドの時機）が矛盾しない。
+- 機械のレビュー（サブエージェント・Codex）でLGTMになる。
 
 ## 16. Completion Record
 
