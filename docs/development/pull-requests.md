@@ -80,9 +80,17 @@ origin/main ← <type>/task-008-1-<slug> ← <type>/task-008-2-<slug> ← <type>
     && RAILS_ENV=test bin/rails db:drop db:create db:schema:load)
   ```
 
-  消してよいのは、環境変数`FOD_DB_SUFFIX`で分けた専用のDB（タスクなら`_task_<3桁>`）だけ。接尾辞のない既定の
-  DBではローカルの開発データを消してしまうため実行せず、`FOD_DB_SUFFIX`を付けてClaude Codeを起動し直して
-  もらうよう人間に伝えて止まる。
+  消してよいのは、環境変数`FOD_DB_SUFFIX`で分けた専用のDB（タスクなら`_task_<3桁>`）だけ。上のコマンドの前に、
+  development・testの実際の接続先を出し、どちらのDB名も`FOD_DB_SUFFIX`（空でない）で終わることを確かめる。
+  `DATABASE_URL`があるとRailsは`database.yml`よりそれを優先するため、接尾辞を付けても既定のDBを指しうる。
+
+  ```bash
+  (cd apps/api && bin/rails runner 'puts ActiveRecord::Base.connection_db_config.database' \
+    && RAILS_ENV=test bin/rails runner 'puts ActiveRecord::Base.connection_db_config.database')
+  ```
+
+  `FOD_DB_SUFFIX`がない、またはDB名が接尾辞で終わらなければ、ローカルの開発データを消してしまうため実行しない。
+  `FOD_DB_SUFFIX`を付け、`DATABASE_URL`を外してClaude Codeを起動し直してもらうよう人間に伝えて止まる。
 - PRごとの作業（修正・検証・push・PR作成・レビュー）は、**そのPRのブランチへ`git switch`してから**行う。
   pre-pushの検査、`gh pr create`のhead、Codexの最終チェックやレビューのdiff（`<base>...HEAD`）は、どれも
   今いるブランチを基準にするため、別のブランチにいると、そのPRを単独で確かめたことにならない。
@@ -106,8 +114,9 @@ origin/main ← <type>/task-008-1-<slug> ← <type>/task-008-2-<slug> ← <type>
   コミットが入らず、後ろのPRのdiffに前のPRの変更が再び現れ、コンフリクトも起きる。
 - 1番目から順にマージする。
 - マージしたら、次のPRのbaseを`main`へ付け替えてからマージする。GitHubの「マージ後にブランチを自動で
-  削除する」設定が有効なら自動で付け替わる。付け替えた後、スタックの分岐元
-  （`git merge-base origin/main <ブランチ>`）から前のPRのマージ以外のコミットが`main`に入っていれば、
+  削除する」設定が有効なら自動で付け替わる。付け替えた後、`git fetch origin main <ブランチ>`で最新にしてから
+  （GitHub上のマージ・付け替えではローカルの`origin/main`は更新されないため）、スタックの分岐元
+  （`git merge-base origin/main origin/<ブランチ>`）から前のPRのマージ以外のコミットが`main`に入っていれば、
   AIに`main`の取り込み（`git merge origin/main`してpush）を頼み、新しいCIが通ってからマージする。取り込みで
   コンフリクトの解消や追加の修正が入ったら、前のPRの取り込みと同じく、そのPRを機械のレビューにかけ直し、
   人間に再確認を頼んでからマージする。baseの
