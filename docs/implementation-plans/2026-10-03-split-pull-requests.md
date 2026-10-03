@@ -43,8 +43,8 @@ LGTMになってから、タスク単位で1回行う。
     タスクファイルの状態だけの更新は数えない。testとPlan・仕様文書は数える。
   - 依存するPRは積み重ね（stacked PR）にし、前のPRの修正は`git merge`で後ろへ取り込む（rebase・force pushは
     既存の規則で禁止のため）。
-  - 新しい手順で使う`git merge`・`git branch --show-current`・`gh pr edit`は許可ルールにないため、実行のたびに
-    確認が出る。許可ルール（`.claude/settings.json`）への追加は人間が行い、このPRでは変えない。
+  - 新しい手順で使う`git merge`・`git branch --show-current`・`git branch -m`・`gh pr edit`・`git cherry-pick`・
+    `git checkout <コミット> -- <path>`は許可ルールにないため、実行のたびに確認が出る。許可ルール（`.claude/settings.json`）への追加は人間が行い、このPRでは変えない。
   - 積み重ねたPRはmerge commitでマージする（既存のPRもmerge commitでマージしている）。
   - Planとタスクファイルは1番目のPRで作り、完了の記録は最後のPRで書く。
   - 人間のレビューはタスク単位で、すべてのPRがLGTMになってから1回。仕様・設計・securityの判断が必要なときは
@@ -53,7 +53,7 @@ LGTMになってから、タスク単位で1回行う。
 ## 6. References and Documents to Update
 
 - 参照: AGENTS.md、上記3 skill、`scripts/claude-quality-gate.mjs`、`scripts/codex-final-check.mjs`。
-- 更新: AGENTS.md（Pull Requests・タスクの自動実行）、上記3 skill。
+- 更新: AGENTS.md（Pull Requests・タスクの自動実行）、README.md（Claude Codeでのタスク実行）、上記3 skill。
 - 新規: `docs/development/pull-requests.md`（分割・積み重ね・マージ・人間のレビューの時機の正本）。
 
 ## 7. Proposed Approach
@@ -86,7 +86,7 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
 ## 10. Files to Change
 
 - `docs/development/pull-requests.md`（新規）
-- `AGENTS.md`、`.claude/skills/run-task/SKILL.md`、`.claude/skills/pr-review-cycle/SKILL.md`、
+- `AGENTS.md`、`README.md`、`.claude/skills/run-task/SKILL.md`、`.claude/skills/pr-review-cycle/SKILL.md`、
   `.claude/skills/human-review-artifact/SKILL.md`（変更）
 - 本Plan（新規）
 
