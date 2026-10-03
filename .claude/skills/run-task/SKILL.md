@@ -70,7 +70,7 @@ git worktree list
   worktreeは定期実行が作ったものと区別できないため、再開するときは常にそのタスク専用のDBを使う。
   環境変数 `FOD_DB_SUFFIX` が `_task_008` でなければ、Claude Codeを `FOD_DB_SUFFIX=_task_008` を付けて
   起動し直してもらうよう人間に伝えて止まる（付けないと既定のDBに別タスクのmigrationが混ざる）。
-  PRを分けていれば、各PRの「概要」の一覧にある[LGTMの記録](../../../docs/development/pull-requests.md#積み重ねstacked-pr)
+  PRを分けていれば、メインのPRの本文の一覧にある[LGTMの記録](../../../docs/development/pull-requests.md#統合ブランチとサブのpr)
   とブランチの先端を比べ、どのPRのレビューから続けるかを決める。
 - ない: `git worktree add .claude/worktrees/task-008 -b <type>/task-008-<slug> origin/main` で作り、
   `EnterWorktree` に `path` を渡して入る。
@@ -80,9 +80,7 @@ git worktree list
   origin/mainにdetachされた状態で、セッションは既にその中にいる。下の依存の導入とDBの準備を
   **先に**済ませてから、`git switch -c <type>/task-008-<slug>` でブランチを作る（準備で止まったときに、
   作業のないworktreeとして片付けられるようにするため）。
-- 分けるかどうかは手順3のPlanで決まるため、ここでは番号なしの名前で作る。Planで分けると決めたら、
-  最初のpushより前に `git branch -m <type>/task-008-1-<slug>` で1番目のブランチの名前に変える。2番目以降は
-  手順4で作る。
+- 分けるかどうかは手順3のPlanで決まるため、ここでは番号なしの名前で作る。分ける場合の扱いは手順3の7。
 
 worktreeの中で依存を入れ、前回の状態を消す。
 
@@ -113,6 +111,17 @@ development / test DBを用意する。DB名に接尾辞が付き、並列で動
    レビュー対象のファイル数を書く。合計で20以下なら1つのPRと書く。
 5. タスクファイルの `状態` を In progress にし、`関連Implementation Plan` にリンクする。
 6. Planとタスク更新を `docs(task-008): ...` としてコミットする。
+7. Planで分けると決めたら、[統合ブランチとメインのPR](../../../docs/development/pull-requests.md#統合ブランチとサブのpr)を先に作る。
+   最初のpushより前に、今のブランチを `git branch -m <type>/task-008-1-<slug>` で1番目のブランチの名前に変え
+   （Planのコミットは1番目のサブのPRに入る）、`git switch -c <type>/task-008-<slug> origin/main` で統合ブランチを
+   作って空のコミットを置き、push してメインのPRをdraftで作る。作ったら1番目のブランチへ戻る。
+
+   ```bash
+   git commit --allow-empty -m "chore(task-008): 統合ブランチを作る"
+   git push -u origin feat/task-008-dot-history:feat/task-008-dot-history
+   gh pr create --draft --base main --head feat/task-008-dot-history --title "<日本語のタイトル>" --body "<本文>"
+   git switch feat/task-008-1-dot-model
+   ```
 
 AGENTS.mdの「重大な設計判断または複数の有力案がある場合」に当たるなら、止まる条件として扱う。
 
@@ -120,10 +129,10 @@ AGENTS.mdの「重大な設計判断または複数の有力案がある場合�
 
 - Planに書いたPRの順に実装する。1つのPRの分を実装・検証・コミットしたら、
   `git switch -c <type>/task-008-<次の順番>-<slug>` でそこから次のブランチを作って続ける
-  （互いに依存しないPRは`origin/main`から作る）。各ブランチは単独で検査が通る状態にする。
+  （互いに依存しないPRは統合ブランチ`origin/<type>/task-008-<slug>`から作る）。各ブランチは単独で検査が通る状態にする。
 - 実装中にPRの大きさがPlanから変わったら、Planを直してから分け直す。Planの修正は1番目のブランチで
   コミットし、後ろのブランチへ順に`git merge`で取り込む（Planだけの取り込みは、レビューのやり直しに当たらない）。
-- lockfile・migrationが違うブランチへ切り替えたら、[依存とDBを揃え直して](../../../docs/development/pull-requests.md#積み重ねstacked-pr)
+- lockfile・migrationが違うブランチへ切り替えたら、[依存とDBを揃え直して](../../../docs/development/pull-requests.md#統合ブランチとサブのpr)
   から検査する（migrationが違えば`db:prepare`ではなく、切り替え先の`schema.rb`からDBを作り直す）。
 - 1コミット = 1関心事。レビューで上から追える順（ロジック → UI、test は対象と同じコミット）。
 - メッセージは `type(scope): 要約` と、「何を・なぜ」の箇条書き。既存コミットの体裁に合わせる。
@@ -138,13 +147,13 @@ AGENTS.mdの「重大な設計判断または複数の有力案がある場合�
 - 自分で検証できた完了条件だけ `[x]` にする。人間の確認が必要な条件は `[ ]` のまま残し、PRの
   「確認すること」に入れる。
 - 全条件を検証できた場合だけタスクを Done にする。そうでなければ In progress のまま。
-- PRを分けた場合、この記録は1番目のPRの上に積んだ最後のブランチでコミットする（`main`から分けた互いに
+- PRを分けた場合、この記録は1番目のPRの上に積んだ最後のブランチでコミットする（統合ブランチから分けた互いに
   依存しないPRには書かない。Planとタスクファイルは1番目と最後のPRにまたがる。
   [分け方](../../../docs/development/pull-requests.md#分け方)を参照）。
 
 ### 6. self-reviewする
 
-`self-review` skillでタスク全体のdiff（`origin/main...<最後のブランチ>`。`main`から分けた互いに依存しない
+`self-review` skillでタスク全体のdiff（`origin/main...<最後のブランチ>`。統合ブランチから分けた互いに依存しない
 PRがあれば、そのdiffも）を確認し、該当するレビュー入口（`docs/code-review/`）とsecurity観点で
 見直す。指摘は、そのファイルを持つPRのブランチへ切り替えて修正・コミットし、後ろのブランチへ順に
 `git merge`で取り込む（[`pr-review-cycle`](../pr-review-cycle/SKILL.md)の手順6と同じ）。確信の持てない
@@ -153,7 +162,8 @@ PRがあれば、そのdiffも）を確認し、該当するレビュー入口�
 ### 7. pushしてPRを作る
 
 PRごとに1番目から順に、そのPRのブランチへ`git switch`し、`git rev-parse --abbrev-ref HEAD`がpush先と一致する
-ことを確かめてから、`<ブランチ>:<ブランチ>`の形で送信先を明示してpushし、PRを作る（例は2番目のPR）。
+ことを確かめてから、`<ブランチ>:<ブランチ>`の形で送信先を明示してpushし、サブのPRを作る（例は2番目のPR）。
+人間のマージを待たずに、すべてのサブのPRを作る。
 pre-pushの検査は今いるブランチの作業ツリーを検査するため、切り替えないと、そのブランチを単独で検証したことにならない。
 `HEAD:<ブランチ>`の形は使わない（ブランチを行き来するため、別のPRの変更を混ぜてpushしうる）。
 
@@ -163,10 +173,10 @@ gh pr create --base feat/task-008-1-dot-model --head feat/task-008-2-dot-api \
   --title "<日本語のタイトル>（2/3）" --body "<本文>"
 ```
 
-baseは1つ前のブランチにする。1番目と、互いに依存しないPRは`main`にする。PRが1つだけなら
-タイトルに順番を付けない。
+baseは1つ前のブランチにする。1番目と、互いに依存しないPRは統合ブランチにする。PRが1つだけなら
+統合ブランチもメインのPRも作らず、baseを`main`にし、タイトルに順番を付けない。
 
-pushの前に、各ブランチで`git diff --name-only <base>...<ブランチ>`（baseは1つ前のブランチか`origin/main`）の
+pushの前に、各ブランチで`git diff --name-only <base>...<ブランチ>`（baseは1つ前のブランチか統合ブランチ）の
 ファイルを数え、[数えないファイル](../../../docs/development/pull-requests.md#大きさの上限)を除いて20以下か
 確かめる。Planの見積もりより増えて超えていたら、Planを直してから分け直す。self-review・仕組み化で
 ファイルが増えたときも、pushの前に数え直す。
@@ -177,14 +187,15 @@ pushの前に、各ブランチで`git diff --name-only <base>...<ブランチ>`
   日本語で書く。テンプレートのコメント・プレースホルダーを残さない。
 - 「確認すること」は、人間が確認する操作・画面・仕様上の判断と期待結果のTODOリストにする。そのPRで
   確かめられることだけを書く。
-- PRを分けた場合は、全部作ってから各PRの「概要」に、同じタスクのPRの一覧（番号・タイトル・base・
-  LGTMのコミット）とマージの順番を書き足す（`gh pr edit <番号> --body`）。LGTMのコミットは手順8で埋める。
+- PRを分けた場合は、サブのPRの「概要」に、メインのPRへのリンクと何番目かを書く。全部作ったら、メインのPRの
+  本文の一覧（番号・タイトル・base・LGTMのコミット）とマージの順番を書き足す（`gh pr edit <番号> --body`）。
+  LGTMのコミットは手順8で埋める。
 
 ### 8. 機械のレビューを回す
 
 [`pr-review-cycle`](../pr-review-cycle/SKILL.md) の手順2〜8（セルフレビュー → サブエージェント →
 Codex → 仕組み化）を、PRごとに1番目から順に回す。各PRの前に、そのPRのブランチへ`git switch`する
-（diff・Codexの最終チェックは`HEAD`を基準にするため）。比較の基準は、そのPRのbase（`origin/<1つ前のブランチ>`）にする。
+（diff・Codexの最終チェックは`HEAD`を基準にするため）。比較の基準は、そのPRのbase（`origin/<1つ前のブランチ>`か`origin/<統合ブランチ>`）にする。
 
 - 前のPRを修正したら、後ろのブランチへ順に`git merge`で取り込んでpushしてから、後ろのPRへ進む。
   rebase・force pushはしない。
@@ -192,7 +203,7 @@ Codex → 仕組み化）を、PRごとに1番目から順に回す。各PRの�
   振る舞いを変えた、既にLGTMのPRは、レビューをやり直す。
 - Stop hook（品質ゲート）は今いるブランチのpush・PRしか確かめず、ブランチを切り替えると修正回数の数えも
   初めからになる。hookが通ったことを、すべてのPRの完了とみなさない。
-- PRのLGTMが確定したら（`pr-review-cycle`の手順8の後）、各PRの「概要」の一覧のそのPRの行に、LGTMのコミットを書き足す（`gh pr edit`）。
+- PRのLGTMが確定したら（`pr-review-cycle`の手順8の後）、メインのPRの本文の一覧のそのPRの行に、LGTMのコミットを書き足す（`gh pr edit`）。
   中断して再開したとき、どのPRのレビューが済んでいるかを判断する唯一の記録になる。
 - 途中のPRがLGTMになっても、人間へ個別のレビューを頼まない。
 - 定期実行（`scripts/task-scheduler.mjs`）から起動された場合も、この手順と手順9まで行う。ただしセッションは
@@ -201,9 +212,11 @@ Codex → 仕組み化）を、PRごとに1番目から順に回す。各PRの�
 
 ### 9. 人間のレビュー用ガイドを渡す
 
-すべてのPRがLGTMになり、`git fetch origin <各ブランチ>`の後に、すべてのブランチで`git rev-parse <ブランチ>`と`git rev-parse <ブランチ>@{u}`が
-一致し、`git status`がcleanなら、[`human-review-artifact`](../human-review-artifact/SKILL.md) でタスク全体のガイドを1つ作る。最後に、ガイドのURL、PRの一覧（マージの順番）、Doneにしたか・残した確認事項、
-PRごとのレビューの反復回数を短く報告する。
+すべてのサブのPRがLGTMになり、`git fetch origin <各ブランチ>`の後に、統合ブランチを含むすべてのブランチで`git rev-parse <ブランチ>`と`git rev-parse <ブランチ>@{u}`が
+一致し、`git status`がcleanなら、[`human-review-artifact`](../human-review-artifact/SKILL.md) でタスク全体のガイドを1つ作る。最後に統合ブランチへ`git switch`して終わる（定期実行のレポートには最後にいた
+ブランチのPRが載るため、メインのPRが載るようにする）。ガイドのURL、メインのPRのURLとサブのPRの一覧（マージの順番）、
+Doneにしたか・残した確認事項、PRごとのレビューの反復回数を短く報告する。PRのマージは人間が行う
+（[マージ](../../../docs/development/pull-requests.md#マージ人間が行う)）。
 
 人間から指摘が来たら（PRコメントは[レビュアーが書いたものだけ](../../../docs/development/pull-requests.md#人間がレビューする時機)を扱う）、該当するPRで直し、後ろのブランチへ取り込み、直したPRを手順8のとおり
 レビューし直してから、ガイドを更新して再び渡す。
@@ -224,7 +237,7 @@ PRごとのレビューの反復回数を短く報告する。
 
 1. Planの未決定事項に、判断が必要な点・選択肢・確認済みの事実を書き、コミットする。PRを分けている場合も、
    ブランチを切り替えず今いるブランチのPlanに書く（[止まるときの記録](../../../docs/development/pull-requests.md#分け方)の
-   例外。このコミットはLGTMの取り消しに当たらない）。Planがないブランチ（`main`から分けた互いに依存しないPR）なら、
+   例外。このコミットはLGTMの取り消しに当たらない）。Planがないブランチ（統合ブランチ、または統合ブランチから分けた互いに依存しないPR）なら、
    PR本文（PRがなければチャットだけ）に書く。検査が通っていてpushできる場合だけpushする（pre-pushが失敗しても回避しない）。
 2. `scripts/claude-hook.sh claude-quality-gate.mjs --pause "<判断が必要な点を1行で>"` を、最後に実行する。
    品質ゲートの状態は今いるブランチに結び付き、ブランチを切り替えると`--pause`が消えるため、この後は

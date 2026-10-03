@@ -41,8 +41,8 @@
   - APIはコードを生成せず手で書き、request specでresponseを契約と照合する（committee-rails）。
   - 契約のexamplesを、WebのZodとAPIの検証器の両方で読み、同じ意味で解釈することを確かめる。
   - 運用・error code・互換性の規則は[`contracts/README.md`](../contracts/README.md)。
-- API、Web、契約は同じPRで更新するか、PRを分ける場合はmainへ入ったどの時点でも互換性を保つ順に
-  積む（2026-10-03に分けることを許可。手順は[`contracts/README.md`](../contracts/README.md) §2）。
+- API、Web、契約は同じPRで更新するか、PRを分ける場合は統合ブランチに集めて、mainへは一度に入れる
+  （2026-10-03に分けることを許可。手順は[`contracts/README.md`](../contracts/README.md) §2）。
   同一PRでもWebとAPIのデプロイ時差（古いタブ、deploy中の新旧タスクの併存）があり得るため、1回のreleaseでは両方向で壊れない変更だけを入れ、それ以外は
   expand → migrate → contractの段階を踏む（[`contracts/README.md`](../contracts/README.md) §3）。
 

@@ -60,5 +60,5 @@ Mediumがなければ`LGTM`と明記する。
 | Model / migration | validationとDB制約、UUID foreign key、data migration、rollback、既存dataへの影響 |
 | AI / storage / 外部API | 送信内容の最小化、timeout、failure、再試行、冪等性、ログ・削除 |
 | Job | enqueueのtransaction境界、重複実行、retry、dead letter相当の観測方法 |
-| WebとAPIの同時変更 | request / response schema、互換性、同一PRでの更新（分けた場合は、契約のPRに生成した型・Zodが入っているか、mainへ入る順番のどの時点でも互換性を保つか）、デプロイ時差 |
+| WebとAPIの同時変更 | request / response schema、互換性、同一PRでの更新（分けた場合は、契約のPRに生成した型・Zodが入っているか、expand・migrate・contractの段階を同じ統合ブランチにまとめていないか）、デプロイ時差 |
 | auth / CORS / CSRF | 採用した認証方式、Cookieかtokenか、配信origin、ブラウザからの利用経路 |
