@@ -30,7 +30,8 @@ CI相当の検査・コミット・push・PRの有無を確かめ、満たすま
 node scripts/task-status.mjs $ARGUMENTS
 ```
 
-- `runnable: false` なら、`reasons` を日本語で示して止まる。作業区分が設計判断・API契約なら、
+- `runnable: false` なら、`reasons` を日本語で示して止まる。定期実行のセッションが同じタスクを進めている間も
+  `runnable: false` になる（同じworktreeで2つのセッションが作業しないように）。作業区分が設計判断・API契約なら、
   対話で一緒に進めることを提案する。ここではworktreeを作らない。
 - `unblocking: true`（Blockedで依存がすべてDone）なら、依存先の判断・契約がこのタスクの前提を
   満たすか確認してから進む。満たさなければ止まる条件として扱う。
@@ -59,11 +60,19 @@ git fetch origin main
 git worktree list
 ```
 
-- 同じタスクのworktreeが既にある（再開）: `EnterWorktree` に `path` を渡して入る。
+- 同じタスクのworktreeが既にある（再開）: 入る直前に `node scripts/task-status.mjs $ARGUMENTS` をもう一度実行し、
+  定期実行のセッションが作業中でない（`runnable: true`）ことを確かめてから、`EnterWorktree` に `path` を渡して入る。
+  worktreeは定期実行が作ったものと区別できないため、再開するときは常にそのタスク専用のDBを使う。
+  環境変数 `FOD_DB_SUFFIX` が `_task_008` でなければ、Claude Codeを `FOD_DB_SUFFIX=_task_008` を付けて
+  起動し直してもらうよう人間に伝えて止まる（付けないと既定のDBに別タスクのmigrationが混ざる）。
 - ない: `git worktree add .claude/worktrees/task-008 -b <type>/task-008-<slug> origin/main` で作り、
   `EnterWorktree` に `path` を渡して入る。
 - 既にこのセッションが別のworktreeにいて作業ツリーがcleanなら、そこで
   `git switch -c <type>/task-008-<slug> origin/main` としてよい。
+- 定期実行（`scripts/task-scheduler.mjs`）から起動された場合は、`.claude/worktrees/task-008` が
+  origin/mainにdetachされた状態で、セッションは既にその中にいる。下の依存の導入とDBの準備を
+  **先に**済ませてから、`git switch -c <type>/task-008-<slug>` でブランチを作る（準備で止まったときに、
+  作業のないworktreeとして片付けられるようにするため）。
 
 worktreeの中で依存を入れ、前回の状態を消す。
 
@@ -71,6 +80,15 @@ worktreeの中で依存を入れ、前回の状態を消す。
 pnpm install --frozen-lockfile
 (cd apps/api && bundle install)   # apps/api を変更する見込みがあるときだけ
 scripts/claude-hook.sh claude-quality-gate.mjs --reset
+```
+
+定期実行から起動された場合（環境変数 `FOD_DB_SUFFIX` がある）は、変更する範囲にかかわらず、このタスク専用の
+development / test DBを用意する。DB名に接尾辞が付き、並列で動く他のタスクのmigrationが `schema.rb` に混ざらない。
+品質ゲートは `apps/api/` 以外（`scripts/`、`contracts/`、ルートの設定など）の変更でもRSpecを実行するため、
+用意していないと存在しないDBで失敗する。
+
+```bash
+(cd apps/api && bundle install && bin/rails db:prepare && RAILS_ENV=test bin/rails db:prepare)
 ```
 
 ### 3. 読んでからPlanを作る
