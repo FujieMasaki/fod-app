@@ -121,7 +121,8 @@ Browser（音声は memory のみ。storage へ書かない）
           → S3東京：一時object（非公開・暗号化・versioning無効・keyはUUID）
              ＋ server側の記録：処理ID・所有者・key・受理時刻・再試行期限・状態
           → Amazon Transcribe（東京）    ← 元音声が第三者へ渡る最初の地点
-          → Amazon Bedrock の Claude（Geo:JP または mantle In-Region）
+          → Amazon Bedrock の Claude（当面はGeo:JP または mantle In-Region。経路は下記
+            「データ所在地と費用」に従い、国外も許容。確認が済むまでは国内に収まる経路）
           → RDS：dots（sentence / summary / date / started_at / duration）
           → 成功（＝Dotの保存まで完了）：一時object（音声）の削除処理を始める
              （記録は後片付けが終わってから消す。2026-09-29にTASK-003で確定）
@@ -248,9 +249,8 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   適用後にeffective policyを照会して効いていることを確認する（TASK-009/015）。
   なおBedrockはこのopt-out policyの対象外で、モデルごとのdata retention modeで別に確認する。
 - **Bedrockのモデルの推論経路は、下記「データ所在地と費用」に従う**（2026-10-03に変更。変更前は
-  「推論が日本国外へ出ない経路で使えるものから選ぶ」だった）。日本国内に収まるのは
-  **Geo: JPの推論profile（宛先は東京と大阪）**か、**`bedrock-mantle` endpointのIn-Region（東京のみ）**
-  である。**Globalプロファイルは世界中へルーティングされる。**endpointによって可否が違うため、
+  「推論が日本国外へ出ない経路で使えるものから選ぶ」だった）。**「国内に収まる経路」の定義は同節に
+  置く。**なお**Globalプロファイルは世界中へルーティングされる。**endpointによって可否が違うため、
   `bedrock-runtime`と`bedrock-mantle`の対応表を取り違えない。**model idはTASK-009で決める。**
   **選んだ経路が国内か国外かを記録し、国外を選ぶ場合は越境移転の規律の確認（同節。TASK-017）を済ませてから使う。**国外を選んだ
   結果は[privacy.md §5-1](privacy.md)の外部provider行と利用者への説明へ反映する。
@@ -269,8 +269,10 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   残っていても端末へ返さない。**いずれもcleanupの完了を待たず、受理した時点から返さない。
   期間と契機の正本は[privacy.md §5](privacy.md)、判断は
   [TASK-003 Plan §27](implementation-plans/2026-09-29-task-003-generation-design.md)。
-  選定するモデルのdata retention modeも確認し、保持とAWSによる人的レビューが必須のモデルを
-  使う場合は、それを録音前の案内に書く。
+  選定するモデルのdata retention modeも確認する。**`none`にできないモデル（保持とAWSによる人的
+  レビューが必須のもの）を使えるのは、推論が日本国内に収まる経路の場合だけとし、そのときは録音前の
+  案内に書く。国外の推論経路では`none`にできるモデルに限る**（下記「データ所在地と費用」。
+  2026-10-03に条件を足した）。
 - **Job基盤はSolid Queue**（RDSのテーブルを使う）。ElastiCache Redisを常時稼働させないため、
   基盤費の目標（月5,000円、許容1万円前後）を増やさない。**workerは当面ECSの同一タスク内で
   Pumaと並走させ、Puma占有やdeployでの中断が実測で問題になれば別タスクへ分ける。**
@@ -329,10 +331,20 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
 **保存は東京、AIの推論は日本国外を許容する**（2026-10-03にTASK-003で変更。変更前は「日記内容・
 音声・AI入力は原則として東京に置き、文字起こし・AI処理も東京を優先する」だった）。日記内容・音声・
 文字起こし結果の**保存**は東京に置く（RDSとS3は`ap-northeast-1`）。一方で**生成の推論が日本国外へ
-出る経路を許容する。**変更した理由は3つである。
+出る経路を許容する。**
+
+**「保存は東京」の射程は、自分たちの保存（RDS・S3）だけでなく委託先側の保存も含む。**だから上記の
+とおりTranscribeのopt-out適用が必須であり、**国外の推論経路を選ぶ場合は data retention mode を
+`none`にできるモデルに限る。**保持とAWSによる人的レビューが必須のモデルを国外経路で使うと、発話内容が
+日本国外に保持されるため「保存は東京」が成り立たない。**録音前の案内に書くこと（開示）で代替できるのは、
+保持が国内に収まる場合だけとする**（2026-10-03に追加。この条件が無いと「国外経路 ＋ 保持ありのモデル」が
+どの必須条件にも触れないまま成立してしまう）。
+
+変更した理由は3つである。
 
 - **利用者への約束ではなかった。**下記のとおり国内限定は法的・契約上の約束にしておらず、
-  Googleログイン・メール配送・Cookie sessionは既に国内で閉じていない。
+  **Cookie sessionは利用者のブラウザにあり東京DBに収まらない。**Google・メールの処理地域については
+  下記のとおり「全処理が国内であるとは扱わない」としており、国内に収まることを確認していない。
 - **[privacy.md §2](privacy.md)の5原則にリージョンの記述が無い。**privacyの手段はデータを減らす
   こと・境界を示すこと・送信前に判断させること・検出を過信しないこと・残存を管理することであって、
   所在地ではない。

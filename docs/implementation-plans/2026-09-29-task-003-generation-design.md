@@ -9,6 +9,10 @@
 完了（2026-09-29に人間が採用を決定）。**採用内容は未実装である。**実装はTASK-009/010/011、
 API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
 
+**2026-10-03に、人間の判断でデータ所在地の方針を変更した**（`architecture.md`「データ所在地と費用」を
+「保存は東京、AIの推論は日本国外を許容する」へ。経緯は§18「2026-10-03の再確認」、判断の記録は§25）。
+**providerの採用は案Aのままだが、続ける理由が変わり、案Cは不採用から保留になった。**
+
 完了条件7（委託先への9項目の確認）は**このタスクでは満たしていない。**選定の条件として9項目を
 記録し、確認先と確認方法を定めた。**一次資料を読んで確認できた項目もある**（§18、§26に項目別で
 記録した）が、**9項目全体の確認、AWSアカウントの設定、日本の個人情報保護法上の評価は完了して
@@ -107,9 +111,12 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
 
 2026-10-03の所在地方針の変更（§18「2026-10-03の再確認」）では、上記に加えて次も更新した。
 
-- `docs/architecture.md`: 「データ所在地と費用」を正本として変更。経路図の註、Bedrockのモデル選定、
-  「未決定」への越境移転の確認の追加。
-- `docs/product.md`・`docs/journaling.md`: 所在地の記述を新しい方針へ揃えた。
+- `docs/architecture.md`: 「データ所在地と費用」を正本として変更（「保存は東京」の射程とdata retention
+  modeの条件を含む）。2つの経路図の註、Bedrockのモデル選定、「未決定」への越境移転の確認の追加。
+- `docs/privacy.md`: §4のTASK-003の行へ方針の変更と残る確認。§5-1の外部provider行へ正本への参照。
+- `docs/product.md`・`docs/journaling.md`: 所在地の記述を新しい方針へ揃えた。product.mdは§5へ
+  「委託先の構成」の保留事項（案Cが保留になったことと再検討条件）も追加した。
+- `docs/tasks/TASK-001-identity-design.md`: 所在地の要約を正本への参照へ置き換えた。
 - `docs/tasks/TASK-009-backend-audio-generation.md`: model id選定の前提。
 - `docs/tasks/TASK-010-frontend-recording.md`: 送信先（国内/国外）を録音前の案内へ反映する条件。
 - `docs/tasks/TASK-017-breach-response-design.md`: 越境移転の規律を作業範囲と完了条件へ追加。
@@ -123,9 +130,8 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
    文字起こしし、Amazon BedrockのClaudeで`sentence`と`summary`を生成する（§18案A）。
    **Bedrockのモデルの推論経路は`architecture.md`「データ所在地と費用」に従う**（2026-10-03に
    同文書を「保存は東京、AIの推論は日本国外を許容する」へ変更した。変更前は「国外へ出ない経路で
-   使えるものから選ぶ」だった）。日本国内に収まるのはGeo: JP（東京・大阪）か`bedrock-mantle`の
-   In-Region（東京のみ）で、**Globalも選べるが越境移転の規律の確認が済んでからとする。
-   model idはTASK-009で確定する**（§18）。
+   使えるものから選ぶ」だった）。**「国内に収まる経路」の定義は同文書の同節が正本。Globalも選べるが
+   越境移転の規律の確認が済んでからとする。model idはTASK-009で確定する**（§18）。
 2. **非同期で実行する。** Job基盤はSolid Queue（RDSのテーブルを使う）。workerは当面ECSの同一タスク内で
    Pumaと並走させ、詰まったら別タスクへ分ける。**clientはpollingで結果を取得する**（§19案A）。
 3. **処理IDと冪等性keyと録音attemptの識別子を同一にし（server発行）、`dots`の列へ引き継ぐ。**
@@ -453,8 +459,8 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 | **A（採用）: AWSで統一** | Amazon Transcribe（東京）→ Amazon BedrockのClaude | 委託先が1社に集約され、**§26の9項目の確認対象が1つになる。**認証はECS task roleのIAMで行うため**長期固定のAPIキーをアプリで管理しない**（ただしECSはSDKへ一時credentialを供給するので、項目8は消えず内容が変わる）。委託契約（項目6）はAWS DPAがService Termsへ組み込み済みで自動適用される。TranscribeはS3上のobjectを直接入力に取れるため、TASK-002が決めた一時objectの置き場をそのまま使える |
 | 案B: Transcribe（東京）+ Anthropic API（first-party） | 生成だけ別ベンダー | 最新モデルを最速で使えるが、**9項目の確認とDPA締結が2社ぶん**になる。APIキーの管理が増え、生成処理が米国へ出るため所在地の説明が増える（product.mdは国内限定を約束していないので致命的ではない） |
 | 案C: OpenAIに統一（**採否は保留**） | 音声の文字起こし + GPT | 1社で完結し、**既定で入出力をモデル学習に使わない。**文字起こし結果はHTTP responseで返り、取得用の保存はされない（**不正利用監視ログの30日保持は別**）。**日本は地域内保存のみで、推論（inference）は米国**だが、2026-10-03に`architecture.md`を「保存は東京、AIの推論は日本国外を許容する」へ変更したため、**これ自体は不採用の理由にならなくなった。**残る不利点は3つ。**(a) 委託先が1社増えて9項目の確認とDPA・`privacy.md §5-1`の行の差し替えが発生する**、**(b) 文字起こしの入力が25MBまで**で録音30分・32MBの上限と衝突し得る、**(c) ZDRはOpenAIの事前承認（sales）に依存し、適用しない限り不正利用監視ログを30日保持する**（承認が得られるかは自分たちで決められない外部裁量である。2026-09-30の補足でも挙げていた論点）。同文書が**委託先の変更は別の判断として残す**としたため、**本Planでは採否を決めず保留する**（下記「2026-10-03の再確認」） |
-| 案D: Googleで統一 | Cloud Speech-to-Text + Vertex AIのGemini | **候補から外した。**data loggingはopt-inで既定値は良く、**v2は`asia-northeast1`をlocationに持つ**ため「東京に無いから」では落とせない。外した主な理由は**基盤として未使用のため委託先が1社増え**、GeminiのTokyo対応・単価・DPAが未調査で確認が案Aの倍になること。加えて**v1では非同期endpointが文字起こしをGoogle側に約5日間保存し、削除を自分たちで制御できない**（案Aは`OutputBucketName`で自前bucketへ出し、ACKで削除処理を始められる。§27）。**ただしこの保持はv1の記述で、東京で使うv2で同じかは未確認**なので、確認作業の量を主因とする（2026-10-03に調査） |
-| 案E: Azureで統一 | Azure AI Speech + Azure OpenAI | **候補から外した。**Azure OpenAIは**既定で顧客の入出力を学習に使わず**、Regional配備なら選んだリージョン内で処理する。ただし**新しいモデルはJapan Eastに無くGlobal配備が必要になる例があり**、Bedrockの In-Region / Geo / Global と同じ制約を抱える。所在地の悩みが解決しないうえ委託先が1社増えるため外した（2026-10-03に調査） |
+| 案D: Googleで統一 | Cloud Speech-to-Text + Vertex AIのGemini | **候補から外した。**data loggingはopt-inで既定値は良く（**v1のFAQの記述。v2は未確認**）、**v2は`asia-northeast1`をlocationに持つ**ため「東京に無いから」では落とせない。外した主な理由は**基盤として未使用のため委託先が1社増え**、GeminiのTokyo対応・単価・DPAが未調査で確認が案Aの倍になること。加えて**v1では非同期endpointが文字起こしをGoogle側に約5日間保存し、削除を自分たちで制御できない**（案Aは`OutputBucketName`で自前bucketへ出し、ACKで削除処理を始められる。§27）。**ただしこの保持はv1の記述で、東京で使うv2で同じかは未確認**なので、確認作業の量を主因とする（2026-10-03に調査） |
+| 案E: Azureで統一 | Azure AI Speech + Azure OpenAI | **候補から外した。**Azure OpenAIは**顧客データをモデルの再学習に使わない**（一次資料で確認）。外した理由は**基盤として未使用のため委託先が1社増え、§26の9項目の確認が案Aの倍になること。**配備の種類とリージョンの可否（Japan Eastで使えるモデルの範囲）、Azure AI Speechの東京対応、単価、DPAは**未確認**（2026-10-03に調査） |
 
 **採用は案A。**決め手はモデル性能ではなく**完了条件7の重さ**である。
 
@@ -539,13 +545,18 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
    適用後、effective policyを照会して実際に効いていることを確認する。
 2. **Bedrockのモデルの推論経路は、`architecture.md`「データ所在地と費用」に従う**（2026-10-03に
    同文書を**「保存は東京、AIの推論は日本国外を許容する」**へ変更したため、**Globalプロファイルも
-   選べる**）。日本国内に収まるのは**Geo: JP（東京・大阪）**か**`bedrock-mantle`のIn-Region
-   （東京のみ）**である。**選んだ経路が国内か国外かを記録し、国外を選ぶ場合は越境移転の規律の確認を
-   済ませてから使う**（確認が済むまでは国内に収まる経路で運用する。範囲の定義は`architecture.md`「データ所在地と費用」。該当範囲と手当はTASK-017）。
+   選べる**）。**「国内に収まる経路」の定義は同節が正本**（写さない）。**選んだ経路が国内か国外かを
+   記録し、国外を選ぶ場合は越境移転の規律の確認を済ませてから使う**（確認が済むまでは国内に収まる
+   経路で運用する。該当範囲と手当はTASK-017）。
    **モデルの都合で所在地方針を黙って曲げない**（曲げるなら`architecture.md`を先に直す。
    2026-10-03の変更はその手順で行った）。
 3. **選定するモデルの data retention mode を確認し、`none`にできるものを選ぶ。**`none`にできない
    （保持とAWSによる人的レビューが必須の）モデルを使うなら、それを録音前の案内に書く。
+   **2026-10-03に条件を足した。`none`にできないモデルを使えるのは推論が日本国内に収まる経路の
+   場合だけで、国外経路では`none`にできるモデルに限る。**国外経路と保持ありのモデルを組み合わせると
+   発話内容が日本国外に保持され、`architecture.md`「保存は東京」（委託先側の保存を含む）と両立しない。
+   **開示では代替できない。**この条件が無いと、必須条件2と3のどちらにも触れないまま両立しない構成が
+   作れてしまう（2巡目のレビュー指摘）。
 4. **録音形式（webm/opus・mp4/aac）の疎通を実ファイルで確認する。**対応表はコンテナ形式までしか
    保証しておらず、コーデックとMediaRecorderが出すヘッダの扱いは実機で確かめる必要がある。
 5. **文字起こし結果を自前のS3へ出す（§27で採用）。**上記7bのとおり、バッチは必ずS3へ書き出す。
@@ -619,10 +630,10 @@ opt-outを設定すると、それ以前に送った音声の**保存データ�
    `mp3, mp4, mpeg, mpga, m4a, wav, webm`で、**結果はHTTP responseのJSON（`text`）で返る**。
    時間の上限は記載がない。
    （[Speech to text](https://developers.openai.com/api/docs/guides/speech-to-text)）
-4. **Google Cloud Speech-to-Textのdata loggingはopt-inで、既定では顧客コンテンツをサービス提供以外に
-   使わない。**
-   > "Google does not use any of your content for any purpose except to provide you with the Cloud
-   > Speech-to-Text API service."
+4. **Google Cloud Speech-to-Textのdata loggingはopt-inで、入っていなければ顧客コンテンツをサービス
+   提供以外に使わない。**
+   > "**If you are not enrolled in the data logging opt-in program,** Google does not use any of your
+   > content for any purpose except to provide you with the Cloud Speech-to-Text API service."
 
    **ただしv1では、非同期（async）のendpointで結果を取得させるために文字起こしがGoogle側に約5日間
    保存される。**
@@ -631,16 +642,21 @@ opt-outを設定すると、それ以前に送った音声の**保存データ�
 
    同期・streamingはmemory上で処理され保存されない。**v1はEUとUSのendpointしか無いが、v2は
    `asia-northeast1`をlocationに持つ。**
-   **この約5日保持はv1のFAQの記述であり、v2で同じかは未確認である。**v2のdata usageに相当する資料は
-   確認できていない（v2のパスへアクセスするとv1の内容が返る）。**東京で使うなら構成はv2になるため、
-   採否の判断に使うなら先にv2で確認する。**
+   **出典のFAQはv1のドキュメント配下にあり、ページ自身は適用範囲（v2を含むか）を明記していない。
+   したがってこの項の2点（opt-inであること・約5日保持）はいずれもv1の記述として扱い、v2で同じかは
+   未確認とする。**v2のdata usageに相当する資料は確認できていない（v2のパスへアクセスするとv1の内容が
+   返る）。**東京で使うなら構成はv2になるため、採否の判断に使うなら先にv2で確認する。**
    （[Data usage FAQ](https://docs.cloud.google.com/speech-to-text/docs/v1/data-usage-faq)、
    [Supported regional endpoints（v1）](https://docs.cloud.google.com/speech-to-text/docs/v1/endpoints)、
    [Supported languages（v2。locationの一覧）](https://docs.cloud.google.com/speech-to-text/v2/docs/speech-to-text-supported-languages)）
-5. **Azure OpenAIは既定で顧客のプロンプト・応答を学習に使わず、OpenAIへも共有しない。**Regional配備は
-   選んだリージョン内で処理し、Global配備は複数リージョンに跨る。**新しいモデルはJapan Eastに無く
-   Global配備が必要になる例がある。**
-   （[Azure OpenAI frequently asked questions](https://learn.microsoft.com/en-us/azure/foundry-classic/openai/faq)）
+5. **Azure OpenAIは顧客データをモデルの再学習に使わない。**
+   （[Azure OpenAI frequently asked questions](https://learn.microsoft.com/en-us/azure/foundry-classic/openai/faq)。
+   同ページに書かれているのはこの1点とdata privacyガイドへのリンクだけである）
+   **未確認（同ページでは裏付けられない）**: 「OpenAIへも共有しない」、「Regional配備は選んだリージョン
+   内で処理し、Global配備は複数リージョンに跨る」、「新しいモデルはJapan Eastに無くGlobal配備が必要に
+   なる例がある」の3点は、**検索結果の要約から拾ったもので一次資料で確認していない**（同ページは
+   リージョンの可否について model availability guide を見よとだけ書いている）。
+   **案Eを外す判断は「委託先が1社増える」で足りるため、この3点に依存させない。**
 
 **学習利用の既定値は、比較したサービスのうちAmazon Transcribeだけが例外である**（音声そのものを
 渡す工程がそこなので、一番効く場所で既定値が悪い）。
@@ -650,8 +666,8 @@ opt-outを設定すると、それ以前に送った音声の**保存データ�
 | **AWS Transcribe** | **既定で顧客コンテンツをサービス改善に利用し、利用リージョン外へ保存し得る。**opt-out policyの適用が必須 |
 | AWS Bedrock | opt-out policyの**対象外**。既定はゼロデータ保持と説明されるが、**モデルごとのdata retention modeで決まる**（§26項目2。未確認） |
 | OpenAI | 使わない |
-| Google Speech-to-Text | data loggingはopt-in（**v1では非同期endpointが結果を約5日保存する**。学習利用とは別の話。v2は未確認） |
-| Azure OpenAI | 使わない |
+| Google Speech-to-Text | data loggingはopt-in。**非同期endpointは結果を約5日保存する**（学習利用とは別の話）。**どちらもv1のFAQの記述で、v2は未確認** |
+| Azure OpenAI | モデルの再学習に使わない |
 
 したがって**「案Aを選んだのはプライバシー上有利だから」とは書けない。**正確には「opt-outを適用すれば
 並ぶ」であり、だからこそ上記「案Aを採るための必須条件」1でopt-outの適用を必須としている。
@@ -687,7 +703,8 @@ Yes / Processing No」）が正しかった。**`bedrock-runtime`と`bedrock-man
 - 変更前: 案Cは東京原則を満たさないため落ちる。
 - 変更後: **所在地では落ちない。**案Aを続ける理由は、**委託先を増やさないこと**（AWSは既に
   ALB / ECS / RDS / S3 として使用中で、9項目の確認とDPA・`privacy.md §5-1`の行の差し替えが発生
-  しない）、**25MBの上限が無いこと**（Transcribeは8時間 / 2GB）、**ZDRのような外部裁量に依存しない
+  しない）、**25MBの上限が無いこと**（Transcribeは8時間 / 2GB。
+  [Transcribeのendpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)）、**ZDRのような外部裁量に依存しない
   こと**（案CはOpenAIのsales承認が得られないと監視ログの30日保持が残る）である。
 - **案Cは不採用ではなく保留**とする。`architecture.md`が**委託先そのものの変更を別の判断として残した**
   ため、本Planでは採否を決めない。**同じ「国外を許容する」譲歩でも、AWS内に留まる方が安い**という
@@ -1310,6 +1327,24 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
    残すことになる」として取得後削除を採らなかったが、**この理由は成立していなかった**
    （2巡目のレビュー指摘3。成功後も`dots`に処理IDが残るため記録なしで認可できる）。
    **それでもTASK-002の前提に対しては後退である**ことを§27に記録した。
+
+### 2026-10-03の人間の判断（所在地方針の変更）
+
+**判断の主体は人間である。**providerの比較を一次資料で確認し直した結果（§18「2026-10-03の再確認」）を
+10件の選択式の質問にまとめて提示し、人間が回答した。**所在地方針については「原則を外す。ただし
+まずAWS内でGlobalを許すところまでとし、委託先の変更は別判断にする」を選んだ。**
+
+| 項目 | 判断 |
+| --- | --- |
+| 東京原則の採否 | **外す。**`architecture.md`「データ所在地と費用」を「保存は東京、AIの推論は日本国外を許容する」へ変更する |
+| 範囲 | **AWS内に限る。**Bedrockの推論経路の制約を外すだけで、**委託先そのものの変更は別の判断として残す** |
+| 見直しの範囲 | 判断1（provider）だけを再検討する。判断5（文字起こしの置き場）は変えない |
+| 案Cの採否 | 所在地では落ちなくなったため、**不採用ではなく保留**とする（再検討条件は`product.md §5`） |
+| 比較対象 | AWSとOpenAIに絞り、**Google・Azureを候補から外した理由を明記する**（案D・案E） |
+
+**この変更はproviderの都合で方針を曲げたものではない。**必須条件2が「モデルの都合で所在地方針を黙って
+曲げない（曲げるならarchitecture.mdを先に直す）」としているとおり、**正本の側を先に直す手順で行った。**
+なお**「方針を変えたこと」と「越境移転の規律の確認が済んだこと」は別である**（§5、TASK-017）。
 
 ## 26. 委託先に確認する9項目（完了条件7。**未確認**）
 
