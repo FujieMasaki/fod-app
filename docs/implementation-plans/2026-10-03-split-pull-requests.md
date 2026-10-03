@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中（機械のレビュー中。Codexの最終チェックでLGTMになったら完了にする）
+完了（Codexの最終チェックで`de980db`がLGTM。人間のレビュー待ち）
 
 ## 2. Goal
 
@@ -158,9 +158,15 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
 
 ## 16. Completion Record
 
-- 状態: 実施中
+- 状態: 完了（サブエージェント・Codexとも`de980db`でLGTM）
 - 実装差異: なし
 - 検証結果: `taskBranchPattern`が`feat/task-008-1-dot-model`に一致し、codex-final-checkのbase検査が
   `origin/feat/task-008-1-dot-model`を受け付けることをnodeで確認した。`pnpm lint:naming`は成功。
   `docs/development/pull-requests.md`の見出しと、skillからのアンカーリンクの対応を目視で確認した。
+  DBの接続先を確かめる`bin/rails runner 'puts ActiveRecord::Base.connection_db_config.database'`が、
+  `FOD_DB_SUFFIX=_task_999`で`…_development_task_999`・`…_test_task_999`を、`DATABASE_URL`を足すと既定の
+  `focus_on_dot_api_development`を出すことを確かめた（接続・削除はしていない）。
+- 対応しなかった任意改善（サブエージェントのLow）: AIが所有者のtokenで書いたPRコメントを人間の指摘と取り違えうること、
+  `gh api`の例に`--paginate`がないこと、pushしていない仕組み化のコミットを外す方法、許可ルールにない
+  コマンドの一覧に`bin/rails runner`がないこと。人間のレビューで扱いを決める。
 - 関連: PR #50
