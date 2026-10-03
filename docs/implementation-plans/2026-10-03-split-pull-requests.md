@@ -102,6 +102,7 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
 - `docs/architecture.md`、`contracts/README.md`、`docs/code-review/backend/README.md`、`docs/development/backend.md`（変更）
 - `AGENTS.md`、`README.md`、`.claude/skills/run-task/SKILL.md`、`.claude/skills/pr-review-cycle/SKILL.md`、
   `.claude/skills/human-review-artifact/SKILL.md`（変更）
+- `docs/implementation-plans/TEMPLATE.md`（変更。「10. Files to Change」にPRごとの分け方の欄）
 - 本Plan（新規）
 
 ## 11. Libraries / APIs
@@ -131,6 +132,10 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
 - 定期実行（`-p`、`--permission-mode auto`）では確認を出せないため、許可ルールにない`git merge`・`gh pr edit`等が
   拒否されうる。拒否されたら`run-task`の止まる条件に当たる。
 - 定期実行のレポート・通知には、分けたPRのうち最後のブランチのPRしか載らない（別のPRで直す）。
+- 定期実行で、`origin/main`から作ったばかりの互いに依存しないブランチにいるまま打ち切られると、`task-scheduler.mjs`の
+  `untouched`が今いるブランチだけを見て、worktreeを作業なしとして消す（ほかのブランチのコミットは残るが、
+  翌日に同じタスクが最初から始まりうる）。scriptの見直し（別のPR）で、同じタスクのすべてのブランチを見るようにする。
+- PRコメントは公開repositoryで誰でも書けるため、人間の指摘として扱うのはレビュアーのコメントだけにした（サブエージェントの指摘）。
 - `bin/rails db:prepare`は適用済みのmigrationを巻き戻さないため、migrationが違う前のブランチへ戻ると、後ろのPRの
   テーブルが残ったDBで検証してしまう（Codexの指摘）。タスク専用DBを切り替え先の`schema.rb`から作り直す手順にした。
 
