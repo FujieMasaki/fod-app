@@ -157,6 +157,9 @@ AIはどのPRもマージしない。人間は、すべてのサブのPRをレ�
 
    コンフリクトが出たら、AIは解消せずに止まり、人間に判断を仰ぐ（解消の内容は、どのサブのPRのレビューも
    経ていないため）。pushが拒否されたら、force push（`--force-with-lease`を含む）をせずに止まる。
+   止まるときは、コンフリクトなら`git merge --abort`で取り込む前に戻し、最後に
+   `scripts/claude-hook.sh claude-quality-gate.mjs --pause "<理由>"`を実行する。統合ブランチもStop hookの対象で、
+   止めずに終わると「コミットしてpushせよ」と差し戻されるが、統合ブランチではこの差し戻しに従ってコミット・pushしない。
 4. `main`へマージする前に、統合ブランチにレビューを経ていない変更が入っていないことを確かめる。
    `git fetch origin main <統合ブランチ>`の後、`git log --first-parent --oneline origin/main..origin/<統合ブランチ>`
    が、最初の空のコミット、一覧にあるサブのPRのmerge commit、`main`の取り込みのmerge commitだけでできていること。

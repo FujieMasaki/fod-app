@@ -132,7 +132,8 @@ AGENTS.mdの「重大な設計判断または複数の有力案がある場合�
 - Planに書いたPRの順に実装する。1つのPRの分を実装・検証・コミットしたら、
   `git switch -c <type>/task-008-<次の順番>-<slug>` でそこから次のブランチを作って続ける
   （互いに依存しないPRは統合ブランチ`origin/<type>/task-008-<slug>-integration`から作る）。各ブランチは単独で検査が通る状態にする。
-- 実装中にPRの大きさがPlanから変わったら、Planを直してから分け直す。Planの修正は1番目のブランチで
+- 実装中にPRの大きさがPlanから変わったら、Planを直してから分け直す。既にコミットした変更を分け直すときは、
+  [`pr-review-cycle`](../pr-review-cycle/SKILL.md)の1-6の方法（新しいブランチへ載せ直し、元の履歴は書き換えない）に従う。Planの修正は1番目のブランチで
   コミットし、後ろのブランチへ順に`git merge`で取り込む（Planだけの取り込みは、レビューのやり直しに当たらない）。
 - lockfile・migrationが違うブランチへ切り替えたら、[依存とDBを揃え直して](../../../docs/development/pull-requests.md#統合ブランチとサブのpr)
   から検査する（migrationが違えば`db:prepare`ではなく、切り替え先の`schema.rb`からDBを作り直す）。
@@ -180,7 +181,7 @@ baseは1つ前のブランチにする。1番目と、互いに依存しないPR
 
 pushの前に、各ブランチで`git diff --name-only <base>...<ブランチ>`（baseは1つ前のブランチか統合ブランチ）の
 ファイルを数え、[数えないファイル](../../../docs/development/pull-requests.md#大きさの上限)を除いて20以下か
-確かめる。Planの見積もりより増えて超えていたら、Planを直してから分け直す。self-review・仕組み化で
+確かめる。Planの見積もりより増えて超えていたら、Planを直してから、`pr-review-cycle`の1-6の方法で分け直す。self-review・仕組み化で
 ファイルが増えたときも、pushの前に数え直す。
 
 - pushは送信先のブランチを必ず明示する。`git push` や `git push origin HEAD` のように送信先を省略する形は、
