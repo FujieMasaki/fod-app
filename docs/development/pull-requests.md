@@ -59,6 +59,8 @@ origin/main ← <type>/task-008-1-<slug> ← <type>/task-008-2-<slug> ← <type>
 - PRのタイトルの末尾に`（1/3）`のように順番を付ける。`main`から分けた互いに依存しないPRは、完了の記録を
   書く最後のPRより前の番号にする。本文の「概要」に、同じタスクのPRの一覧
   （番号・タイトル・base）とマージの順番を書く。
+- lockfile・migrationが違うブランチへ切り替えたら、`pnpm install --frozen-lockfile`・`bundle install`・
+  `bin/rails db:prepare`を実行し直してから検査する（前のブランチの依存で検査が通ってしまうのを防ぐ）。
 - PRごとの作業（修正・検証・push・PR作成・レビュー）は、**そのPRのブランチへ`git switch`してから**行う。
   pre-pushの検査、`gh pr create`のhead、Codexの最終チェックやレビューのdiff（`<base>...HEAD`）は、どれも
   今いるブランチを基準にするため、別のブランチにいると、そのPRを単独で確かめたことにならない。
@@ -66,7 +68,8 @@ origin/main ← <type>/task-008-1-<slug> ← <type>/task-008-2-<slug> ← <type>
   一致することを確かめる。hookのメッセージにある`HEAD:<ブランチ>`の例は、今いるブランチへpushする場合に限る。ブランチを行き来するため、`HEAD:<ブランチ>`だと
   後ろのブランチにいるまま前のブランチの名前へpushしても、fast-forwardとして通ってしまい、後ろのPRの変更が
   前のPRに黙って混ざる。
-- 既にLGTMのPRにコミットを足したら、そのPRのLGTMは取り消しになる。そのPRのレビュー（セルフレビュー →
+- 既にLGTMのPRにコミットを足したら、そのPRのLGTMは取り消しになる（前のPRを`git merge`で取り込んだだけの
+  コミットは、次の項目の基準で判断する）。そのPRのレビュー（セルフレビュー →
   サブエージェント → Codex）をやり直してから、後ろのPRのレビューへ戻る。
 - 前のPRを直したら、その後ろのブランチへ順に`git merge`で取り込んでpushする。rebase・force pushは
   しない。push前の修正でも`git merge`に揃える（push済みかどうかで手順を分けると、取り違えてforce pushが
@@ -81,8 +84,10 @@ origin/main ← <type>/task-008-1-<slug> ← <type>/task-008-2-<slug> ← <type>
   コミットが入らず、後ろのPRのdiffに前のPRの変更が再び現れ、コンフリクトも起きる。
 - 1番目から順にマージする。
 - マージしたら、次のPRのbaseを`main`へ付け替えてからマージする。GitHubの「マージ後にブランチを自動で
-  削除する」設定が有効なら自動で付け替わる。付け替えた後、`main`が進んでいれば、
-  CIを再実行するか、AIに`main`の取り込みを頼んでからマージする（baseの付け替えだけではCIが走り直さない）。
+  削除する」設定が有効なら自動で付け替わる。付け替えた後、前のPRのマージ以外で`main`が進んでいれば、
+  AIに`main`の取り込み（`git merge origin/main`してpush）を頼み、新しいCIが通ってからマージする。baseの
+  付け替えではCIが走り直さず、CIの再実行（re-run）も付け替える前のmerge commitを検査し直すだけで、新しい
+  `main`と合わせた状態を検証しない。
   付け替えずにマージすると、`main`ではなく前のブランチへ
   入ってしまう。
 

@@ -57,7 +57,7 @@ LGTMになってから、タスク単位で1回行う。
 
 - 参照: AGENTS.md、上記3 skill、`scripts/claude-quality-gate.mjs`、`scripts/codex-final-check.mjs`。
 - 更新: AGENTS.md（Pull Requests・タスクの自動実行）、README.md（Claude Codeでのタスク実行）、上記3 skill、
-  `docs/architecture.md`・`contracts/README.md`・`docs/code-review/backend/README.md`（契約・API・Webを分けてよいこと）。
+  `docs/architecture.md`・`contracts/README.md`・`docs/code-review/backend/README.md`・`docs/development/backend.md`（契約・API・Webを分けてよいこと）。
 - 新規: `docs/development/pull-requests.md`（分割・積み重ね・マージ・人間のレビューの時機の正本）。
 
 ## 7. Proposed Approach
@@ -90,7 +90,7 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
 ## 10. Files to Change
 
 - `docs/development/pull-requests.md`（新規）
-- `docs/architecture.md`、`contracts/README.md`、`docs/code-review/backend/README.md`（変更）
+- `docs/architecture.md`、`contracts/README.md`、`docs/code-review/backend/README.md`、`docs/development/backend.md`（変更）
 - `AGENTS.md`、`README.md`、`.claude/skills/run-task/SKILL.md`、`.claude/skills/pr-review-cycle/SKILL.md`、
   `.claude/skills/human-review-artifact/SKILL.md`（変更）
 - 本Plan（新規）

@@ -146,6 +146,11 @@ gh pr create --base feat/task-008-1-dot-model --head feat/task-008-2-dot-api \
 baseは1つ前のブランチにする。1番目と、互いに依存しないPRは`main`にする。PRが1つだけなら
 タイトルに順番を付けない。
 
+pushの前に、各ブランチで`git diff --name-only <base>...<ブランチ>`（baseは1つ前のブランチか`origin/main`）の
+ファイルを数え、[数えないファイル](../../../docs/development/pull-requests.md#大きさの上限)を除いて20以下か
+確かめる。Planの見積もりより増えて超えていたら、Planを直してから分け直す。self-review・仕組み化で
+ファイルが増えたときも、pushの前に数え直す。
+
 - pushは送信先のブランチを必ず明示する。`git push` や `git push origin HEAD` のように送信先を省略する形は、
   実行時のブランチや設定でmainに送られうるためhookで拒否される。
 - 本文は [.github/pull_request_template.md](../../../.github/pull_request_template.md) の見出し順に

@@ -66,8 +66,8 @@
 
 ### 必須
 
-- Webが利用する最初のプロダクトAPIでは、request、response、error、認証、互換性を同じ変更で
-  更新する。契約の運用はarchitectureの方針に従う。
+- Webが利用する最初のプロダクトAPIでは、request、response、error、認証、互換性を同じ変更（または
+  [`contracts/README.md`](../../contracts/README.md) §2に従って積み重ねたPR）で更新する。契約の運用はarchitectureの方針に従う。
 - API契約の正本は[`contracts/openapi.yaml`](../../contracts/openapi.yaml)。endpointを実装する前に
   契約を確認し、形を変えるときは先に契約を直す。request specでは
   `assert_response_schema_confirm(status)`でresponseを契約と照合する。errorはRFC 9457の形で、

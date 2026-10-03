@@ -32,7 +32,8 @@ OpenAPIを3.1ではなく3.0.3で書くのは、API側の検証に使うcommitte
      API実装も同じPRに入れる。`pnpm check`・`pnpm type-check`が契約・型・Zodの一致を検査するため、
      分けるとそのPRのCIが通らない。
    - PRは1つずつmainへマージ・releaseされうる。マージのどの時点でも、mainのWebとAPIが下記
-     「互換性」を満たす順にする。例: 追加なら「契約（型・Zodを含む） → APIの実装 → Webでの利用」。
+     「互換性」を満たす順にする。例: endpoint・任意項目の追加なら「契約（型・Zodを含む） → APIの実装 → Webでの利用」
+     （responseのenumへの値の追加は、下記のとおりWebが先）。
      まだmainにないendpoint・項目をWebが使うPRを、先にマージしない。
    - 下記で「だめ」の変更は、expand・migrate・contractの各段階を別のPRにしてよい。
 
