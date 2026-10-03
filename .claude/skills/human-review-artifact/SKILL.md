@@ -1,6 +1,6 @@
 ---
 name: human-review-artifact
-description: 機械のレビュー（サブエージェント・Codex）でLGTMが出たPRを人間のレビューへ渡すとき、人間が判断する項目を実例と「OKの基準」つきでまとめたガイドページ（Artifact）を作る。pr-review-cycleのLGTM後に使うほか、「レビュー用のページを作って」「人間のレビュー用にまとめて」と頼まれたときにも使う。
+description: 機械のレビュー（サブエージェント・Codex）でLGTMが出たPR（分けた場合はタスクのすべてのPR）を人間のレビューへ渡すとき、人間が判断する項目を実例と「OKの基準」つきでまとめたガイドページ（Artifact）を作る。pr-review-cycleのLGTM後に使うほか、「レビュー用のページを作って」「人間のレビュー用にまとめて」と頼まれたときにも使う。
 ---
 
 # /human-review-artifact
@@ -41,7 +41,8 @@ PRごとには作らない。以下の「PR」は、分けた場合はまとま�
 LGTMになったとき。まだLGTMでないPRが残っていれば作らない。
 
 **作らない**: 軽微な修正（文言・typo、lintの修正、小さなバグ修正、依存の更新など）。目安として、PR本文の
-「確認すること」が2項目以下で、仕様や運用の判断を含まない場合は作らない。
+「確認すること」が2項目以下で、仕様や運用の判断を含まない場合は作らない。PRを分けた場合は、まとまり全体の
+項目数で判断する。
 
 迷ったら作る。作らなかった場合は、その理由を完了報告に1行で書く。Artifact toolが使えない、または
 publishが拒否された場合も、ページを作らずにその旨を完了報告に書く（PRのマージは妨げない）。
@@ -52,7 +53,7 @@ publishが拒否された場合も、ページを作らずにその旨を完了�
 
 以下はPRごとに集める。分けた場合のdiffは、各PRのbase（1つ前のブランチ）との差分にする。
 
-- `gh pr view <番号> --json number,title,body,baseRefName,headRefOid,url` と `git diff origin/<ベースブランチ>...<PRのブランチ>`
+- `gh pr view <番号> --json number,title,body,baseRefName,headRefOid,url` と `git diff origin/<ベースブランチ>...origin/<PRのブランチ>`
 - `gh pr checks <番号>`（CIの結果）。CIが実行中なら、`gh pr checks <番号> --watch`をBash toolの
   バックグラウンド実行で走らせ、終わるまで待つ。CIが動かないブランチなら、そのことを書く。
   - **CIが失敗していたら、ページを作らない。** `pr-review-cycle`から呼ばれた場合は、同skillの手順6

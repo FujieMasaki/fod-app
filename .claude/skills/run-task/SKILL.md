@@ -118,12 +118,17 @@ AGENTS.mdの「重大な設計判断または複数の有力案がある場合�
 
 ### 6. self-reviewする
 
-`self-review` skillでタスク全体のdiff（`origin/main...<最後のブランチ>`）を確認し、該当するレビュー入口（`docs/code-review/`）とsecurity観点で
-見直す。指摘は修正してコミットする。確信の持てない指摘はPRの「確認すること」に入れる。
+`self-review` skillでタスク全体のdiff（`origin/main...<最後のブランチ>`。`main`から分けた互いに依存しない
+PRがあれば、そのdiffも）を確認し、該当するレビュー入口（`docs/code-review/`）とsecurity観点で
+見直す。指摘は、そのファイルを持つPRのブランチへ切り替えて修正・コミットし、後ろのブランチへ順に
+`git merge`で取り込む（[`pr-review-cycle`](../pr-review-cycle/SKILL.md)の手順6と同じ）。確信の持てない
+指摘はPRの「確認すること」に入れる。
 
 ### 7. pushしてPRを作る
 
-PRごとに1番目から順に、`<ブランチ>:<ブランチ>`の形で送信先を明示してpushし、PRを作る（例は2番目のPR）。
+PRごとに1番目から順に、そのPRのブランチへ`git switch`し、`git branch --show-current`がpush先と一致する
+ことを確かめてから、`<ブランチ>:<ブランチ>`の形で送信先を明示してpushし、PRを作る（例は2番目のPR）。
+pre-pushの検査は今いるブランチの作業ツリーを検査するため、切り替えないと、そのブランチを単独で検証したことにならない。
 `HEAD:<ブランチ>`の形は使わない（ブランチを行き来するため、別のPRの変更を混ぜてpushしうる）。
 
 ```bash
@@ -147,7 +152,8 @@ baseは1つ前のブランチにする。1番目と、互いに依存しないPR
 ### 8. 機械のレビューを回す
 
 [`pr-review-cycle`](../pr-review-cycle/SKILL.md) の手順2〜8（セルフレビュー → サブエージェント →
-Codex → 仕組み化）を、PRごとに1番目から順に回す。比較の基準は、そのPRのbase（`origin/<1つ前のブランチ>`）にする。
+Codex → 仕組み化）を、PRごとに1番目から順に回す。各PRの前に、そのPRのブランチへ`git switch`する
+（diff・Codexの最終チェックは`HEAD`を基準にするため）。比較の基準は、そのPRのbase（`origin/<1つ前のブランチ>`）にする。
 
 - 前のPRを修正したら、後ろのブランチへ順に`git merge`で取り込んでpushしてから、後ろのPRへ進む。
   rebase・force pushはしない。
@@ -160,7 +166,7 @@ Codex → 仕組み化）を、PRごとに1番目から順に回す。比較の�
 ### 9. 人間のレビュー用ガイドを渡す
 
 すべてのPRがLGTMになり、すべてのブランチで`git rev-parse <ブランチ>`と`git rev-parse <ブランチ>@{u}`が
-一致したら、[`human-review-artifact`](../human-review-artifact/SKILL.md) でタスク全体のガイドを1つ作る。最後に、ガイドのURL、PRの一覧（マージの順番）、Doneにしたか・残した確認事項、
+一致し、`git status`がcleanなら、[`human-review-artifact`](../human-review-artifact/SKILL.md) でタスク全体のガイドを1つ作る。最後に、ガイドのURL、PRの一覧（マージの順番）、Doneにしたか・残した確認事項、
 PRごとのレビューの反復回数を短く報告する。
 
 人間から指摘が来たら、該当するPRで直し、後ろのブランチへ取り込み、直したPRを手順8のとおり
@@ -174,6 +180,8 @@ PRごとのレビューの反復回数を短く報告する。
 - 完了条件が現在の仕様・実装と矛盾する。
 - 秘密情報、外部サービスの設定、課金、本番環境の操作が必要。
 - 依存先の判断・契約がこのタスクの前提を満たさない。
+- 手順8で、[`pr-review-cycle`](../pr-review-cycle/SKILL.md)の「止まる条件」に当たった（レビューの往復の
+  上限、securityの指摘を対応不要と判断したい、Codexの最終チェックが実行できない、など）。
 
 止まるときは、次の順で行う。
 

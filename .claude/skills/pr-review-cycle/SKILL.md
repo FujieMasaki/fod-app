@@ -12,7 +12,11 @@ description: 「PR作成して」と依頼されたら、PR作成→セルフレ
 PRは[PRの分割と人間のレビュー](../../../docs/development/pull-requests.md)に従い、レビュー対象の
 ファイルが1つあたり20個までになるように分ける。分けた場合、手順2〜8は**PRごとに1番目から順に**回し、
 手順9の人間のレビュー用ガイドは**すべてのPRがLGTMになってから1つだけ**作る。この skill の
-「ベースブランチ」は、そのPRのbase（積み重ねたPRなら1つ前のブランチ）を指す。
+「ベースブランチ」は、そのPRのbase（積み重ねたPRなら1つ前のブランチ）を指す。分けた場合、PRごとの
+作業（修正・検証・push・PR作成・レビュー）は、**そのPRのブランチへ`git switch`してから**行う
+（pre-push、`gh pr create`、diff、Codexの最終チェックは、どれも今いるブランチを基準にするため）。
+
+この skill の「手順N」は`### N`の節を指す。手順1の中の小項目は「1-5」のように書いて区別する。
 
 レビューは次の3段で行う。段ごとに役割が違い、後段が前段の代わりになるわけではない。
 
@@ -62,16 +66,18 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
    apps/apiのRailsコードは`cd apps/api && bundle exec rspec` / `bundle exec rubocop` /
    `bundle exec brakeman`）。pre-push hookで検証されない領域（Railsのtest/lint/security
    scanなど）は、pushする前に自分で実行して結果を確認する。
-6. コミットした後に、`git diff --name-only origin/<ベースブランチ>...HEAD` で変更ファイルを数える
+6. 1-5でコミットした後に、`git diff --name-only origin/<ベースブランチ>...HEAD` で変更ファイルを数える
    （未コミットの変更を数え漏らさないよう、`git status` がcleanになってから数える）。
    [数えないファイル](../../../docs/development/pull-requests.md#大きさの上限)を除いて20を超えるなら、
    同文書の[分け方](../../../docs/development/pull-requests.md#分け方)と
    [積み重ね](../../../docs/development/pull-requests.md#積み重ねstacked-pr)に従ってブランチを分ける。
    既存のコミットを分け直すときは、新しいブランチを作って`git cherry-pick`や`git checkout <コミット> -- <path>`
-   で載せ直し、元のブランチの履歴は書き換えない。分けた場合は、各ブランチが単独で上の5の検証を通ることを
-   確かめる。分け方に迷う（関心事の境界が決まらない）場合は、推測で進めず「止まる条件」に従う。
+   で載せ直し、元のブランチの履歴は書き換えない。分けた場合は、各ブランチへ切り替えて、単独で1-5の検証を通ることを
+   確かめる。分け方に迷う（関心事の境界が決まらない）場合は、推測で進めず「止まる条件」に従う。1つの関心事がどうしても20を超える場合の例外は、同文書の
+   [大きさの上限](../../../docs/development/pull-requests.md#大きさの上限)のとおり（概要に理由を書く）。
 7. `git push -u origin HEAD:<ブランチ名>` で送信先を明示してpushし、
-   `gh pr create --base <ベースブランチ>` でPRを作る。分けた場合は1番目から順にpush・PR作成し、
+   `gh pr create --base <ベースブランチ> --head <ブランチ名>` でPRを作る。分けた場合は1番目から順に、
+   そのブランチへ切り替えてからpush・PR作成し、
    [pushの形](../../../docs/development/pull-requests.md#積み重ねstacked-pr)は`<ブランチ>:<ブランチ>`にする。
    タイトル末尾に`（1/3）`のような順番を、各PRの「概要」に同じまとまりのPRの一覧とマージの順番を書く。
    以降のレビューでも同じ基準（`origin/<ベースブランチ>`）を使う。
@@ -140,7 +146,7 @@ baseだけを受け取り（形式を検査し、余分な引数は拒否する�
 
 - 時間がかかるため、Bash toolのバックグラウンド実行（`run_in_background`）で実行し、終了の通知を待つ。
   スクリプトは20分で打ち切る。
-- repo rootから実行する（許可ルールもスクリプトのパスも、repo root基準の相対パスのため）。手順1・6で
+- repo rootから実行する（許可ルールもスクリプトのパスも、repo root基準の相対パスのため）。1-5・手順6で
   `cd apps/api`した後は作業ディレクトリが残るので、実行前に`git rev-parse --show-toplevel`と一致するか
   確かめる。
 - **最終チェックは、自分が作成したブランチだけを対象にする。** 他人が作成したブランチでは実行しない。
