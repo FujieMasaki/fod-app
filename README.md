@@ -99,7 +99,7 @@ User、認証、Dot、音声、AI処理のプロダクトAPIは未実装です�
 | [`docs/privacy.md`](docs/privacy.md) | 個人データの最小化、外部送信、固有名詞と削除に関する横断仕様 |
 | [`docs/dot-history.md`](docs/dot-history.md) | 複数Dotの履歴体験と時間軸の検証候補 |
 | [`docs/architecture.md`](docs/architecture.md) | 現在の構成と継続する設計判断 |
-| [`docs/development/`](docs/development/) | frontend / backend実装時の判断基準 |
+| [`docs/development/`](docs/development/) | frontend / backend実装時の判断基準、PRの分割と人間のレビューの規約 |
 | [`docs/code-review/`](docs/code-review/) | frontend / backendレビューの確認・報告方法、Codexの最終チェック |
 | [`docs/implementation-plans/`](docs/implementation-plans/) | 変更単位の判断と検証履歴 |
 
@@ -157,13 +157,13 @@ Production BuildはローカルでのPushを遅くしないため、CI側で実�
 
 ## Claude Codeでのタスク実行
 
-実装系のタスク（`docs/tasks/`）は、Claude Codeに「TASK-008を進めて」と依頼するか、`/run-task TASK-008` と入力すると、着手可否の確認からPR作成まで止まらずに進みます。自然文でもSkillは起動しますが、確実に起動したいときは `/run-task` を使ってください。対象の条件は[`docs/tasks/README.md`](docs/tasks/README.md)を参照してください。
+実装系のタスク（`docs/tasks/`）は、Claude Codeに「TASK-008を進めて」と依頼するか、`/run-task TASK-008` と入力すると、着手可否の確認から、PR作成、機械のレビュー（セルフレビュー → サブエージェント → Codex）、人間のレビュー用ガイドの作成まで止まらずに進みます。PRはレビュー対象のファイルが1つあたり20個までになるよう分けられます。分けたときは、`main`へのメインのPR（統合ブランチ）と、そこへ向けたサブのPRができます。人間はすべてのサブのPRがLGTMになってからまとめてレビューし、サブのPRを統合ブランチへ、最後にメインのPRを`main`へマージします（[`docs/development/pull-requests.md`](docs/development/pull-requests.md)）。PRを分けるときに使う`git merge`・`gh pr edit`・`gh api`などは`.claude/settings.json`の許可ルールにないため、追加するまでは実行のたびに確認が出ます（定期実行のように確認を出せない実行では拒否されうるため、そのときは止まります）。自然文でもSkillは起動しますが、確実に起動したいときは `/run-task` を使ってください。対象の条件は[`docs/tasks/README.md`](docs/tasks/README.md)を参照してください。
 
-作業ブランチは `<type>/task-<3桁の番号>-<slug>`（例: `feat/task-008-dot-history`）です。`<type>` はそのタスクの主な変更の種別で、`feat` / `fix` / `refactor` / `chore` / `docs` / `test` のいずれかを使います。以下のhookはこの形のブランチ名でのみ働きます。
+作業ブランチは `<type>/task-<3桁の番号>-<slug>`（例: `feat/task-008-dot-history`）です。PRを分けるときは `<type>/task-<3桁の番号>-<順番>-<slug>`（例: `feat/task-008-1-dot-model`）にします。`<type>` はそのタスクの主な変更の種別で、`feat` / `fix` / `refactor` / `chore` / `docs` / `test` のいずれかを使います。以下のhookはこの形のブランチ名でのみ働きます。
 
 | Hook | 対象 | 内容 |
 | --- | --- | --- |
-| Stop | `<type>/task-*` ブランチ | CI相当の検査（変更範囲はCIと同じ判定）、コミット・push・PRの有無を確かめ、満たすまで作業に差し戻す |
+| Stop | `<type>/task-*` ブランチ | CI相当の検査（変更範囲はCIと同じ判定。サブのPRのブランチではCIがPRのbaseとの差分、hookが`origin/main`との差分を見るため、hookの方が広い）、コミット・push・PRの有無を確かめ、満たすまで作業に差し戻す |
 | PreToolUse | すべて | `--no-verify`、force push、mainへのpush、送信先を明示しないpush、`gh pr merge`、帰属トレーラーを拒否する |
 | PostToolUse | `<type>/task-*` ブランチ | 編集したファイルだけESLint / RuboCopを実行し、結果をClaudeに返す |
 
