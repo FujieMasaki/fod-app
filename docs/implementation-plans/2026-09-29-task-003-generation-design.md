@@ -80,6 +80,11 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
   §26の確認と実装時の疎通で確定する（TASK-009）。
 - promptの最終文面。方針と必要項目までを決め、文面はTASK-009で実データを見ながら詰める。
 - 生成の品質評価の方法と基準。
+- **東京原則を維持するかどうか**（2026-10-03に追加）。`architecture.md`は「日記内容・音声・AI入力は
+  原則として東京」としつつ「国内限定を利用者への法的・契約上の約束にはしない」と明記しており、
+  `privacy.md §2`の5原則にもリージョンの記述は無い。**東京は自分で置いた既定値で、法的要件として
+  確認したものではない。**この原則の採否は本Planの範囲外とし、見直すなら`architecture.md`
+  「データ所在地と費用」を正本として判断する（§18「2026-10-03の再確認」）。
 
 ## 6. References and Documents to Update
 
@@ -421,7 +426,9 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 | --- | --- | --- |
 | **A（採用）: AWSで統一** | Amazon Transcribe（東京）→ Amazon BedrockのClaude | 委託先が1社に集約され、**§26の9項目の確認対象が1つになる。**認証はECS task roleのIAMで行うため**長期固定のAPIキーをアプリで管理しない**（ただしECSはSDKへ一時credentialを供給するので、項目8は消えず内容が変わる）。委託契約（項目6）はAWS DPAがService Termsへ組み込み済みで自動適用される。TranscribeはS3上のobjectを直接入力に取れるため、TASK-002が決めた一時objectの置き場をそのまま使える |
 | 案B: Transcribe（東京）+ Anthropic API（first-party） | 生成だけ別ベンダー | 最新モデルを最速で使えるが、**9項目の確認とDPA締結が2社ぶん**になる。APIキーの管理が増え、生成処理が米国へ出るため所在地の説明が増える（product.mdは国内限定を約束していないので致命的ではない） |
-| 案C: OpenAIに統一 | Whisper + GPT。音声を直接渡せる | 1社で完結し呼び出しも1回にできるが、東京原則から外れ、既存文書が想定していない委託先が増える |
+| 案C: OpenAIに統一 | 音声の文字起こし + GPT | 1社で完結し、**既定で入出力をモデル学習に使わない。**文字起こし結果はHTTP responseで返るためストレージへ書かれない。ただし**日本は地域内保存のみで、推論（inference）は米国**であり東京原則を満たせない。文字起こしの入力は**25MBまで**で、録音30分・32MBの上限と衝突し得る。既存文書が想定していない委託先が増える（2026-10-03に一次資料で再確認。下記「2026-10-03の再確認」） |
+| 案D: Googleで統一 | Cloud Speech-to-Text + Vertex AIのGemini | **候補から外した。**STTは**既定で音声も文字起こしもログしない**（data loggingはopt-in）点で既定値は良く、**v2は`asia-northeast1`をlocationに持つ**ため「東京に無いから」では落とせない。外した理由は、基盤として未使用のため委託先が1社増えること、GeminiのTokyo対応と単価・DPAが未調査で、確認が案Aの倍になること（2026-10-03に調査） |
+| 案E: Azureで統一 | Azure AI Speech + Azure OpenAI | **候補から外した。**Azure OpenAIは**既定で顧客の入出力を学習に使わず**、Regional配備なら選んだリージョン内で処理する。ただし**新しいモデルはJapan Eastに無くGlobal配備が必要になる例があり**、Bedrockの In-Region / Geo / Global と同じ制約を抱える。所在地の悩みが解決しないうえ委託先が1社増えるため外した（2026-10-03に調査） |
 
 **採用は案A。**決め手はモデル性能ではなく**完了条件7の重さ**である。
 
@@ -553,6 +560,77 @@ opt-outを設定すると、それ以前に送った音声の**保存データ�
 
 「音声を1件でも送る前にopt-outを適用する」ことを必須条件（上記1）としているのは、削除できるかどうか
 ではなく、**適用前に一度も改善目的の使用が起きないようにする**ためである。
+
+### 2026-10-03の再確認: 候補を広げて確認し直した結果
+
+**なぜ再確認したか。**初稿の案Cの不採用理由は「東京原則から外れ、既存文書が想定していない委託先が
+増える」の2行だけだった。一方で案Bの行には「product.mdは国内限定を約束していないので致命的では
+ない」と書いており、**同じ論理を案Cに当てていない**という非一貫があった。さらに`architecture.md`の
+東京原則そのものが「**国内限定を利用者への法的・契約上の約束にはしない**」と明記しており、
+禁止事項ではない。したがって「東京原則から外れる」だけでは不採用理由として弱い。
+
+**確認した事実（2026-10-03、一次資料）**
+
+1. **OpenAIは既定でAPIの入出力をモデル学習に使わない**（2023-03-01以降）。不正利用監視ログの保持は
+   30日。ZDR（Zero Data Retention）の対応endpointに`/v1/audio/transcriptions`を含むが、
+   **OpenAIの事前承認（sales）が必要**である。
+   （[Data controls in the OpenAI platform](https://developers.openai.com/api/docs/guides/your-data)）
+2. **OpenAIのデータレジデンシーは、地域内処理（inference）に対応する地域が米国・欧州（EEA+スイス）・
+   UAEの3つだけで、日本は「地域内保存のみ」である。**
+   > "If you select a region that supports regional processing, as specifically identified below, the
+   > services will perform inference for your Customer Content in the selected region as well."
+
+   地域表で日本は地域内保存Yes・地域内処理Noである。つまり**日本を選んでも推論は米国で行われる。**
+   （同上）
+3. **OpenAIの文字起こしの入力上限は25MB。**「Files can be up to 25 MB.」対応形式は
+   `mp3, mp4, mpeg, mpga, m4a, wav, webm`で、**結果はHTTP responseのJSON（`text`）で返る**。
+   時間の上限は記載がない。
+   （[Speech to text](https://developers.openai.com/api/docs/guides/speech-to-text)）
+4. **Google Cloud Speech-to-Textは既定で音声も文字起こしもログしない**（data loggingはopt-inで、
+   入ると割引になる）。**v1はEUとUSのendpointしか無いが、v2は`asia-northeast1`をlocationに持つ。**
+   （[Data usage FAQ](https://docs.cloud.google.com/speech-to-text/docs/v1/data-usage-faq)、
+   [Supported regional endpoints（v1）](https://docs.cloud.google.com/speech-to-text/docs/v1/endpoints)、
+   [Supported languages（v2。locationの一覧）](https://docs.cloud.google.com/speech-to-text/v2/docs/speech-to-text-supported-languages)）
+5. **Azure OpenAIは既定で顧客のプロンプト・応答を学習に使わず、OpenAIへも共有しない。**Regional配備は
+   選んだリージョン内で処理し、Global配備は複数リージョンに跨る。**新しいモデルはJapan Eastに無く
+   Global配備が必要になる例がある。**
+   （[Azure OpenAI frequently asked questions](https://learn.microsoft.com/en-us/azure/foundry-classic/openai/faq)）
+
+**学習利用の既定値は、4社のうちAWSだけが例外である。**
+
+| 委託先 | 学習利用の既定 |
+| --- | --- |
+| **AWS** | **既定で顧客コンテンツをサービス改善に利用し、利用リージョン外へ保存し得る。**opt-out policyの適用が必須 |
+| OpenAI | 使わない |
+| Google Speech-to-Text | ログしない（opt-in方式） |
+| Azure OpenAI | 使わない |
+
+したがって**「案Aを選んだのはプライバシー上有利だから」とは書けない。**正確には「opt-outを適用すれば
+並ぶ」であり、だからこそ上記「案Aを採るための必須条件」1でopt-outの適用を必須としている。
+
+**2026-10-03の再確認の途中では「OpenAIの日本レジデンシーはAPI Platformでin-region処理とZDRを含む」と
+整理していたが、これは誤りだった。**一般的な発表文と地域別の対応表を混同した読み誤りで、一次資料の
+地域表では日本は地域内保存のみである。**2026-09-30に追記された上記の補足（「日本endpointがStorage
+Yes / Processing No」）が正しかった。**`bedrock-runtime`と`bedrock-mantle`の2つの表を混同した誤り
+（上記「確認できなかったこと」）と同じ種類の取り違えである。**発表文ではなく地域別の対応表を読む。**
+
+**案D（Google統一）・案E（Azure統一）を候補から外した理由。**決め手を「委託先を1社に寄せる＋東京」と
+置いた以上、同じ条件を満たし得る候補を並べないままにはできないため、比較表へ行として追加した上で
+外した。外した理由は**「東京に無いから」ではない**（案DのSTT v2は東京にある）。**どちらも基盤として
+未使用のため委託先が1社増え、§26の9項目の確認が案Aの倍になる**ことが理由である。AWSは既に
+ALB / ECS / RDS / S3 として使用中で、委託先の行が増えない。
+
+**結論。東京原則を維持する限り、採用は案Aのままで変わらない。**案Cは上記2により東京原則を満たせず、
+`architecture.md`「Bedrockのモデルは、推論が日本国外へ出ない経路で使えるものから選ぶ」と同じ基準を
+当てれば落ちる。**案Aに「opt-outの適用は必須」という前提条件を置いたのと同じ厳しさで案Cを測った
+結果である。**
+
+**未決として残す事項。**東京原則そのものを維持するかは、本Planでは決めない。`architecture.md`が
+「法的・契約上の約束にはしない」と明記しており、`privacy.md §2`の5原則にもリージョンの記述は無く、
+越境移転・個人情報保護法に触れた記述もdocsに存在しない。つまり**東京は自分で置いた既定値であって、
+法的要件として確認したものではない。**原則を曲げる判断が必要になった場合は、本Planではなく
+`architecture.md`の「データ所在地と費用」の側を先に見直す（上記「案Aを採るための必須条件」2と同じ
+扱いとする。**モデルや委託先の都合で所在地方針を黙って曲げない。**）。
 
 ## 19. 判断2: 実行方式と結果の受け渡し（比較。採用は§25-2）
 
