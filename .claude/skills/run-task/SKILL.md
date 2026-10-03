@@ -1,13 +1,17 @@
 ---
 name: run-task
-description: docs/tasks のタスク（TASK-XXX）を、着手可否の確認からPlan作成・実装・検証・self-review・push・PR作成まで止まらずに進める。「TASK-008を進めて」「TASK-008を実装して」「TASK-008に着手して」「TASK-008をやって」のように、タスクIDを挙げて作業を依頼されたときに使う。
+description: docs/tasks のタスク（TASK-XXX）を、着手可否の確認からPlan作成・実装・検証・レビューしやすい大きさへのPR分割・push・PR作成・機械のレビューまで止まらずに進め、最後にタスク全体の人間のレビュー用ガイドを渡す。「TASK-008を進めて」「TASK-008を実装して」「TASK-008に着手して」「TASK-008をやって」のように、タスクIDを挙げて作業を依頼されたときに使う。
 argument-hint: "TASK-XXX"
 ---
 
 # /run-task $ARGUMENTS
 
-対象タスク `$ARGUMENTS` を、PRを作成してURLを出力するまで進める。途中で完了報告や確認のために
-止まらない。止まってよいのは「止まる条件」に当たったときだけ。
+対象タスク `$ARGUMENTS` を、PRを作成し、すべてのPRが機械のレビューでLGTMになり、人間のレビュー用
+ガイドを渡すまで進める。途中で完了報告や確認のために止まらない。止まってよいのは「止まる条件」に
+当たったときだけ。
+
+PRは[PRの分割と人間のレビュー](../../../docs/development/pull-requests.md)に従い、レビュー対象の
+ファイルが1つあたり20個までになるように分ける。
 
 `<type>/task-*` ブランチでは、Stop hook（`scripts/claude-quality-gate.mjs`）が終了のたびに
 CI相当の検査・コミット・push・PRの有無を確かめ、満たすまで作業に差し戻す。差し戻されたら、
@@ -38,7 +42,8 @@ node scripts/task-status.mjs $ARGUMENTS
 ### 2. 作業場所を用意する
 
 ブランチ名は `<type>/task-<3桁の番号>-<英小文字の短いslug>`（例: `feat/task-008-dot-history`）。
-この名前でないとhookが働かない。
+PRを分ける場合は `<type>/task-<3桁の番号>-<順番>-<slug>`（例: `feat/task-008-1-dot-model`）。
+この形でないとhookが働かない。
 
 `<type>` はそのタスクの主な変更の種別を1つ選ぶ。使えるのは次の6つだけ。
 
@@ -52,7 +57,7 @@ node scripts/task-status.mjs $ARGUMENTS
 | `test` | testだけを追加・整備する |
 
 迷ったらタスクの完了条件で最も大きい変更に合わせる（例: 機能追加に伴うtestは `feat`）。
-PRのタイトル・先頭のコミットのtypeと揃える。
+PRのタイトル・先頭のコミットのtypeと揃える。PRを分ける場合は、PRごとに選んでよい。
 
 ```bash
 git fetch origin main
@@ -64,6 +69,7 @@ git worktree list
   `EnterWorktree` に `path` を渡して入る。
 - 既にこのセッションが別のworktreeにいて作業ツリーがcleanなら、そこで
   `git switch -c <type>/task-008-<slug> origin/main` としてよい。
+- PRを分ける場合、ここで作るのは1番目のブランチ。2番目以降は手順4で作る。
 
 worktreeの中で依存を入れ、前回の状態を消す。
 
@@ -80,7 +86,9 @@ scripts/claude-hook.sh claude-quality-gate.mjs --reset
    Railsなら `rails-conventions.md` も読む。
 3. 対象の実装と仕様が一致しているか確かめる。差異があれば根拠とともにPlanへ記録する。
 4. [TEMPLATE](../../../docs/implementation-plans/TEMPLATE.md) から
-   `docs/implementation-plans/<今日の日付>-task-008-<slug>.md` を作る。
+   `docs/implementation-plans/<今日の日付>-task-008-<slug>.md` を作る。「10. Files to Change」には、
+   [分け方](../../../docs/development/pull-requests.md#分け方)に従い、PRごとのファイル・順番・ブランチ名・
+   レビュー対象のファイル数を書く。合計で20以下なら1つのPRと書く。
 5. タスクファイルの `状態` を In progress にし、`関連Implementation Plan` にリンクする。
 6. Planとタスク更新を `docs(task-008): ...` としてコミットする。
 
@@ -88,6 +96,10 @@ AGENTS.mdの「重大な設計判断または複数の有力案がある場合�
 
 ### 4. 実装する
 
+- Planに書いたPRの順に実装する。1つのPRの分を実装・検証・コミットしたら、
+  `git switch -c <type>/task-008-<次の順番>-<slug>` でそこから次のブランチを作って続ける
+  （互いに依存しないPRは`origin/main`から作る）。各ブランチは単独で検査が通る状態にする。
+- 実装中にPRの大きさがPlanから変わったら、Planを直してから分け直す。
 - 1コミット = 1関心事。レビューで上から追える順（ロジック → UI、test は対象と同じコミット）。
 - メッセージは `type(scope): 要約` と、「何を・なぜ」の箇条書き。既存コミットの体裁に合わせる。
 - 仕様・architectureが変わるなら、関連する現行文書を同じ変更で更新する。
@@ -104,22 +116,49 @@ AGENTS.mdの「重大な設計判断または複数の有力案がある場合�
 
 ### 6. self-reviewする
 
-`self-review` skillでdiff全体を確認し、該当するレビュー入口（`docs/code-review/`）とsecurity観点で
+`self-review` skillでタスク全体のdiff（`origin/main...<最後のブランチ>`）を確認し、該当するレビュー入口（`docs/code-review/`）とsecurity観点で
 見直す。指摘は修正してコミットする。確信の持てない指摘はPRの「確認すること」に入れる。
 
 ### 7. pushしてPRを作る
 
+PRごとに1番目から順に、送信先を明示してpushし、PRを作る（例は2番目のPR）。
+
 ```bash
-git push -u origin HEAD:<type>/task-008-<slug>
-gh pr create --base main --title "<日本語のタイトル>" --body "<本文>"
+git push -u origin feat/task-008-2-dot-api:feat/task-008-2-dot-api
+gh pr create --base feat/task-008-1-dot-model --head feat/task-008-2-dot-api \
+  --title "<日本語のタイトル>（2/3）" --body "<本文>"
 ```
+
+baseは1つ前のブランチにする。1番目と、互いに依存しないPRは`main`にする。PRが1つだけなら
+タイトルに順番を付けない。
 
 - pushは送信先のブランチを必ず明示する。`git push` や `git push origin HEAD` のように送信先を省略する形は、
   実行時のブランチや設定でmainに送られうるためhookで拒否される。
 - 本文は [.github/pull_request_template.md](../../../.github/pull_request_template.md) の見出し順に
   日本語で書く。テンプレートのコメント・プレースホルダーを残さない。
-- 「確認すること」は、人間が確認する操作・画面・仕様上の判断と期待結果のTODOリストにする。
-- 最後にPRのURLと、Doneにしたか・残した確認事項を短く報告する。
+- 「確認すること」は、人間が確認する操作・画面・仕様上の判断と期待結果のTODOリストにする。そのPRで
+  確かめられることだけを書く。
+- PRを分けた場合は、全部作ってから各PRの「概要」に、同じタスクのPRの一覧（番号・タイトル・base）と
+  マージの順番を書き足す（`gh pr edit <番号> --body`）。
+
+### 8. 機械のレビューを回す
+
+[`pr-review-cycle`](../pr-review-cycle/SKILL.md) の手順2〜8（セルフレビュー → サブエージェント →
+Codex → 仕組み化）を、PRごとに1番目から順に回す。比較の基準は、そのPRのbase（`origin/<1つ前のブランチ>`）にする。
+
+- 前のPRを修正したら、後ろのブランチへ順に`git merge`で取り込んでpushしてから、後ろのPRへ進む。
+  rebase・force pushはしない。
+- 取り込みでコンフリクトの解消や追加の修正が入った、既にLGTMのPRは、レビューをやり直す。
+- 途中のPRがLGTMになっても、人間へ個別のレビューを頼まない。
+
+### 9. 人間のレビュー用ガイドを渡す
+
+すべてのPRがLGTMになったら、[`human-review-artifact`](../human-review-artifact/SKILL.md) でタスク全体の
+ガイドを1つ作る。最後に、ガイドのURL、PRの一覧（マージの順番）、Doneにしたか・残した確認事項、
+PRごとのレビューの反復回数を短く報告する。
+
+人間から指摘が来たら、該当するPRで直し、後ろのブランチへ取り込み、直したPRを手順8のとおり
+レビューし直してから、ガイドを更新して再び渡す。
 
 ## 止まる条件
 
