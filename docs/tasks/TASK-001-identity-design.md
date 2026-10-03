@@ -45,7 +45,7 @@
 - 通常認証はRails標準CookieStore。HttpOnly・Secure・SameSite=Lax、同一originとRailsのCSRFを維持する。DB sessionによる端末別失効・全端末logoutは将来要件。コピー済みCookieをlogoutだけで即時失効できるとは保証しない。
 - 内部Userを所有者として、current_userのDotだけを一覧・取得・更新・削除する。clientのowner指定やGoogle/email一致の自動統合は認めない。明示的連携は将来対応。
 - MFA、passkey、運営者による手動アカウント復旧はMVP対象外。復旧はDeviseのpassword再設定とGoogleの標準機能の範囲とし、Google専用Userへのreset経由の無条件なpassword追加はしない。
-- AWS東京のALB + ECS Fargate + RDS PostgreSQL、初期1タスク・Single-AZ、React成果物のRails同梱・同一originを維持。日記・音声・AI入力は原則東京だが国内限定を約束しない。
+- AWS東京のALB + ECS Fargate + RDS PostgreSQL、初期1タスク・Single-AZ、React成果物のRails同梱・同一originを維持。所在地方針は[architecture.md](../architecture.md)「データ所在地と費用」を正本とする（2026-10-03に「保存は東京、AIの推論は日本国外を許容する」へ変更）。国内限定を約束しない。
 - 基盤費は月5,000円目標・月1万円前後許容、音声保存・文字起こし・AI・通信量は別予算。Calculator/Budgets/Cost Anomaly Detectionは公開前の設定対象。
 
 ### 認証詳細の採用（2026-09-25、未実装）
