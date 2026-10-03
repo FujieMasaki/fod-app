@@ -57,21 +57,22 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
    どちらかで無関係な変更（未コミット・コミット済み問わず）が見つかったら、自動で
    退避・削除・コミットせず、ユーザーに確認する。確認が取れない、または対応方針が
    決まらない場合は、推測で進めず「止まる条件」に従う。
-5. `git diff --name-only origin/<ベースブランチ>...HEAD` で変更ファイルを数える。
+5. 今回の依頼に関係する変更だけをコミットする。コミット前に、変更した領域に応じた検証を
+   実行する（例: frontendは`pnpm --filter @focus-on-dot/web type-check` / `test`、
+   apps/apiのRailsコードは`cd apps/api && bundle exec rspec` / `bundle exec rubocop` /
+   `bundle exec brakeman`）。pre-push hookで検証されない領域（Railsのtest/lint/security
+   scanなど）は、pushする前に自分で実行して結果を確認する。
+6. コミットした後に、`git diff --name-only origin/<ベースブランチ>...HEAD` で変更ファイルを数える
+   （未コミットの変更を数え漏らさないよう、`git status` がcleanになってから数える）。
    [数えないファイル](../../../docs/development/pull-requests.md#大きさの上限)を除いて20を超えるなら、
    同文書の[分け方](../../../docs/development/pull-requests.md#分け方)と
    [積み重ね](../../../docs/development/pull-requests.md#積み重ねstacked-pr)に従ってブランチを分ける。
    既存のコミットを分け直すときは、新しいブランチを作って`git cherry-pick`や`git checkout <コミット> -- <path>`
-   で載せ直し、元のブランチの履歴は書き換えない。分け方に迷う（関心事の境界が決まらない）場合は、
-   推測で進めず「止まる条件」に従う。
-6. 今回の依頼に関係する変更だけをコミットする。コミット前に、変更した領域に応じた検証を
-   実行する（例: frontendは`pnpm --filter @focus-on-dot/web type-check` / `test`、
-   apps/apiのRailsコードは`cd apps/api && bundle exec rspec` / `bundle exec rubocop` /
-   `bundle exec brakeman`）。pre-push hookで検証されない領域（Railsのtest/lint/security
-   scanなど）は、pushする前に自分で実行して結果を確認する。分けた場合は、各ブランチが単独で検証を
-   通ることを確かめる。検証が通ったら
-   `git push -u origin HEAD:<ブランチ名>` で送信先を明示してpushし、
+   で載せ直し、元のブランチの履歴は書き換えない。分けた場合は、各ブランチが単独で上の5の検証を通ることを
+   確かめる。分け方に迷う（関心事の境界が決まらない）場合は、推測で進めず「止まる条件」に従う。
+7. `git push -u origin HEAD:<ブランチ名>` で送信先を明示してpushし、
    `gh pr create --base <ベースブランチ>` でPRを作る。分けた場合は1番目から順にpush・PR作成し、
+   [pushの形](../../../docs/development/pull-requests.md#積み重ねstacked-pr)は`<ブランチ>:<ブランチ>`にする。
    タイトル末尾に`（1/3）`のような順番を、各PRの「概要」に同じまとまりのPRの一覧とマージの順番を書く。
    以降のレビューでも同じ基準（`origin/<ベースブランチ>`）を使う。
    タイトル・本文は日本語、`.github/pull_request_template.md` の見出し順（概要 / 取り組んだ理由 /
@@ -85,7 +86,8 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
 必ず確認する。手順6と同様に、コミット前に変更した領域に応じた検証（frontendの型・test、apps/apiの
 Railsコードはrspec / rubocop / brakeman等）を実行し、pre-push hookで検証されない領域は自分で確認する。
 検証が通ったらコミットし、`git push origin HEAD:<ブランチ名>` で即座にpushする
-（後続のレビューが、この時点の最新コミットを見られるようにする）。
+（後続のレビューが、この時点の最新コミットを見られるようにする）。PRを分けた場合は、手順6と同じく
+`<ブランチ>:<ブランチ>`の形でpushする。
 
 ### 3. サブエージェントのレビュー
 
@@ -174,13 +176,16 @@ Codexが報告したdiffの範囲（baseとHEAD）が、スクリプトが最初
 
 1コミット = 1関心事を保つ。積み重ねたPRの前のPRを直した場合は、検証・push後に後ろのブランチへ順に
 `git merge`で取り込んでpushする（rebase・force pushはしない）。取り込みでコンフリクトの解消や追加の
-修正が入った、既にLGTMの後ろのPRは、手順2からレビューをやり直す。
+修正が入った、または前のPRの修正が後ろのPRで使うinterface・振る舞いを変えた、既にLGTMの後ろのPRは、
+手順2からレビューをやり直す。
 コミット前に、変更した領域に応じた検証を実行する
 （例: frontendは`pnpm --filter @focus-on-dot/web type-check` / `test`、
 apps/apiのRailsコードは`cd apps/api && bundle exec rspec` / `bundle exec rubocop`）。
 pre-push hookで検証されない領域（Railsのtest/lintなど）は、pushする前に自分で実行して
 結果を確認する。検証が通ったらコミットし、送信先を明示して必ずpushする
-（`git push origin HEAD:<ブランチ名>`）。pushせずに次に進まない — PRのURLは常に
+（`git push origin HEAD:<ブランチ名>`。PRを分けた場合は、ブランチを行き来するため`HEAD`が別のブランチを
+指していても気づけない。`git push origin <ブランチ>:<ブランチ>`の形にし、push前に
+`git branch --show-current`で今いるブランチを確かめる）。pushせずに次に進まない — PRのURLは常に
 push済みの最新コミットを指していなければならない。
 
 ### 7. セルフレビューとサブエージェントのレビューを経てから4に戻る
