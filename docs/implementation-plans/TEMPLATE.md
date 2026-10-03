@@ -73,8 +73,8 @@ UI
 - 新規 / 変更
 - 役割
 
-レビュー対象のファイルが合計で20を超える場合は、PRごとのファイルと順番も書く
-（[PRの分割](../development/pull-requests.md#分け方)）。
+レビュー対象のファイルが合計で20を超える場合は、PRごとのファイルと順番も書く（20以下なら1つのPRと書く。
+[PRの分割](../development/pull-requests.md#分け方)）。
 
 ## 11. Libraries / APIs
 

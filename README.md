@@ -157,7 +157,7 @@ Production BuildはローカルでのPushを遅くしないため、CI側で実�
 
 ## Claude Codeでのタスク実行
 
-実装系のタスク（`docs/tasks/`）は、Claude Codeに「TASK-008を進めて」と依頼するか、`/run-task TASK-008` と入力すると、着手可否の確認から、PR作成、機械のレビュー（セルフレビュー → サブエージェント → Codex）、人間のレビュー用ガイドの作成まで止まらずに進みます。PRはレビュー対象のファイルが1つあたり20個までになるよう分けられ、人間のレビューはタスクのすべてのPRがLGTMになってから1回行います（[`docs/development/pull-requests.md`](docs/development/pull-requests.md)）。PRを分けるときに使う`git merge`・`gh pr edit`などは`.claude/settings.json`の許可ルールにないため、追加するまでは実行のたびに確認が出ます（定期実行のように確認を出せない実行では拒否されうるため、そのときは止まります）。自然文でもSkillは起動しますが、確実に起動したいときは `/run-task` を使ってください。対象の条件は[`docs/tasks/README.md`](docs/tasks/README.md)を参照してください。
+実装系のタスク（`docs/tasks/`）は、Claude Codeに「TASK-008を進めて」と依頼するか、`/run-task TASK-008` と入力すると、着手可否の確認から、PR作成、機械のレビュー（セルフレビュー → サブエージェント → Codex）、人間のレビュー用ガイドの作成まで止まらずに進みます。PRはレビュー対象のファイルが1つあたり20個までになるよう分けられ、人間のレビューはタスクのすべてのPRがLGTMになってから1回行います（[`docs/development/pull-requests.md`](docs/development/pull-requests.md)）。PRを分けるときに使う`git merge`・`gh pr edit`・`gh api`などは`.claude/settings.json`の許可ルールにないため、追加するまでは実行のたびに確認が出ます（定期実行のように確認を出せない実行では拒否されうるため、そのときは止まります）。自然文でもSkillは起動しますが、確実に起動したいときは `/run-task` を使ってください。対象の条件は[`docs/tasks/README.md`](docs/tasks/README.md)を参照してください。
 
 作業ブランチは `<type>/task-<3桁の番号>-<slug>`（例: `feat/task-008-dot-history`）です。PRを分けるときは `<type>/task-<3桁の番号>-<順番>-<slug>`（例: `feat/task-008-1-dot-model`）にします。`<type>` はそのタスクの主な変更の種別で、`feat` / `fix` / `refactor` / `chore` / `docs` / `test` のいずれかを使います。以下のhookはこの形のブランチ名でのみ働きます。
 

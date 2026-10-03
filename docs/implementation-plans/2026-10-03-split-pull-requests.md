@@ -46,7 +46,7 @@ LGTMになってから、タスク単位で1回行う。
     タスクファイルの状態だけの更新は数えない。testとPlan・仕様文書は数える。
   - 依存するPRは積み重ね（stacked PR）にし、前のPRの修正は`git merge`で後ろへ取り込む（rebase・force pushは
     既存の規則で禁止のため）。
-  - 新しい手順で使う`git merge`・`git branch -m`・`git branch -D`・`gh pr edit`・`git cherry-pick`・`bin/rails db:drop`・
+  - 新しい手順で使う`git merge`・`git branch -m`・`git branch -D`・`gh pr edit`・`gh api`・`git cherry-pick`・`bin/rails db:drop`・
     `git checkout <コミット> -- <path>`は許可ルールにないため、実行のたびに確認が出る。許可ルール（`.claude/settings.json`）への追加は人間が行い、このPRでは変えない。
   - 契約・API・Webは別のPRに分けてよい（人間の判断）。ただし契約のPRには生成した型・Zod schemaを入れ、
     mainへ入ったどの時点でもWebとAPIの互換性を保つ順にする。既存の「同じPRで更新する」規約
@@ -138,6 +138,10 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
 - PRコメントは公開repositoryで誰でも書けるため、人間の指摘として扱うのはレビュアーのコメントだけにした（サブエージェントの指摘）。
 - `bin/rails db:prepare`は適用済みのmigrationを巻き戻さないため、migrationが違う前のブランチへ戻ると、後ろのPRの
   テーブルが残ったDBで検証してしまう（Codexの指摘）。タスク専用DBを切り替え先の`schema.rb`から作り直す手順にした。
+- `DATABASE_URL`があると`FOD_DB_SUFFIX`を付けても既定のDBを指し、`db:drop`で開発データを消しうる（Codexの指摘）。
+  消す前に実際の接続先のDB名を確かめる手順にした。
+- GitHub上でマージ・baseを付け替えてもローカルの`origin/main`は更新されないため、取り込みの要否を判断する前に
+  fetchする（Codexの指摘）。
 
 ## 14. Verification
 
