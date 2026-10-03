@@ -36,7 +36,7 @@ cat > "$plist" <<PLIST
   <array>
     <string>/bin/sh</string>
     <string>-c</string>
-    <string>if git -C "\$0" fetch -q origin main &amp;&amp; script=\$(git -C "\$0" show origin/main:scripts/task-scheduler.sh); then printf '%s\\n' "\$script" | /bin/sh -s "\$0"; else osascript -e 'display notification "定期実行のscriptを取得できませんでした。launchd.logを参照" with title "Focus on Dot タスク"'; exit 1; fi</string>
+    <string>if git -C "\$0" fetch -q origin main &amp;&amp; script=\$(git -C "\$0" show origin/main:scripts/task-scheduler.sh); then /bin/sh -c "\$script" task-scheduler "\$0"; else osascript -e 'display notification "定期実行のscriptを取得できませんでした。launchd.logを参照" with title "Focus on Dot タスク"'; exit 1; fi</string>
     <string>$(xml_escape "$root")</string>
   </array>
   <key>StartCalendarInterval</key>

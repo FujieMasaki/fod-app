@@ -62,9 +62,9 @@ git worktree list
 
 - 同じタスクのworktreeが既にある（再開）: 入る直前に `node scripts/task-status.mjs $ARGUMENTS` をもう一度実行し、
   定期実行のセッションが作業中でない（`runnable: true`）ことを確かめてから、`EnterWorktree` に `path` を渡して入る。
-  定期実行が作ったworktreeを手動で再開するときは、そのタスク専用のDBを使うため、Claude Codeを
-  `FOD_DB_SUFFIX=_task_008` を付けて起動し直してもらうよう人間に伝えて止まる（付けないと既定のDBに
-  migrationが混ざる）。
+  worktreeは定期実行が作ったものと区別できないため、再開するときは常にそのタスク専用のDBを使う。
+  環境変数 `FOD_DB_SUFFIX` が `_task_008` でなければ、Claude Codeを `FOD_DB_SUFFIX=_task_008` を付けて
+  起動し直してもらうよう人間に伝えて止まる（付けないと既定のDBに別タスクのmigrationが混ざる）。
 - ない: `git worktree add .claude/worktrees/task-008 -b <type>/task-008-<slug> origin/main` で作り、
   `EnterWorktree` に `path` を渡して入る。
 - 既にこのセッションが別のworktreeにいて作業ツリーがcleanなら、そこで

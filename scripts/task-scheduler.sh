@@ -1,6 +1,6 @@
 #!/bin/sh
 # Entry point that launchd runs every morning (see scripts/install-task-scheduler.sh).
-# launchd pipes this file from origin/main, so it and the Node script always run
+# launchd reads this file from origin/main, so it and the Node script always run
 # the latest merged version, whatever branch the main checkout is on.
 # Usage: scripts/task-scheduler.sh <repository root>
 set -eu
