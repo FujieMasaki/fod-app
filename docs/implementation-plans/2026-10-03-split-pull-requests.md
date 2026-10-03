@@ -34,7 +34,7 @@ LGTMになってから、タスク単位で1回行う。
 
 ## 5. Scope and Non-goals
 
-- 対象: 分割の規約の新設、`run-task`・`pr-review-cycle`・`human-review-artifact`の手順、AGENTS.mdの要約。
+- 対象: 分割の規約の新設、`run-task`・`pr-review-cycle`・`human-review-artifact`の手順、AGENTS.md・README.mdの要約。
 - 対象外: hook・scriptの変更。ブランチ名・baseの形式は現状で通るため、上記の制約は手順（`<ブランチ>:<ブランチ>`
   の形のpush、すべてのブランチのpush状態の確認）で補い、hookの改修は必要になったら別のPRで行う。
   マージの自動化（マージは人間が行う）。
@@ -43,6 +43,8 @@ LGTMになってから、タスク単位で1回行う。
     タスクファイルの状態だけの更新は数えない。testとPlan・仕様文書は数える。
   - 依存するPRは積み重ね（stacked PR）にし、前のPRの修正は`git merge`で後ろへ取り込む（rebase・force pushは
     既存の規則で禁止のため）。
+  - 新しい手順で使う`git merge`・`git branch --show-current`・`gh pr edit`は許可ルールにないため、実行のたびに
+    確認が出る。許可ルール（`.claude/settings.json`）への追加は人間が行い、このPRでは変えない。
   - 積み重ねたPRはmerge commitでマージする（既存のPRもmerge commitでマージしている）。
   - Planとタスクファイルは1番目のPRで作り、完了の記録は最後のPRで書く。
   - 人間のレビューはタスク単位で、すべてのPRがLGTMになってから1回。仕様・設計・securityの判断が必要なときは
