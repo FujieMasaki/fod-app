@@ -435,7 +435,7 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 | **A（採用）: AWSで統一** | Amazon Transcribe（東京）→ Amazon BedrockのClaude | 委託先が1社に集約され、**§26の9項目の確認対象が1つになる。**認証はECS task roleのIAMで行うため**長期固定のAPIキーをアプリで管理しない**（ただしECSはSDKへ一時credentialを供給するので、項目8は消えず内容が変わる）。委託契約（項目6）はAWS DPAがService Termsへ組み込み済みで自動適用される。TranscribeはS3上のobjectを直接入力に取れるため、TASK-002が決めた一時objectの置き場をそのまま使える |
 | 案B: Transcribe（東京）+ Anthropic API（first-party） | 生成だけ別ベンダー | 最新モデルを最速で使えるが、**9項目の確認とDPA締結が2社ぶん**になる。APIキーの管理が増え、生成処理が米国へ出るため所在地の説明が増える（product.mdは国内限定を約束していないので致命的ではない） |
 | 案C: OpenAIに統一（**採否は保留**） | 音声の文字起こし + GPT | 1社で完結し、**既定で入出力をモデル学習に使わない。**文字起こし結果はHTTP responseで返るためストレージへ書かれない。**日本は地域内保存のみで、推論（inference）は米国**だが、2026-10-03に`architecture.md`を「保存は東京、AIの推論は日本国外を許容する」へ変更したため、**これ自体は不採用の理由にならなくなった。**残る不利点は、**委託先が1社増えて9項目の確認とDPA・`privacy.md §5-1`の行の差し替えが発生する**こと、**文字起こしの入力が25MBまで**で録音30分・32MBの上限と衝突し得ることである。同文書が**委託先の変更は別の判断として残す**としたため、**本Planでは採否を決めず保留する**（下記「2026-10-03の再確認」） |
-| 案D: Googleで統一 | Cloud Speech-to-Text + Vertex AIのGemini | **候補から外した。**STTは**既定で音声も文字起こしもログしない**（data loggingはopt-in）点で既定値は良く、**v2は`asia-northeast1`をlocationに持つ**ため「東京に無いから」では落とせない。外した理由は、基盤として未使用のため委託先が1社増えること、GeminiのTokyo対応と単価・DPAが未調査で、確認が案Aの倍になること（2026-10-03に調査） |
+| 案D: Googleで統一 | Cloud Speech-to-Text + Vertex AIのGemini | **候補から外した。**data loggingはopt-inで既定値は良く、**v2は`asia-northeast1`をlocationに持つ**ため「東京に無いから」では落とせない。外した理由は2つ。**(a) 非同期endpointは文字起こしをGoogle側に約5日間保存し、削除を自分たちで制御できない**（案Aは`OutputBucketName`で自前bucketへ出し、ACKで削除処理を始められる。§27）。**(b) 基盤として未使用のため委託先が1社増え**、GeminiのTokyo対応・単価・DPAが未調査で確認が案Aの倍になる（2026-10-03に調査） |
 | 案E: Azureで統一 | Azure AI Speech + Azure OpenAI | **候補から外した。**Azure OpenAIは**既定で顧客の入出力を学習に使わず**、Regional配備なら選んだリージョン内で処理する。ただし**新しいモデルはJapan Eastに無くGlobal配備が必要になる例があり**、Bedrockの In-Region / Geo / Global と同じ制約を抱える。所在地の悩みが解決しないうえ委託先が1社増えるため外した（2026-10-03に調査） |
 
 **採用は案A。**決め手はモデル性能ではなく**完了条件7の重さ**である。
@@ -601,8 +601,18 @@ opt-outを設定すると、それ以前に送った音声の**保存データ�
    `mp3, mp4, mpeg, mpga, m4a, wav, webm`で、**結果はHTTP responseのJSON（`text`）で返る**。
    時間の上限は記載がない。
    （[Speech to text](https://developers.openai.com/api/docs/guides/speech-to-text)）
-4. **Google Cloud Speech-to-Textは既定で音声も文字起こしもログしない**（data loggingはopt-inで、
-   入ると割引になる）。**v1はEUとUSのendpointしか無いが、v2は`asia-northeast1`をlocationに持つ。**
+4. **Google Cloud Speech-to-Textのdata loggingはopt-inで、既定では顧客コンテンツをサービス提供以外に
+   使わない。**
+   > "Google does not use any of your content for any purpose except to provide you with the Cloud
+   > Speech-to-Text API service."
+
+   **ただし非同期（async）のendpointでは、結果を取得させるために文字起こしがGoogle側に約5日間
+   保存される。**
+   > "the resulting transcript is stored for a period of approximately 5 days to give you time to
+   > retrieve the transcript."
+
+   同期・streamingはmemory上で処理され保存されない。**v1はEUとUSのendpointしか無いが、v2は
+   `asia-northeast1`をlocationに持つ。**
    （[Data usage FAQ](https://docs.cloud.google.com/speech-to-text/docs/v1/data-usage-faq)、
    [Supported regional endpoints（v1）](https://docs.cloud.google.com/speech-to-text/docs/v1/endpoints)、
    [Supported languages（v2。locationの一覧）](https://docs.cloud.google.com/speech-to-text/v2/docs/speech-to-text-supported-languages)）
@@ -617,7 +627,7 @@ opt-outを設定すると、それ以前に送った音声の**保存データ�
 | --- | --- |
 | **AWS** | **既定で顧客コンテンツをサービス改善に利用し、利用リージョン外へ保存し得る。**opt-out policyの適用が必須 |
 | OpenAI | 使わない |
-| Google Speech-to-Text | ログしない（opt-in方式） |
+| Google Speech-to-Text | data loggingはopt-in（**ただし非同期endpointは結果を約5日保存する**。学習利用とは別の話） |
 | Azure OpenAI | 使わない |
 
 したがって**「案Aを選んだのはプライバシー上有利だから」とは書けない。**正確には「opt-outを適用すれば
@@ -632,8 +642,10 @@ Yes / Processing No」）が正しかった。**`bedrock-runtime`と`bedrock-man
 **案D（Google統一）・案E（Azure統一）を候補から外した理由。**決め手を「委託先を1社に寄せる＋東京」と
 置いた以上、同じ条件を満たし得る候補を並べないままにはできないため、比較表へ行として追加した上で
 外した。外した理由は**「東京に無いから」ではない**（案DのSTT v2は東京にある）。**どちらも基盤として
-未使用のため委託先が1社増え、§26の9項目の確認が案Aの倍になる**ことが理由である。AWSは既に
-ALB / ECS / RDS / S3 として使用中で、委託先の行が増えない。
+未使用のため委託先が1社増え、§26の9項目の確認が案Aの倍になる。**AWSは既にALB / ECS / RDS / S3 として
+使用中で、委託先の行が増えない。加えて**案Dは非同期endpointが文字起こしをGoogle側に約5日間保存し、
+削除を自分たちで制御できない。**案Aは`OutputBucketName`で自前bucketへ出し、端末のACKで削除処理を
+始められる（§27）ので、**この点では案Aの方が後退していない。**
 
 **この再確認の結果、東京原則そのものを見直すことになった。**`architecture.md`が「法的・契約上の約束に
 はしない」と明記しており、`privacy.md §2`の5原則にもリージョンの記述は無く、越境移転・個人情報保護法に
