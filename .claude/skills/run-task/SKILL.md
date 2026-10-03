@@ -112,14 +112,15 @@ development / test DBを用意する。DB名に接尾辞が付き、並列で動
 5. タスクファイルの `状態` を In progress にし、`関連Implementation Plan` にリンクする。
 6. Planとタスク更新を `docs(task-008): ...` としてコミットする。
 7. Planで分けると決めたら、[統合ブランチとメインのPR](../../../docs/development/pull-requests.md#統合ブランチとサブのpr)を先に作る。
-   最初のpushより前に、今のブランチを `git branch -m <type>/task-008-1-<slug>` で1番目のブランチの名前に変え
-   （Planのコミットは1番目のサブのPRに入る）、`git switch -c <type>/task-008-<slug> origin/main` で統合ブランチを
-   作って空のコミットを置き、push してメインのPRをdraftで作る。作ったら1番目のブランチへ戻る。
+   今のブランチ（Planのコミットを持つ）は1番目のサブのPRになる。まだpushしていなければ
+   `git branch -m <type>/task-008-1-<slug>` で1番目のブランチの名前に変え、push済み（Planの段階で止まった後の再開など）
+   なら名前を変えずに使う。続けて `git switch -c <type>/task-008-<slug>-integration origin/main` で統合ブランチを作って
+   空のコミットを置き、push してメインのPRをdraftで作る。作ったら1番目のブランチへ戻る。
 
    ```bash
    git commit --allow-empty -m "chore(task-008): 統合ブランチを作る"
-   git push -u origin feat/task-008-dot-history:feat/task-008-dot-history
-   gh pr create --draft --base main --head feat/task-008-dot-history --title "<日本語のタイトル>" --body "<本文>"
+   git push -u origin feat/task-008-dot-history-integration:feat/task-008-dot-history-integration
+   gh pr create --draft --base main --head feat/task-008-dot-history-integration --title "<日本語のタイトル>" --body "<本文>"
    git switch feat/task-008-1-dot-model
    ```
 
@@ -129,7 +130,7 @@ AGENTS.mdの「重大な設計判断または複数の有力案がある場合�
 
 - Planに書いたPRの順に実装する。1つのPRの分を実装・検証・コミットしたら、
   `git switch -c <type>/task-008-<次の順番>-<slug>` でそこから次のブランチを作って続ける
-  （互いに依存しないPRは統合ブランチ`origin/<type>/task-008-<slug>`から作る）。各ブランチは単独で検査が通る状態にする。
+  （互いに依存しないPRは統合ブランチ`origin/<type>/task-008-<slug>-integration`から作る）。各ブランチは単独で検査が通る状態にする。
 - 実装中にPRの大きさがPlanから変わったら、Planを直してから分け直す。Planの修正は1番目のブランチで
   コミットし、後ろのブランチへ順に`git merge`で取り込む（Planだけの取り込みは、レビューのやり直しに当たらない）。
 - lockfile・migrationが違うブランチへ切り替えたら、[依存とDBを揃え直して](../../../docs/development/pull-requests.md#統合ブランチとサブのpr)
@@ -256,5 +257,6 @@ Doneにしたか・残した確認事項、PRごとのレビューの反復回�
 
 1. 今いるブランチのPlanの `Completion Record` に、失敗している検査、試したこと、考えられる原因を書く
    （Planがないブランチなら、上の「止まるときは」の1と同じ場所に書く）。
-2. pre-commitが通ればローカルでコミットする。push・PR作成はしない。
+2. pre-commitが通ればローカルでコミットする（統合ブランチにいるときはコミットしない。統合ブランチにはレビューを
+   経た変更しか入れないため）。push・PR作成はしない。
 3. チャットで同じ内容を報告して止まる。再開時は `--reset` を実行してから続ける。

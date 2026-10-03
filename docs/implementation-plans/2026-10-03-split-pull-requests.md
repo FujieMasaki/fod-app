@@ -52,7 +52,10 @@ LGTMになってから、タスク単位で1回行う。
   - 人間は、すべてのサブのPRがLGTMになってから、統合ブランチへマージする前にレビューし、サブのPRを統合ブランチへ、
     最後にメインのPRを`main`へマージする。AIはどのPRもマージしない（人間の判断。hookの変更は不要）。
   - メインのPRは着手時にdraftで作り、本文のサブのPRの一覧を、LGTMの記録と進み具合の正本にする（人間の判断）。
-  - 新しい手順で使う`git merge`・`git branch -m`・`git branch -D`・`gh pr edit`・`gh api`・`git cherry-pick`・`bin/rails db:drop`・`bin/rails runner`・
+  - 統合ブランチの名前は`<type>/task-NNN-<slug>-integration`にし、作業を始めた番号なしのブランチと分ける（人間の判断）。
+    番号なしのブランチがpush済みでも、force pushせずに統合ブランチを作れるようにするため。push済みの番号なしの
+    ブランチは、名前を変えずに1番目のサブのPRとして使う。
+  - 新しい手順で使う`git merge`・`git branch -m`・`git branch -D`・`gh pr edit`・`gh api`・`git cherry-pick`・`git reset --soft`・`bin/rails db:drop`・`bin/rails runner`・
     `git checkout <コミット> -- <path>`は許可ルールにないため、実行のたびに確認が出る。許可ルール（`.claude/settings.json`）への追加は人間が行い、このPRでは変えない。
   - 契約・API・Webは別のPRに分けてよい（人間の判断）。ただし契約のPRには生成した型・Zod schemaを入れる。
     統合ブランチに集めるので`main`へは一度に入る。expand・migrate・contractの段階は、同じ統合ブランチにまとめない。既存の「同じPRで更新する」規約
@@ -190,7 +193,7 @@ Plan（PRの分け方） → 統合ブランチとメインのPR（draft） → 
   `focus_on_dot_api_development`を出すことを確かめた（接続・削除はしていない）。
   `git show --remerge-diff --format=`が、競合のないmerge commit（`fc8907c`）では空、コンフリクトを解消した
   merge commit（`71311d2`）では解消の内容を出すことを確かめた。
-- 対応しなかった任意改善（サブエージェントのLow）: AIが所有者のtokenで書いたPRコメントを人間の指摘と取り違えうること、
-  `gh api`の例に`--paginate`がないこと、pushしていない仕組み化のコミットを外す方法、許可ルールにない
-  コマンドの一覧に`bin/rails runner`がないこと。人間のレビューで扱いを決める。
+- 対応しなかった任意改善: なし（`de980db`の時点で残した4件は、統合ブランチの形への変更とその後のレビューで対応した。
+  AIが所有者のtokenで書いたPRコメントを人間の指摘と取り違えないよう、AIはPRコメントを書かず、記録はPR本文・Plan・
+  会話に残すと規約に書いた）。
 - 関連: PR #50
