@@ -66,8 +66,20 @@ origin/main ← <type>/task-008-1-<slug> ← <type>/task-008-2-<slug> ← <type>
 - PRが機械のレビューでLGTMになったら、各PRの一覧のそのPRの行にLGTMのコミットを書き足す。中断して
   再開したときは、この記録とブランチの先端を比べ、記録より後にコミットがあれば、下の取り込みの基準で
   レビューをやり直すか判断する。
-- lockfile・migrationが違うブランチへ切り替えたら、`pnpm install --frozen-lockfile`・`bundle install`・
-  `bin/rails db:prepare`を実行し直してから検査する（前のブランチの依存で検査が通ってしまうのを防ぐ）。
+- lockfileが違うブランチへ切り替えたら、`pnpm install --frozen-lockfile`・`bundle install`を実行し直してから
+  検査する（前のブランチの依存で検査が通ってしまうのを防ぐ）。
+- migrationが違うブランチへ切り替えたら、DBを切り替え先の`schema.rb`から作り直してから検査する。
+  `bin/rails db:prepare`は未適用のmigrationを実行するだけで、後ろのブランチで適用済みのmigrationを
+  巻き戻さないため、前のブランチへ戻ると後ろのPRのテーブル・列が残ったDBで検証し、`schema.rb`にも混ざる。
+
+  ```bash
+  (cd apps/api && bin/rails db:drop db:create db:schema:load \
+    && RAILS_ENV=test bin/rails db:drop db:create db:schema:load)
+  ```
+
+  消してよいのは、環境変数`FOD_DB_SUFFIX`で分けた専用のDB（タスクなら`_task_<3桁>`）だけ。接尾辞のない既定の
+  DBではローカルの開発データを消してしまうため実行せず、`FOD_DB_SUFFIX`を付けてClaude Codeを起動し直して
+  もらうよう人間に伝えて止まる。
 - PRごとの作業（修正・検証・push・PR作成・レビュー）は、**そのPRのブランチへ`git switch`してから**行う。
   pre-pushの検査、`gh pr create`のhead、Codexの最終チェックやレビューのdiff（`<base>...HEAD`）は、どれも
   今いるブランチを基準にするため、別のブランチにいると、そのPRを単独で確かめたことにならない。

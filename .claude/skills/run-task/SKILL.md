@@ -123,8 +123,8 @@ AGENTS.mdの「重大な設計判断または複数の有力案がある場合�
   （互いに依存しないPRは`origin/main`から作る）。各ブランチは単独で検査が通る状態にする。
 - 実装中にPRの大きさがPlanから変わったら、Planを直してから分け直す。Planの修正は1番目のブランチで
   コミットし、後ろのブランチへ順に`git merge`で取り込む（Planだけの取り込みは、レビューのやり直しに当たらない）。
-- lockfile・migrationが違うブランチへ切り替えたら、`pnpm install --frozen-lockfile`・`bundle install`・
-  `bin/rails db:prepare`を実行し直してから検査する（前のブランチの依存で検査が通ってしまうのを防ぐ）。
+- lockfile・migrationが違うブランチへ切り替えたら、[依存とDBを揃え直して](../../../docs/development/pull-requests.md#積み重ねstacked-pr)
+  から検査する（migrationが違えば`db:prepare`ではなく、切り替え先の`schema.rb`からDBを作り直す）。
 - 1コミット = 1関心事。レビューで上から追える順（ロジック → UI、test は対象と同じコミット）。
 - メッセージは `type(scope): 要約` と、「何を・なぜ」の箇条書き。既存コミットの体裁に合わせる。
 - 仕様・architectureが変わるなら、関連する現行文書を同じ変更で更新する。
