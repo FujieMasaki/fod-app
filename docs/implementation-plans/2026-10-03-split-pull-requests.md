@@ -44,7 +44,7 @@ LGTMになってから、タスク単位で1回行う。
 - 決定済み:
   - 上限は「レビュー対象のファイル20個」。lockfile・生成物（`schema.rb`、`api-contract.d.ts`）、
     タスクファイルの状態だけの更新は数えない。testとPlan・仕様文書は数える。
-  - 分けるときは、統合ブランチ（`<type>/task-NNN-<slug>`）と`main`へのメインのPR（draft）を先に作り、サブのPRは
+  - 分けるときは、統合ブランチ（`<type>/task-NNN-<slug>-integration`）と`main`へのメインのPR（draft）を先に作り、サブのPRは
     統合ブランチへ向けて作る。タスクの変更は最後にメインのPRで一度に`main`へ入る（人間の判断。2026-10-03の
     人間のレビューで、サブのPRを1つずつ`main`へ入れる形から変更）。
   - サブのPRは、依存するものを積み重ね（stacked PR）、前のPRの修正は`git merge`で後ろへ取り込む（rebase・force pushは
@@ -164,7 +164,8 @@ Plan（PRの分け方） → 統合ブランチとメインのPR（draft） → 
 - `bin/rails db:prepare`は適用済みのmigrationを巻き戻さないため、migrationが違う前のブランチへ戻ると、後ろのPRの
   テーブルが残ったDBで検証してしまう（Codexの指摘）。タスク専用DBを切り替え先の`schema.rb`から作り直す手順にした。
 - `DATABASE_URL`があると`FOD_DB_SUFFIX`を付けても既定のDBを指し、`db:drop`で開発データを消しうる（Codexの指摘）。
-  消す前に実際の接続先のDB名を確かめる手順にした。
+  消す前に実際の接続先のDB名を確かめる手順にした。確認とdropは別々のコマンドで、手順を飛ばされると防げないため、
+  DB名の検査とdropを1つのscriptにまとめることを、scriptの見直し（別のPR）で検討する。
 - GitHub上でマージ・baseを付け替えてもローカルの`origin/main`は更新されないため、取り込みの要否を判断する前に
   fetchする（Codexの指摘）。
 

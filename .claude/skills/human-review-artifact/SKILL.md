@@ -53,7 +53,8 @@ publishが拒否された場合も、ページを作らずにその旨を完了�
 ### 1. 材料を集める
 
 以下はPRごとに集める。先に`git fetch origin <ベースブランチ> <PRのブランチ>`で最新にする。分けた場合のdiffは、各サブのPRのbase（統合ブランチか1つ前のブランチ）との差分にする。
-LGTMのコミットは、メインのPRの本文の一覧から取る。
+LGTMのコミットは、分けた場合はメインのPRの本文の一覧から、分けていない場合は`pr-review-cycle`でLGTMが確定した
+コミットを使う。
 
 - `gh pr view <番号> --json number,title,body,baseRefName,headRefOid,url` と `git diff origin/<ベースブランチ>...origin/<PRのブランチ>`
 - `gh pr checks <番号>`（CIの結果）。CIが実行中なら、`gh pr checks <番号> --watch`をBash toolの
@@ -83,7 +84,8 @@ PRを分けた場合は`TASK-XXX レビューガイド`（タスク外なら`PR 
   HEADと、その間のコミットが何か（前のPRの取り込み、Planの完了の記録など）も並べる）と、[マージの手順](../../../docs/development/pull-requests.md#マージ人間が行う)
   （サブのPRをmerge commitで1番目から順に統合ブランチへマージし、次のPRのbaseを統合ブランチへ付け替える。
   すべて入ったらメインのPRをReady for reviewにし、統合ブランチにレビューを経ていないコミットがないことを
-  `git log --first-parent`で確かめ、CIが通ったら`main`へマージする）
+  `git log --first-parent`・サブのPRのmerge commitの第2親・`main`の取り込みの`--remerge-diff`で確かめ、
+  CIが通ったら`main`へマージする）
 - レビュー状態: どのコミットでLGTMか、CIの結果、testの件数、再確認待ちのもの、人のレビュー待ちであること
 - まだ通っていないもの（CI未実行、再確認待ちなど）は、通ったものと見分けられる表示にする
 - このページは非公開で、ほかの人に見せるときはページの共有メニューから共有すること

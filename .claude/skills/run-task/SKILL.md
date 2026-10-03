@@ -195,8 +195,10 @@ pushの前に、各ブランチで`git diff --name-only <base>...<ブランチ>`
 ### 8. 機械のレビューを回す
 
 [`pr-review-cycle`](../pr-review-cycle/SKILL.md) の手順2〜8（セルフレビュー → サブエージェント →
-Codex → 仕組み化）を、PRごとに1番目から順に回す。各PRの前に、そのPRのブランチへ`git switch`する
-（diff・Codexの最終チェックは`HEAD`を基準にするため）。比較の基準は、そのPRのbase（`origin/<1つ前のブランチ>`か`origin/<統合ブランチ>`）にする。
+Codex → 仕組み化）を回す。PRが1つなら、そのブランチで`origin/main`を基準に回す。分けた場合はサブのPRごとに
+1番目から順に回し、各PRの前にそのPRのブランチへ`git switch`する（diff・Codexの最終チェックは`HEAD`を基準にするため）。
+比較の基準は、そのPRのbase（`origin/<1つ前のブランチ>`か`origin/<統合ブランチ>`）にする。以下の箇条のうち、
+前のPR・メインのPR・統合ブランチに関わるものは、分けた場合だけ行う。
 
 - 前のPRを修正したら、後ろのブランチへ順に`git merge`で取り込んでpushしてから、後ろのPRへ進む。
   rebase・force pushはしない。
@@ -213,9 +215,14 @@ Codex → 仕組み化）を、PRごとに1番目から順に回す。各PRの�
 
 ### 9. 人間のレビュー用ガイドを渡す
 
-すべてのサブのPRがLGTMになり、`git fetch origin <各ブランチ>`の後に、統合ブランチを含むすべてのブランチで`git rev-parse <ブランチ>`と`git rev-parse <ブランチ>@{u}`が
-一致し、`git status`がcleanなら、[`human-review-artifact`](../human-review-artifact/SKILL.md) でタスク全体のガイドを1つ作る。最後に統合ブランチへ`git switch`して終わる（定期実行のレポートには最後にいた
-ブランチのPRが載るため、メインのPRが載るようにする）。ガイドのURL、メインのPRのURLとサブのPRの一覧（マージの順番）、
+PRが1つなら、そのPRがLGTMになり、`git rev-parse HEAD`と`git rev-parse @{u}`が一致し、`git status`がcleanなら、
+[`human-review-artifact`](../human-review-artifact/SKILL.md) でガイドを作り、そのブランチのまま終わる。
+
+分けた場合は、すべてのサブのPRがLGTMになり、`git fetch origin <各ブランチ>`の後に、統合ブランチを含むすべてのブランチで`git rev-parse <ブランチ>`と`git rev-parse <ブランチ>@{u}`が
+一致し、`git status`がcleanなら、タスク全体のガイドを1つ作る。最後に統合ブランチへ`git switch`して終わる（定期実行のレポートには最後にいた
+ブランチのPRが載るため、メインのPRが載るようにする）。
+
+ガイドのURL、PRのURL（分けた場合はメインのPRとサブのPRの一覧、マージの順番）、
 Doneにしたか・残した確認事項、PRごとのレビューの反復回数を短く報告する。PRのマージは人間が行う
 （[マージ](../../../docs/development/pull-requests.md#マージ人間が行う)）。
 
