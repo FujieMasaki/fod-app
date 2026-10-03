@@ -25,7 +25,17 @@ OpenAPIを3.1ではなく3.0.3で書くのは、API側の検証に使うcommitte
 3. `pnpm --filter @focus-on-dot/web generate:api-types`で型を作り直し、型検査で失敗した
    Zod schemaと呼び出し側を直す。
 4. API側はrequest specで`assert_response_schema_confirm(status)`を使い、responseを契約と照合する。
-5. 契約・API・Webの変更を**同じPR**に入れる。PRでは下記「互換性」を確認する。
+5. 契約・API・Webの変更は、同じPRに入れるか、PRを分けて積み重ねる
+   （[PRの分割](../docs/development/pull-requests.md)）。分ける場合は次を守る。
+   - 契約（`openapi.yaml`・`examples`）を変えるPRには、生成した型と、それに合わせたZod schema・
+     `schemas.test.ts`も入れる。`pnpm check`・`pnpm type-check`が契約・型・Zodの一致を検査するため、
+     分けるとそのPRのCIが通らない。
+   - PRは1つずつmainへマージ・releaseされうる。マージのどの時点でも、mainのWebとAPIが下記
+     「互換性」を満たす順にする。例: 追加なら「契約（型・Zodを含む） → APIの実装 → Webでの利用」。
+     まだmainにないendpoint・項目をWebが使うPRを、先にマージしない。
+   - 下記で「だめ」の変更は、expand・migrate・contractの各段階を別のPRにしてよい。
+
+   どちらの場合も、PRでは下記「互換性」を確認する。
 
 検査はすべて既存のコマンドに入っている。
 

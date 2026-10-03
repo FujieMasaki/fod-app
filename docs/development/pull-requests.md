@@ -24,7 +24,9 @@ PR本文の「概要」に、超えた理由と、レビューで見なくてよ
 
 - 1つのPR = 1つの関心事。PRのタイトルだけで何を見ればよいか分かる単位にする。
 - 依存の下から積む。目安は「Plan・仕様文書 → データモデル・migration → ドメインロジック（service等）
-  → API（routes・controller・契約） → frontend」。
+  → 契約（生成した型・Zod schemaを含む） → API（routes・controller） → frontend」。契約・API・Webを
+  分けるときに各PRへ入れるものと順番は、[`contracts/README.md`](../../contracts/README.md#2-契約を変えるときの手順)
+  の手順5に従う（mainへ入ったどの時点でも、WebとAPIの互換性を保つ）。
 - testは対象のコードと同じPRに入れる。testだけ・実装だけのPRを作らない。
 - **各PRは単独でCIが通る**状態にする。後続PRがないと壊れる・testが落ちる分け方をしない。
 - 1つのファイルの変更を、関心事が同じなのに複数のPRへ散らさない。

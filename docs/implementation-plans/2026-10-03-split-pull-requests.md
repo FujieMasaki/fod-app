@@ -45,6 +45,9 @@ LGTMになってから、タスク単位で1回行う。
     既存の規則で禁止のため）。
   - 新しい手順で使う`git merge`・`git branch --show-current`・`git branch -m`・`gh pr edit`・`git cherry-pick`・
     `git checkout <コミット> -- <path>`は許可ルールにないため、実行のたびに確認が出る。許可ルール（`.claude/settings.json`）への追加は人間が行い、このPRでは変えない。
+  - 契約・API・Webは別のPRに分けてよい（人間の判断）。ただし契約のPRには生成した型・Zod schemaを入れ、
+    mainへ入ったどの時点でもWebとAPIの互換性を保つ順にする。既存の「同じPRで更新する」規約
+    （`docs/architecture.md`・`contracts/README.md`・`docs/code-review/backend/README.md`）を同じ変更で直す。
   - 積み重ねたPRはmerge commitでマージする（既存のPRもmerge commitでマージしている）。
   - Planとタスクファイルは1番目のPRで作り、完了の記録は最後のPRで書く。
   - 人間のレビューはタスク単位で、すべてのPRがLGTMになってから1回。仕様・設計・securityの判断が必要なときは
@@ -53,7 +56,8 @@ LGTMになってから、タスク単位で1回行う。
 ## 6. References and Documents to Update
 
 - 参照: AGENTS.md、上記3 skill、`scripts/claude-quality-gate.mjs`、`scripts/codex-final-check.mjs`。
-- 更新: AGENTS.md（Pull Requests・タスクの自動実行）、README.md（Claude Codeでのタスク実行）、上記3 skill。
+- 更新: AGENTS.md（Pull Requests・タスクの自動実行）、README.md（Claude Codeでのタスク実行）、上記3 skill、
+  `docs/architecture.md`・`contracts/README.md`・`docs/code-review/backend/README.md`（契約・API・Webを分けてよいこと）。
 - 新規: `docs/development/pull-requests.md`（分割・積み重ね・マージ・人間のレビューの時機の正本）。
 
 ## 7. Proposed Approach
@@ -86,6 +90,7 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
 ## 10. Files to Change
 
 - `docs/development/pull-requests.md`（新規）
+- `docs/architecture.md`、`contracts/README.md`、`docs/code-review/backend/README.md`（変更）
 - `AGENTS.md`、`README.md`、`.claude/skills/run-task/SKILL.md`、`.claude/skills/pr-review-cycle/SKILL.md`、
   `.claude/skills/human-review-artifact/SKILL.md`（変更）
 - 本Plan（新規）
