@@ -51,7 +51,11 @@ origin/main ← <type>/task-008-1-<slug> ← <type>/task-008-2-<slug> ← <type>
 - 互いに依存しないPRは、どれも`main`をbaseにしてよい。
 - PRのタイトルの末尾に`（1/3）`のように順番を付ける。本文の「概要」に、同じタスクのPRの一覧
   （番号・タイトル・base）とマージの順番を書く。
-- pushは`git push origin <ブランチ>:<ブランチ>`の形にする。ブランチを行き来するため、`HEAD:<ブランチ>`だと
+- PRごとの作業（修正・検証・push・PR作成・レビュー）は、**そのPRのブランチへ`git switch`してから**行う。
+  pre-pushの検査、`gh pr create`のhead、Codexの最終チェックやレビューのdiff（`<base>...HEAD`）は、どれも
+  今いるブランチを基準にするため、別のブランチにいると、そのPRを単独で確かめたことにならない。
+- pushは`git push origin <ブランチ>:<ブランチ>`の形にし、push前に`git branch --show-current`がpush先と
+  一致することを確かめる。hookのメッセージにある`HEAD:<ブランチ>`の例は、今いるブランチへpushする場合に限る。ブランチを行き来するため、`HEAD:<ブランチ>`だと
   後ろのブランチにいるまま前のブランチの名前へpushしても、fast-forwardとして通ってしまい、後ろのPRの変更が
   前のPRに黙って混ざる。
 - 前のPRを直したら、その後ろのブランチへ順に`git merge`で取り込んでpushする。rebase・force pushは
