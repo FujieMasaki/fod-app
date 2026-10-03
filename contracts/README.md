@@ -28,7 +28,8 @@ OpenAPIを3.1ではなく3.0.3で書くのは、API側の検証に使うcommitte
 5. 契約・API・Webの変更は、同じPRに入れるか、PRを分けて積み重ねる
    （[PRの分割](../docs/development/pull-requests.md)）。分ける場合は次を守る。
    - 契約（`openapi.yaml`・`examples`）を変えるPRには、生成した型と、それに合わせたZod schema・
-     `schemas.test.ts`も入れる。`pnpm check`・`pnpm type-check`が契約・型・Zodの一致を検査するため、
+     `schemas.test.ts`も入れる。型検査で失敗するWebの呼び出し側と、契約の変更で落ちる既存のrequest spec・
+     API実装も同じPRに入れる。`pnpm check`・`pnpm type-check`が契約・型・Zodの一致を検査するため、
      分けるとそのPRのCIが通らない。
    - PRは1つずつmainへマージ・releaseされうる。マージのどの時点でも、mainのWebとAPIが下記
      「互換性」を満たす順にする。例: 追加なら「契約（型・Zodを含む） → APIの実装 → Webでの利用」。

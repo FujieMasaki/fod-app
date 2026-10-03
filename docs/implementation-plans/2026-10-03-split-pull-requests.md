@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-完了（2026-10-03）
+実施中（機械のレビュー中。Codexの最終チェックでLGTMになったら完了にする）
 
 ## 2. Goal
 
@@ -43,7 +43,7 @@ LGTMになってから、タスク単位で1回行う。
     タスクファイルの状態だけの更新は数えない。testとPlan・仕様文書は数える。
   - 依存するPRは積み重ね（stacked PR）にし、前のPRの修正は`git merge`で後ろへ取り込む（rebase・force pushは
     既存の規則で禁止のため）。
-  - 新しい手順で使う`git merge`・`git branch --show-current`・`git branch -m`・`gh pr edit`・`git cherry-pick`・
+  - 新しい手順で使う`git merge`・`git branch -m`・`gh pr edit`・`git cherry-pick`・
     `git checkout <コミット> -- <path>`は許可ルールにないため、実行のたびに確認が出る。許可ルール（`.claude/settings.json`）への追加は人間が行い、このPRでは変えない。
   - 契約・API・Webは別のPRに分けてよい（人間の判断）。ただし契約のPRには生成した型・Zod schemaを入れ、
     mainへ入ったどの時点でもWebとAPIの互換性を保つ順にする。既存の「同じPRで更新する」規約
@@ -132,7 +132,7 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
 
 ## 16. Completion Record
 
-- 状態: 2026-10-03 完了
+- 状態: 実施中
 - 実装差異: なし
 - 検証結果: `taskBranchPattern`が`feat/task-008-1-dot-model`に一致し、codex-final-checkのbase検査が
   `origin/feat/task-008-1-dot-model`を受け付けることをnodeで確認した。`pnpm lint:naming`は成功。

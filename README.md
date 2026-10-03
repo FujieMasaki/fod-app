@@ -99,7 +99,7 @@ User、認証、Dot、音声、AI処理のプロダクトAPIは未実装です�
 | [`docs/privacy.md`](docs/privacy.md) | 個人データの最小化、外部送信、固有名詞と削除に関する横断仕様 |
 | [`docs/dot-history.md`](docs/dot-history.md) | 複数Dotの履歴体験と時間軸の検証候補 |
 | [`docs/architecture.md`](docs/architecture.md) | 現在の構成と継続する設計判断 |
-| [`docs/development/`](docs/development/) | frontend / backend実装時の判断基準 |
+| [`docs/development/`](docs/development/) | frontend / backend実装時の判断基準、PRの分割と人間のレビューの規約 |
 | [`docs/code-review/`](docs/code-review/) | frontend / backendレビューの確認・報告方法、Codexの最終チェック |
 | [`docs/implementation-plans/`](docs/implementation-plans/) | 変更単位の判断と検証履歴 |
 
