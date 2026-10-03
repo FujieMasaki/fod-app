@@ -52,7 +52,7 @@ LGTMになってから、タスク単位で1回行う。
   - 人間は、すべてのサブのPRがLGTMになってから、統合ブランチへマージする前にレビューし、サブのPRを統合ブランチへ、
     最後にメインのPRを`main`へマージする。AIはどのPRもマージしない（人間の判断。hookの変更は不要）。
   - メインのPRは着手時にdraftで作り、本文のサブのPRの一覧を、LGTMの記録と進み具合の正本にする（人間の判断）。
-  - 新しい手順で使う`git merge`・`git branch -m`・`git branch -D`・`git commit --allow-empty`・`gh pr edit`・`gh api`・`git cherry-pick`・`bin/rails db:drop`・`bin/rails runner`・
+  - 新しい手順で使う`git merge`・`git branch -m`・`git branch -D`・`gh pr edit`・`gh api`・`git cherry-pick`・`bin/rails db:drop`・`bin/rails runner`・
     `git checkout <コミット> -- <path>`は許可ルールにないため、実行のたびに確認が出る。許可ルール（`.claude/settings.json`）への追加は人間が行い、このPRでは変えない。
   - 契約・API・Webは別のPRに分けてよい（人間の判断）。ただし契約のPRには生成した型・Zod schemaを入れる。
     統合ブランチに集めるので`main`へは一度に入る。expand・migrate・contractの段階は、同じ統合ブランチにまとめない。既存の「同じPRで更新する」規約
@@ -151,9 +151,12 @@ Plan（PRの分け方） → 統合ブランチとメインのPR（draft） → 
   拒否されうる。拒否されたら`run-task`の止まる条件に当たる。
 - 定期実行のレポート・通知には、最後にいたブランチのPRしか載らない。`run-task`は最後に統合ブランチへ切り替えて
   終わるので、メインのPRが載る（サブのPRの一覧はその本文にある）。途中で打ち切られた場合は、別のPRで直す。
-- 定期実行で、統合ブランチから作ったばかりの互いに依存しないブランチにいるまま打ち切られると、`task-scheduler.mjs`の
-  `untouched`が今いるブランチだけを見て、worktreeを作業なしとして消す（ほかのブランチのコミットは残るが、
-  翌日に同じタスクが最初から始まりうる）。scriptの見直し（別のPR）で、同じタスクのすべてのブランチを見るようにする。
+- 定期実行で、統合ブランチから作ったばかりのブランチにいるまま打ち切られても、そのブランチはupstreamが
+  `origin/<統合ブランチ>`になり（gitの既定のbranch.autoSetupMerge）、空のコミットも`origin/main`にないため、
+  `task-scheduler.mjs`の`untouched`には当たらず、worktreeは残る（サブエージェントの指摘で、当初の見立てを訂正）。
+- `main`の取り込みは、ローカルの統合ブランチが古いままだとpushが拒否され、guardの案内どおり`--force-with-lease`を
+  使うとサブのPRのマージを消しうる。リモートへ`--ff-only`で揃えてから取り込み、拒否されたらforce pushせずに止まる
+  手順にした（サブエージェントの指摘）。
 - PRコメントは公開repositoryで誰でも書けるため、人間の指摘として扱うのはレビュアーのコメントだけにした（サブエージェントの指摘）。
 - `bin/rails db:prepare`は適用済みのmigrationを巻き戻さないため、migrationが違う前のブランチへ戻ると、後ろのPRの
   テーブルが残ったDBで検証してしまう（Codexの指摘）。タスク専用DBを切り替え先の`schema.rb`から作り直す手順にした。
@@ -185,6 +188,8 @@ Plan（PRの分け方） → 統合ブランチとメインのPR（draft） → 
   DBの接続先を確かめる`bin/rails runner 'puts ActiveRecord::Base.connection_db_config.database'`が、
   `FOD_DB_SUFFIX=_task_999`で`…_development_task_999`・`…_test_task_999`を、`DATABASE_URL`を足すと既定の
   `focus_on_dot_api_development`を出すことを確かめた（接続・削除はしていない）。
+  `git show --remerge-diff --format=`が、競合のないmerge commit（`fc8907c`）では空、コンフリクトを解消した
+  merge commit（`71311d2`）では解消の内容を出すことを確かめた。
 - 対応しなかった任意改善（サブエージェントのLow）: AIが所有者のtokenで書いたPRコメントを人間の指摘と取り違えうること、
   `gh api`の例に`--paginate`がないこと、pushしていない仕組み化のコミットを外す方法、許可ルールにない
   コマンドの一覧に`bin/rails runner`がないこと。人間のレビューで扱いを決める。
