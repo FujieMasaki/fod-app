@@ -55,6 +55,8 @@ LGTMになってから、タスク単位で1回行う。
   - 統合ブランチの名前は`<type>/task-NNN-<slug>-integration`にし、作業を始めた番号なしのブランチと分ける（人間の判断）。
     番号なしのブランチがpush済みでも、force pushせずに統合ブランチを作れるようにするため。push済みの番号なしの
     ブランチは、名前を変えずに1番目のサブのPRとして使う。
+  - Codexの最終チェックが5回の上限に達した（統合ブランチの形にした後も端のケースの指摘が続いた）ため、人間の判断で
+    1回だけ例外として6回目を実行する。そこで指摘が出たら止まる。
   - 新しい手順で使う`git merge`・`git branch -m`・`git branch -D`・`gh pr edit`・`gh api`・`git cherry-pick`・`git reset --soft`・`bin/rails db:drop`・`bin/rails runner`・
     `git checkout <コミット> -- <path>`は許可ルールにないため、実行のたびに確認が出る。許可ルール（`.claude/settings.json`）への追加は人間が行い、このPRでは変えない。
   - 契約・API・Webは別のPRに分けてよい（人間の判断）。ただし契約のPRには生成した型・Zod schemaを入れる。
@@ -75,7 +77,8 @@ LGTMになってから、タスク単位で1回行う。
 
 - 参照: AGENTS.md、上記3 skill、`scripts/claude-quality-gate.mjs`、`scripts/codex-final-check.mjs`。
 - 更新: AGENTS.md（Pull Requests・タスクの自動実行）、README.md（Claude Codeでのタスク実行）、上記3 skill、
-  `docs/architecture.md`・`contracts/README.md`・`docs/code-review/backend/README.md`・`docs/development/backend.md`（契約・API・Webを分けてよいこと）。
+  `docs/architecture.md`・`contracts/README.md`・`docs/code-review/backend/README.md`・`docs/development/backend.md`（契約・API・Webを分けてよいこと）、`docs/implementation-plans/TEMPLATE.md`
+  （「10. Files to Change」にPRごとの分け方の欄）。
 - 新規: `docs/development/pull-requests.md`（分割・統合ブランチとサブのPR・マージ・人間のレビューの時機の正本）。
 
 ## 7. Proposed Approach
