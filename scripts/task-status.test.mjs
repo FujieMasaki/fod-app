@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { evaluateTask, parseTask } from "./task-status.mjs";
+import { evaluateTask, parseTask, scheduledSessionPath } from "./task-status.mjs";
 
 function taskMarkdown({ id, category = "実装", status = "Todo", dependencies = [], criteria = ["- [ ] 動く。"] }) {
   const dependencyLines = dependencies.length ? dependencies.map((dep) => `- ${dep}`).join("\n") : "なし。";
@@ -142,5 +142,35 @@ test("invalid and unknown IDs are rejected", () => {
     assert.equal(evaluateTask("task-1", { tasksDir }).runnable, false);
     assert.equal(evaluateTask(undefined, { tasksDir }).runnable, false);
     assert.deepEqual(evaluateTask("TASK-042", { tasksDir }).reasons, ["TASK-042 does not exist in docs/tasks"]);
+  });
+});
+
+test("a task a scheduled session is working on is not runnable, except for that session", () => {
+  withTasks([{ id: "TASK-006" }], (tasksDir) => {
+    const lockDir = path.join(tasksDir, "scheduled-sessions");
+    mkdirSync(lockDir);
+    writeFileSync(scheduledSessionPath("TASK-006", lockDir), JSON.stringify({ pid: process.pid }));
+
+    const manual = evaluateTask("TASK-006", { tasksDir, lockDir, env: {} });
+    assert.equal(manual.runnable, false);
+    assert.match(manual.reasons[0], new RegExp(`^TASK-006 is being worked on by a scheduled session \\(pid ${process.pid};`));
+
+    const scheduled = evaluateTask("TASK-006", { tasksDir, lockDir, env: { FOD_SCHEDULED_TASK: "TASK-006" } });
+    assert.equal(scheduled.runnable, true);
+  });
+});
+
+test("a record left by a session that is no longer running does not block the task", () => {
+  withTasks([{ id: "TASK-006" }], (tasksDir) => {
+    const lockDir = path.join(tasksDir, "scheduled-sessions");
+    mkdirSync(lockDir);
+    const record = scheduledSessionPath("TASK-006", lockDir);
+
+    writeFileSync(record, JSON.stringify({ pid: 2 ** 22 + 1 }));
+    assert.equal(evaluateTask("TASK-006", { tasksDir, lockDir, env: {} }).runnable, true);
+
+    // A live but reused pid does not count once the recorded worktree is gone.
+    writeFileSync(record, JSON.stringify({ pid: process.pid, worktree: path.join(tasksDir, "removed") }));
+    assert.equal(evaluateTask("TASK-006", { tasksDir, lockDir, env: {} }).runnable, true);
   });
 });
