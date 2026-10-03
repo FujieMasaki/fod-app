@@ -349,15 +349,16 @@ export function startSession(task, worktree, { logDir, lockDir }, deps = { spawn
   });
 }
 
-// A worktree still at the commit it was created from, with no changes and no
+// A worktree with no commit of its own, no changes and no
 // pushed branch, holds no work: keeping it would only make the task look taken
 // tomorrow. A session can stop right after creating its branch (installing
 // dependencies, preparing databases), so an unpushed branch alone is not work.
-function untouched(worktree, base, branch, git) {
-  const head = git(["-C", worktree, "rev-parse", "HEAD"]);
+function untouched(worktree, branch, git) {
+  // No commit beyond origin/main, which the session may have fetched since.
+  const ahead = git(["-C", worktree, "rev-list", "HEAD", "--not", "origin/main"]);
   const status = git(["-C", worktree, "status", "--porcelain"]);
   const pushed = branch && git(["-C", worktree, "rev-parse", "--abbrev-ref", `${branch}@{upstream}`]).ok;
-  return head.ok && status.ok && head.stdout.trim() === base && !status.stdout.trim() && !pushed;
+  return ahead.ok && status.ok && !ahead.stdout.trim() && !status.stdout.trim() && !pushed;
 }
 
 // deps: git(args) → { ok, stdout, stderr }, spawn. Injectable for the failure-path tests.
@@ -376,7 +377,7 @@ export async function runTask(task, { root, logDir, lockDir, deps = { git: (args
   }
 
   const branch = deps.git(["-C", worktree, "branch", "--show-current"]).stdout.trim();
-  if (!session.started || untouched(worktree, base, branch, deps.git)) {
+  if (!session.started || untouched(worktree, branch, deps.git)) {
     deps.git(["-C", root, "worktree", "remove", "--force", worktree]);
     if (branch) deps.git(["-C", root, "branch", "-D", branch]);
     return { id: task.id, branch: "", detail: `${session.detail}（作業がなかったためworktreeを削除）` };
@@ -384,10 +385,33 @@ export async function runTask(task, { root, logDir, lockDir, deps = { git: (args
   return { id: task.id, branch, detail: session.detail };
 }
 
-export async function run({ root, dryRun = false, maxParallel = DEFAULT_MAX_PARALLEL, now = new Date() }) {
+// Claims as they are right now; failing to read them counts as claimed, since
+// starting a task someone else holds is worse than starting it tomorrow.
+function currentClaim(taskId, root, deps) {
+  try {
+    const claims = findClaims({ worktrees: deps.listWorktrees(root), pullRequests: deps.openPullRequests(root) });
+    return claims.get(taskId);
+  } catch (error) {
+    return `着手状況を確認できません: ${error.message}`;
+  }
+}
+
+const defaultRunDeps = {
+  listTasks: (lockDir) => listTaskIds().map((id) => evaluateTask(id, { lockDir })),
+  listWorktrees,
+  openPullRequests,
+  runTask,
+  sleep,
+  notify,
+  logRoot: path.join(homedir(), "Library", "Logs", "focus-on-dot"),
+};
+
+// deps defaults to the real git, gh, claude and macOS; tests replace them.
+export async function run({ root, dryRun = false, maxParallel = DEFAULT_MAX_PARALLEL, now = new Date(), deps = {} }) {
+  const { listTasks, runTask: startTask, logRoot, ...io } = { ...defaultRunDeps, ...deps };
   const lockDir = scheduledSessionsDir(root);
-  const tasks = listTaskIds().map((id) => evaluateTask(id, { lockDir }));
-  const claims = findClaims({ worktrees: listWorktrees(root), pullRequests: openPullRequests(root) });
+  const tasks = listTasks(lockDir);
+  const claims = findClaims({ worktrees: io.listWorktrees(root), pullRequests: io.openPullRequests(root) });
   const plan = planRun(tasks, claims, maxParallel);
 
   if (dryRun) {
@@ -396,20 +420,26 @@ export async function run({ root, dryRun = false, maxParallel = DEFAULT_MAX_PARA
     return;
   }
 
-  const logDir = path.join(homedir(), "Library", "Logs", "focus-on-dot", timestamp(now));
+  const logDir = path.join(logRoot, timestamp(now));
   mkdirSync(logDir, { recursive: true });
 
   const sessions = [];
   for (const [index, task] of plan.start.entries()) {
-    if (index > 0) await sleep(LAUNCH_INTERVAL_MS);
-    sessions.push(runTask(task, { root, logDir, lockDir }));
+    if (index > 0) await io.sleep(LAUNCH_INTERVAL_MS);
+    // Someone may have taken the task while earlier ones were starting.
+    const claim = currentClaim(task.id, root, io);
+    if (claim) {
+      sessions.push({ id: task.id, branch: "", detail: `起動の直前に着手済みになったため見送り（${claim}）` });
+      continue;
+    }
+    sessions.push(startTask(task, { root, logDir, lockDir }));
   }
   const finished = await Promise.all(sessions);
 
   // The report must still be written when GitHub is unreachable after the sessions.
   let pullRequests = [];
   try {
-    if (finished.length) pullRequests = openPullRequests(root);
+    if (finished.length) pullRequests = io.openPullRequests(root);
   } catch (error) {
     console.error(error);
   }
@@ -417,8 +447,9 @@ export async function run({ root, dryRun = false, maxParallel = DEFAULT_MAX_PARA
 
   const reportPath = path.join(logDir, "report.md");
   writeFileSync(reportPath, formatReport(plan, results, { date: timestamp(now) }));
-  notify(notificationText(plan, results));
+  io.notify(notificationText(plan, results));
   console.log(`report: ${reportPath}`);
+  return { plan, results, reportPath };
 }
 
 function option(args, name) {

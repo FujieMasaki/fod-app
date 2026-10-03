@@ -153,7 +153,7 @@ test("a task a scheduled session is working on is not runnable, except for that 
 
     const manual = evaluateTask("TASK-006", { tasksDir, lockDir, env: {} });
     assert.equal(manual.runnable, false);
-    assert.deepEqual(manual.reasons, [`TASK-006 is being worked on by a scheduled session (pid ${process.pid})`]);
+    assert.match(manual.reasons[0], new RegExp(`^TASK-006 is being worked on by a scheduled session \\(pid ${process.pid};`));
 
     const scheduled = evaluateTask("TASK-006", { tasksDir, lockDir, env: { FOD_SCHEDULED_TASK: "TASK-006" } });
     assert.equal(scheduled.runnable, true);

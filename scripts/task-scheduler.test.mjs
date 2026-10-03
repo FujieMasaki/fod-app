@@ -12,6 +12,7 @@ import {
   parseWorktrees,
   planRun,
   pullRequestFor,
+  run,
   runTask,
   sessionSummary,
   waitingCounts,
@@ -174,7 +175,8 @@ test("a session's PR is the one on its exact branch from this repository", () =>
 function fakeSpawn(events, logDir) {
   return (_command, _args, options) => {
     const child = new EventEmitter();
-    child.pid = 999999;
+    // Above any pid Linux or macOS hands out, so the real group kill reaches nothing.
+    child.pid = 2 ** 22 + 1;
     child.kill = () => {};
     setImmediate(() => {
       for (const [event, value] of events) {
@@ -197,7 +199,7 @@ function fakeGit({ addOk = true, branch = "", head = "base", status = "", pushed
     if (args.includes("add")) return addOk ? ok() : { ok: false, stdout: "", stderr: "already exists" };
     if (args.includes("--show-current")) return ok(`${branch}\n`);
     if (args.some((arg) => arg.endsWith("@{upstream}"))) return pushed ? ok("origin/x\n") : { ok: false, stdout: "", stderr: "no upstream" };
-    if (args.includes("HEAD")) return ok(`${head}\n`);
+    if (args.includes("rev-list")) return ok(head === "base" ? "" : "abc123\n");
     if (args.includes("status")) return ok(status);
     return ok();
   };
@@ -281,7 +283,7 @@ test("a running session is recorded for manual /run-task and the record is remov
 
     await runTask({ id: "TASK-006" }, { root: "/repo", logDir, lockDir, deps: { git, spawn } });
 
-    assert.deepEqual(recorded, { pid: 999999, worktree: "/repo/.claude/worktrees/task-006" });
+    assert.deepEqual(recorded, { pid: 2 ** 22 + 1, worktree: "/repo/.claude/worktrees/task-006" });
     assert.ok(!existsSync(lockPath));
   }));
 
@@ -326,4 +328,64 @@ test("a pushed branch is kept even without new commits or changes", () =>
 
     assert.equal(result.branch, "feat/task-006-x");
     assert.ok(!removed(calls));
+  }));
+
+test("a task taken while earlier ones were starting is not started again", () =>
+  withLogDir(async (logRoot) => {
+    const runnable = (id) => ({ ...task(id, { status: "Todo", runnable: true }), title: id });
+    let worktrees = [];
+    const started = [];
+    const notifications = [];
+
+    const { results } = await run({
+      root: "/repo",
+      maxParallel: 2,
+      now: new Date(2026, 9, 3, 4, 0),
+      deps: {
+        listTasks: () => [runnable("TASK-102"), runnable("TASK-103")],
+        listWorktrees: () => worktrees,
+        openPullRequests: () => [],
+        // A manual /run-task takes TASK-103 in another worktree during the wait.
+        sleep: async () => {
+          worktrees = [{ path: "/repo/.claude/worktrees/review", branch: "feat/task-103-manual" }];
+        },
+        runTask: async (started_) => {
+          started.push(started_.id);
+          return { id: started_.id, branch: "", detail: "done" };
+        },
+        notify: (message) => notifications.push(message),
+        logRoot,
+      },
+    });
+
+    assert.deepEqual(started, ["TASK-102"]);
+    assert.equal(results[1].detail, "起動の直前に着手済みになったため見送り（worktree review）");
+    assert.equal(notifications.length, 1);
+  }));
+
+test("a run that cannot read claims before a launch does not start that task", () =>
+  withLogDir(async (logRoot) => {
+    let calls = 0;
+    const started = [];
+
+    const { results } = await run({
+      root: "/repo",
+      now: new Date(2026, 9, 3, 4, 0),
+      deps: {
+        listTasks: () => [{ ...task("TASK-102", { status: "Todo", runnable: true }), title: "x" }],
+        listWorktrees: () => [],
+        openPullRequests: () => {
+          calls += 1;
+          if (calls === 2) throw new Error("gh: network");
+          return [];
+        },
+        sleep: async () => {},
+        runTask: async (started_) => started.push(started_.id),
+        notify: () => {},
+        logRoot,
+      },
+    });
+
+    assert.deepEqual(started, []);
+    assert.match(results[0].detail, /着手状況を確認できません: gh: network/);
   }));

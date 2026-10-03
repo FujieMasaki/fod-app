@@ -114,7 +114,10 @@ export function evaluateTask(taskId, { tasksDir = defaultTasksDir, lockDir, env 
 
   if (env.FOD_SCHEDULED_TASK !== taskId) {
     const pid = scheduledSessionPid(taskId, lockDir);
-    if (pid) reasons.push(`${taskId} is being worked on by a scheduled session (pid ${pid})`);
+    if (pid) {
+      const record = scheduledSessionPath(taskId, lockDir);
+      reasons.push(`${taskId} is being worked on by a scheduled session (pid ${pid}; delete ${record} if it is not)`);
+    }
   }
 
   return {
