@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-完了（Codexの最終チェックで`de980db`がLGTM。人間のレビュー待ち）
+実施中（人間のレビューで、分け方を統合ブランチの形へ変えることになった。機械のレビューをやり直す）
 
 ## 2. Goal
 
@@ -44,19 +44,25 @@ LGTMになってから、タスク単位で1回行う。
 - 決定済み:
   - 上限は「レビュー対象のファイル20個」。lockfile・生成物（`schema.rb`、`api-contract.d.ts`）、
     タスクファイルの状態だけの更新は数えない。testとPlan・仕様文書は数える。
-  - 依存するPRは積み重ね（stacked PR）にし、前のPRの修正は`git merge`で後ろへ取り込む（rebase・force pushは
-    既存の規則で禁止のため）。
-  - 新しい手順で使う`git merge`・`git branch -m`・`git branch -D`・`gh pr edit`・`gh api`・`git cherry-pick`・`bin/rails db:drop`・
+  - 分けるときは、統合ブランチ（`<type>/task-NNN-<slug>`）と`main`へのメインのPR（draft）を先に作り、サブのPRは
+    統合ブランチへ向けて作る。タスクの変更は最後にメインのPRで一度に`main`へ入る（人間の判断。2026-10-03の
+    人間のレビューで、サブのPRを1つずつ`main`へ入れる形から変更）。
+  - サブのPRは、依存するものを積み重ね（stacked PR）、前のPRの修正は`git merge`で後ろへ取り込む（rebase・force pushは
+    既存の規則で禁止のため）。AIはサブのPRを人間のマージを待たずにすべて作る（人間の判断）。
+  - 人間は、すべてのサブのPRがLGTMになってから、統合ブランチへマージする前にレビューし、サブのPRを統合ブランチへ、
+    最後にメインのPRを`main`へマージする。AIはどのPRもマージしない（人間の判断。hookの変更は不要）。
+  - メインのPRは着手時にdraftで作り、本文のサブのPRの一覧を、LGTMの記録と進み具合の正本にする（人間の判断）。
+  - 新しい手順で使う`git merge`・`git branch -m`・`git branch -D`・`git commit --allow-empty`・`gh pr edit`・`gh api`・`git cherry-pick`・`bin/rails db:drop`・`bin/rails runner`・
     `git checkout <コミット> -- <path>`は許可ルールにないため、実行のたびに確認が出る。許可ルール（`.claude/settings.json`）への追加は人間が行い、このPRでは変えない。
-  - 契約・API・Webは別のPRに分けてよい（人間の判断）。ただし契約のPRには生成した型・Zod schemaを入れ、
-    mainへ入ったどの時点でもWebとAPIの互換性を保つ順にする。既存の「同じPRで更新する」規約
+  - 契約・API・Webは別のPRに分けてよい（人間の判断）。ただし契約のPRには生成した型・Zod schemaを入れる。
+    統合ブランチに集めるので`main`へは一度に入る。expand・migrate・contractの段階は、同じ統合ブランチにまとめない。既存の「同じPRで更新する」規約
     （`docs/architecture.md`・`contracts/README.md`・`docs/code-review/backend/README.md`）を同じ変更で直す。
-  - 積み重ねたPRはmerge commitでマージする（既存のPRもmerge commitでマージしている）。
+  - サブのPRはmerge commitで統合ブランチへマージする（squashすると後ろのPRのdiffに前の変更が再び現れる）。
   - Planとタスクファイルは1番目のPRで作り、完了の記録は最後のPRで書く。
   - 定期実行でも、分割・PRごとの機械のレビュー・ガイドの作成まで行う（人間の判断）。4時間の打ち切り、
     許可ルールにないコマンドの拒否、レポートに1件しかPRが載らないことは、下のRisksに書き、scriptの見直しは別のPRで行う。
-  - PRごとのLGTMのコミットは、各PR本文の「概要」にあるPRの一覧に書き足す（人間の判断）。中断後の再開で、
-    どのPRのレビューが済んだかを判断する記録にする。
+  - PRごとのLGTMのコミットは、メインのPRの本文の一覧に書き足す（人間の判断。当初は各PR本文の一覧だったが、
+    メインのPRができたので1か所にまとめた）。中断後の再開で、どのPRのレビューが済んだかを判断する記録にする。
   - 分けたPRの途中で止まるときは、ブランチを切り替えずに今いるブランチのPlanへ書き、その記録だけのコミットは
     LGTMの取り消しに当たらないとする（人間の判断）。
   - 人間のレビューはタスク単位で、すべてのPRがLGTMになってから1回。仕様・設計・securityの判断が必要なときは
@@ -67,11 +73,11 @@ LGTMになってから、タスク単位で1回行う。
 - 参照: AGENTS.md、上記3 skill、`scripts/claude-quality-gate.mjs`、`scripts/codex-final-check.mjs`。
 - 更新: AGENTS.md（Pull Requests・タスクの自動実行）、README.md（Claude Codeでのタスク実行）、上記3 skill、
   `docs/architecture.md`・`contracts/README.md`・`docs/code-review/backend/README.md`・`docs/development/backend.md`（契約・API・Webを分けてよいこと）。
-- 新規: `docs/development/pull-requests.md`（分割・積み重ね・マージ・人間のレビューの時機の正本）。
+- 新規: `docs/development/pull-requests.md`（分割・統合ブランチとサブのPR・マージ・人間のレビューの時機の正本）。
 
 ## 7. Proposed Approach
 
-1. `docs/development/pull-requests.md`に、上限・数えないファイル・分け方・積み重ね・マージ手順・
+1. `docs/development/pull-requests.md`に、上限・数えないファイル・分け方・統合ブランチとサブのPR・マージ手順・
    人間のレビューの時機をまとめる。各skillはここを参照し、規約本文を複製しない。
 2. `run-task`: PlanでPRの分け方を決め、PRの順にブランチを積んで実装し、PRを作った後に
    `pr-review-cycle`の手順2〜8をPRごとに回し、最後にタスク全体のガイドを1つ渡す。
@@ -82,8 +88,10 @@ LGTMになってから、タスク単位で1回行う。
 ## 8. Why This Approach
 
 - 20ファイルはユーザーの指定。生成物・lockfileは読む価値が低く、数えると不要な分割が増える。
-- 積み重ねにすると各PRのdiffがそのPRの分だけになり、1番目から順に読める。依存しないPRを`main`から
+- 積み重ねにすると各PRのdiffがそのPRの分だけになり、1番目から順に読める。依存しないPRを統合ブランチから
   分けることも許し、無理に直列にしない。
+- 統合ブランチに集めると、タスクの変更が`main`へ一度に入る。`main`のどの時点でもWebとAPIの互換性を保つ順番の
+  工夫、`main`へのbaseの付け替え、PRごとの「mainを取り込むか」の判断が要らなくなり、最後に統合した全体でCIが走る。
 - 人間のレビューをタスク単位にまとめると、途中の設計変更による見直しを避けられ、ガイドも1つで済む。
 
 ## 9. Data Flow
@@ -91,9 +99,9 @@ LGTMになってから、タスク単位で1回行う。
 アプリのデータフローの変更はない。作業の流れは次のとおり。
 
 ```text
-Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作成
-→ PRごとに機械のレビュー（前のPRの修正は後ろへmerge） → すべてLGTM
-→ タスク全体のガイド1つ → 人間のレビュー → 1番目から順にマージ
+Plan（PRの分け方） → 統合ブランチとメインのPR（draft） → サブのPRごとに実装・ブランチを積む → サブのPRをすべて作成
+→ サブのPRごとに機械のレビュー（前のPRの修正は後ろへmerge） → すべてLGTM
+→ タスク全体のガイド1つ → 人間のレビュー → サブのPRを統合ブランチへ順にマージ → メインのPRをmainへマージ
 ```
 
 ## 10. Files to Change
@@ -115,14 +123,19 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
 - 実装後に1つのPRとして作り、レビューの時だけコミット単位で読む: GitHub上でファイル数が減らず、
   レビューのコメントも1つのPRに混ざる。不採用。
 - PRごとに人間がレビューする: 途中の設計変更で見直しが二度手間になる。不採用。
+- サブのPRを1つずつ`main`へマージする（当初の案）: `main`へ途中の状態が入るため、互換性を保つ順番の工夫と、
+  マージのたびのbaseの付け替え・mainの取り込みが要る。人間のレビューで統合ブランチの形に変更。
+- AIがLGTMのサブのPRを統合ブランチへマージする: 積み重ねが不要になるが、人間がマージ前にレビューできず、
+  hookの変更も要る。人間の判断で不採用。
 
 ## 13. Risks / Things to Watch
 
-- 積み重ねたPRを、baseを付け替えずにマージすると`main`ではなく前のブランチへ入る。マージ手順を
+- サブのPRを、baseを付け替えずにマージすると統合ブランチではなく前のブランチへ入る。マージ手順を
   規約とガイドに書いた。GitHubの「マージ後にheadブランチを自動で削除」を有効にすると自動で付け替わる。
+- メインのPRは20ファイルを超える。行ごとには読まない前提で、上限の例外とした。
 - 前のPRの修正を取り込み忘れると、後ろのPRが古い前提でレビューされる。取り込みを手順に入れた。
 - `run-task`の範囲が機械のレビューまで広がるため、1回の実行が長くなる。
-- squashでマージすると、後ろのPRのdiffに前のPRの変更が再び現れる。merge commitでマージすると規約に書いた。
+- サブのPRをsquashでマージすると、後ろのPRのdiffに前のPRの変更が再び現れる。merge commitでマージすると規約に書いた。
 - Stop hookはブランチを切り替えると状態が初期化され、今いるブランチしか確かめない。すべてのブランチの
   push状態の確認を`run-task`の手順9に入れた。
 - `HEAD:<ブランチ>`のpushで別のPRの変更が混ざりうる。積み重ねたPRでは`<ブランチ>:<ブランチ>`の形にした。
@@ -131,8 +144,9 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
   打ち切られた場合の後始末は、scriptの見直し（別のPR）で扱う。
 - 定期実行（`-p`、`--permission-mode auto`）では確認を出せないため、許可ルールにない`git merge`・`gh pr edit`等が
   拒否されうる。拒否されたら`run-task`の止まる条件に当たる。
-- 定期実行のレポート・通知には、分けたPRのうち最後のブランチのPRしか載らない（別のPRで直す）。
-- 定期実行で、`origin/main`から作ったばかりの互いに依存しないブランチにいるまま打ち切られると、`task-scheduler.mjs`の
+- 定期実行のレポート・通知には、最後にいたブランチのPRしか載らない。`run-task`は最後に統合ブランチへ切り替えて
+  終わるので、メインのPRが載る（サブのPRの一覧はその本文にある）。途中で打ち切られた場合は、別のPRで直す。
+- 定期実行で、統合ブランチから作ったばかりの互いに依存しないブランチにいるまま打ち切られると、`task-scheduler.mjs`の
   `untouched`が今いるブランチだけを見て、worktreeを作業なしとして消す（ほかのブランチのコミットは残るが、
   翌日に同じタスクが最初から始まりうる）。scriptの見直し（別のPR）で、同じタスクのすべてのブランチを見るようにする。
 - PRコメントは公開repositoryで誰でも書けるため、人間の指摘として扱うのはレビュアーのコメントだけにした（サブエージェントの指摘）。
@@ -158,8 +172,8 @@ Plan（PRの分け方） → PRごとに実装・ブランチを積む → PR作
 
 ## 16. Completion Record
 
-- 状態: 完了（サブエージェント・Codexとも`de980db`でLGTM）
-- 実装差異: なし
+- 状態: 実施中（`de980db`でサブエージェント・CodexともLGTMになった後、人間のレビューで統合ブランチの形へ変更）
+- 実装差異: 当初の「サブのPRを1つずつ`main`へマージする」形から、統合ブランチとメインのPRの形へ変えた。
 - 検証結果: `taskBranchPattern`が`feat/task-008-1-dot-model`に一致し、codex-final-checkのbase検査が
   `origin/feat/task-008-1-dot-model`を受け付けることをnodeで確認した。`pnpm lint:naming`は成功。
   `docs/development/pull-requests.md`の見出しと、skillからのアンカーリンクの対応を目視で確認した。
