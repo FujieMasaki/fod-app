@@ -11,20 +11,19 @@ const USER_A = "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10";
 
 // Rails APIのSession（契約の形）をfetchの差し替えで模す。未認証で始まり、loginでAになる。
 function mockSessionApi() {
+  const signedIn = {
+    authenticated: true,
+    csrf_token: "t2",
+    expires_at: "2099-01-01T00:00:00Z",
+    account_status: "active",
+    user: { id: USER_A, email: "a@example.com", email_confirmed: true, sign_in_methods: ["password"] },
+  };
+  let loggedIn = false;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (_path: string, init?: RequestInit) => {
-      const body =
-        init?.method === "POST"
-          ? {
-              authenticated: true,
-              csrf_token: "t2",
-              expires_at: "2099-01-01T00:00:00Z",
-              account_status: "active",
-              user: { id: USER_A, email: "a@example.com", email_confirmed: true, sign_in_methods: ["password"] },
-            }
-          : { authenticated: false, csrf_token: "t1" };
-      return Response.json(body);
+      if (init?.method === "POST") loggedIn = true;
+      return Response.json(loggedIn ? signedIn : { authenticated: false, csrf_token: "t1" });
     }),
   );
 }

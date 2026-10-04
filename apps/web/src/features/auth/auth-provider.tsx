@@ -215,11 +215,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(
     async (credentials: Credentials) => {
       const next = await withCsrf((csrfToken) => createSession(csrfToken, credentials));
-      // login前のCookieで送った取り直し（画面へ戻ったときなど）が後から届いて、未認証で上書きしないように取り消す。
-      await queryClient.cancelQueries({ queryKey: SESSION_QUERY_KEY });
       queryClient.setQueryData(SESSION_QUERY_KEY, next);
+      // login前のCookieで送った取り直し（画面へ戻ったときなど）が後から届いて、未認証で上書きしないよう、
+      // 新しいCookieで取り直す（実行中の取り直しは結果を捨てて止まる）。cancelQueriesは取り消しの際に
+      // 取り直し前の値へ非同期に戻すため、置いたloginの結果を消し得る。
+      void refresh();
     },
-    [queryClient, withCsrf],
+    [queryClient, refresh, withCsrf],
   );
 
   const signOut = useCallback(async () => {

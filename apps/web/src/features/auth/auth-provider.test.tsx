@@ -122,7 +122,8 @@ describe("認証状態", () => {
 describe("login", () => {
   it("取得したCSRF tokenで送り、成功したら利用者の切り替わりを通知する", async () => {
     const calls = mockApi({
-      "GET /api/v1/session": [anonymous("t1")],
+      // login後の取り直しは新しいCookieで送られ、認証済みを返す
+      "GET /api/v1/session": [anonymous("t1"), authenticated(USER_A, "t2")],
       "POST /api/v1/session": [authenticated(USER_A, "t2")],
     });
     const { auth, onIdentityChange } = await renderAndSubscribe();
@@ -145,9 +146,13 @@ describe("login", () => {
         getCount += 1;
         if (getCount === 1) return Response.json(anonymous("t1").body);
         // 2回目（画面へ戻ったときの取り直し）はlogin前のCookieで送られ、遅れて未認証を返す
-        return new Promise<Response>((resolve) => {
-          releaseStale = resolve;
-        });
+        if (getCount === 2) {
+          return new Promise<Response>((resolve) => {
+            releaseStale = resolve;
+          });
+        }
+        // login後の取り直しは新しいCookieで送られる
+        return Response.json(authenticated(USER_A, "t3").body);
       }),
     );
     const { auth } = await renderAndSubscribe();
@@ -160,13 +165,14 @@ describe("login", () => {
     await act(() => auth().signIn({ email: "user@example.com", password: "password123" }));
     await act(async () => releaseStale(Response.json(anonymous("t1").body)));
 
+    await waitFor(() => expect(getCount).toBe(3));
     expect(auth().status).toBe("authenticated");
     expect(auth().endReason).toBeNull();
   });
 
   it("csrf_invalidならtokenを取り直して1回だけ再送する", async () => {
     const calls = mockApi({
-      "GET /api/v1/session": [anonymous("old"), anonymous("new")],
+      "GET /api/v1/session": [anonymous("old"), anonymous("new"), authenticated(USER_A, "t2")],
       "POST /api/v1/session": [problem(403, "csrf_invalid"), authenticated(USER_A, "t2")],
     });
     const { auth } = await renderAndSubscribe();
