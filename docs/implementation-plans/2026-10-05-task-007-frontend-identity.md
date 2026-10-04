@@ -165,7 +165,8 @@ TASK-006で実装したRailsの認証（Devise + OmniAuth Google + CookieStore�
   「設定」を有効にする。
 - 新しい画面はTailwind CSS v4で組む。既存の`--fod-*` tokenだけをTailwindのthemeに割り当て、既定の色・
   余白は消す（任意の値を画面へ足せないように）。既存画面のCSS Modulesとresetに影響しないよう、Tailwindの
-  preflightは読み込まず、themeとutilitiesだけを使う。
+  preflightは読み込まず、themeとutilitiesだけを使う。行間は`text-*`に組み込まず`leading-*`で指定する
+  （Tailwindの`--text-*--line-height`は、repositoryのCSS custom propertyの命名検査に合わないため）。
 
 ### 7-5. 開発環境
 
@@ -247,23 +248,21 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 | `apps/web/src/styles/tailwind.css` | 新規 | tokenだけのtheme |
 | `apps/web/src/main.tsx` | 変更 | tailwind.cssの読み込み |
 | `apps/web/src/features/auth/messages.ts` | 新規 | `ApiError`・`auth_error`・終了の理由から文言 |
-| `apps/web/src/features/auth/messages.test.ts` | 新規 | 文言の対応 |
+| `apps/web/src/features/auth/messages.test.ts` | 新規 | 文言の対応・`redirect`の検証 |
 | `apps/web/src/features/auth/components/auth-layout.tsx` | 新規 | 認証画面の骨格・入力欄・メッセージ |
 | `apps/web/src/features/auth/components/sign-in-screen.tsx` | 新規 | ログイン |
-| `apps/web/src/features/auth/components/sign-in-screen.test.tsx` | 新規 | 成功・失敗・未確認・auth_error |
 | `apps/web/src/features/auth/components/google-sign-in-form.tsx` | 新規 | Googleのform POST |
 | `apps/web/src/features/auth/components/sign-up-screen.tsx` | 新規 | 新規登録 |
 | `apps/web/src/features/auth/components/require-auth.tsx` | 新規 | guard |
-| `apps/web/src/features/auth/components/require-auth.test.tsx` | 新規 | 状態ごとの表示・遷移 |
 | `apps/web/src/features/auth/components/account-screen.tsx` | 新規 | アカウント・logout |
-| `apps/web/src/features/auth/components/account-screen.test.tsx` | 新規 | logoutの成功・失敗 |
+| `apps/web/src/features/auth/components/auth-screens.test.tsx` | 新規 | guardの状態ごとの表示・遷移、ログインの成功・失敗・未確認・auth_error・Googleのform、アカウントの期限・logoutの失敗 |
 | `apps/web/src/features/auth/components/sign-in-prompt.tsx` | 新規 | Homeの未認証の案内 |
 | `apps/web/src/features/auth/redirect.ts` | 新規 | `redirect`の許可一覧と検証 |
 | `apps/web/src/features/auth/index.ts` | 変更 | 画面のexport |
 | `apps/web/src/router.tsx` | 変更 | route追加・guard |
 | `apps/web/src/components/bottom-navigation/bottom-navigation.tsx` | 変更 | 「設定」を有効に |
 
-レビュー対象 20。
+レビュー対象 18。
 
 ### PR 3/3: メールのリンクの画面と文書（`feat/task-007-3-account-recovery`、base PR 2）
 
@@ -275,12 +274,13 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 | `apps/web/src/features/auth/components/password-reset-screen.tsx` | 新規 | 再設定 |
 | `apps/web/src/features/auth/components/unlock-screen.tsx` | 新規 | ロック解除 |
 | `apps/web/src/features/auth/components/token-screens.test.tsx` | 新規 | token画面の成功・期限切れ・不正・URLからの消去 |
+| `apps/web/src/features/auth/components/sign-in-screen.tsx` | 変更 | password再設定への導線（routeがこのPRで増えるため） |
 | `apps/web/src/features/auth/index.ts` | 変更 | export |
 | `apps/web/src/router.tsx` | 変更 | route追加 |
 | `docs/architecture.md`・`docs/journaling.md`・`docs/product.md`・`docs/development/frontend.md`・`docs/design-system.md` | 変更 | §6の現行文書 |
 | 本Plan・`docs/tasks/TASK-007-frontend-identity.md` | 変更 | Completion Record・完了条件 |
 
-レビュー対象 約15。
+レビュー対象 約16。
 
 ## 11. Libraries / APIs
 
