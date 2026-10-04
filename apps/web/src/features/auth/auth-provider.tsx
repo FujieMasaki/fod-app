@@ -74,7 +74,8 @@ type AuthContextValue = {
   prepareExternalSignIn: () => void;
   /**
    * 認証の終了・利用者の切り替わりを購読する。個人データを持つstate（SessionProvider、TASK-014の
-   * 端末データ）はここで消す。戻り値で購読をやめる。
+   * 端末データ）はここで消す。戻り値で購読をやめる。同じ切り替わりで複数回呼ばれ得る（logoutの開始と
+   * 完了など）ため、購読者は何度呼ばれても同じ結果になるようにする。
    */
   subscribeIdentityChange: (listener: () => void) => () => void;
 };
@@ -214,6 +215,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(
     async (credentials: Credentials) => {
       const next = await withCsrf((csrfToken) => createSession(csrfToken, credentials));
+      // login前のCookieで送った取り直し（画面へ戻ったときなど）が後から届いて、未認証で上書きしないように取り消す。
+      await queryClient.cancelQueries({ queryKey: SESSION_QUERY_KEY });
       queryClient.setQueryData(SESSION_QUERY_KEY, next);
     },
     [queryClient, withCsrf],

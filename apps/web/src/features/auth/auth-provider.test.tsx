@@ -135,6 +135,35 @@ describe("login", () => {
     expect(onIdentityChange).toHaveBeenCalledTimes(1);
   });
 
+  it("login前に始まった取り直しが後から届いても、未認証へ戻さない", async () => {
+    let releaseStale: (response: Response) => void = () => undefined;
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_path: string, init?: RequestInit) => {
+        if (init?.method === "POST") return Response.json(authenticated(USER_A, "t2").body);
+        getCount += 1;
+        if (getCount === 1) return Response.json(anonymous("t1").body);
+        // 2回目（画面へ戻ったときの取り直し）はlogin前のCookieで送られ、遅れて未認証を返す
+        return new Promise<Response>((resolve) => {
+          releaseStale = resolve;
+        });
+      }),
+    );
+    const { auth } = await renderAndSubscribe();
+
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(getCount).toBe(2));
+    await act(() => auth().signIn({ email: "user@example.com", password: "password123" }));
+    await act(async () => releaseStale(Response.json(anonymous("t1").body)));
+
+    expect(auth().status).toBe("authenticated");
+    expect(auth().endReason).toBeNull();
+  });
+
   it("csrf_invalidならtokenを取り直して1回だけ再送する", async () => {
     const calls = mockApi({
       "GET /api/v1/session": [anonymous("old"), anonymous("new")],
