@@ -7,7 +7,7 @@
 | 対象領域 | Backend |
 | 作業区分 | 実装 |
 | 優先度 | P1 |
-| 状態 | Blocked |
+| 状態 | In progress |
 
 ## 目的と作業範囲
 
@@ -45,4 +45,4 @@ serverをDotの正本とし、利用者ごとに複数Dotを永続保存してDa
 
 ## 関連Implementation Plan
 
-未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+[2026-10-05-task-008-dot-history.md](../implementation-plans/2026-10-05-task-008-dot-history.md)
