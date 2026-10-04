@@ -114,7 +114,7 @@ development / test DBを用意する。DB名に接尾辞が付き、並列で動
 7. Planで分けると決めたら、[統合ブランチとメインのPR](../../../docs/development/pull-requests.md#統合ブランチとサブのpr)を先に作る。
    今のブランチ（Planのコミットを持つ）は1番目のサブのPRになる。まだpushしていなければ
    `git branch -m <type>/task-008-1-<slug>` で1番目のブランチの名前に変え、push済み（Planの段階で止まった後の再開など）
-   なら名前を変えずに使う。続けて `git switch -c <type>/task-008-<slug>-integration origin/main` で統合ブランチを作って
+   なら名前を変えずに使う（既にPRがあれば、`gh pr edit <番号> --base <統合ブランチ>`でbaseを統合ブランチへ付け替える）。続けて `git switch -c <type>/task-008-<slug>-integration origin/main` で統合ブランチを作って
    空のコミットを置き（直前に`git status --porcelain`が空であることを確かめる）、push してメインのPRをdraftで作る。
    作ったら1番目のブランチへ戻る。
 
