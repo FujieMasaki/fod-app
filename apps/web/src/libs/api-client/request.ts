@@ -46,6 +46,8 @@ type RequestOptions<T> = {
 };
 
 export async function apiRequest<T = undefined>(path: string, options: RequestOptions<T> = {}): Promise<T> {
+  // 同一originのpathだけを送る。CSRF tokenを外部へ送らないため（`//host`と`/\\host`はbrowserが外部URLとして解釈する）。
+  if (!path.startsWith("/") || path.startsWith("//") || path.startsWith("/\\")) throw new TypeError("apiRequest: same-origin path only");
   const { method = "GET", body, csrfToken, schema } = options;
   const headers: Record<string, string> = { Accept: "application/json" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
