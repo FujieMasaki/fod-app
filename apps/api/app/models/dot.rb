@@ -5,6 +5,7 @@
 #   （暗黙の除外は、ゴミ箱の中が一覧へ漏れる事故と、ゴミ箱が空に見える事故の両方を起こしやすい）。
 # - 編集前の値は保存しない（版も履歴も持たない）。
 class Dot < ApplicationRecord
+  # migrationの生成列（`date`）の式と同じ値にする。一致はspecで確かめている。
   TIME_ZONE = "Asia/Tokyo".freeze
   SENTENCE_MAX_LENGTH = 200
   SUMMARY_MAX_LENGTH = 2000
@@ -27,6 +28,9 @@ class Dot < ApplicationRecord
   # 空文字を許す（契約のDot）。nilはDBのNOT NULLより先にここで拒否する。
   validates :sentence, length: { maximum: SENTENCE_MAX_LENGTH }, exclusion: { in: [nil] }
   validates :summary, length: { maximum: SUMMARY_MAX_LENGTH }, exclusion: { in: [nil] }
+  # PostgreSQLのtextはNUL文字を保存できず、DBの例外になる。APIを通らない保存（生成のJob）でも
+  # validationの失敗として扱えるよう、modelで先に拒否する。
+  validates :sentence, :summary, format: { without: /\u0000/ }
 
   # `date`はDBが`started_at`から算出する。代入しても保存されず、手元の値だけが食い違うため拒否する。
   def date=(_value)

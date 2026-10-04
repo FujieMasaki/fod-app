@@ -78,13 +78,30 @@ RSpec.describe Dot do
       expect([0, 1, 1800, 1801].map { build(:dot, duration_seconds: it).valid? }).to eq([false, true, true, false])
     end
 
+    it "sentenceとsummaryにNUL文字を含めない（DBに保存できないため、validationで止める）" do
+      expect([build(:dot, sentence: "一\u0000文").valid?, build(:dot, summary: "\u0000").valid?]).to eq([false, false])
+    end
+
     # validationを通らない保存（SQL・一括更新）でも上限を超えないことを確かめるため、あえてvalidationを飛ばす。
+    # 1件ごとにsavepointで包む。包まないと、最初の違反でtestのtransactionが中断し、後の更新が制約と
+    # 関係なく失敗してしまう。どの制約で失敗したかも、制約の名前で確かめる。
     it "validationを通らない保存でも、DBの制約が上限を守る" do
       scope = described_class.where(id: create(:dot).id)
+      cases = { dots_sentence_length: { sentence: "あ" * 201 }, dots_summary_length: { summary: "あ" * 2001 },
+                dots_duration_seconds_range: { duration_seconds: 1801 } }
 
-      [{ sentence: "あ" * 201 }, { summary: "あ" * 2001 }, { duration_seconds: 1801 }].each do |values|
-        expect { scope.update_all(values) }.to raise_error(ActiveRecord::StatementInvalid) # rubocop:disable Rails/SkipsModelValidations
+      cases.each do |constraint, values|
+        expect { described_class.transaction(requires_new: true) { scope.update_all(values) } } # rubocop:disable Rails/SkipsModelValidations
+          .to raise_error(ActiveRecord::StatementInvalid, /#{constraint}/)
       end
+    end
+
+    it "started_atを書き換えればdateも追従する（DBが算出する生成列である）" do
+      dot = create(:dot, started_at: Time.zone.parse("2026-09-27 14:00:00 UTC"))
+
+      described_class.where(id: dot.id).update_all(started_at: Time.zone.parse("2026-09-27 15:00:00 UTC")) # rubocop:disable Rails/SkipsModelValidations
+
+      expect(dot.reload.date).to eq(Date.new(2026, 9, 28))
     end
   end
 
