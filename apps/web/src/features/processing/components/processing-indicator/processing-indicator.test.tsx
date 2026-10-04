@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AuthProvider } from "@/features/auth";
 import { SessionProvider } from "@/features/session";
 import { sampleSession } from "@/mocks/sample-session";
 import { ProcessingIndicator } from "./processing-indicator";
@@ -11,15 +12,27 @@ vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => navigateMock,
 }));
 
+// AuthProviderの認証状態の取得（未認証）だけを別に返し、残りをDot生成のmockへ渡す。
+function stubFetch(dotApi: (...args: unknown[]) => unknown) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (path: unknown, ...rest: unknown[]) =>
+      path === "/api/v1/session" ? Response.json({ authenticated: false, csrf_token: "t" }) : dotApi(path, ...rest),
+    ),
+  );
+}
+
 function renderProcessing() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <SessionProvider>
-        <ProcessingIndicator />
-      </SessionProvider>
+      <AuthProvider>
+        <SessionProvider>
+          <ProcessingIndicator />
+        </SessionProvider>
+      </AuthProvider>
     </QueryClientProvider>,
   );
 }
@@ -34,10 +47,7 @@ afterEach(() => {
 describe("整理が終わると今日の一文へ進む", () => {
   it("整理完了で /dot へ自動遷移し、結果をセッションへ確定する", async () => {
     vi.stubEnv("VITE_DOT_API_URL", "http://api.test");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: true, json: async () => sampleSession })),
-    );
+    stubFetch(vi.fn(async () => ({ ok: true, json: async () => sampleSession })));
 
     renderProcessing();
 
@@ -57,7 +67,7 @@ describe("整理が終わると今日の一文へ進む", () => {
       .fn()
       .mockResolvedValueOnce({ ok: false, json: async () => ({}) })
       .mockResolvedValueOnce({ ok: true, json: async () => sampleSession });
-    vi.stubGlobal("fetch", fetchMock);
+    stubFetch(fetchMock);
 
     renderProcessing();
 
