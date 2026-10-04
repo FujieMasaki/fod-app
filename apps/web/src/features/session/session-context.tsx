@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useAuth } from "@/features/auth";
 import type { Seconds } from "@/types";
 import { dotSessionSchema, type DotSession } from "./schema";
 import type { SessionContextValue } from "./types";
@@ -85,6 +86,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       window.localStorage.removeItem(STORAGE_KEY);
     }
   }, []);
+
+  // 認証の終了・利用者の切り替わりで、前の利用者の録音時間とDotを残さない（TASK-007 Plan §7-3）。
+  // fod.session.v1の扱いそのもの（読み取りをやめる・起動時に消す）はTASK-014で決める。
+  const { subscribeIdentityChange } = useAuth();
+  useEffect(() => subscribeIdentityChange(reset), [subscribeIdentityChange, reset]);
 
   const value = useMemo<SessionContextValue>(
     () => ({
