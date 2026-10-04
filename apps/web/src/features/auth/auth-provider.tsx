@@ -10,7 +10,9 @@ import {
 } from "react";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 
-import { apiRequest, isProblem } from "@/libs/api-client/request";
+import type { z } from "zod";
+
+import { apiRequest, isProblem, type ApiRequestOptions } from "@/libs/api-client/request";
 import type { Session } from "@/libs/api-contract/schemas";
 import { createSession, deleteSession, getSession, type Credentials } from "./api";
 
@@ -40,7 +42,13 @@ export type EndReason = "signed_out" | "expired" | "session_lost";
 
 export type SessionUser = Extract<Session, { authenticated: true }>["user"];
 
-type RequestOptions<T> = Omit<NonNullable<Parameters<typeof apiRequest<T>>[1]>, "csrfToken">;
+type RequestOptions = Omit<ApiRequestOptions, "csrfToken">;
+
+/** 保護APIの入口。schemaを渡したときだけ本文を返す（apiRequestと同じ） */
+type AuthorizedRequest = {
+  <T>(path: string, options: RequestOptions & { schema: z.ZodType<T> }): Promise<T>;
+  (path: string, options?: RequestOptions & { schema?: undefined }): Promise<void>;
+};
 
 type AuthContextValue = {
   status: AuthStatus;
@@ -58,7 +66,7 @@ type AuthContextValue = {
    */
   withCsrf: <T>(operation: (csrfToken: string) => Promise<T>) => Promise<T>;
   /** 保護APIを呼ぶ入口（後続の機能はこれを使う） */
-  request: <T = undefined>(path: string, options?: RequestOptions<T>) => Promise<T>;
+  request: AuthorizedRequest;
   signIn: (credentials: Credentials) => Promise<void>;
   /** 失敗したら投げる。serverで終わったと確認できるまでlogin中のまま */
   signOut: () => Promise<void>;
@@ -84,9 +92,10 @@ function deriveStatus(session: Session | undefined, isError: boolean): AuthStatu
   return session.account_status === "deletion_in_progress" ? "deletion_in_progress" : "authenticated";
 }
 
-// 認証以外のquery（前の利用者のresponse）を取り消して消す。
+// 認証状態のquery以外（前の利用者のresponse）を取り消して消す。
 function clearPrivateQueries(queryClient: QueryClient) {
-  const predicate = ({ queryKey }: { queryKey: readonly unknown[] }) => queryKey[0] !== SESSION_QUERY_KEY[0];
+  const predicate = ({ queryKey }: { queryKey: readonly unknown[] }) =>
+    JSON.stringify(queryKey) !== JSON.stringify(SESSION_QUERY_KEY);
   void queryClient.cancelQueries({ predicate });
   queryClient.removeQueries({ predicate });
 }
@@ -144,10 +153,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // serverが認証の終了を返した。取り直しが失敗しても保護する画面を閉じられるよう、先に未認証として置く。
   const markEnded = useCallback(
     (reason: EndReason) => {
-      setEndReason(reason);
-      queryClient.setQueryData<Session>(SESSION_QUERY_KEY, (current) =>
-        current ? { authenticated: false, csrf_token: current.csrf_token } : current,
-      );
+      // もともと未認証なら、終わった認証はないので理由を残さない（ログイン画面の案内を誤らせない）。
+      const current = queryClient.getQueryData<Session>(SESSION_QUERY_KEY);
+      if (current?.authenticated) {
+        setEndReason(reason);
+        queryClient.setQueryData<Session>(SESSION_QUERY_KEY, { authenticated: false, csrf_token: current.csrf_token });
+      }
       void refresh();
     },
     [queryClient, refresh],
@@ -192,10 +203,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const request = useCallback(
-    <T = undefined,>(path: string, options: RequestOptions<T> = {}) =>
-      withCsrf((csrfToken) => apiRequest<T>(path, { ...options, csrfToken })),
+    <T,>(path: string, options: RequestOptions & { schema?: z.ZodType<T> } = {}) =>
+      withCsrf((csrfToken) =>
+        // overloadの実装側。schemaの有無による戻り値の違いは、AuthorizedRequestの型で呼び出し側へ示す。
+        apiRequest(path, { ...options, csrfToken } as ApiRequestOptions & { schema: z.ZodType<T> }),
+      ),
     [withCsrf],
-  );
+  ) as AuthorizedRequest;
 
   const signIn = useCallback(
     async (credentials: Credentials) => {
