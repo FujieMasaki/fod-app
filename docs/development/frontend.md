@@ -60,6 +60,12 @@
   version・削除契機が定義できる値だけに使う。録音Blob、文字起こし、トークン、認証根拠は保存しない。
 - API失敗、schema不正、権限拒否、ネットワーク中断を区別して安全なUIへ変換する。サーバーの
   エラー本文、録音内容、秘密情報をそのまま表示・ログ出力しない。
+- Rails APIは同一originで、`features/auth`の`useAuth().request`（状態を変える通信関数は
+  `useAuth().withCsrf`）から呼ぶ。CSRF tokenの付与・`csrf_invalid`の1回の再送・`401`での認証の終了を
+  ここに集めているため、機能ごとに`fetch`でRails APIを呼ばない。
+- 本人の個人データをReact state・Query cache以外（`sessionStorage`など）に持つ機能は、
+  `useAuth().subscribeIdentityChange`を購読し、認証の終了・利用者の切り替わりで消す。Query cacheは
+  認証（`["auth", ...]`）以外をAuth Providerが消す。
 - Rails APIのresponseは、[`contracts/openapi.yaml`](../../contracts/openapi.yaml)から生成した型
   （`types/api-contract.d.ts`）と完全一致するZod schemaで検証する。schemaは
   `libs/api-contract/schemas.ts`に置き、使う機能の実装時に追加する。失敗は`code`で判定し、

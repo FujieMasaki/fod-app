@@ -7,8 +7,17 @@
 
 - 現在稼働しているFrontendは `apps/web/` のVite + React + TypeScript SPAである。
 - TanStack Routerが `apps/web/src/router.tsx` で `/`、`/record`、`/processing`、`/dot`、
-  `/reflection` のクライアントルートを管理する。
-- `apps/web/src/providers.tsx` がTanStack QueryとSession Providerを提供する。
+  `/reflection`、`/settings` と、認証の `/login`、`/signup`、`/confirmation`、`/password/forgot`、
+  `/password/reset`、`/unlock` のクライアントルートを管理する。`/record`・`/processing`・`/dot`・
+  `/reflection`・`/settings` は `RequireAuth` で包み、serverで認証を確かめるまで中身を表示しない。
+- `apps/web/src/providers.tsx` がTanStack Query、Auth Provider、Session Providerを提供する。
+- Auth Provider（`features/auth`）は`GET /api/v1/session`をTanStack Queryで取得し、認証状態・
+  CSRF token・期限を持つ（2026-10-05にTASK-007で実装）。保護APIは`useAuth().request`から呼び、
+  `csrf_invalid`の1回の再送と`401`の検出をここに集める。利用者が変わったら（logout・期限切れ・
+  別タブでの入れ替わり・login）、認証以外のquery cacheを消し、購読者（`subscribeIdentityChange`）へ
+  通知する。Session Providerはこの通知で録音時間と現在のDotを消す。
+- `apps/web/src/libs/api-client`がRails APIを同一originで呼ぶ入口で、失敗を`problem`・`network`・
+  `schema`・`http`に分ける。開発ではViteのproxyが`/api`・`/auth`をRailsへ送る（Hostを書き換えない）。
 - Session ProviderはReact stateを画面間で共有し、録音時間と現在のDot sessionを
   `fod.session.v1` というkeyでブラウザの `localStorage` に保存・復元する。
 - Dot生成はTanStack Queryのmutationから呼び出す。`VITE_DOT_API_URL` が設定されている場合は
@@ -81,8 +90,8 @@ Browser
   通常認証用DB sessionテーブルは作らない。CookieにDot本文・password・Google tokenを保存しない。
 - Cookieは`HttpOnly; Secure; SameSite=Lax; Path=/`、`Domain`なしを基本とする。認証成功時に
   sessionを更新し、変更操作はRailsのCSRF tokenとOriginを検証する。同一originのWeb/API間に
-  CORS許可は不要。API-onlyへのCookie/session/CSRF・Deviseの組込みはTASK-006で実装した（Rails側のみ。
-  Webの接続はTASK-007、AWSでの配信は未構築）。
+  CORS許可は不要。API-onlyへのCookie/session/CSRF・Deviseの組込みはTASK-006で、Webの接続はTASK-007で
+  実装した（AWSでの配信は未構築。開発はViteのproxyで同一originにする）。
 - Google認証開始はCSRF保護したPOSTを基本とし、OmniAuth/strategyでstateと認証応答を検証する。
   Google callbackは必要だが、旧CognitoのOIDC callback/token検証を組み込む設計ではない。
   API/認証responseはno-store、SPA fallbackは画面GET/HEADのみ。Google秘密情報をWebへ渡さない。
@@ -344,7 +353,8 @@ ALB/Fargate/RDS/公開IPv4の小規模例でも、1ドル150円・消費税10%�
 
 [TASK-001 Plan §50–54・§56](implementation-plans/2026-09-21-task-001-identity-design.md)で採用し、
 残りの具体値を[TASK-006 Plan §12](implementation-plans/2026-10-02-task-006-backend-identity.md)で決めた。
-Webの接続（TASK-007）、退会（TASK-013）、本番のメール配送とGoogle OAuth clientの設定は未実装。
+Webの接続は2026-10-05に[TASK-007 Plan](implementation-plans/2026-10-05-task-007-frontend-identity.md)で
+実装した。退会（TASK-013）、本番のメール配送とGoogle OAuth clientの設定は未実装。
 
 - 自分専用端末では認証成功から7日の絶対期限。通常操作で延長せず、server側で検証する。
   Rememberableの自動再ログインと別のidle期限は使わない。共有端末向け短期モードはMVP外。
@@ -374,6 +384,11 @@ Webの接続（TASK-007）、退会（TASK-013）、本番のメール配送とG
   かつloginしている利用者のGoogle利用者と一致したときだけ記録する。記録は5分有効。
 - Cookieの有効期限は認証から8日にする。期限の判定は7日でserverが行い、残る1日は`session_expired`を
   返すためだけに使う（暗号化Cookieは有効期限を中に持ち、過ぎると読めず「未login」と区別できないため）。
+- Webは期限を案内用にだけ使い（アカウント画面にJSTで表示）、期限の時刻・画面へ戻ったとき・保護APIの
+  `401`でserverに確かめ直す。`GET /api/v1/session`は期限切れを未認証として返すため、直前の期限を過ぎて
+  いれば期限切れとして案内する。logoutはserverで終わったと確かめるまでlogin中のままにする。
+  メールのリンクのtokenはfragmentから読んだらURLから消し、利用者の操作で送る（scannerが開いただけで
+  確定しないように）。
 - Google同一メール衝突時は自動統合も重複User作成もしない。Googleが確認済みとしたメールに限り
   登録方法を案内する。将来の連携は既存Userへのログイン/再認証と追加手段の確認後に限定。
 - メール/password変更・退会はcurrent password、Google専用UserはGoogle再認証を要求する。
