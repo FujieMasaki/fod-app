@@ -29,10 +29,12 @@ class Dot < ApplicationRecord
   validates :sentence, length: { maximum: SENTENCE_MAX_LENGTH }, exclusion: { in: [nil] }
   validates :summary, length: { maximum: SUMMARY_MAX_LENGTH }, exclusion: { in: [nil] }
   # PostgreSQLのtextはNUL文字を保存できず、DBの例外になる。APIを通らない保存（生成のJob）でも
-  # validationの失敗として扱えるよう、modelで先に拒否する。
+  # validationの失敗として扱えるよう、modelで先に拒否する。壊れたUTF-8はRailsのvalidator自体が例外を
+  # 出すため、外部の文字列を受け取る側（TASK-009）で`valid_encoding?`を確かめる。
   validates :sentence, :summary, format: { without: /\u0000/ }
 
   # `date`はDBが`started_at`から算出する。代入しても保存されず、手元の値だけが食い違うため拒否する。
+  # そのため`on_date`を含むscopeから`new`・`first_or_create`などでDotを組み立てない（whereの値が代入される）。
   def date=(_value)
     raise ActiveRecord::ReadonlyAttributeError, "date"
   end
