@@ -130,6 +130,7 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
 
       <div className="flex flex-col items-start gap-2">
         <TextLink to="/signup">はじめての方は新規登録</TextLink>
+        <TextLink to="/password/forgot">パスワードを忘れた場合</TextLink>
       </div>
     </AuthScreen>
   );

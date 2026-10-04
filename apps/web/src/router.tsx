@@ -5,10 +5,14 @@ import { EmptyState } from "@/components/empty-state/empty-state";
 import { ScreenLayout } from "@/components/screen-layout/screen-layout";
 import {
   AccountScreen,
+  ConfirmationScreen,
+  PasswordForgotScreen,
+  PasswordResetScreen,
   RequireAuth,
   SignInPrompt,
   SignInScreen,
   SignUpScreen,
+  UnlockScreen,
   parseAuthError,
   safeRedirect,
 } from "@/features/auth";
@@ -126,6 +130,39 @@ function SignUpPage() {
   );
 }
 
+// メールのリンクの画面。パスはRailsのメール（apps/api/app/mailers/user_mailer.rb）と揃える。
+function ConfirmationPage() {
+  return (
+    <ScreenLayout>
+      <ConfirmationScreen />
+    </ScreenLayout>
+  );
+}
+
+function PasswordForgotPage() {
+  return (
+    <ScreenLayout>
+      <PasswordForgotScreen />
+    </ScreenLayout>
+  );
+}
+
+function PasswordResetPage() {
+  return (
+    <ScreenLayout>
+      <PasswordResetScreen />
+    </ScreenLayout>
+  );
+}
+
+function UnlockPage() {
+  return (
+    <ScreenLayout>
+      <UnlockScreen />
+    </ScreenLayout>
+  );
+}
+
 const rootRoute = createRootRoute({ component: RootComponent });
 const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage });
 const recordRoute = createRoute({ getParentRoute: () => rootRoute, path: "/record", component: RecordPage });
@@ -144,6 +181,18 @@ const loginRoute = createRoute({
   }),
 });
 const signUpRoute = createRoute({ getParentRoute: () => rootRoute, path: "/signup", component: SignUpPage });
+const confirmationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/confirmation", component: ConfirmationPage });
+const passwordForgotRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/password/forgot",
+  component: PasswordForgotPage,
+});
+const passwordResetRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/password/reset",
+  component: PasswordResetPage,
+});
+const unlockRoute = createRoute({ getParentRoute: () => rootRoute, path: "/unlock", component: UnlockPage });
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -154,6 +203,10 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
   loginRoute,
   signUpRoute,
+  confirmationRoute,
+  passwordForgotRoute,
+  passwordResetRoute,
+  unlockRoute,
 ]);
 
 export const router = createRouter({ routeTree });
