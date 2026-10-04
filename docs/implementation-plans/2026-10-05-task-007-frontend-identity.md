@@ -312,6 +312,9 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 - **logout中の再取得（後続への申し送り）**: logoutの開始でQuery cacheを消しても、mount中の`useQuery`は
   DELETEが終わる前（Cookieが前の利用者のまま）に取り直し得る。今は個人データのqueryがないため影響はない。
   TASK-008以降で保護APIのqueryを足すときは、`status`が`authenticated`のときだけ`enabled`にするなどで防ぐ。
+  同じく、切り替わりの前に始まった非同期処理（Dot生成のmutation、`request`のpromise）は止めないため、終わった後に
+  結果をstateへ書き戻すと前の利用者のデータが残り得る。TASK-011・014で、切り替わりの後に終わった処理の結果を
+  捨てる（世代番号やAbortSignalで照合する）。
 - **`libs/api-client`の位置づけ**: frontend.md §1が保留する「通信専用directory・repository層」ではなく、
   `libs/`の定義（Browser APIの小さいラッパー。React stateを持たない）に収まるfetchの薄い包みとして置く。
   endpointごとの通信関数は各featureに置く方針を変えない。
