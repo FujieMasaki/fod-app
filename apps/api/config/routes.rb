@@ -18,6 +18,9 @@ Rails.application.routes.draw do
       # Day・日単位の一覧・日の詳細（契約のhistory tag）。todayを`days/:date`より先に置く。
       get "days/today", to: "days#today"
       resources :days, only: %i[index show], param: :date
+
+      # Dotの編集（契約のdot tag）。ゴミ箱・完全削除はTASK-013で足す。
+      patch "dots/:dot_id", to: "dots#update", as: :dot
     end
   end
 
