@@ -116,12 +116,14 @@ development / test DBを用意する。DB名に接尾辞が付き、並列で動
    `git branch -m <type>/task-008-1-<slug>` で1番目のブランチの名前に変え、push済み（Planの段階で止まった後の再開など）
    なら名前を変えずに使う。続けて `git switch -c <type>/task-008-<slug>-integration origin/main` で統合ブランチを作って
    空のコミットを置き（直前に`git status --porcelain`が空であることを確かめる）、push してメインのPRをdraftで作る。
-   作ったら1番目のブランチへ戻る。
+   1番目のブランチに既にPRがあれば、統合ブランチを作った後に、baseを統合ブランチへ付け替え、タイトルと概要も
+   サブのPRの形（タイトル末尾の`（1/n）`、メインのPRへのリンク）に直す。作ったら1番目のブランチへ戻る。
 
    ```bash
    git commit --allow-empty -m "chore(task-008): 統合ブランチを作る"
    git push -u origin feat/task-008-dot-history-integration:feat/task-008-dot-history-integration
    gh pr create --draft --base main --head feat/task-008-dot-history-integration --title "<日本語のタイトル>" --body "<本文>"
+   gh pr edit <1番目のPRの番号> --base feat/task-008-dot-history-integration --title "<タイトル>（1/n）" --body "<本文>"  # 既にPRがあるときだけ
    git switch feat/task-008-1-dot-model
    ```
 
