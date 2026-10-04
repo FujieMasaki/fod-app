@@ -6,6 +6,8 @@ class User < ApplicationRecord
   devise :database_authenticatable, :registerable, :confirmable, :recoverable, :lockable
 
   has_many :identities, class_name: "UserIdentity", dependent: :delete_all, inverse_of: :user
+  # Dotは本人だけのもの。取得・編集は必ずこの関連から行い、clientが送るuser IDを使わない。
+  has_many :dots, dependent: nil
 
   validates :email, presence: true, length: { maximum: 254 },
                     format: { with: Devise.email_regexp, allow_blank: true },
