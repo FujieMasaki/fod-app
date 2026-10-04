@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中（2026-10-05着手）。
+完了（2026-10-05）。機械のレビューの結果は各サブのPRに記録する。
 
 ## 2. Goal
 
@@ -334,4 +334,53 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
 
 ## 16. Completion Record
 
-（完了時に記入する）
+- 状態: 2026-10-05に実装と検証を終えた。タスクの完了条件はすべてtestで確かめたため、タスクをDoneにする。
+- 関連: メインのPR #60（統合ブランチ`feat/task-008-dot-history-integration`）と、そこへ向けた3つのサブのPR。
+
+### 実装差異（Planから変えた点と理由）
+
+- **今日の取得もServiceにした（`TodaySummary`）。**件数と最新のDotを別々のqueryで引くと、間にDotが
+  ゴミ箱へ移ったとき「件数はあるのに最新のDotが無い」responseを作り得る。1つのquery（`COUNT(*) OVER ()`）
+  で取る処理をcontrollerに置くと読みにくいため、Serviceに分けた。
+- **serializerを4つにした**（`DotSerializer`・`DayListSerializer`・`TodaySerializer`・`DayDetailSerializer`）。
+  Zeitwerkは1ファイル1定数のため。PR 2/3のレビュー対象は15ファイルで、20以下に収まった。
+- **`dots`の`user_id`・`generation_id`・`started_at`・`duration_seconds`を`attr_readonly`にし、`date`への
+  代入を拒否した。**生成列は代入しても保存されず、手元の値だけが食い違うため。編集できる項目を
+  modelでも`sentence`と`summary`に限る。
+- **PATCHでParamsWrapperを切った（`wrap_parameters false`）。**Railsの既定でJSONの項目が`dot`に包まれ、
+  `request_parameters`に足されるため、許可しない項目として数えてしまう。JSONのobjectでないbody
+  （配列・文字列）はRailsが`_json`に入れるので、`body`の`invalid_format`にした。
+- `filter_parameters`は完全一致ではなく部分一致（`%i[sentence summary]`）にした。隠しすぎて困る項目が無いため。
+
+### 検証結果
+
+実行したcommand（`apps/api`、DBは`FOD_DB_SUFFIX=_task_008`の専用DB）:
+
+- `bundle exec rspec` — 401 examples, 0 failures（追加: model 14、service 17、request 35）
+- `bundle exec rubocop` — no offenses
+- `bundle exec brakeman -q` — No warnings found
+- `RAILS_ENV=test bin/rails db:drop db:create db:schema:load`の後に`dot_spec`・`days_spec`を実行し、
+  `schema.rb`から作ったDBでも生成列が再現されることを確かめた（CIと同じ作り方）。
+- rootの検査（`pnpm check`・`pnpm type-check`・`pnpm test`）は品質ゲートとpre-pushで実行する。
+
+完了条件ごとの確認:
+
+| 完了条件 | 確かめたtest |
+| --- | --- |
+| 利用者に関連付けた永続保存、過去のDotを失わない | `dot_spec`「同じ日に録音しても追記」「同じ処理から2件目のDotを作らない」「保存に失敗したら行を残さない」。Dotを作るendpointはTASK-009で、本タスクは`user.dots.create!`で保存できるmodelと制約まで |
+| 同日の複数録音・日付境界・表示順・Dayのデータ | `dot_spec`「0:00 JSTの前後」「保存時刻ではなくstarted_at」、`days_spec`「今日の最新のDot」「0:00で切り替わる」「started_atの降順」 |
+| 一覧・日付指定の取得、続き、0件の区別 | `day_list_spec`・`day_dots_spec`の続きの欠落・重複（同じ`started_at`、途中のゴミ箱移動を含む）、`days_spec`の0件（記録なし・全件ゴミ箱・完全削除）が`200` |
+| 未認証・別利用者の拒否、更新は本人だけ | `days_spec`・`dots_spec`の`401`、他人のDotが出ないこと、他人・存在しない・ゴミ箱の中のPATCHが`404`、CSRFなしの`403` |
+| 契約どおりの項目、保存失敗と未取得の区別 | すべてのrequest specで`assert_response_schema_confirm`。PATCHの失敗は`422`/`404`で値が変わらないこと、0件は`200`の空配列 |
+| 現行仕様・architectureへの反映 | architecture・dot-history・journaling・productを更新（PR 3/3） |
+
+「必要な検証」のうち「復元で戻る」は、復元のendpointがTASK-013のため、`trashed_at`を直接戻して
+一覧・Day・詳細へ戻ることを確かめた（`days_spec`「ゴミ箱」）。endpointとしての復元はTASK-013で確かめる。
+
+### 未実施の確認と理由
+
+- Webからの実際の呼び出し: 画面（TASK-012）とWebの認証接続（TASK-007）が未実装のため。
+- 退会中の`409 account_deletion_in_progress`: 退会の状態を持つ列がまだ無い。TASK-013で退会を実装する
+  ときに、本タスクのendpointへも適用する。
+- 大量件数での実行計画の確認（`EXPLAIN`）: ローカルの少量のデータでは索引の選択が本番と変わり得るため、
+  実データの規模が出てから確かめる。
