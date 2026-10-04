@@ -1,0 +1,343 @@
+# TASK-007 認証状態と利用開始・終了のFrontend接続 Implementation Plan
+
+## 1. Status
+
+実施中（2026-10-05）。
+
+## 2. Goal
+
+TASK-006で実装したRailsの認証（Devise + OmniAuth Google + CookieStore）を、Webから使えるようにする。
+利用者は次のことができる。
+
+- メールアドレス＋passwordで登録し、メールのリンクで確認してからloginする。Googleでもloginできる。
+- password再設定・ロック解除・確認メールの再送を、メールのリンクから画面で行う。
+- 今loginしているか、いつまで保たれるか、次に何をすればよいか（login・確認メール・再ログイン）が分かる。
+- logoutする。7日の期限切れ・別タブでのlogoutの後は、録音・Dotの画面へ進めず、loginへ案内される。
+
+後続のFrontend（TASK-010 / 011 / 012 / 014）が、CSRF・`401`・schema不正を毎回書かずに保護APIを
+呼べる入口と、認証の終了・利用者の切り替わりを個人データのstateへ伝える境界を用意する。
+
+## 3. Background
+
+- TASK-001で、録音前ログイン・7日の固定期限・確認/再設定メール・Google衝突時の案内・ログイン画面での
+  説明を採用した（[TASK-001 Plan §50–§56](2026-09-21-task-001-identity-design.md)）。
+- TASK-005で、endpoint・schema・error codeとWebの扱いを契約にした（[`contracts/openapi.yaml`](../../contracts/openapi.yaml)、
+  [`contracts/README.md`](../../contracts/README.md) §4・§5）。
+- TASK-006でRails側を実装した（[TASK-006 Plan](2026-10-02-task-006-backend-identity.md)）。メールのリンクは
+  SPAの`/confirmation`・`/password/reset`・`/unlock`（tokenはfragmentの`#token=`）、案内メールは`/login`・
+  `/password/forgot`を指す（`apps/api/app/mailers/user_mailer.rb`）。Googleのcallbackは成功時に`return_to`、
+  失敗時に`/login?auth_error=<理由>`へredirectする。
+- 依存（TASK-001 / 005 / 006）はすべてDone。契約とRailsの実装は、このタスクの前提（Cookie session、
+  `GET /api/v1/session`で状態とCSRF tokenを取る、`401`の2つのcode、Googleのform POST）を満たすことを確認した。
+
+## 4. Current State
+
+開始時点はmain `7a62614`（PR #53まで）。branchは`feat/task-007-frontend-identity`。
+
+- Route: `/`・`/record`・`/processing`・`/dot`・`/reflection`（`apps/web/src/router.tsx`）。認証のguardはない。
+- State: `SessionProvider`（`features/session`）が録音時間と現在のDot 1件を`fod.session.v1`（localStorage）へ
+  保存・復元する。利用者を区別しない。`reset()`はあるがUIから呼ばれない。
+- API: `createDot`（`features/processing`）が`VITE_DOT_API_URL`のときだけ本文なしPOSTを送る。それ以外はmock。
+  Rails APIを呼ぶ通信関数・CSRFの扱い・`problem+json`の解釈はない。
+- 契約のZod: `libs/api-contract/schemas.ts`に`Problem`・`Dot`・`Generation`がある。`Session`はない。
+- 開発環境: Vite（5173）とRails（3000）は別origin。Viteにproxyはない。Railsは`forgery_protection_origin_check`で
+  Originとrequestのhostを照合し、メールのリンクは`APP_BASE_URL`（既定`http://localhost:5173`）を指す。
+- UI: CSS Modules。Tailwindは未導入（[design-system](../design-system.md)は新規UIの標準をTailwind CSS v4としている）。
+  下部ナビの「設定」タブは非活性。
+- Railsの`GET /api/v1/session`は、期限切れのsessionを破棄して未認証（`authenticated: false`）を返す。
+  期限切れを`session_expired`で返すのは保護API（`authenticate_user!`）だけ。保護APIはまだない（TASK-008以降）。
+
+## 5. Scope and Non-goals
+
+### 対象
+
+- 同一originでRailsを呼ぶ通信の入口（CSRF、`problem+json`、ネットワーク失敗・schema不正の区別）
+- 認証状態の取得・保持と、login・logout・期限切れ・利用者の切り替わりの検出
+- 認証の終了・切り替わりを、TanStack Queryのcacheと`SessionProvider`へ伝える境界
+- 画面: ログイン、新規登録、メール確認、確認メールの再送、password再設定（依頼・設定）、ロック解除、
+  アカウント（login中の利用者・期限・logout）
+- 保護する画面のguard（`/record`・`/processing`・`/dot`・`/reflection`・`/settings`）
+- 開発環境の同一origin（Viteのproxy）
+- 新しい画面のためのTailwind CSS v4の導入（既存画面は移行しない）
+
+### 対象外
+
+- 退会の画面と状況画面（TASK-014）。`account_status=deletion_in_progress`のときは、保護する画面の代わりに
+  「退会の手続き中」であることだけを示す。Railsの退会（TASK-013）も未実装で、現状は常に`active`。
+- `fod.session.v1`の読み取りをやめる・起動時に消す変更と、Dot・文字起こしの端末保持の整理（TASK-014）。
+  本タスクは認証の終了・切り替わりで`SessionProvider`の`reset()`を呼ぶところまで。
+- 録音画面に留まったままの再ログインと、memory内の音声の再送（TASK-010 / 011）。現在の録音は音声を
+  後続へ渡さないため、失うデータはない。
+- Google専用の利用者の再認証（`intent=reauthenticate`。使うのは退会のTASK-014）。
+- メール/password変更（契約にない）。
+- 本番の配信（Rails releaseへのReact同梱、SPA fallback）とGoogle OAuth client・メール配送の設定。
+
+### 今回確定しない事項
+
+- 実Google・実メール・HTTPSでの一連の動作（外部設定が必要。TASK-015）。
+
+## 6. References and Documents to Update
+
+- 参照
+  - [AGENTS.md](../../AGENTS.md)、[frontend.md](../development/frontend.md)、[design-system](../design-system.md)
+  - [product](../product.md) §2・§4「認証体験」、[journaling](../journaling.md) §2・§4「録音前認証と期限切れ」、
+    [privacy](../privacy.md)、[architecture](../architecture.md)「認証詳細」
+  - 契約（`contracts/`）、[TASK-001 Plan](2026-09-21-task-001-identity-design.md) §46・§50–§56、
+    [TASK-006 Plan](2026-10-02-task-006-backend-identity.md)
+  - [frontend review](../code-review/frontend/README.md)、[security](../code-review/frontend/security.md)
+- 同じ変更で更新する文書
+  - architecture: 実装済み（route・Provider・通信の入口・proxy）と「認証詳細」のWeb接続
+  - journaling: §1の現行flow（ログインを経る）、§3（Railsに認証がある）、「録音前認証と期限切れ」の実装状況
+  - product: §3の区分（Web接続を実装済みへ）
+  - frontend.md: 保護APIの呼び方、認証の終了・切り替わりの購読、Tailwindの使い始め
+  - design-system: 「既存実装との関係」（Tailwindを導入した範囲）
+
+## 7. Proposed Approach
+
+### 7-1. 通信の入口（`libs/api-client`）
+
+- `apiRequest(path, { method, body, csrfToken, schema })`を置く。React stateを持たない。
+  - `credentials: "same-origin"`、`cache: "no-store"`。bodyはJSON。`csrfToken`があれば`X-CSRF-Token`に付ける。
+  - 成功は`schema`で検証する（`202`・`204`は本文なし）。
+  - 失敗を`ApiError`の`kind`で区別する: `problem`（契約のProblemとして読めた）、`network`（届かない）、
+    `schema`（成功・失敗のどちらも契約と合わない。古いタブの可能性）、`http`（契約にない失敗。proxyの502など）。
+  - `title`・`detail`は画面に出さず、`code`で判定する（frontend.md §2）。
+
+### 7-2. 認証状態（`features/auth`）
+
+- `AuthProvider`が`GET /api/v1/session`をTanStack Queryで取得する（key `["auth", "session"]`）。
+  状態は次の5つ。
+
+  | 状態 | 条件 | 保護する画面 |
+  | --- | --- | --- |
+  | `checking` | 初回の取得中 | 表示しない（待つ） |
+  | `unknown` | 取得に失敗した（ネットワーク・5xx・schema不正） | 表示しない。再試行を出す（未認証と同じに扱わない） |
+  | `anonymous` | `authenticated: false` | ログインへ |
+  | `authenticated` | `authenticated: true`・`account_status: active` | 表示する |
+  | `deletion_in_progress` | `account_status: deletion_in_progress` | 「退会の手続き中」を示す（画面はTASK-014） |
+
+- CSRF tokenは最新のSessionのresponseから取る（loginの成功responseでも置き換わる）。
+- 保護APIの入口`request`（`useAuth().request`）を後続の機能へ公開する。
+  - `403 csrf_invalid`なら、Sessionを取り直して1回だけ再送する（contracts/README §5）。
+  - `401 unauthenticated`・`401 session_expired`なら、終了の理由を記録してSessionを取り直す。取り直した
+    結果が未認証になれば、下の切り替わりの処理が走る。
+- 期限切れの検出: Railsの`GET /api/v1/session`は期限切れを未認証として返すため、次の2つで期限切れと判断する。
+  1. 保護APIが`session_expired`を返した。
+  2. login中の`expires_at`を過ぎた時点でSessionを取り直し、未認証になった（timerで取り直す。表示の
+     期限は案内用で、判断はserverの応答に従う）。
+- 別タブのlogout・login: 画面へ戻ったとき（window focus）にSessionを取り直す。
+- logout: `DELETE /api/v1/session`の前に個人データを画面から外す（下の切り替わりを先に通知する）。
+  成功したらSessionを取り直し、ログイン画面へ「ログアウトしました」と出す。失敗したら「ログアウトを確認
+  できませんでした」と示し、login中のまま再試行させる（serverで終わったと断定しない。TASK-001 Plan §20）。
+  確認できるまでログイン画面へ進めない。
+- Googleのlogin: Sessionの`csrf_token`を`authenticity_token`に入れたformを通常のsubmitで送る
+  （`intent=sign_in`、`return_to`）。遷移の前に切り替わりを通知する（戻ってきたときはページの読み込み直しに
+  なり、前後の利用者を比べられないため）。
+
+### 7-3. 認証の終了・切り替わりの伝達（TASK-014との境界）
+
+- `AuthProvider`は、確定した利用者（`authenticated`の`user.id`、未認証なら`null`）が前回と変わったら
+  「切り替わり」を通知する。初回の確定（`checking`から）は通知しない。
+  - A → 未認証（logout・期限切れ・別タブのlogout）、未認証 → A（login）、A → B（別タブで入れ替わった）。
+  - logoutの開始とGoogleへの遷移の前にも通知する。
+- 通知を受けたら次を行う。
+  - TanStack Queryの`auth`以外のqueryを取り消して消す（前の利用者のresponseを再表示しない）。
+  - `SessionProvider`が`reset()`する（録音時間と現在のDot、`fod.session.v1`を消す）。
+  - 購読は`useAuth().subscribeIdentityChange(listener)`で公開する。TASK-014で端末の個人データ
+    （`sessionStorage`の文字起こしなど）を足すときは、ここへ購読を足す。
+- 通知はreact stateではなく購読の関数にする。切り替わりの瞬間に1回だけ実行したい処理で、表示のための
+  値ではないため。
+
+### 7-4. 画面とguard
+
+- 保護する画面は`RequireAuth`で包む。`checking`は待ち、`unknown`は再試行、`anonymous`は
+  `/login?redirect=<今のpath>`へ置き換え遷移、`deletion_in_progress`は案内を出す。
+  `redirect`は保護する画面のpathの一覧に一致するものだけを使い、合わなければ`/`にする（open redirect対策）。
+- `/`（Home）は公開のまま。マイクを押すと`/record`のguardでログインへ進み、成功すると`/record`へ戻る。
+  Homeには未認証のときだけ「ログインすると話し始められます」とログインへのリンクを示す。
+- ログイン画面: メール＋password、Google、新規登録・password再設定への導線。自分専用端末向けで7日保たれ、
+  共有端末では使用後にlogoutすること（product §4「認証体験」）を示す。`auth_error`・終了の理由（`reason`）を
+  enumで検証して文言に変える。`email_unconfirmed`なら確認メールの再送へ案内する。
+- 新規登録・確認メールの再送・password再設定の依頼は、登録の有無にかかわらず同じ文言で受付を示す。
+- メールのリンクの画面（確認・再設定・ロック解除）は、fragmentのtokenを読んだら`history.replaceState`で
+  URLから消し、ボタンの操作でserverへ送る（メールのscannerがリンクを開いただけで確認・解除されないように）。
+- アカウント（`/settings`）: login中のメールアドレス、login方法、保たれる期限（JST）、logout。下部ナビの
+  「設定」を有効にする。
+- 新しい画面はTailwind CSS v4で組む。既存の`--fod-*` tokenだけをTailwindのthemeに割り当て、既定の色・
+  余白は消す（任意の値を画面へ足せないように）。既存画面のCSS Modulesとresetに影響しないよう、Tailwindの
+  preflightは読み込まず、themeとutilitiesだけを使う。
+
+### 7-5. 開発環境
+
+- Viteの`server.proxy`で`/api`と`/auth`をRails（`http://localhost:3000`）へ送る。Hostを書き換えない
+  （`changeOrigin: false`）。RailsのOrigin照合とGoogleのcallback URLが、browserの見ているorigin（5173）で
+  揃うため。Railsのportは`FOD_API_PROXY_TARGET`で変えられるようにする。
+
+## 8. Why This Approach
+
+- 認証状態はserverの正本なので、TanStack Queryで扱う（frontend.md §2）。`SessionProvider`やlocalStorageに
+  入れない。
+- 期限切れを`GET /api/v1/session`が区別して返さないため、Rails・契約を変えずにWebで判断できる2つの契機を使う。
+  契約を変える案（Sessionに`expired`を足す）は、enumの追加で古いWebを壊すため段階が要り、本タスクの範囲を
+  超える。
+- 通信の入口を`libs`（React非依存）と`features/auth`（CSRF・401の扱い）に分ける。TASK-008以降の各機能は
+  `useAuth().request`だけを使えばよく、CSRFの再送・失効の検出を機能ごとに重複させない。
+- Viteのproxyは、本番の同一origin配信（architecture）と同じ形を開発でも作る最小の手段。CORSを許可する案は
+  本番と構成が変わり、Cookie・CSRFの検証が開発で素通りになる。
+
+## 9. Data Flow
+
+```text
+起動 / 画面へ戻る / expires_at到来
+  → AuthProvider: GET /api/v1/session（TanStack Query）
+  → 状態（checking / unknown / anonymous / authenticated / deletion_in_progress）と csrf_token
+  → 利用者が前回と違えば「切り替わり」を通知
+       → Query cache（auth以外）を取り消して消す
+       → SessionProvider.reset()（録音時間・現在のDot・fod.session.v1）
+  → RequireAuth: 保護する画面を表示 / ログインへ置き換え遷移
+
+ログイン画面 → POST /api/v1/session（X-CSRF-Token）
+  → 成功: Sessionのcacheを置き換え → 切り替わり（未認証 → A）→ redirect先へ
+  → 失敗: codeで文言（invalid_credentials / email_unconfirmed / rate_limited / validation_failed）
+
+Google → form POST /auth/google_oauth2（authenticity_token・intent・return_to）
+  → Google → /auth/google_oauth2/callback → return_to または /login?auth_error=...（ページの読み込み直し）
+
+保護API（後続の機能）→ useAuth().request
+  → 403 csrf_invalid: Sessionを取り直して1回だけ再送
+  → 401: 終了の理由を記録 → Sessionを取り直す → 未認証なら切り替わり → RequireAuthがログインへ
+```
+
+source of truthは、認証状態・利用者・期限・CSRF tokenがRails（Cookie session）で、Webはその写しを
+TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠にしない。
+
+## 10. Files to Change
+
+レビュー対象は合計で約45ファイルになるため、3つのサブのPRに分ける（[PRの分割](../development/pull-requests.md)）。
+統合ブランチは`feat/task-007-frontend-identity-integration`。
+
+### PR 1/3: 認証状態と通信の入口（`feat/task-007-1-auth-state`、base 統合ブランチ）
+
+| ファイル | 新規 / 変更 | 役割 |
+| --- | --- | --- |
+| `docs/implementation-plans/2026-10-05-task-007-frontend-identity.md` | 新規 | 本Plan |
+| `docs/tasks/TASK-007-frontend-identity.md` | 変更 | 状態とPlanへのリンク（数えない） |
+| `apps/web/vite.config.ts` | 変更 | `/api`・`/auth`のproxy |
+| `apps/web/src/libs/api-contract/schemas.ts` | 変更 | `Session`のZod |
+| `apps/web/src/libs/api-contract/schemas.test.ts` | 変更 | 契約のexamplesをZodで読む |
+| `apps/web/src/libs/api-client/request.ts` | 新規 | 通信の入口 |
+| `apps/web/src/libs/api-client/request.test.ts` | 新規 | 失敗の区別・CSRF header |
+| `apps/web/src/features/auth/api.ts` | 新規 | session・登録・確認・再設定・解除の通信関数 |
+| `apps/web/src/features/auth/auth-provider.tsx` | 新規 | 状態・CSRF・401・切り替わりの通知・logout |
+| `apps/web/src/features/auth/auth-provider.test.tsx` | 新規 | 状態遷移・再送・切り替わり |
+| `apps/web/src/features/auth/index.ts` | 新規 | 公開API |
+| `apps/web/src/providers.tsx` | 変更 | `AuthProvider`の配置 |
+| `apps/web/src/features/session/session-context.tsx` | 変更 | 切り替わりで`reset()` |
+| `apps/web/src/features/session/session-context.test.tsx` | 新規 | 切り替わりで消えること |
+
+レビュー対象 13。
+
+### PR 2/3: ログイン・登録・guard・アカウント画面（`feat/task-007-2-sign-in-screens`、base PR 1）
+
+| ファイル | 新規 / 変更 | 役割 |
+| --- | --- | --- |
+| `apps/web/package.json`（`pnpm-lock.yaml`は数えない） | 変更 | `tailwindcss`・`@tailwindcss/vite` |
+| `apps/web/vite.config.ts` | 変更 | Tailwindのplugin |
+| `apps/web/src/styles/tailwind.css` | 新規 | tokenだけのtheme |
+| `apps/web/src/main.tsx` | 変更 | tailwind.cssの読み込み |
+| `apps/web/src/features/auth/messages.ts` | 新規 | `ApiError`・`auth_error`・終了の理由から文言 |
+| `apps/web/src/features/auth/messages.test.ts` | 新規 | 文言の対応 |
+| `apps/web/src/features/auth/components/auth-layout.tsx` | 新規 | 認証画面の骨格・入力欄・メッセージ |
+| `apps/web/src/features/auth/components/sign-in-screen.tsx` | 新規 | ログイン |
+| `apps/web/src/features/auth/components/sign-in-screen.test.tsx` | 新規 | 成功・失敗・未確認・auth_error |
+| `apps/web/src/features/auth/components/google-sign-in-form.tsx` | 新規 | Googleのform POST |
+| `apps/web/src/features/auth/components/sign-up-screen.tsx` | 新規 | 新規登録 |
+| `apps/web/src/features/auth/components/require-auth.tsx` | 新規 | guard |
+| `apps/web/src/features/auth/components/require-auth.test.tsx` | 新規 | 状態ごとの表示・遷移 |
+| `apps/web/src/features/auth/components/account-screen.tsx` | 新規 | アカウント・logout |
+| `apps/web/src/features/auth/components/account-screen.test.tsx` | 新規 | logoutの成功・失敗 |
+| `apps/web/src/features/auth/components/sign-in-prompt.tsx` | 新規 | Homeの未認証の案内 |
+| `apps/web/src/features/auth/redirect.ts` | 新規 | `redirect`の許可一覧と検証 |
+| `apps/web/src/features/auth/index.ts` | 変更 | 画面のexport |
+| `apps/web/src/router.tsx` | 変更 | route追加・guard |
+| `apps/web/src/components/bottom-navigation/bottom-navigation.tsx` | 変更 | 「設定」を有効に |
+
+レビュー対象 20。
+
+### PR 3/3: メールのリンクの画面と文書（`feat/task-007-3-account-recovery`、base PR 2）
+
+| ファイル | 新規 / 変更 | 役割 |
+| --- | --- | --- |
+| `apps/web/src/features/auth/use-fragment-token.ts` | 新規 | fragmentのtokenを読んでURLから消す |
+| `apps/web/src/features/auth/components/confirmation-screen.tsx` | 新規 | メール確認・確認メールの再送 |
+| `apps/web/src/features/auth/components/password-forgot-screen.tsx` | 新規 | 再設定の依頼 |
+| `apps/web/src/features/auth/components/password-reset-screen.tsx` | 新規 | 再設定 |
+| `apps/web/src/features/auth/components/unlock-screen.tsx` | 新規 | ロック解除 |
+| `apps/web/src/features/auth/components/token-screens.test.tsx` | 新規 | token画面の成功・期限切れ・不正・URLからの消去 |
+| `apps/web/src/features/auth/index.ts` | 変更 | export |
+| `apps/web/src/router.tsx` | 変更 | route追加 |
+| `docs/architecture.md`・`docs/journaling.md`・`docs/product.md`・`docs/development/frontend.md`・`docs/design-system.md` | 変更 | §6の現行文書 |
+| 本Plan・`docs/tasks/TASK-007-frontend-identity.md` | 変更 | Completion Record・完了条件 |
+
+レビュー対象 約15。
+
+## 11. Libraries / APIs
+
+- TanStack Query（既存）: Sessionの取得・再取得・cacheの消去。
+- TanStack Router（既存）: guardの遷移、`redirect`・`auth_error`・`reason`のsearch param。
+- Zod（既存）: Session・Problem・search paramの検証。
+- **Tailwind CSS v4**（新規、`tailwindcss`・`@tailwindcss/vite`）: [design-system](../design-system.md)が新規UIの
+  標準としている。既存のCSS Modulesで代替できるが、同文書が新規採用しない方針のため使わない。
+- Fetch API・`history.replaceState`（Browser API）: 通信とfragmentのtokenの消去。
+
+## 12. Alternatives Considered
+
+- **mockで動かすときは認証を省く（環境変数で切り替える）**: 採らない。認証を外す経路が本番に残る危険があり、
+  localStorageを本人性の根拠にしないという方針（journaling §4）と相反する。開発ではRailsを起動する。
+- **TanStack Routerの`beforeLoad`でguardする**: router contextへ認証状態を渡し、状態が変わるたびに
+  `router.invalidate()`が要る。Componentで包む方が、状態の変化（期限切れ・別タブ）にそのまま追従できる。
+- **切り替わりをReactのstate（世代番号）で配る**: 受け取る側がeffectで差分を見ることになり、初回の確定と
+  区別しにくい。購読の関数にした（§7-3）。
+- **確認・解除のリンクを開いたら自動で送る**: メールのscannerがリンクを開くだけで確定し得る（TASK-001 Plan
+  §52）。ボタンの操作で送る。
+
+## 13. Risks / Things to Watch
+
+- **期限切れの見逃し**: `expires_at`のtimerは、端末のsleepなどで遅れ得る。画面へ戻ったときの再取得と、保護APIの
+  `401`で補う。表示の期限は案内であり、判断はserverに従う。
+- **logoutの失敗**: 個人データを外した後に失敗しても、ログイン画面へ進めない（別の利用者がloginして前の
+  Cookieと混ざるのを防ぐ）。
+- **Googleから戻った直後**: ページの読み込み直しで前の利用者と比べられないため、遷移の前に切り替わりを通知して
+  消しておく。
+- **open redirect**: `redirect`は許可した保護する画面のpathだけ。`return_to`もRailsが検証する（二重）。
+- **tokenの漏えい**: fragmentはserverへ送られないが、URLに残るとbrowserの履歴・共有で漏れ得るため、読んだら
+  消す。tokenを画面・ログに出さない。
+- **Tailwindの影響**: preflightを読み込まないので既存画面のresetは変わらない。themeの既定値を消すので、
+  token外の色・余白のclassは生成されない。
+- **互換性**: 契約は変えない。Webが新しく読むのは既存の`Session`だけ。
+
+## 14. Verification
+
+### Manual
+
+- Rails（`apps/api`）とVite（proxy）を起動し、`curl`でproxy越しに`GET/POST/DELETE /api/v1/session`・登録が
+  同一originのCookie・CSRFで通ることを確かめる。
+- 実browserでの、登録 → 確認メールのリンク → ログイン → 録音 → logout、期限切れ、別タブのlogout、再読込、
+  Google（OAuth clientの設定が必要）は、人間の確認としてPRの「確認すること」に入れる。
+
+### Automated
+
+- `pnpm check`・`pnpm type-check`・`pnpm test`。
+- Unit: `apiRequest`の失敗の区別、Sessionのexamples、文言の対応、`redirect`の検証。
+- Component: `AuthProvider`（状態・CSRFの再送・`401`・切り替わり・logoutの失敗）、`SessionProvider`の`reset`、
+  `RequireAuth`、ログイン・アカウント・token画面。
+
+## 15. Definition of Done
+
+- TASK-007の完了条件と必要な検証を満たし、検証できなかったものを理由とともに記録している。
+- TypeScript error・lint・testがない。
+- 関連する現行文書を更新している。
+
+## 16. Completion Record
+
+未記入。
