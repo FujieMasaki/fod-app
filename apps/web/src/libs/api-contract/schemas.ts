@@ -132,9 +132,34 @@ export const generationSchema = z.discriminatedUnion("status", [
   }),
 ]);
 
+const sessionUserSchema = z.object({
+  id: z.uuid(),
+  // 契約はformat: email。利用者の入力に由来し、serverとWebで判定がずれると正しいsessionを
+  // 「古いタブ」と扱ってしまうため、形式までは確かめない。
+  email: z.string(),
+  email_confirmed: z.boolean(),
+  sign_in_methods: z.array(z.enum(["password", "google"])),
+});
+
+// authenticatedで形が分かれる（契約のSessionのoneOf）。
+export const sessionSchema = z.discriminatedUnion("authenticated", [
+  z.object({
+    authenticated: z.literal(true),
+    csrf_token: z.string(),
+    expires_at: z.iso.datetime(),
+    user: sessionUserSchema,
+    account_status: z.enum(["active", "deletion_in_progress"]),
+  }),
+  z.object({
+    authenticated: z.literal(false),
+    csrf_token: z.string(),
+  }),
+]);
+
 export type Problem = z.infer<typeof problemSchema>;
 export type Dot = z.infer<typeof dotSchema>;
 export type Generation = z.infer<typeof generationSchema>;
+export type Session = z.infer<typeof sessionSchema>;
 
 // 契約とZodの型がずれたら、ここで型検査が失敗する。
 export const contractTypeChecks = {
@@ -148,4 +173,5 @@ export const contractTypeChecks = {
   retryExpiredProblem: true satisfies TypeMatches<z.infer<typeof retryExpiredProblemSchema>, Schemas["ProblemRetryExpired"]>,
   dot: true satisfies TypeMatches<Dot, Schemas["Dot"]>,
   generation: true satisfies TypeMatches<Generation, Schemas["Generation"]>,
+  session: true satisfies TypeMatches<Session, Schemas["Session"]>,
 } as const;
