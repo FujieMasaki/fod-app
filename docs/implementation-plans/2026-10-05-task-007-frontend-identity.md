@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中（2026-10-05）。
+実施中（2026-10-05）。実装と自動検証は完了し、実browserでの操作確認が残る（§16）。
 
 ## 2. Goal
 
@@ -341,4 +341,50 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 
 ## 16. Completion Record
 
-未記入。
+- 状態: 実装・自動検証まで完了（2026-10-05）。実browserでの操作確認が人間の確認として残るため、タスクはIn progressのまま。
+- 実装差異:
+  - guard・ログイン・アカウントのtestは同じfetchの差し替えを使うため、1ファイル（`auth-screens.test.tsx`）にまとめた。
+  - Tailwindの行間は`--text-*--line-height`ではなく`--leading-*`で割り当てた。repositoryのCSS custom propertyの
+    命名検査（`scripts/check-naming.mjs`）が`--`を含む名前を拒否するため。
+  - 終了の理由に`session_lost`（別タブでのlogout・serverの`unauthenticated`）を足した。「ログアウトしました」と
+    出すのは、このタブでlogoutしたときだけにするため。
+  - このタブでlogoutした後は、guardがログインへ移すときに`redirect`を付けない（次に使う人を前の画面へ戻さないため）。
+  - 既存の`processing-indicator.test.tsx`は、`SessionProvider`が`AuthProvider`を要るようになったため包み、
+    認証状態の取得だけを別に返すようにした。
+
+### 検証結果
+
+| command | 結果 |
+| --- | --- |
+| `pnpm check`（ESLint・命名・契約のlint・生成した型の最新確認） | 通過 |
+| `pnpm type-check` | 通過（Zodの`Session`と契約の型の一致を含む） |
+| `pnpm test` | scripts 173件・web 255件、すべて通過 |
+| `pnpm --filter @focus-on-dot/web build` | 通過。生成したCSSにpreflightがなく、使ったutilityが`--fod-*` tokenを参照することを確認 |
+
+proxy越しの確認（Rails 3107・Vite 5207を起動し、`curl`でWebと同じrequestの形を送った）:
+
+- `GET /api/v1/session`でCSRF tokenを受け取り、登録`202`、未確認のlogin`403 email_unconfirmed`、CSRF tokenなし・
+  別Originの`403 csrf_invalid`。responseは`Cache-Control: no-store`、Cookieは`HttpOnly; SameSite=Lax`（開発のため
+  Secureなし）。
+- 確認`204`、同じtokenの再使用`422 token_invalid`、login`200`（Sessionの形が契約どおり）、`GET`で
+  `authenticated: true`、logout`204`、その後の`GET`で`authenticated: false`。
+- Googleの開始（form POST）が`302`でGoogleへ。`redirect_uri`がproxyのorigin（`localhost:5207`）になる。
+- tokenのURLからの消去は、消去の処理を外すとtestが失敗することを一度確かめた。
+
+完了条件ごとの結果:
+
+| 完了条件 | 結果 | 証跡 |
+| --- | --- | --- |
+| 認証の開始・終了と失効を扱い、状態と次の操作が分かる | 実装・component testまで。**実browserの操作確認は未実施** | `auth-provider.test.tsx`（期限・別タブ・logout）、`auth-screens.test.tsx`、`token-screens.test.tsx` |
+| 未認証の保護対象、API呼び出し中の失効を契約どおり扱う | 確認 | `auth-provider.test.tsx`（`session_expired`・`unauthenticated`・`csrf_invalid`の1回の再送）、`auth-screens.test.tsx`（guard） |
+| 採用方式で資格情報を受け渡し、localStorageを根拠にしない | 確認 | proxy越しの確認、`request.test.ts`（`same-origin`・`X-CSRF-Token`）。認証状態はQuery cacheだけに持つ |
+| 終了・切り替わりを個人データのstateへ伝える境界 | 確認 | `subscribeIdentityChange`、`session-context.test.tsx` |
+| 関連現行文書の更新 | 確認 | architecture・journaling・product・frontend.md・design-system |
+
+### 未実施の確認と理由
+
+- 実browserでの、登録 → 確認メールのリンク → ログイン → 録音 → logout、期限切れ、別タブのlogout、再読込、見た目。
+  このセッションではbrowserを操作できないため、PRの「確認すること」に入れる。
+- 実Googleでのlogin、実メールの受信。OAuth clientとメール配送の設定（外部サービス）が必要なため（TASK-015）。
+- 保護API（Dot）がまだ無いため、実serverの`401 session_expired`はmockの応答で確かめた。
+- 関連: メインのPR #61。
