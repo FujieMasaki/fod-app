@@ -107,7 +107,7 @@ main ← <type>/task-008-<slug>-integration（統合ブランチ。メインのP
   例外: 止まるときの記録、LGTM後にPlanを完了にする記録）だけなら、レビューは済んだものとして扱う。
 - メインのPRは、サブのPRの合計なので20ファイルを超えてよい。人間は行ごとには読まず（サブのPRで読み終えている）、
   CIで統合した全体を確かめる。そのため、統合ブランチにはレビューを経た変更だけを入れる。AIが統合ブランチへ直接
-  pushしてよいのは、最初の空のコミットと、コンフリクトのない`main`の取り込み（下の「マージ」の3）だけ。ほかの
+  pushしてよいのは、最初の空のコミットと、コンフリクトがなく検査が通る`main`の取り込み（下の「マージ」の3）だけ。ほかの
   変更はすべてサブのPRを通す。
 - lockfileが違うブランチへ切り替えたら、`pnpm install --frozen-lockfile`・`bundle install`を実行し直してから
   検査する（前のブランチの依存で検査が通ってしまうのを防ぐ）。
@@ -168,8 +168,13 @@ AIはどのPRもマージしない。人間は、すべてのサブのPRをレ�
    git switch <統合ブランチ>
    git merge --ff-only origin/<統合ブランチ>
    git merge origin/main
+   # lockfile・migrationが変わっていれば依存とDBを揃え直し、品質ゲートと同じ検査を実行する
    git push origin <統合ブランチ>:<統合ブランチ>
    ```
+
+   pushの前に、取り込みでlockfile・migrationが変わっていれば依存とDBを揃え直し（上の「統合ブランチとサブのPR」と
+   同じ手順）、品質ゲートと同じ検査（`pnpm check`・`pnpm type-check`・`pnpm test`、`apps/api`では`rubocop`・
+   `brakeman`・`rspec`）を実行する。pre-pushの検査はweb側の一部だけのため。
 
    コンフリクトが出たら、AIは解消せずに止まり、人間に判断を仰ぐ（解消の内容は、どのサブのPRのレビューも
    経ていないため）。pushが拒否されたら、force push（`--force-with-lease`を含む）をせずに止まる。コンフリクトは
