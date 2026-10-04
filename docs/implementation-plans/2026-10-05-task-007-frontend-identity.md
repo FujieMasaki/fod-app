@@ -306,6 +306,15 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 
 - **期限切れの見逃し**: `expires_at`のtimerは、端末のsleepなどで遅れ得る。画面へ戻ったときの再取得と、保護APIの
   `401`で補う。表示の期限は案内であり、判断はserverに従う。
+- **端末の時計のずれ**: 期限のtimerは端末の時計で決まる。時計が進んでいてserverがまだ認証済みと返したら、
+  30秒ごとに確かめ直す。期限切れ（`expired`）か別の終了（`session_lost`）かの判定も端末の時計を使うため、
+  ずれていると案内の文言だけが変わり得る（保護する画面を閉じる判断には影響しない）。
+- **logout中の再取得（後続への申し送り）**: logoutの開始でQuery cacheを消しても、mount中の`useQuery`は
+  DELETEが終わる前（Cookieが前の利用者のまま）に取り直し得る。今は個人データのqueryがないため影響はない。
+  TASK-008以降で保護APIのqueryを足すときは、`status`が`authenticated`のときだけ`enabled`にするなどで防ぐ。
+- **`libs/api-client`の位置づけ**: frontend.md §1が保留する「通信専用directory・repository層」ではなく、
+  `libs/`の定義（Browser APIの小さいラッパー。React stateを持たない）に収まるfetchの薄い包みとして置く。
+  endpointごとの通信関数は各featureに置く方針を変えない。
 - **logoutの失敗**: 個人データを外した後に失敗しても、ログイン画面へ進めない（別の利用者がloginして前の
   Cookieと混ざるのを防ぐ）。
 - **Googleから戻った直後**: ページの読み込み直しで前の利用者と比べられないため、遷移の前に切り替わりを通知して
