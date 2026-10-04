@@ -101,6 +101,8 @@ describe("apiRequest", () => {
     await expect(apiRequest("https://evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
     await expect(apiRequest("//evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
     await expect(apiRequest("/\\evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    await expect(apiRequest("/\t/evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    await expect(apiRequest("/\n/evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
