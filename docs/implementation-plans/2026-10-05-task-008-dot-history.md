@@ -317,7 +317,9 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
 ### Automated
 
 - model spec: 生成列の日付境界、SQLで`started_at`を書き換えたときに`date`が追従すること（modelでは
-  `started_at`を更新させない）、文字数・durationの制約（validationとDBのCHECK）、NUL文字の拒否、`(user_id, generation_id)`の一意、同日の追記で過去のDotが残ること、
+  `started_at`を更新させない）、文字数・durationの制約（validationとDBのCHECK）、NUL文字の拒否
+  （壊れたUTF-8はRailsの標準validatorが例外を出すため、外部の文字列を受け取るTASK-009で`valid_encoding?`を
+  確かめる）、保存・更新のSQLのログに本文が出ないこと、`(user_id, generation_id)`の一意、同日の追記で過去のDotが残ること、
   `kept`・`trashed`・`newest_first`。
 - service spec: cursorの往復と不正値、一覧の集約（件数・最新id・ゴミ箱の除外）、多数件を続きで
   たどったときに欠落・重複が無いこと（同日内の続きも含む）。
