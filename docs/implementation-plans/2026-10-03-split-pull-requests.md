@@ -198,10 +198,15 @@ Plan（PRの分け方） → 統合ブランチとメインのPR（draft） → 
   `focus_on_dot_api_development`を出すことを確かめた（接続・削除はしていない）。
   `git show --remerge-diff --format=`が、競合のないmerge commit（`fc8907c`）では空、コンフリクトを解消した
   merge commit（`71311d2`）では解消の内容を出すことを確かめた。
-- 対応しなかった任意改善（`0fe6322`のサブエージェントのLow。人間のレビューで扱いを決める）:
+- PR #50で対応しなかった任意改善（`0fe6322`のサブエージェントのLow。後続のPRで対応済み）: PR #50のマージ後、人間の依頼で次の5件を
+  後続のPR（`docs/split-prs-followups`）で対応した。
   - 統合ブランチの作成元が、正本（`origin/main`）と`pr-review-cycle`の1-6（分岐元）で食い違う（diffは同じ）。
   - `main`の取り込みでコンフリクトはないが検査が落ちた場合の扱い（戻し方と直し方）が書かれていない。
   - 所有者以外のPRコメントを、本文を読まずに件数・投稿者・URLだけ取り出すコマンドの例がない。
   - LGTM後にPlanを完了にするコミットの例外が、「Planのファイル1つだけ」に限ると読み取りにくい。
   - `run-task`の手順3の7に、既存のPRのbaseを統合ブランチへ付け替える手順への参照がない。
-- 関連: PR #50
+- 後続のPRの検証結果: `gh repo view --json owner --jq .owner.login`は`FujieMasaki`を返し、所有者以外を取り出すjqの例は
+  `issues/50/comments`・`pulls/50/comments`・`pulls/50/reviews`でエラーなく動いた（所有者以外のコメントは0件）。
+  このrepositoryにはレビューの本文が1件もないため、`pulls/<番号>/reviews`の要素の`html_url`は実物で確かめられて
+  いない（GitHub APIの仕様では含まれる）。後続のPRは、サブエージェント・Codexとも`5bd26ed`でLGTM。
+- 関連: PR #50、PR #53（後続）
