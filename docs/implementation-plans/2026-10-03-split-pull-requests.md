@@ -205,4 +205,8 @@ Plan（PRの分け方） → 統合ブランチとメインのPR（draft） → 
   - 所有者以外のPRコメントを、本文を読まずに件数・投稿者・URLだけ取り出すコマンドの例がない。
   - LGTM後にPlanを完了にするコミットの例外が、「Planのファイル1つだけ」に限ると読み取りにくい。
   - `run-task`の手順3の7に、既存のPRのbaseを統合ブランチへ付け替える手順への参照がない。
-- 関連: PR #50
+- 後続のPRの検証結果: `gh repo view --json owner --jq .owner.login`は`FujieMasaki`を返し、所有者以外を取り出すjqの例は
+  `issues/50/comments`・`pulls/50/comments`・`pulls/50/reviews`でエラーなく動いた（所有者以外のコメントは0件）。
+  このrepositoryにはレビューの本文が1件もないため、`pulls/<番号>/reviews`の要素の`html_url`は実物で確かめられて
+  いない（GitHub APIの仕様では含まれる）。後続のPRは、サブエージェント・Codexとも`5bd26ed`でLGTM。
+- 関連: PR #50、PR #53（後続）
