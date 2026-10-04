@@ -300,14 +300,24 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
 - **cursorの改ざん**: 利用者を含まず、queryは`current_user`のscopeの中だけ。形式違いは`400`。
 - **件数の多い日**: 同日の件数に上限は無いが、日の詳細はcursorで続きを取る。一覧の1要素は固定サイズ。
 - **ログ**: Dotの本文をrequestのparameterのログに出さない（`filter_parameters`）。
+- **DBの例外messageに本文が入る**: PostgreSQLのCHECK・NOT NULLの違反は`DETAIL: Failing row contains (...)`に
+  行の全列（`sentence`・`summary`を含む）を入れ、Railsはそれを`ActiveRecord::StatementInvalid`のmessageへ
+  入れる。`filter_parameters`は例外のmessageを隠さない。通常の保存はmodelのvalidation（上限・NUL文字）が
+  DBより先に止めるため、validationを飛ばす経路（`update_all`・`insert_all`など）でだけ起きる。
+  **TASK-009のJobは`create!`でvalidationを通して保存する。**error trackingを入れるとき（TASK-009）と、
+  RDSのログの設定（`log_min_error_statement`等。TASK-015）で、例外のmessageとDBのserver logに本文が
+  残らないことを確かめる。
+- **契約のexampleの紛らわしさ**: `GenerationSucceeded`と`DotEvening`のexampleは、Dotの`id`と処理IDに
+  同じUUIDを使っている。本タスクでは別の値として持つ（§12）。TASK-009で契約に触れるときに、exampleの
+  UUIDを別の値にする。
 - **互換性**: 新しいendpointの追加だけで、既存の契約・endpointを変えない。
 
 ## 14. Verification
 
 ### Automated
 
-- model spec: 生成列の日付境界、`started_at`の更新に`date`が追従すること、文字数・durationの
-  制約（validationとDBのCHECK）、`(user_id, generation_id)`の一意、同日の追記で過去のDotが残ること、
+- model spec: 生成列の日付境界、SQLで`started_at`を書き換えたときに`date`が追従すること（modelでは
+  `started_at`を更新させない）、文字数・durationの制約（validationとDBのCHECK）、NUL文字の拒否、`(user_id, generation_id)`の一意、同日の追記で過去のDotが残ること、
   `kept`・`trashed`・`newest_first`。
 - service spec: cursorの往復と不正値、一覧の集約（件数・最新id・ゴミ箱の除外）、多数件を続きで
   たどったときに欠落・重複が無いこと（同日内の続きも含む）。
