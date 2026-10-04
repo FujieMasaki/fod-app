@@ -314,7 +314,10 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
   TASK-008以降で保護APIのqueryを足すときは、`status`が`authenticated`のときだけ`enabled`にするなどで防ぐ。
   同じく、切り替わりの前に始まった非同期処理（Dot生成のmutation、`request`のpromise）は止めないため、終わった後に
   結果をstateへ書き戻すと前の利用者のデータが残り得る。TASK-011・014で、切り替わりの後に終わった処理の結果を
-  捨てる（世代番号やAbortSignalで照合する）。
+  捨てる（世代番号やAbortSignalで照合する）。Mutation cacheも今は消していない。`removeQueries`はmount中の
+  `useQuery`が持つ表示中のdataまでは消さないため、個人データのqueryは`status`で`enabled`を切るかguardでunmountする。
+- **通信のtimeout**: `apiRequest`はtimeoutもAbortSignalも持たない。応答が止まるとlogin・logoutの送信中の表示が
+  解けない。保護APIを足すTASK-008以降で、`signal`を通すかを決める。
 - **`libs/api-client`の位置づけ**: frontend.md §1が保留する「通信専用directory・repository層」ではなく、
   `libs/`の定義（Browser APIの小さいラッパー。React stateを持たない）に収まるfetchの薄い包みとして置く。
   endpointごとの通信関数は各featureに置く方針を変えない。
@@ -344,6 +347,22 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 - Unit: `apiRequest`の失敗の区別、Sessionのexamples、文言の対応、`redirect`の検証。
 - Component: `AuthProvider`（状態・CSRFの再送・`401`・切り替わり・logoutの失敗）、`SessionProvider`の`reset`、
   `RequireAuth`、ログイン・アカウント・token画面。
+
+## 判断が必要な点（2026-10-05、PR 1/3の機械のレビューで停止）
+
+PR 1/3（#65）のサブエージェントのレビューが3回続けてLGTMにならず、`pr-review-cycle`の止まる条件
+（1回のサブエージェント段階で3回）に当たった。各回の指摘はすべて直した。
+
+| 回 | Medium | 対応 |
+| --- | --- | --- |
+| 1 | 端末の時計が進んでいると、期限の前に取り直した後に次の取り直しが予約されない | 30秒ごとに確かめ直す（testで再現・修正を確認） |
+| 2 | `apiRequest`の同一originの判定が、tab・改行を挟んだpathで外部URLになり得る（CSRF tokenの送り先） | URLとして解決したoriginで比べる |
+| 3 | login直前に始まったSessionの取り直しが、login成功のcacheを未認証で上書きし得る | `signIn`で実行中の取り直しを取り消す（testで再現・修正を確認） |
+
+各回のLowは直すか、§13へ申し送りとして書いた。指摘は回ごとに別の箇所で、同じ問題の繰り返しではない。
+
+- 選択肢A（推奨）: 3回目の修正を入れた状態で、サブエージェントのレビューをもう1段階（最大3回）続ける。
+- 選択肢B: PR 1/3の範囲（認証状態の扱い）を見直してから再開する。
 
 ## 15. Definition of Done
 
