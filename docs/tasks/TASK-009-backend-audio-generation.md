@@ -15,7 +15,9 @@
 
 **TASK-003の状態機械をそのまま実装する。**[TASK-003 Plan §20](../implementation-plans/2026-09-29-task-003-generation-design.md)が状態と遷移を表で定義しているので、**表にあるすべての遷移をテストで1本ずつ検証する**（下記の完了条件）。文書だけで閉じたと判定するのが難しい領域なので、実装時にテストで閉じる。
 
-このタスクの前提として次も行う。**Amazon TranscribeのAI services opt-out policyを適用し、effective policyで効いていることを確認してから音声を外部へ送る**（設定前に送ると、後からopt-outしても送った事実は消えない）。Bedrockのmodel idは**[architecture.md](../architecture.md)「データ所在地と費用」に従って選び**、data retention modeを確認する。2026-10-03に同文書を**「保存は日本国内、AIの推論は日本国外を許容する」**へ変更したため、**国外へ出る推論経路（Globalプロファイル）も候補にできる**（**Geo: JPとGlobalはどちらも`bedrock-runtime`で呼べる**。`bedrock-mantle`のIn-Regionは呼び出し方が違う）。**選んだ経路（国内/国外）とdata retention mode（`none`か、保持＋人的レビューありか）を記録し、利用者への説明へ反映できるようTASK-010へ渡す。国外を選ぶ場合は越境移転の規律の確認（TASK-017）を済ませてから使い、済むまでは国内に収まる経路で運用する**（「国内に収まる経路」の定義は[architecture.md](../architecture.md)「データ所在地と費用」が正本）。**`none`にできないモデルを使う場合は、国内に収まる経路であることに加えて、保持されるデータの所在リージョンを一次資料で確認して日本国内に収まることを確かめる。確認できなければ`none`にできるモデルに限る。国外経路では経路の時点で`none`にできるモデルに限る**（同節。**推論の宛先と保持データの所在は別である**）。`bedrock-mantle`のIn-Regionを採るならSigV4付きHTTP clientの選定を含める。文字起こし結果は`OutputBucketName`を指定して自前のbucketへ出し、prefixごとにIAM権限を分ける。録音形式（webm/opus・mp4/aac）の疎通を実ファイルで確認する。
+このタスクの前提として次も行う。**Amazon TranscribeのAI services opt-out policyを適用し、effective policyで効いていることを確認してから音声を外部へ送る**（設定前に送ると、後からopt-outしても送った事実は消えない）。Bedrockのmodel idは**[architecture.md](../architecture.md)「データ所在地と費用」の要求を満たすものから選ぶ。**同文書は2026-10-03に**「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」**へ変わり、**国外へ出る推論経路（Globalプロファイル）も候補にできる**（Geo: JPとGlobalはどちらも`bedrock-runtime`で呼べる。`bedrock-mantle`のIn-Regionは呼び出し方が違い、SigV4付きHTTP clientの選定が別に要る）。
+
+**同文書は軸を数え上げないことにしたため、網羅はこのタスクの責任である**（2026-10-04に変更。経緯は[TASK-003 Plan §18](../implementation-plans/2026-09-29-task-003-generation-design.md)の必須条件3）。**使う構成（経路・モデル・設定）について「どこに保存されるか」「誰がどこから閲覧し得るか」を一次資料で確認して記録し、確認できない構成は使わない。**少なくとも次を見る。**推論の宛先（モデルカードのGeo inference details。モデルごとに違うので選んだmodel idで都度確認する）／data retention modeと保持データの所在リージョン／人によるレビューの実施地とアクセス経路／prompt cache等の滞留先。**確認項目はPlan §26の項目2・4へ接続する。**確認した結果（経路が国内か国外か、保持と人によるレビューの有無）を記録し、利用者への説明へ反映できるようTASK-010へ渡す。国外経路を使う場合は越境移転の規律の確認（TASK-017）を済ませてから使い、済むまでは国内に収まる経路で運用する。**文字起こし結果は`OutputBucketName`を指定して自前のbucketへ出し、prefixごとにIAM権限を分ける。録音形式（webm/opus・mp4/aac）の疎通を実ファイルで確認する。
 
 2026-09-29にTASK-004で、Dotの`date`を`started_at`（録音開始操作をserverが受理した時刻）から算出し、その値を**録音attempt**から決めると採用した。処理の記録を扱う本タスクで、**attemptの識別子を初回uploadで1つの処理記録へ原子的に関連付けて一回性を担保する**実装を行う。同じattemptの同時並行送信、応答前のupload失敗、処理記録が作られる前の失敗でも、二重の処理やDotが生まれないようにする。upload受理後の24時間再試行はattemptの再利用ではなく処理記録で認可し、再試行やJob再実行でも元の`started_at`を維持する。契約は[TASK-005](TASK-005-product-api-contract.md)、Dotへの保存と日付算出は[TASK-008](TASK-008-backend-dot-history.md)、不変条件は[TASK-004 Plan §18-3](../implementation-plans/2026-09-28-task-004-history-design.md)。
 
@@ -39,6 +41,7 @@
   - Dotの完全削除: **そのDotを作った処理の分だけ。**同じ利用者の他の録音（生成中・再試行待ち）を巻き込まない
   - 退会: 本人の全処理の分
 - [ ] 音声・文字起こし結果・Transcribeのjobのcleanupが冪等で、失敗しても状態を保ったまま再実行できる。**古いPUTが後から完成した場合も、prefixの列挙とlifecycleで回収できる。**PUTの実行と終了の実際の挙動を確認したうえで判断している。
+- [ ] **使う構成（経路・モデル・設定）の保存先と閲覧元を一次資料で確認し、記録している。**[architecture.md](../architecture.md)「データ所在地と費用」の要求（発話内容の保存と閲覧を日本国内に限る）を満たすことを、推論の宛先・data retention modeと保持データの所在・人によるレビューの実施地・cache等の滞留先について確かめている。**確認できない構成を使っていない。**確認結果（経路が国内か国外か、保持と人によるレビューの有無）をTASK-010へ引き渡している。
 - [ ] 文字起こしテキストとBedrockのrequest / responseがログ・error trackingに出ない。
 - [ ] 送信・外部AI・生成結果の検証・保存の各失敗を区別して扱い、未保存なのに保存済みと返さない。
 - [ ] 再送・retry・Job再実行の重複防止、または利用者への明確な結果通知を設計どおり実装している。
