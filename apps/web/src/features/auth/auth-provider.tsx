@@ -75,6 +75,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 // setTimeoutの上限（約24.8日）。7日の期限はこれに収まるが、端末の時刻がずれていても溢れないようにする。
 const MAX_TIMER_MS = 2_147_483_647;
+// 端末の時計では期限を過ぎたのにserverがまだ認証済みと返したとき、次に確かめるまでの間隔。
+const EXPIRY_RECHECK_MS = 30_000;
 
 function deriveStatus(session: Session | undefined, isError: boolean): AuthStatus {
   if (!session) return isError ? "unknown" : "checking";
@@ -152,13 +154,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   // 期限の時刻に取り直す。端末のsleepなどで遅れても、画面へ戻ったときの取り直しと保護APIの401で補う。
+  // 端末の時計がserverより進んでいると期限の前に取り直してしまい、まだ認証済みが返る。そのときは
+  // 取り直すたびに（dataUpdatedAtが変わる）、間隔を空けて予約し直す。
   const expiresAt = authenticatedSession?.expires_at ?? null;
+  const sessionUpdatedAt = sessionQuery.dataUpdatedAt;
   useEffect(() => {
     if (!expiresAt) return;
-    const delay = Math.min(Math.max(Date.parse(expiresAt) - Date.now(), 0) + 1000, MAX_TIMER_MS);
+    const remaining = Date.parse(expiresAt) - Date.now();
+    const delay = remaining > 0 ? Math.min(remaining + 1000, MAX_TIMER_MS) : EXPIRY_RECHECK_MS;
     const timer = setTimeout(() => void refresh(), delay);
     return () => clearTimeout(timer);
-  }, [expiresAt, refresh]);
+  }, [expiresAt, sessionUpdatedAt, refresh]);
 
   const currentCsrfToken = useCallback(async () => {
     const cached = queryClient.getQueryData<Session>(SESSION_QUERY_KEY);

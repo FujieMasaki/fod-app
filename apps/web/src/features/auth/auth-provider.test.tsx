@@ -276,12 +276,58 @@ describe("別タブ・期限での変化", () => {
   });
 
   it("期限の時刻に取り直し、未認証になっていれば期限切れにする", async () => {
-    const expiresAt = new Date(Date.now() + 100).toISOString().replace(/\.\d+Z$/, "Z");
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const expiresAt = new Date(Date.now() + 60_000).toISOString().replace(/\.\d+Z$/, "Z");
     mockApi({ "GET /api/v1/session": [authenticated(USER_A, "t1", expiresAt), anonymous("t2")] });
     const { auth, onIdentityChange } = await renderAndSubscribe();
 
-    await waitFor(() => expect(auth().status).toBe("anonymous"), { timeout: 4000 });
+    await act(() => vi.advanceTimersByTimeAsync(62_000));
+
+    await waitFor(() => expect(auth().status).toBe("anonymous"));
     expect(auth().endReason).toBe("expired");
     expect(onIdentityChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("端末の時計が進んでいて期限の前に取り直しても、間隔を空けて確かめ直す", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // 端末の時計ではもう期限を過ぎているが、serverではまだ認証済み（時計のずれ）
+    const expiresAt = new Date(Date.now() - 5_000).toISOString().replace(/\.\d+Z$/, "Z");
+    const calls = mockApi({
+      "GET /api/v1/session": [authenticated(USER_A, "t1", expiresAt), authenticated(USER_A, "t1", expiresAt), anonymous("t2")],
+    });
+    const { auth } = await renderAndSubscribe();
+
+    await act(() => vi.advanceTimersByTimeAsync(31_000));
+    await waitFor(() => expect(calls.filter((c) => c.key === "GET /api/v1/session")).toHaveLength(2));
+    expect(auth().status).toBe("authenticated");
+
+    await act(() => vi.advanceTimersByTimeAsync(31_000));
+    await waitFor(() => expect(auth().status).toBe("anonymous"));
+    expect(auth().endReason).toBe("expired");
+  });
+});
+
+describe("後続の機能が使う入口", () => {
+  it("保護APIのcsrf_invalidでもtokenを取り直して1回だけ再送する", async () => {
+    const calls = mockApi({
+      "GET /api/v1/session": [authenticated(USER_A, "old"), authenticated(USER_A, "new")],
+      "PATCH /api/v1/dots/x": [problem(403, "csrf_invalid"), { status: 204 }],
+    });
+    const { auth } = await renderAndSubscribe();
+
+    await auth().request("/api/v1/dots/x", { method: "PATCH", body: {} });
+
+    expect(calls.filter((c) => c.key === "PATCH /api/v1/dots/x").map((c) => c.csrf)).toEqual(["old", "new"]);
+  });
+
+  it("Googleへ遷移する前に、前の利用者の個人データを消すよう通知する", async () => {
+    mockApi({ "GET /api/v1/session": [anonymous("t1")] });
+    const { auth, queryClient, onIdentityChange } = await renderAndSubscribe();
+    queryClient.setQueryData(["days", "today"], { private: true });
+
+    act(() => auth().prepareExternalSignIn());
+
+    expect(onIdentityChange).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryData(["days", "today"])).toBeUndefined();
   });
 });
