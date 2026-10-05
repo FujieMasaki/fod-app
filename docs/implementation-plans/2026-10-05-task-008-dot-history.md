@@ -80,6 +80,14 @@ Dotを作る入口（音声の送信と生成）はTASK-009が作り、本タス
     - C: TASK-008では直さず、security.md §6に未対策と明記し、横断の修正を別タスクにする。
   - 推奨: A。契約を変えずに済み、ログへ本文が出る経路を全endpointでまとめて塞げる。
   - **決定（2026-10-05、人間の判断）: A。**`lib/middleware/api_request_guard.rb`として実装した（§16の実装差異）。
+- **判断待ち（2026-10-05）: PR 3/3のサブエージェントのレビューが、同じ段階で3回LGTMにならなかった（上限）。**
+  - 3回目の指摘（🟡、request specの形で再現した）: `ApiRequestGuard`は正規化前の`request.path`を`/api/`と
+    前方一致で比べる。Railsのrouterは`//`をまとめるため、`PATCH //api/v1/dots/:id`にformのbodyを送ると
+    検査を通らずに`200`で更新される。不正なUTF-8の値なら、塞いだはずの`BadRequest`のログの経路も開く。
+  - 修正案: 比べる前に`ActionDispatch::Journey::Router::Utils.normalize_path`でrouterと同じ正規化をし、
+    前方一致と`NON_JSON_BODIES`の照合の両方に使う。`//api/...`が`422`になるrequest specを足す。
+  - 選択肢: A: 修正案で直し、サブエージェントのレビューを続ける。B: ここで打ち切り、別のタスクで直す。
+  - 推奨: A。直し方は決まっており、塞いだと書いた保証を成り立たせるため。
 
 ## 6. References and Documents to Update
 
