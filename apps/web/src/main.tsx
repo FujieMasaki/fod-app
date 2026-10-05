@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import "@/design-system/tokens/tokens.css";
 import "@/styles/globals.css";
+import "@/styles/tailwind.css";
 import { router } from "@/router";
 
 createRoot(document.getElementById("root")!).render(

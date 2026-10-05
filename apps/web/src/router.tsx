@@ -3,6 +3,19 @@ import { AppHeader } from "@/components/app-header/app-header";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { EmptyState } from "@/components/empty-state/empty-state";
 import { ScreenLayout } from "@/components/screen-layout/screen-layout";
+import {
+  AccountScreen,
+  ConfirmationScreen,
+  PasswordForgotScreen,
+  PasswordResetScreen,
+  RequireAuth,
+  SignInPrompt,
+  SignInScreen,
+  SignUpScreen,
+  UnlockScreen,
+  parseAuthError,
+  safeRedirect,
+} from "@/features/auth";
 import { HomeHero } from "@/features/home";
 import { ProcessingIndicator } from "@/features/processing";
 import { RecordingStage } from "@/features/recording";
@@ -22,15 +35,23 @@ function RootComponent() {
 function HomePage() {
   return (
     <ScreenLayout activeTab="home">
-      <HomeHero />
+      <div className="flex h-full flex-col">
+        <div className="min-h-0 flex-1">
+          <HomeHero />
+        </div>
+        <SignInPrompt />
+      </div>
     </ScreenLayout>
   );
 }
 
+// 録音前にserverで認証を確かめる（journaling.md §4「録音前認証と期限切れ」）。
 function RecordPage() {
   return (
     <ScreenLayout>
-      <RecordingStage />
+      <RequireAuth startsOnEnter>
+        <RecordingStage />
+      </RequireAuth>
     </ScreenLayout>
   );
 }
@@ -38,7 +59,9 @@ function RecordPage() {
 function ProcessingPage() {
   return (
     <ScreenLayout>
-      <ProcessingIndicator />
+      <RequireAuth startsOnEnter>
+        <ProcessingIndicator />
+      </RequireAuth>
     </ScreenLayout>
   );
 }
@@ -49,11 +72,13 @@ function DotPage() {
 
   return (
     <ScreenLayout>
-      {!hydrated ? null : dotSession ? (
-        <TodaysDotView session={dotSession} />
-      ) : (
-        <EmptyState onAction={() => navigate({ to: "/" })} />
-      )}
+      <RequireAuth>
+        {!hydrated ? null : dotSession ? (
+          <TodaysDotView session={dotSession} />
+        ) : (
+          <EmptyState onAction={() => navigate({ to: "/" })} />
+        )}
+      </RequireAuth>
     </ScreenLayout>
   );
 }
@@ -67,11 +92,73 @@ function ReflectionPage() {
       activeTab="reflection"
       header={<AppHeader title="今日の振り返り" showBack />}
     >
-      {!hydrated ? null : dotSession ? (
-        <ReflectionLetter session={dotSession} />
-      ) : (
-        <EmptyState onAction={() => navigate({ to: "/" })} />
-      )}
+      <RequireAuth>
+        {!hydrated ? null : dotSession ? (
+          <ReflectionLetter session={dotSession} />
+        ) : (
+          <EmptyState onAction={() => navigate({ to: "/" })} />
+        )}
+      </RequireAuth>
+    </ScreenLayout>
+  );
+}
+
+function SettingsPage() {
+  return (
+    <ScreenLayout activeTab="settings">
+      <RequireAuth>
+        <AccountScreen />
+      </RequireAuth>
+    </ScreenLayout>
+  );
+}
+
+function LoginPage() {
+  const search = loginRoute.useSearch();
+  return (
+    <ScreenLayout>
+      <SignInScreen redirect={safeRedirect(search.redirect)} authError={parseAuthError(search.auth_error)} />
+    </ScreenLayout>
+  );
+}
+
+function SignUpPage() {
+  return (
+    <ScreenLayout>
+      <SignUpScreen />
+    </ScreenLayout>
+  );
+}
+
+// メールのリンクの画面。パスはRailsのメール（apps/api/app/mailers/user_mailer.rb）と揃える。
+function ConfirmationPage() {
+  return (
+    <ScreenLayout>
+      <ConfirmationScreen />
+    </ScreenLayout>
+  );
+}
+
+function PasswordForgotPage() {
+  return (
+    <ScreenLayout>
+      <PasswordForgotScreen />
+    </ScreenLayout>
+  );
+}
+
+function PasswordResetPage() {
+  return (
+    <ScreenLayout>
+      <PasswordResetScreen />
+    </ScreenLayout>
+  );
+}
+
+function UnlockPage() {
+  return (
+    <ScreenLayout>
+      <UnlockScreen />
     </ScreenLayout>
   );
 }
@@ -82,6 +169,30 @@ const recordRoute = createRoute({ getParentRoute: () => rootRoute, path: "/recor
 const processingRoute = createRoute({ getParentRoute: () => rootRoute, path: "/processing", component: ProcessingPage });
 const dotRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dot", component: DotPage });
 const reflectionRoute = createRoute({ getParentRoute: () => rootRoute, path: "/reflection", component: ReflectionPage });
+const settingsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/settings", component: SettingsPage });
+// searchの値はURLから来るため、ここでは文字列かどうかだけを見て、画面へ渡す前に検証する。
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/login",
+  component: LoginPage,
+  validateSearch: (search: Record<string, unknown>): { redirect?: string; auth_error?: string } => ({
+    redirect: typeof search.redirect === "string" ? search.redirect : undefined,
+    auth_error: typeof search.auth_error === "string" ? search.auth_error : undefined,
+  }),
+});
+const signUpRoute = createRoute({ getParentRoute: () => rootRoute, path: "/signup", component: SignUpPage });
+const confirmationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/confirmation", component: ConfirmationPage });
+const passwordForgotRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/password/forgot",
+  component: PasswordForgotPage,
+});
+const passwordResetRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/password/reset",
+  component: PasswordResetPage,
+});
+const unlockRoute = createRoute({ getParentRoute: () => rootRoute, path: "/unlock", component: UnlockPage });
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -89,6 +200,13 @@ const routeTree = rootRoute.addChildren([
   processingRoute,
   dotRoute,
   reflectionRoute,
+  settingsRoute,
+  loginRoute,
+  signUpRoute,
+  confirmationRoute,
+  passwordForgotRoute,
+  passwordResetRoute,
+  unlockRoute,
 ]);
 
 export const router = createRouter({ routeTree });

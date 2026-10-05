@@ -1,7 +1,8 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Spinner, Text } from "@/design-system";
 import { ErrorState } from "@/components/error-state/error-state";
+import { useAuth } from "@/features/auth";
 import { useSession } from "@/features/session";
 import { useCreateDot } from "../../hooks/use-create-dot";
 import styles from "./processing-indicator.module.css";
@@ -16,23 +17,40 @@ import styles from "./processing-indicator.module.css";
 export function ProcessingIndicator() {
   const navigate = useNavigate();
   const { setDotSession } = useSession();
+  const { identityEpoch } = useAuth();
   const { mutate, status, data } = useCreateDot();
+  // 整理を始めたときの利用者の世代。途中で利用者が切り替わったら、前の利用者の結果を保存・表示しない。
+  const startedEpochRef = useRef(identityEpoch);
+
+  const start = useCallback(() => {
+    startedEpochRef.current = identityEpoch;
+    mutate();
+  }, [identityEpoch, mutate]);
 
   // アイドル時に一度だけ整理を開始する
   useEffect(() => {
-    if (status === "idle") mutate();
-  }, [status, mutate]);
+    if (status === "idle") start();
+  }, [status, start]);
 
   // 整理完了：結果をセッションへ確定し、静かに今日の一文へ委ねる
   useEffect(() => {
-    if (status === "success" && data) {
-      setDotSession(data);
-      navigate({ to: "/dot", replace: true });
+    if (status !== "success" || !data) return;
+    if (startedEpochRef.current !== identityEpoch) {
+      navigate({ to: "/", replace: true });
+      return;
     }
-  }, [status, data, setDotSession, navigate]);
+    setDotSession(data);
+    navigate({ to: "/dot", replace: true });
+  }, [status, data, identityEpoch, setDotSession, navigate]);
+
+  // 失敗の後に利用者が切り替わっていたら、新しい利用者に前の利用者の整理を再試行させずHomeへ戻す。
+  const switchedAfterFailure = status === "error" && startedEpochRef.current !== identityEpoch;
+  useEffect(() => {
+    if (switchedAfterFailure) navigate({ to: "/", replace: true });
+  }, [switchedAfterFailure, navigate]);
 
   if (status === "error") {
-    return <ErrorState onRetry={() => mutate()} />;
+    return switchedAfterFailure ? null : <ErrorState onRetry={start} />;
   }
 
   return (
