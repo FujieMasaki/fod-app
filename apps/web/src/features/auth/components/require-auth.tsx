@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Navigate, useLocation } from "@tanstack/react-router";
 
 import { ErrorState } from "@/components/error-state/error-state";
@@ -14,19 +14,25 @@ import { safeRedirect } from "../redirect";
 type RequireAuthProps = {
   children: ReactNode;
   /**
-   * trueなら、開いたときにserverへ認証を確かめ直し、その応答で認証済みと分かるまで中身を出さない。
-   * 録音画面で使う（マイクを開始する前にRailsで確かめる。journaling.md §4「録音前認証と期限切れ」）。
+   * 中身が開いたときに副作用を始める画面（録音画面はマイクを開いて録音を、整理の画面は生成を始める）ならtrue。
+   * - 開いたときにserverへ認証を確かめ直し、その応答で認証済みと分かるまで中身を出さない（マイクを開始する
+   *   前・送る前にRailsで確かめる。journaling.md §4「録音前認証と期限切れ」）。
+   * - 中身を出した後に認証済みでなくなったら、状態が戻っても中身を出し直さずHome（未認証ならログイン）へ移る。
+   *   出し直すと、利用者の操作なしに録音や生成がもう一度始まるため（security.md §2）。
    */
-  verifyOnEnter?: boolean;
+  startsOnEnter?: boolean;
 };
 
-export function RequireAuth({ children, verifyOnEnter = false }: RequireAuthProps) {
+export function RequireAuth({ children, startsOnEnter = false }: RequireAuthProps) {
   const { status, endReason, refresh } = useAuth();
   const { pathname } = useLocation();
-  const [verified, setVerified] = useState(!verifyOnEnter);
+  const [verified, setVerified] = useState(!startsOnEnter);
+  const shownRef = useRef(false);
+  // 一度離れると決めたら、状態が戻っても（画面の遷移が終わる前に戻っても）中身を出し直さない。
+  const leftRef = useRef<"login" | "home" | null>(null);
 
   useEffect(() => {
-    if (!verifyOnEnter) return;
+    if (!startsOnEnter) return;
     let active = true;
     // 取り直しが終わってから中身を出す。失敗・未認証なら、状態がunknown・anonymousになって下の分岐が扱う。
     void refresh().finally(() => {
@@ -35,7 +41,15 @@ export function RequireAuth({ children, verifyOnEnter = false }: RequireAuthProp
     return () => {
       active = false;
     };
-  }, [verifyOnEnter, refresh]);
+  }, [startsOnEnter, refresh]);
+
+  // 副作用を始める画面を一度出した後に認証済みでなくなったら、中身を出し直さずに離れる。
+  if (startsOnEnter && shownRef.current && status !== "authenticated" && leftRef.current === null) {
+    leftRef.current = status === "anonymous" ? "login" : "home";
+  }
+  if (leftRef.current !== null) {
+    return leftRef.current === "login" ? <Navigate to="/login" replace /> : <Navigate to="/" replace />;
+  }
 
   switch (status) {
     case "authenticated":
@@ -46,6 +60,7 @@ export function RequireAuth({ children, verifyOnEnter = false }: RequireAuthProp
           </div>
         );
       }
+      shownRef.current = true;
       return children;
     case "checking":
       return (

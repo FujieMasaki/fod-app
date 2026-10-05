@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
 import { AuthProvider, useAuth } from "../auth-provider";
@@ -485,7 +485,7 @@ describe("SignInScreen（開いている間の変化）", () => {
   });
 });
 
-describe("録音画面へ入るときの確かめ直し（verifyOnEnter）", () => {
+describe("副作用を始める画面のguard（startsOnEnter）", () => {
   function Toggle({ children }: { children: ReactNode }) {
     const [open, setOpen] = useState(false);
     return (
@@ -501,7 +501,7 @@ describe("録音画面へ入るときの確かめ直し（verifyOnEnter）", () 
     const requests = mockApi({ "GET /api/v1/session": [signedIn, anonymous] });
     renderWithAuth(
       <Toggle>
-        <RequireAuth verifyOnEnter>録音画面</RequireAuth>
+        <RequireAuth startsOnEnter>録音画面</RequireAuth>
       </Toggle>,
     );
     await waitFor(() => expect(requests.filter((r) => r.key === "GET /api/v1/session")).toHaveLength(1));
@@ -515,11 +515,59 @@ describe("録音画面へ入るときの確かめ直し（verifyOnEnter）", () 
     expect(requests.filter((r) => r.key === "GET /api/v1/session")).toHaveLength(2);
   });
 
+  it("中身を出した後に状態が確かめられなくなったら、戻っても中身を出し直さずHomeへ移る", async () => {
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        getCount += 1;
+        // 1・2回目は認証済み（初回と入るときの確かめ直し）、3回目（focus）は失敗、4回目以降は認証済み
+        if (getCount === 3) throw new TypeError("Failed to fetch");
+        return Response.json(signedIn.body);
+      }),
+    );
+    let mounts = 0;
+    function Recording() {
+      useState(() => {
+        mounts += 1;
+      });
+      return <p>録音画面</p>;
+    }
+    renderWithAuth(
+      <Toggle>
+        <RequireAuth startsOnEnter>
+          <Recording />
+        </RequireAuth>
+      </Toggle>,
+    );
+    await waitFor(() => expect(getCount).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.click(screen.getByRole("button", { name: "enter" }));
+    await screen.findByText("録音画面");
+
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    expect(await screen.findByText("navigate:/")).toBeInTheDocument();
+
+    // 状態が戻っても（4回目の取り直しが成功しても）、録音画面を出し直さない
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(getCount).toBeGreaterThanOrEqual(4));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mounts).toBe(1);
+    expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
+    focusManager.setFocused(undefined);
+  });
+
   it("確かめ直して認証済みなら中身を出す", async () => {
     const requests = mockApi({ "GET /api/v1/session": [signedIn] });
     renderWithAuth(
       <Toggle>
-        <RequireAuth verifyOnEnter>録音画面</RequireAuth>
+        <RequireAuth startsOnEnter>録音画面</RequireAuth>
       </Toggle>,
     );
     await waitFor(() => expect(requests).toHaveLength(1));
