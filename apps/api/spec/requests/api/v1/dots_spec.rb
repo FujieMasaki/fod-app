@@ -119,13 +119,22 @@ RSpec.describe "Dots" do
         expect(dot.reload.sentence).to eq("元の一文")
       end
 
-      it "JSONのobjectでないbodyは422 invalid_format" do
-        [["一文"], "一文"].each do |body|
-          json_request(:patch, "/api/v1/dots/#{dot.id}", body)
+      it "JSONのobjectでないbodyは422 invalid_formatにし、本文をログに出さない（Railsは`_json`に入れる）" do
+        [["ログに出したくない一文"], "ログに出したくない一文"].each do |body|
+          log = captured_log { json_request(:patch, "/api/v1/dots/#{dot.id}", body) }
 
           expect(field_errors).to eq([{ "field" => "body", "code" => "invalid_format" }]), body.inspect
           assert_response_schema_confirm(422)
+          expect(log).not_to include("ログに出したくない一文"), body.inspect
         end
+      end
+
+      it "更新に成功したrequestでも、本文をログに出さない" do
+        log = captured_log { update_dot({ sentence: "ログに出したくない一文", summary: "ログに出したくない要約" }) }
+
+        expect(response).to have_http_status(:ok)
+        expect(log).to include("[FILTERED]")
+        expect(log).not_to include("ログに出したくない")
       end
 
       it "壊れたJSONは422 invalid_format" do
