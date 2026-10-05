@@ -28,7 +28,9 @@ export function RequireAuth({ children }: { children: ReactNode }) {
       return (
         <ErrorState
           title="ログインの状態を確かめられませんでした。"
-          description="通信できる状態で、もう一度お試しください。"
+          // logoutの失敗の直後にここへ来ることがある（取り直しも失敗したとき）。共有端末で、logoutが済んだと
+          // 思って離れないよう、済んでいない可能性も示す。
+          description="通信できる状態で、もう一度お試しください。ログアウトの途中だった場合は、まだログアウトできていない可能性があります。"
           onRetry={() => void refresh()}
         />
       );

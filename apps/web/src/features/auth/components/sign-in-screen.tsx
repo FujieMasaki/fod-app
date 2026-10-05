@@ -123,7 +123,7 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
         )}
         {resent && (
           <FormMessage tone="info">
-            確認のメールを送りました。届いたメールのリンクから確認してから、ログインしてください。
+            確認が済んでいない登録があれば、確認のメールを送ります。届いたメールのリンクから確認してから、ログインしてください。
           </FormMessage>
         )}
         <Button type="submit" fullWidth disabled={submitting || status === "checking"}>

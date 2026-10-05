@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "../auth-provider";
 import { AccountScreen } from "./account-screen";
 import { RequireAuth } from "./require-auth";
 import { SignInScreen } from "./sign-in-screen";
+import { SignInPrompt } from "./sign-in-prompt";
 import { SignUpScreen } from "./sign-up-screen";
 
 // 画面遷移は、遷移先を文字で表すだけの差し替えで確かめる。
@@ -15,8 +16,18 @@ vi.mock("@tanstack/react-router", () => ({
   Navigate: ({ to, search }: { to: string; search?: Record<string, string> }) => (
     <p>{`navigate:${to}${search && Object.keys(search).length > 0 ? `?${new URLSearchParams(search)}` : ""}`}</p>
   ),
-  Link: ({ to, children, className }: { to: string; children: ReactNode; className?: string }) => (
-    <a href={to} className={className}>
+  Link: ({
+    to,
+    search,
+    children,
+    className,
+  }: {
+    to: string;
+    search?: Record<string, string>;
+    children: ReactNode;
+    className?: string;
+  }) => (
+    <a href={search ? `${to}?${new URLSearchParams(search)}` : to} className={className}>
       {children}
     </a>
   ),
@@ -174,7 +185,7 @@ describe("SignInScreen", () => {
     fillSignIn();
     fireEvent.click(await screen.findByRole("button", { name: "確認メールを送り直す" }));
 
-    expect(await screen.findByText(/確認のメールを送りました/)).toBeInTheDocument();
+    expect(await screen.findByText(/確認が済んでいない登録があれば、確認のメールを送ります/)).toBeInTheDocument();
     expect(JSON.parse(requests.find((r) => r.key === "POST /api/v1/confirmation")!.body!)).toEqual({
       email: "user@example.com",
     });
@@ -332,5 +343,42 @@ describe("SignUpScreen", () => {
     fillSignUp();
 
     expect(await screen.findByRole("button", { name: "再読み込み" })).toBeInTheDocument();
+  });
+});
+
+describe("SignInPrompt", () => {
+  it("未認証のときだけ、録音へ戻るログインの導線を出す", async () => {
+    mockApi({ "GET /api/v1/session": [anonymous] });
+    renderWithAuth(<SignInPrompt />);
+
+    expect(await screen.findByRole("link", { name: "ログイン・新規登録" })).toHaveAttribute(
+      "href",
+      "/login?redirect=%2Frecord",
+    );
+  });
+
+  it("login中は出さない", async () => {
+    mockApi({ "GET /api/v1/session": [signedIn] });
+    const { container } = renderWithAuth(<SignInPrompt />);
+
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(container.textContent).toBe("");
+  });
+});
+
+describe("SignInScreen（login済み）", () => {
+  it("login済みで開いたら戻り先へ進む", async () => {
+    mockApi({ "GET /api/v1/session": [signedIn] });
+    renderWithAuth(<SignInScreen redirect="/settings" />);
+
+    expect(await screen.findByText("navigate:/settings")).toBeInTheDocument();
+  });
+
+  it("logoutの失敗後に状態も確かめられないときは、logoutが済んでいない可能性を示す", async () => {
+    mockApi({ "GET /api/v1/session": [new TypeError("Failed to fetch")] });
+    renderWithAuth(<RequireAuth>本人の画面</RequireAuth>);
+
+    expect(await screen.findByText(/まだログアウトできていない可能性があります/)).toBeInTheDocument();
   });
 });
