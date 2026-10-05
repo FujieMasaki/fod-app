@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-import { AuthProvider } from "../auth-provider";
+import { AuthProvider, useAuth } from "../auth-provider";
 import { ConfirmationScreen } from "./confirmation-screen";
 import { PasswordForgotScreen } from "./password-forgot-screen";
 import { PasswordResetScreen } from "./password-reset-screen";
@@ -164,6 +164,54 @@ describe("PasswordResetScreen", () => {
     renderScreen(<PasswordResetScreen />);
 
     expect(await screen.findByLabelText("新しいパスワード")).not.toHaveAttribute("maxlength");
+  });
+
+  it("login中に再設定したら、状態を取り直して未認証にしてからログインへ案内する", async () => {
+    // 再設定でserverは既存のCookieを無効にする。取り直さないと、ログイン画面が古い認証済みを見てHomeへ戻す。
+    let sessionCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        if (path === "/api/v1/session") {
+          sessionCount += 1;
+          return Response.json(
+            sessionCount === 1
+              ? {
+                  authenticated: true,
+                  csrf_token: "t1",
+                  expires_at: "2099-01-01T00:00:00Z",
+                  account_status: "active",
+                  user: {
+                    id: "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10",
+                    email: "a@example.com",
+                    email_confirmed: true,
+                    sign_in_methods: ["password"],
+                  },
+                }
+              : { authenticated: false, csrf_token: "t2" },
+          );
+        }
+        if (init?.method === "PATCH" && path === "/api/v1/password") return new Response(null, { status: 204 });
+        throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
+      }),
+    );
+    function StatusProbe() {
+      return <p>{`status:${useAuth().status}`}</p>;
+    }
+    openLink("/password/reset", "reset-token");
+    renderScreen(
+      <>
+        <PasswordResetScreen />
+        <StatusProbe />
+      </>,
+    );
+    await screen.findByText("status:authenticated");
+
+    fireEvent.change(screen.getByLabelText("新しいパスワード"), { target: { value: "new-password-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
+
+    expect(await screen.findByText("パスワードを再設定しました")).toBeInTheDocument();
+    expect(screen.getByText("status:anonymous")).toBeInTheDocument();
   });
 
   it("passwordが短ければ項目に示す", async () => {

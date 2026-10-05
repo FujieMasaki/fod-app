@@ -19,7 +19,7 @@ const TOKEN_MESSAGES = {
  */
 export function PasswordResetScreen() {
   const token = useFragmentToken();
-  const { withCsrf } = useAuth();
+  const { withCsrf, refresh } = useAuth();
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
@@ -32,6 +32,9 @@ export function PasswordResetScreen() {
     setError(null);
     try {
       await withCsrf((csrfToken) => resetPassword(csrfToken, token, password));
+      // 再設定でserverは既存のCookieを無効にする。login中だった場合に古い認証済みが残らないよう、取り直してから
+      // ログインへ案内する（取り直しの失敗は再設定の成否に関わらないため、案内は出す）。
+      await refresh().catch(() => undefined);
       setDone(true);
     } catch (caught) {
       setError(caught);
