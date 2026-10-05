@@ -12,7 +12,7 @@ import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-quer
 
 import type { z } from "zod";
 
-import { apiRequest, isProblem, type ApiRequestOptions } from "@/libs/api-client/request";
+import { ApiError, apiRequest, isProblem, type ApiRequestOptions } from "@/libs/api-client/request";
 import type { Session } from "@/libs/api-contract/schemas";
 import { createSession, deleteSession, getSession, type Credentials } from "./api";
 
@@ -91,6 +91,12 @@ const SETTLE_TIMEOUT_MS = 10_000;
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** 認証済みなら利用者のid、未認証ならnull、まだ分からなければundefined */
+function identityOf(session: Session | undefined): string | null | undefined {
+  if (!session) return undefined;
+  return session.authenticated ? session.user.id : null;
 }
 
 function deriveStatus(session: Session | undefined, isError: boolean): AuthStatus {
@@ -216,7 +222,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (queryClient.isFetching({ queryKey: SESSION_QUERY_KEY }) > 0) {
           pending.push(queryClient.fetchQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession }));
         }
-        await Promise.race([Promise.allSettled(pending), delay(SETTLE_TIMEOUT_MS)]);
+        const settled = await Promise.race([
+          Promise.allSettled(pending).then(() => true),
+          delay(SETTLE_TIMEOUT_MS).then(() => false),
+        ]);
+        // 待ちきれなかった通信の応答は、後から届いてCookieを戻し得る。送らずに失敗にする（利用者が再試行する）。
+        if (!settled) throw new ApiError("network");
         return operation();
       })();
       exclusiveRef.current = run;
@@ -239,11 +250,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const withCsrf = useCallback(
     async <T,>(operation: (csrfToken: string) => Promise<T>): Promise<T> => {
       try {
+        const csrfToken = await currentCsrfToken();
+        // 始めたときの利用者。再送の前に変わっていたら送らない（Aとして始めた操作をBの認証で送らないため）。
+        const startedAs = identityOf(queryClient.getQueryData<Session>(SESSION_QUERY_KEY));
         try {
-          return await operation(await currentCsrfToken());
+          return await operation(csrfToken);
         } catch (error) {
           if (!isProblem(error, "csrf_invalid")) throw error;
           const fresh = await queryClient.fetchQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession, staleTime: 0 });
+          if (identityOf(fresh) !== startedAs) throw error;
           return await operation(fresh.csrf_token);
         }
       } catch (error) {

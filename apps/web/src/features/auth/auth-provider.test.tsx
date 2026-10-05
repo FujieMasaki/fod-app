@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
 
-import { isProblem } from "@/libs/api-client/request";
+import { ApiError, isProblem } from "@/libs/api-client/request";
 import { AuthProvider, useAuth } from "./auth-provider";
 
 // Rails APIの応答（契約の形）をfetchの差し替えで模す。実serverには接続しない。
@@ -364,6 +364,33 @@ describe("logout", () => {
     expect(auth().endReason).toBe("signed_out");
   });
 
+  it("実行中の通信を待ちきれなければ、DELETEを送らずに失敗にする", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const order: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        const key = `${init?.method ?? "GET"} ${path}`;
+        order.push(key);
+        // 応答が返らないまま止まっている保護API
+        if (key === "PATCH /api/v1/dots/a") return new Promise<Response>(() => undefined);
+        if (key === "DELETE /api/v1/session") return new Response(null, { status: 204 });
+        return Response.json(authenticated(USER_A, "t1").body);
+      }),
+    );
+    const { auth } = await renderAndSubscribe();
+
+    void auth().request("/api/v1/dots/a", { method: "PATCH", body: {} });
+    await waitFor(() => expect(order).toContain("PATCH /api/v1/dots/a"));
+    const signingOut = auth().signOut().catch((e: unknown) => e);
+    await act(() => vi.advanceTimersByTimeAsync(10_500));
+
+    expect(await signingOut).toBeInstanceOf(ApiError);
+    expect(order).not.toContain("DELETE /api/v1/session");
+    expect(auth().status).toBe("authenticated");
+    expect(auth().endReason).toBeNull();
+  });
+
   it("実行中の保護APIの応答を受け取ってからDELETEを送り、logout中に始めた保護APIは後で送る", async () => {
     const order: string[] = [];
     let releaseApi: (response: Response) => void = () => undefined;
@@ -479,6 +506,21 @@ describe("後続の機能が使う入口", () => {
     await auth().request("/api/v1/dots/x", { method: "PATCH", body: {} });
 
     expect(calls.filter((c) => c.key === "PATCH /api/v1/dots/x").map((c) => c.csrf)).toEqual(["old", "new"]);
+  });
+
+  it("csrf_invalidの後に利用者が変わっていたら再送しない", async () => {
+    const calls = mockApi({
+      "GET /api/v1/session": [authenticated(USER_A, "csrf-A"), authenticated(USER_B, "csrf-B")],
+      "POST /api/v1/recording_attempts": [problem(403, "csrf_invalid")],
+    });
+    const { auth } = await renderAndSubscribe();
+
+    const error = await auth()
+      .request("/api/v1/recording_attempts", { method: "POST", body: {} })
+      .catch((e: unknown) => e);
+
+    expect(isProblem(error, "csrf_invalid")).toBe(true);
+    expect(calls.filter((c) => c.key === "POST /api/v1/recording_attempts").map((c) => c.csrf)).toEqual(["csrf-A"]);
   });
 
   it("Googleへ遷移する前に、前の利用者の個人データを消すよう通知する", async () => {
