@@ -3,9 +3,10 @@ import { Navigate, useLocation } from "@tanstack/react-router";
 
 import { ErrorState } from "@/components/error-state/error-state";
 import { Spinner, Text } from "@/design-system";
-import { useQueryClient, type QueryState } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryState } from "@tanstack/react-query";
 
 import type { Session } from "@/libs/api-contract/schemas";
+import { getSession } from "../api";
 import { SESSION_QUERY_KEY, useAuth } from "../auth-provider";
 import { safeRedirect } from "../redirect";
 
@@ -26,12 +27,19 @@ type RequireAuthProps = {
   startsOnEnter?: boolean;
 };
 
-// 確かめ直しが終わった時点のqueryの状態から、中身を出してよいかを決める。
-function verdictOf(state: QueryState<Session> | undefined): "verified" | "anonymous" | "unconfirmed" {
-  // offlineでは取り直しが一時停止（paused）したまま、refreshはすぐに返る。cacheで判断しない。
-  if (!state || state.fetchStatus !== "idle" || state.status !== "success" || !state.data) return "unconfirmed";
+type SessionQueryState = Pick<QueryState<Session>, "status" | "fetchStatus" | "data">;
+
+// sessionのqueryの今の状態から、副作用を始める画面の中身を出してよいかを決める。
+// - ok: serverが認証済み（退会中でない）と返している
+// - anonymous: 未認証と返している
+// - lost: 取得に失敗した・退会中
+// - busy: 取得中・offlineで一時停止中（まだ分からない）
+function liveVerdictOf(state: SessionQueryState | undefined): "ok" | "anonymous" | "lost" | "busy" {
+  if (!state || state.fetchStatus !== "idle") return "busy";
+  if (state.status === "error") return "lost";
+  if (!state.data) return "busy";
   if (!state.data.authenticated) return "anonymous";
-  return state.data.account_status === "active" ? "verified" : "unconfirmed";
+  return state.data.account_status === "active" ? "ok" : "lost";
 }
 
 // 副作用を始める画面で、入るときの確かめ直しを待つ上限。offlineで取り直しが止まったまま、回線が戻った
@@ -39,66 +47,73 @@ function verdictOf(state: QueryState<Session> | undefined): "verified" | "anonym
 const VERIFY_TIMEOUT_MS = 10_000;
 
 export function RequireAuth({ children, startsOnEnter = false }: RequireAuthProps) {
-  const { status, endReason, refresh } = useAuth();
+  if (startsOnEnter) return <EntryVerifiedGuard>{children}</EntryVerifiedGuard>;
+  return <SessionGuard>{children}</SessionGuard>;
+}
+
+/**
+ * 副作用を始める画面のguard。contextの状態はTanStack Queryの通知が届くまで前の値のことがあるため、使わない。
+ * sessionのqueryの今の状態を、取得しない観測者（enabled: false）で購読して判断する。
+ */
+function EntryVerifiedGuard({ children }: { children: ReactNode }) {
+  const { refresh } = useAuth();
   const queryClient = useQueryClient();
-  const { pathname } = useLocation();
-  // 入るときの確かめ直しの結果（startsOnEnterのとき）。contextのstatusではなく、確かめ直しが終わった時点の
-  // queryの状態から決める（TanStack Queryは描画の通知を遅らせるため、contextはまだ前のcacheの認証済みであり得る）。
-  // - verified: serverが認証済み（退会中でない）と返した
-  // - anonymous: 未認証と返した
-  // - unconfirmed: 失敗した・退会中・offlineで終わらない・待ちきれなかった
-  const [check, setCheck] = useState<"pending" | "verified" | "anonymous" | "unconfirmed">(
-    startsOnEnter ? "pending" : "verified",
-  );
-  // 中身を一度出したか。出した後に認証済みでなくなったときだけ「離れる」と決める。
+  const live = useQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession, enabled: false });
+  // 入るときの確かめ直しの結果。確かめ直しが終わった時点のqueryの状態から決める。
+  const [check, setCheck] = useState<"pending" | "verified" | "anonymous" | "unconfirmed">("pending");
+  // 中身を一度出したか。出した後の取り直しの間は中身を保つ（出し直しで録音・生成が始め直されないように）。
   const shownRef = useRef(false);
   // 一度離れると決めたら、状態が戻っても（画面の遷移が終わる前に戻っても）中身を出し直さない。
   const leftRef = useRef<"login" | "home" | null>(null);
 
   useEffect(() => {
-    if (!startsOnEnter) return;
     let active = true;
     const timer = setTimeout(() => {
       if (active) setCheck((current) => (current === "pending" ? "unconfirmed" : current));
     }, VERIFY_TIMEOUT_MS);
     void refresh().finally(() => {
       if (!active) return;
-      const result = verdictOf(queryClient.getQueryState<Session>(SESSION_QUERY_KEY));
+      // offlineでは取り直しが一時停止（paused）したまま、refreshはすぐに返る。cacheで判断しない。
+      const verdict = liveVerdictOf(queryClient.getQueryState<Session>(SESSION_QUERY_KEY));
+      const result = verdict === "ok" ? "verified" : verdict === "anonymous" ? "anonymous" : "unconfirmed";
       setCheck((current) => (current === "pending" ? result : current));
     });
     return () => {
       active = false;
       clearTimeout(timer);
     };
-  }, [startsOnEnter, refresh, queryClient]);
+  }, [refresh, queryClient]);
 
-  if (startsOnEnter && leftRef.current === null) {
-    if (check === "anonymous") {
+  const verdict = liveVerdictOf(live);
+  if (leftRef.current === null) {
+    if (check === "anonymous" || (check === "verified" && verdict === "anonymous")) {
       leftRef.current = "login";
-    } else if (check === "unconfirmed") {
+    } else if (check === "unconfirmed" || (check === "verified" && verdict === "lost")) {
+      // 確かめ直しで認証済みと分からなかった、または中身を出す前後に認証済みでなくなった。後の自動の取り直し
+      // （focus・再接続）で戻っても中身を出さず、利用者がもう一度始める。
       leftRef.current = "home";
-    } else if (check === "verified" && shownRef.current && status !== "authenticated" && status !== "checking") {
-      // 中身を出した後に認証済みでなくなった。後の自動の取り直し（focus・再接続）で戻っても中身を出さず、
-      // 利用者がもう一度始める。
-      leftRef.current = status === "anonymous" ? "login" : "home";
     }
   }
   if (leftRef.current !== null) {
     return leftRef.current === "login" ? <Navigate to="/login" replace /> : <Navigate to="/" replace />;
   }
-  // 確かめ直しで認証済みと分かっても、contextの状態はTanStack Queryの通知が届くまで前の値（unknown・anonymous）
-  // のことがある。中身を出す前なら、追いつくまで待つ（離れたと誤って判断しない）。
-  if (startsOnEnter && (check === "pending" || (check === "verified" && !shownRef.current && status !== "authenticated"))) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Spinner label="ログインの状態を確かめています" />
-      </div>
-    );
+  if (check === "verified" && (verdict === "ok" || (verdict === "busy" && shownRef.current))) {
+    shownRef.current = true;
+    return children;
   }
+  return (
+    <div className="flex h-full items-center justify-center">
+      <Spinner label="ログインの状態を確かめています" />
+    </div>
+  );
+}
+
+function SessionGuard({ children }: { children: ReactNode }) {
+  const { status, endReason, refresh } = useAuth();
+  const { pathname } = useLocation();
 
   switch (status) {
     case "authenticated":
-      shownRef.current = true;
       return children;
     case "checking":
       return (

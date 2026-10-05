@@ -662,6 +662,37 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     expect(screen.queryByText(/navigate:/)).not.toBeInTheDocument();
   });
 
+  it("中身を出した後に別タブでlogoutされたら、中身を出し直さずログインへ移る", async () => {
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        getCount += 1;
+        return Response.json(getCount <= 2 ? signedIn.body : anonymous.body);
+      }),
+    );
+    mounted.count = 0;
+    renderWithAuth(
+      <Toggle>
+        <RequireAuth startsOnEnter>
+          <CountingScreen />
+        </RequireAuth>
+      </Toggle>,
+    );
+    await waitFor(() => expect(getCount).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.click(screen.getByRole("button", { name: "enter" }));
+    await screen.findByText("録音画面");
+
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
+    expect(mounted.count).toBe(1);
+  });
+
   it("確かめ直して認証済みなら中身を出す", async () => {
     const requests = mockApi({ "GET /api/v1/session": [signedIn] });
     renderWithAuth(
