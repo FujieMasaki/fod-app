@@ -56,6 +56,22 @@ const eslintConfig = defineConfig([
     files: ["apps/web/**/*.{ts,tsx}"],
     rules: {
       "func-style": ["error", "expression"],
+      // func-styleは`const f = function () {}`（関数式）を通すため、arrow functionに限る。classとobjectの
+      // methodの形（`start() {}`）は関数式として表されるため除く。
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "FunctionExpression:not(MethodDefinition > FunctionExpression):not(Property[method=true] > FunctionExpression)",
+          message: "関数はarrow functionで書きます（docs/development/frontend.md §1）。",
+        },
+        {
+          // const + arrow functionの関数も、function宣言のときと同じくcamelCase・PascalCaseにする
+          // （naming-conventionのvariableはUPPER_CASEを許すため。typesによる判定は型情報が要る）
+          selector: "VariableDeclarator[init.type='ArrowFunctionExpression'][id.name=/^[A-Z][A-Z0-9]*_[A-Z0-9_]*$/]",
+          message: "関数名はcamelCaseかPascalCaseにします。",
+        },
+      ],
     },
   },
   {

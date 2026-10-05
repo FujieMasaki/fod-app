@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { z } from "zod";
 
 import { ApiError, apiRequest, isProblem } from "./request";
@@ -116,5 +116,20 @@ describe("apiRequest", () => {
     const error = await apiRequest("/x").catch((e: unknown) => e);
     expect((error as ApiError).kind).toBe("network");
     expect((error as ApiError).message).toBe("api_network");
+  });
+});
+
+describe("apiRequestの型", () => {
+  // 呼び出しの型だけを確かめる（実行はしない）。型検査（tsc）で失敗する。
+  it("schemaを渡したときだけ本文の型を返し、渡さないときは本文を返さない", () => {
+    const typeOnly = async () => {
+      const schema = z.object({ id: z.string() });
+      expectTypeOf(apiRequest("/api/v1/session", { schema })).toEqualTypeOf<Promise<{ id: string }>>();
+      expectTypeOf(apiRequest("/api/v1/session")).toEqualTypeOf<Promise<void>>();
+      // @ts-expect-error schemaを渡さない結果は、本文として使えない
+      const body: { id: string } = await apiRequest("/api/v1/session");
+      return body;
+    };
+    expect(typeof typeOnly).toBe("function");
   });
 });
