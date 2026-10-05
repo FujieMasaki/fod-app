@@ -71,7 +71,10 @@ RSpec.describe Dot do
       expect(build(:dot, sentence: "", summary: "")).to be_valid
       expect(build(:dot, sentence: "あ" * 201)).not_to be_valid
       expect(build(:dot, summary: "あ" * 2001)).not_to be_valid
-      expect(build(:dot, sentence: nil)).not_to be_valid
+    end
+
+    it "sentenceとsummaryはnilにできない" do
+      expect([build(:dot, sentence: nil).valid?, build(:dot, summary: nil).valid?]).to eq([false, false])
     end
 
     it "durationは1〜1800秒の整数" do
@@ -102,6 +105,26 @@ RSpec.describe Dot do
       described_class.where(id: dot.id).update_all(started_at: Time.zone.parse("2026-09-27 15:00:00 UTC")) # rubocop:disable Rails/SkipsModelValidations
 
       expect(dot.reload.date).to eq(Date.new(2026, 9, 28))
+    end
+  end
+
+  describe "ログ" do
+    let(:log) { StringIO.new }
+
+    around do |example|
+      logger = ActiveSupport::Logger.new(log)
+      Rails.logger.broadcast_to(logger)
+      example.run
+    ensure
+      Rails.logger.stop_broadcasting_to(logger)
+    end
+
+    it "保存・更新のSQLのログにDotの本文を出さない" do
+      dot = create(:dot, sentence: "ログに出したくない一文", summary: "ログに出したくない要約")
+      dot.update!(sentence: "直したあとの一文")
+
+      expect(log.string).to include("[FILTERED]")
+      expect(log.string).not_to include("ログに出したくない", "直したあとの一文")
     end
   end
 
