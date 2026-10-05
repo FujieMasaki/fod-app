@@ -289,6 +289,13 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
   従う。`started_at`はserverがattemptごとにマイクロ秒で決めるため、同値はほぼ起きず、起きても
   並びは決定的（cursorで欠落・重複しない）である。
 - **ゴミ箱のendpointも本タスクで作る**: TASK-013の作業範囲に明記されているため作らない。
+- **件数・最新のDotを取るSQLをServiceに直接書く**: 最初は`TodaySummary`に`COUNT(*) OVER ()`、`DayList`に
+  `array_agg(...)`の文字列を置いていたが、どの行をどう取るかはmodelの責務なので、`Dot`のscope
+  （`with_total_count`・`by_day`）と`pluck_day_summaries`へ移した（2026-10-05に人間が判断）。「今日」の判定と
+  Dayのresponseの形はServiceに残す。
+- **`duration_seconds`を持たない**: 画面での使い道はまだ決まっていないが、外すと契約（TASK-005）の変更になり、
+  音声を消した後では値を復元できない。持つ負担も小さいため、持ち続ける（2026-10-05に人間が判断）。使い道は
+  TASK-012で決める。
 
 ## 13. Risks / Things to Watch
 
