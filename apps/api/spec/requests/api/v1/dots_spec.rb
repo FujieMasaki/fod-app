@@ -8,6 +8,16 @@ RSpec.describe "Dots" do
 
   def field_errors = response.parsed_body["errors"]
 
+  def captured_log
+    log = StringIO.new
+    logger = ActiveSupport::Logger.new(log, level: :debug)
+    Rails.logger.broadcast_to(logger)
+    yield
+    log.string
+  ensure
+    Rails.logger.stop_broadcasting_to(logger)
+  end
+
   describe "PATCH /api/v1/dots/{dot_id}" do
     context "without login" do
       it "401 unauthenticated" do
@@ -136,20 +146,20 @@ RSpec.describe "Dots" do
         assert_response_schema_confirm(422)
       end
 
-      it "壊れたJSONの本文をdebugのログにも出さない" do
-        log = StringIO.new
-        logger = ActiveSupport::Logger.new(log, level: :debug)
-        Rails.logger.broadcast_to(logger)
-        begin
+      # 壊れたJSON・不正なUTF-8（生の不正なbyte列、対のない下位のsurrogate）。Railsの既定では、生のbodyが
+      # debugのログへ、本文を含む例外のmessageがerrorのログへ出る（config/initializers/json_request_body.rb）。
+      it "解析できないbodyは422 invalid_formatにし、本文をdebugのログにも出さない" do
+        [%({"sentence":"ログに出したくない一文"), %({"sentence":"ログに出したくない一文\xff"}).b,
+         %({"sentence":"ログに出したくない一文\\udc00"}), %({"ログに出したくない一文\\udc00":"x"})].each do |body|
           headers = { "CONTENT_TYPE" => "application/json", "X-CSRF-Token" => csrf_token }
-          patch "/api/v1/dots/#{dot.id}", params: %({"sentence":"ログに出したくない一文"), headers:
-        ensure
-          Rails.logger.stop_broadcasting_to(logger)
-        end
+          log = captured_log { patch "/api/v1/dots/#{dot.id}", params: body, headers: }
 
-        expect(response).to have_http_status(:unprocessable_content)
-        expect(log.string).to include("Error occurred while parsing request parameters")
-        expect(log.string).not_to include("ログに出したくない一文")
+          expect(field_errors).to eq([{ "field" => "body", "code" => "invalid_format" }]), body.inspect
+          assert_response_schema_confirm(422)
+          expect(log).to include("Error occurred while parsing request parameters")
+          expect(log).not_to include("ログに出したくない一文"), body.inspect
+        end
+        expect(dot.reload.sentence).to eq("元の一文")
       end
 
       it "編集した内容は履歴の取得にも反映される" do
