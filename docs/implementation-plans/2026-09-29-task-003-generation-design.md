@@ -1388,7 +1388,7 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 | 1 | 入力を学習・モデル改善に使わないこと | Transcribe: AWS OrganizationsのAI services opt-out policyを適用し、effective policyを照会。Bedrock: モデルの data retention mode | **要対応。**§18のとおり、Transcribeは**既定ではopt-inのまま**。設定しない限り改善に使われ得る |
 | 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）と**保持データの所在リージョン**、Transcribeのjob記録の保持 | Bedrockは**未確認**。既定でゼロデータ保持と説明されるが、**モデルにより保持必須のものがある**。保持ありを選ぶなら**所在リージョンの確認が必須**（§18必須条件3）。**Transcribeのjob記録は各リージョンで90日保持（調整不可）**で、[endpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)に記載があり**確認済み**。`privacy.md §5-1`は`DeleteTranscriptionJob`で消す設計なので矛盾しない |
 | 3 | 処理・保存のリージョン。越境する場合の手続き | Bedrockの In-Region / Geo / Global の別。Transcribeのopt-out前の保存先 | **方針は2026-10-03に決定済み**（`architecture.md`「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」）。**手続きは未確認。委託であっても「外国にある第三者への提供」には別の規律がかかる整理があり、同意の取得または移転先の体制整備と本人への情報提供が必要になり得る**（TASK-017）。**確認が済むまでは国内に収まる経路で運用する**（範囲の定義は`architecture.md`「データ所在地と費用」）。opt-outしない限りTranscribeも利用リージョン外へ保存され得る |
-| 4 | 人によるレビューの有無と条件 | Bedrockの `aws_review` モードの要否、abuse detectionの条件 | 未確認。**モデルによってはAWSによる人的レビューが必須**になり得る |
+| 4 | 人によるレビューの有無と条件、**その実施地とアクセス経路** | Bedrockの `aws_review` モードの要否、abuse detectionの条件、**レビューをどこから行うか**、**prompt cache等の滞留先** | 未確認。**モデルによってはAWSによる人的レビューが必須**になり得る。**`architecture.md`「データ所在地と費用」が求める「誰がどこから閲覧し得るか」の確認はここで行う**（実施地が国外なら、保存が国内でも要求に反する）。cacheの滞留先も同じ理由で含める |
 | 5 | サブプロセッサの開示 | AWSのサブプロセッサ一覧 | 未確認 |
 | 6 | 委託契約（DPA相当）を結べること | AWS DPA（Service Termsへ組み込み済み・自動適用） | **確認済み。**別途の締結を要しない。ただし**日本の個人情報保護法上の委託先としての評価は自分たちで行う** |
 | 7 | 事故発生時の通知義務と期限 | AWS DPAの該当条項 | 未確認。TASK-017の漏えい対応と接続する |
@@ -1400,7 +1400,7 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 | 対象 | 確認すること | 現状 |
 | --- | --- | --- |
 | Transcribeの文字起こし結果 | `OutputBucketName`が実際に効いて自前bucketへ出ること、service-managed bucketへ出ていないこと | **§27で自前bucketへ置くと決めた。**設定が効いていることの確認はTASK-009/015 |
-| Transcribeのjob記録 | 出力objectと別に残るjob自体の記録の保持期間と、`DeleteTranscriptionJob`で消える範囲 | 未確認。**objectを消してもjobが残る**ため、削除の対象に含めたうえで実際に消えることを確認する |
+| Transcribeのjob記録 | 出力objectと別に残るjob自体の記録の保持期間と、`DeleteTranscriptionJob`で消える範囲 | **保持期間は確認済み**（各リージョンで90日・調整不可。上記の項目2と同じ出典）。**残る未確認は`DeleteTranscriptionJob`で実際に消える範囲。objectを消してもjobが残る**ため、削除の対象に含めたうえで実際に消えることを確認する |
 
 ### 確認の担当と時期
 

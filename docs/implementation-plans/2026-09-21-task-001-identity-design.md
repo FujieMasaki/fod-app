@@ -704,7 +704,7 @@ TASK-001はIn progress、TASK-005/006/007はBlockedを維持する。TASK-002/00
 | 利用者と認可 | 内部User UUIDをDotの所有者にする。Devise/Wardenが確定したcurrent_userのscopeで一覧・詳細・更新・削除。作成時のownerもサーバーが設定 |
 | Google | 検証済みprovider/uidを内部Userへ一意に対応。email一致のみの自動統合は禁止。明示的連携は将来対応 |
 | 対象外 | メールOTP、MFA、passkey、運営者の手動復旧。端末別失効・全端末logout用DB sessionは保留 |
-| 維持 | ALB + ECS Fargate + RDS PostgreSQL東京、初期1タスク・Single-AZ、React同梱・同一origin、東京基本配置、国内限定を約束しない方針、既存予算と費用監視 |
+| 維持 | ALB + ECS Fargate + RDS PostgreSQL東京、初期1タスク・Single-AZ、React同梱・同一origin、所在地方針（当時は東京基本配置。現行は`architecture.md`「データ所在地と費用」が正本）、国内限定を約束しない方針、既存予算と費用監視 |
 
 Cognito用OIDC callback、Cognito token検証、Cognito固有identity対応は現行設計から削除する。Google認証からRailsへ戻る**OmniAuth callbackは引き続き必要**。旧Cognito callbackを流用する決定でも、Googleの認証検証を省略する決定でもない。
 
