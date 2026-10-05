@@ -326,8 +326,11 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
   loginしたのに未認証になる）。そのため次のようにする。
   - login・logoutの間は、取り直し（focus・再接続・期限のtimer）を始めない。`request`・`withCsrf`で新しく
     始める通信は、login・logoutが終わるまで待たせる。
-  - login・logoutは、実行中の取り直しと`request`・`withCsrf`の応答を受け取ってから送る（offlineで止まった
-    通信を待ち続けないよう、待つのは10秒まで）。重なって呼ばれたら順に実行する。
+  - login・logoutは、実行中の取り直しと`request`・`withCsrf`の応答を受け取ってから送る。重なって呼ばれたら
+    順に実行する。offlineで止まった通信を待ち続けないよう、10秒で待ちきれなければ送らずに失敗にする
+    （待ちきれなかった通信の応答が後から届くと、logoutの確認の後でもCookieを戻し得るため）。
+- **CSRF tokenの取り直しの後の再送**: `csrf_invalid`の後に取り直したSessionの利用者が、始めたときと違えば
+  再送しない（Aとして始めた操作をBの認証で送らないため。journaling §4の「別Userへ元の録音を送信しない」）。
   - logoutの後はserverに確かめ、まだ認証済みなら1回だけ送り直し、それでも残れば失敗にする。
   - 別タブの通信と、`request`を通さない`fetch`は止められないため、完全には防げない（その場合も、logoutの
     確認で失敗として示す）。後続の機能はRails APIを必ず`request`・`withCsrf`から呼ぶ（frontend.md §2）。
