@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import { AuthProvider, useAuth } from "../auth-provider";
@@ -60,6 +60,7 @@ beforeEach(() => {
 
 afterEach(() => {
   focusManager.setFocused(undefined);
+  onlineManager.setOnline(true);
   vi.unstubAllGlobals();
 });
 
@@ -324,6 +325,103 @@ describe("PasswordResetScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
 
     expect(await screen.findByText("status:anonymous")).toBeInTheDocument();
+  });
+
+  it("再設定の直後にofflineになっても、認証済みを残さない", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        if (path === "/api/v1/session") {
+          return Response.json({
+            authenticated: true,
+            csrf_token: "t1",
+            expires_at: "2099-01-01T00:00:00Z",
+            account_status: "active",
+            user: {
+              id: "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10",
+              email: "a@example.com",
+              email_confirmed: true,
+              sign_in_methods: ["password"],
+            },
+          });
+        }
+        if (init?.method === "PATCH" && path === "/api/v1/password") {
+          // 応答の直後に回線が切れ、取り直しは一時停止する
+          onlineManager.setOnline(false);
+          return new Response(null, { status: 204 });
+        }
+        throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
+      }),
+    );
+    function StatusProbe() {
+      return <p>{`status:${useAuth().status}`}</p>;
+    }
+    openLink("/password/reset", "reset-token");
+    renderScreen(
+      <>
+        <PasswordResetScreen />
+        <StatusProbe />
+      </>,
+    );
+    await screen.findByText("status:authenticated");
+
+    fireEvent.change(screen.getByLabelText("新しいパスワード"), { target: { value: "new-password-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
+
+    expect(await screen.findByText("パスワードを再設定しました")).toBeInTheDocument();
+    expect(screen.getByText("status:anonymous")).toBeInTheDocument();
+  });
+
+  it("再設定を受け付けなかった（入力の誤り）ときは、認証済みのままにする", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        if (path === "/api/v1/session") {
+          return Response.json({
+            authenticated: true,
+            csrf_token: "t1",
+            expires_at: "2099-01-01T00:00:00Z",
+            account_status: "active",
+            user: {
+              id: "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10",
+              email: "a@example.com",
+              email_confirmed: true,
+              sign_in_methods: ["password"],
+            },
+          });
+        }
+        if (init?.method === "PATCH" && path === "/api/v1/password") {
+          return Response.json(
+            {
+              type: "urn:focus-on-dot:problem:validation_failed",
+              title: "x",
+              status: 422,
+              code: "validation_failed",
+              errors: [{ field: "password", code: "out_of_range" }],
+            },
+            { status: 422, headers: { "Content-Type": "application/problem+json" } },
+          );
+        }
+        throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
+      }),
+    );
+    function StatusProbe() {
+      return <p>{`status:${useAuth().status}`}</p>;
+    }
+    openLink("/password/reset", "reset-token");
+    renderScreen(
+      <>
+        <PasswordResetScreen />
+        <StatusProbe />
+      </>,
+    );
+    await screen.findByText("status:authenticated");
+
+    fireEvent.change(screen.getByLabelText("新しいパスワード"), { target: { value: "short" } });
+    fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
+
+    expect(await screen.findByText("8文字以上で入力してください。")).toBeInTheDocument();
+    expect(screen.getByText("status:authenticated")).toBeInTheDocument();
   });
 
   it("passwordが短ければ項目に示す", async () => {

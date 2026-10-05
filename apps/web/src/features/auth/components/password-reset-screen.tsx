@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/design-system";
-import { isProblem } from "@/libs/api-client/request";
+import { ApiError, isProblem } from "@/libs/api-client/request";
+import type { Session } from "@/libs/api-contract/schemas";
 import { resetPassword } from "../api";
-import { useAuth } from "../auth-provider";
+import { SESSION_QUERY_KEY, useAuth } from "../auth-provider";
 import { errorMessage, fieldErrors, needsReload } from "../messages";
 import { useFragmentToken } from "../use-fragment-token";
 import { AuthScreen, FormMessage, ReloadNotice, TextField, TextLink } from "./auth-layout";
@@ -20,16 +22,23 @@ const TOKEN_MESSAGES = {
 export function PasswordResetScreen() {
   const token = useFragmentToken();
   const { withCsrf, refresh } = useAuth();
+  const queryClient = useQueryClient();
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState(false);
 
-  // 再設定でserverは既存のCookieを無効にする。login中だった場合に古い認証済みが残らないよう、送った後は成否に
-  // かかわらず取り直す（取り直しの失敗は再設定の成否に関わらないため、案内は出す）。refreshは実行中の取得を
-  // 共有するため、1回目で再設定の前に始まった取得を終わらせ、2回目で再設定の後に始まる取得の結果を置く。
-  async function refreshAfterReset() {
+  // 再設定でserverは既存のCookieを無効にする。login中だった場合に古い認証済みが残らないよう、再設定が済んだ
+  // かもしれないとき（成功・応答を失った・再試行がtoken_invalid）は、serverの応答を待たずに未認証として置き、
+  // 個人データを消す（取り直しがofflineで止まっても残さない）。そのうえで取り直してserverの状態に合わせる。
+  // refreshは実行中の取得を共有するため、先に再設定の前に始まった取得を終わらせ（後から認証済みで上書き
+  // されないように）、置いた後に始まる取得の結果を最後に置く。取り直しの失敗は再設定の成否に関わらない。
+  async function endSessionAfterReset() {
     await refresh().catch(() => undefined);
+    const current = queryClient.getQueryData<Session>(SESSION_QUERY_KEY);
+    if (current?.authenticated) {
+      queryClient.setQueryData<Session>(SESSION_QUERY_KEY, { authenticated: false, csrf_token: current.csrf_token });
+    }
     await refresh().catch(() => undefined);
   }
 
@@ -40,11 +49,13 @@ export function PasswordResetScreen() {
     setError(null);
     try {
       await withCsrf((csrfToken) => resetPassword(csrfToken, token, password));
-      await refreshAfterReset();
+      await endSessionAfterReset();
       setDone(true);
     } catch (caught) {
       // 失敗に見えても、serverでは済んでいることがある（応答だけを失った、再試行がtoken_invalidになった）。
-      await refreshAfterReset();
+      if ((caught instanceof ApiError && caught.kind === "network") || isProblem(caught, "token_invalid")) {
+        await endSessionAfterReset();
+      }
       setError(caught);
     } finally {
       setSubmitting(false);
