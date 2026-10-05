@@ -416,6 +416,52 @@ describe("logout", () => {
     expect(onIdentityChange).toHaveBeenCalled();
   });
 
+  // 振る舞いの確認。TanStack Queryは描画の通知をsetTimeoutで遅らせるため、今の実装では先に理由を置かなくても
+  // 通るが、通知の時機に依らないよう、実装は確かめる取り直しの前に理由を置いている。
+  it("未認証になった最初の描画で、理由が既にlogoutになっている（保護する画面が戻り先を判断できるように）", async () => {
+    mockApi({
+      "GET /api/v1/session": [authenticated(USER_A, "t1"), anonymous("t2")],
+      "DELETE /api/v1/session": [{ status: 204 }],
+    });
+    const seen: { status: string; endReason: string | null }[] = [];
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let current: ReturnType<typeof useAuth> | null = null;
+    function Recorder() {
+      const auth = useAuth();
+      current = auth;
+      seen.push({ status: auth.status, endReason: auth.endReason });
+      return null;
+    }
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <Recorder />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(current!.status).toBe("authenticated"));
+
+    await act(() => current!.signOut());
+
+    const anonymousRenders = seen.filter((r) => r.status === "anonymous");
+    expect(anonymousRenders.length).toBeGreaterThan(0);
+    expect(anonymousRenders.every((r) => r.endReason === "signed_out")).toBe(true);
+  });
+
+  it("案内し終えた理由は消せる", async () => {
+    mockApi({
+      "GET /api/v1/session": [authenticated(USER_A, "t1"), anonymous("t2")],
+      "DELETE /api/v1/session": [{ status: 204 }],
+    });
+    const { auth } = await renderAndSubscribe();
+    await act(() => auth().signOut());
+    expect(auth().endReason).toBe("signed_out");
+
+    act(() => auth().acknowledgeEndReason());
+
+    expect(auth().endReason).toBeNull();
+  });
+
   it("失敗したら投げ、個人データは消すがlogin中のままにする", async () => {
     mockApi({
       "GET /api/v1/session": [authenticated(USER_A, "t1")],
