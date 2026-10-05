@@ -51,6 +51,14 @@ const eslintConfig = defineConfig([
     },
   },
   {
+    // Webの関数は、Component・hook・補助関数も含めて const + arrow functionで書く（2026-10-05に決定、
+    // docs/development/frontend.md）。混在させないためlintで固定する。
+    files: ["apps/web/**/*.{ts,tsx}"],
+    rules: {
+      "func-style": ["error", "expression"],
+    },
+  },
+  {
     files: ["scripts/**/*.mjs", "*.config.{js,mjs,ts}"],
     languageOptions: {
       globals: { ...globals.node, ...globals.browser },

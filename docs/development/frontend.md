@@ -23,6 +23,9 @@
   移さない。
 - 外部から来るAPIレスポンス、`localStorage`値、URL由来の値は、使用前にZodなど既存のschemaで
   検証する。検証できない値は表示・保存しない。
+- 関数は、Component・Hook・補助関数・Component内のhandlerも含めて`const`＋arrow functionで書き、
+  `function`宣言を使わない（2026-10-05に決定。ESLintの`func-style`で固定）。overloadが要る関数は、
+  overloadを持つ関数型を`const`に付ける（`libs/api-client/request.ts`の`apiRequest`）。
 
 ### 推奨
 
