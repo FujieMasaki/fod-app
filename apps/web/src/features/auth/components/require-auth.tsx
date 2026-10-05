@@ -7,8 +7,10 @@ import { useQuery, useQueryClient, type QueryState } from "@tanstack/react-query
 
 import type { Session } from "@/libs/api-contract/schemas";
 import { getSession } from "../api";
+import { needsReload } from "../messages";
 import { SESSION_QUERY_KEY, useAuth } from "../auth-provider";
 import { safeRedirect } from "../redirect";
+import { ReloadNotice } from "./auth-layout";
 
 /**
  * 本人の録音・Dotを扱う画面のguard。serverで認証を確かめるまで中身を表示しない。
@@ -137,6 +139,8 @@ function EntryVerifiedGuard({ children }: { children: ReactNode }) {
 function SessionGuard({ children }: { children: ReactNode }) {
   const { status, endReason, refresh } = useAuth();
   const { pathname } = useLocation();
+  // 取得の失敗の種類を見るだけの観測者（取得はしない）。schemaに合わない応答は古いタブの可能性がある。
+  const { error } = useQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession, enabled: false });
 
   switch (status) {
     case "authenticated":
@@ -148,6 +152,14 @@ function SessionGuard({ children }: { children: ReactNode }) {
         </div>
       );
     case "unknown":
+      // 再試行しても直らないため、再読み込みを案内する（frontend.md「schema不正」）。
+      if (needsReload(error)) {
+        return (
+          <div className="flex h-full flex-col justify-center">
+            <ReloadNotice />
+          </div>
+        );
+      }
       return (
         <ErrorState
           title="ログインの状態を確かめられませんでした。"

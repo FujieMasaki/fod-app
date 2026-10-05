@@ -133,12 +133,34 @@ describe("RequireAuth", () => {
     expect(await screen.findByText("本人の画面")).toBeInTheDocument();
   });
 
+  it("sessionの応答がschemaに合わなければ、再試行ではなく再読み込みを案内する", async () => {
+    mockApi({ "GET /api/v1/session": [{ status: 200, body: { authenticated: true } }] });
+    renderWithAuth(<RequireAuth>本人の画面</RequireAuth>);
+
+    expect(await screen.findByRole("button", { name: "再読み込み" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "もう一度" })).not.toBeInTheDocument();
+    expect(screen.queryByText("本人の画面")).not.toBeInTheDocument();
+  });
+
   it("退会の手続き中は本人の画面を開かない", async () => {
     mockApi({ "GET /api/v1/session": [{ ...signedIn, body: { ...signedIn.body, account_status: "deletion_in_progress" } }] });
     renderWithAuth(<RequireAuth>本人の画面</RequireAuth>);
 
     expect(await screen.findByText("退会の手続き中です")).toBeInTheDocument();
     expect(screen.queryByText("本人の画面")).not.toBeInTheDocument();
+  });
+});
+
+describe("パスワードの入力欄", () => {
+  // HTMLのmaxLengthはUTF-16の単位で数え、Railsは文字の単位で数えるため、補助文字を含む有効なパスワードを切り詰める。
+  it("ログイン・新規登録のパスワードの欄は、文字数をHTMLで制限しない", async () => {
+    mockApi({ "GET /api/v1/session": [anonymous] });
+    const { unmount } = renderWithAuth(<SignInScreen redirect="/" />);
+    expect(await screen.findByLabelText("パスワード")).not.toHaveAttribute("maxlength");
+    unmount();
+
+    renderWithAuth(<SignUpScreen />);
+    expect(await screen.findByLabelText(/^パスワード/)).not.toHaveAttribute("maxlength");
   });
 });
 

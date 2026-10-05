@@ -119,7 +119,6 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
           name="password"
           autoComplete="current-password"
           required
-          maxLength={128}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           error={fields.password}
