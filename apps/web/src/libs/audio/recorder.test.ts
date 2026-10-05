@@ -72,4 +72,16 @@ describe("createRecorder", () => {
     expect(await starting).toBe("silent");
     expect(stopTrack).toHaveBeenCalled();
   });
+
+  it("許可を待っている間に止めたら、許可の後にマイクのstreamを止めて録音を始めない", async () => {
+    const { stopTrack, grantPermission } = stubMicrophone();
+    const recorder = createRecorder();
+
+    const starting = recorder.start();
+    await recorder.stop();
+    grantPermission();
+
+    expect(await starting).toBe("silent");
+    expect(stopTrack).toHaveBeenCalled();
+  });
 });
