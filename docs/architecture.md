@@ -16,8 +16,11 @@
 - 録音処理はブラウザのMediaDevices / MediaRecorder APIを利用する。
 - Frontendのbuild、test、型検査設定とweb固有dependencyは `apps/web/` が管理する。
 - `apps/api/` はRuby on RailsのAPI backendである。現在実装済みなのはRails基盤、
-  PostgreSQL接続、RSpec、品質・security検査、CIまでである。
-- `apps/api/` の公開APIは将来 `/api/v1` namespaceに追加する。
+  PostgreSQL接続、RSpec、品質・security検査、CIに加え、認証（TASK-006。下記「認証詳細」）と、
+  Dotの保存先（`dots`）・Day・日単位の一覧・日の詳細の取得・`sentence`/`summary`の編集のAPI
+  （TASK-008。`app/controllers/api/v1/days_controller.rb`・`dots_controller.rb`）である。Webはまだ
+  これらに接続していない。
+- `apps/api/` の公開APIは `/api/v1` namespaceに置く（OmniAuthの開始・callbackだけ`/auth/...`）。
 - repository全体のコマンド、ESLint、Lefthook、命名チェック、CI、開発文書はrootが管理する。
 - Claude Codeの共有設定（`.claude/settings.json`のhook・permission、`.claude/skills/`）と、hookが
   呼ぶ`scripts/claude-*.mjs`・`scripts/task-status.mjs`、毎朝タスクを起動する`scripts/task-scheduler.*`も
@@ -30,7 +33,8 @@
 - FrontendとBackendは同じrepositoryで管理する。
 - アプリケーション機能としてのAI処理はBackend側に置く。
 - 開発支援AIに関する指示・文書・workflowはroot、`docs/`、`.github/` 側で管理する。
-- User、認証、Dot、音声、AI処理は将来の変更で実装する。
+- 音声、AI処理、Dotを作る入口（TASK-009）、ゴミ箱・削除の操作（TASK-013）は将来の変更で実装する
+  （User・認証はTASK-006、Dotの保存先と取得・編集はTASK-008で実装した）。
 - **API契約の正本は手書きのOpenAPI（[`contracts/openapi.yaml`](../contracts/openapi.yaml)）とする**
   （2026-10-01にTASK-005で採用）。契約を実装より先に人が決め、WebとAPIがそれに合わせる。
   コードから契約を生成する方式（バックエンドを正にする）は採らない。
@@ -41,6 +45,12 @@
   - APIはコードを生成せず手で書き、request specでresponseを契約と照合する（committee-rails）。
   - 契約のexamplesを、WebのZodとAPIの検証器の両方で読み、同じ意味で解釈することを確かめる。
   - 運用・error code・互換性の規則は[`contracts/README.md`](../contracts/README.md)。
+- **`/api/`のrequest bodyは`application/json`だけを受け付ける**（2026-10-05にTASK-008で採用）。それ以外の
+  Content-Typeは、Railsがbodyを解析する前に`422 body invalid_format`で拒否し、paramsを解釈できない
+  requestも`422`のProblemで返す（`apps/api/lib/middleware/api_request_guard.rb`）。Railsの既定では、
+  不正なUTF-8の値から本文を含む例外のmessageがerrorのログに残り、Problem形式でない`400`になるため。
+  JSON以外を受け取るendpoint（TASK-009の`POST /api/v1/dots`のmultipart）は、同ファイルの一覧で個別に
+  許す。契約には`415`を足さず、既存の`422 invalid_format`に寄せた。
 - API、Web、契約は同じPRで更新するか、PRを分ける場合は統合ブランチに集めて、mainへは一度に入れる
   （2026-10-03に分けることを許可。手順は[`contracts/README.md`](../contracts/README.md) §2）。
   同一PRでもWebとAPIのデプロイ時差（古いタブ、deploy中の新旧タスクの併存）があり得るため、1回のreleaseでは両方向で壊れない変更だけを入れ、それ以外は
@@ -177,10 +187,13 @@ Browser（音声は memory のみ。storage へ書かない）
   （2026-09-29に物理削除のみから変更）。**期間と削除の契機は[privacy.md §5](privacy.md)を正本とする。**
 - ゴミ箱の中のDotをDay・一覧・詳細から除外する。**除外は明示的なscopeで行い、暗黙の既定scope
   （`default_scope`等）に頼らない。**暗黙の除外は、ゴミ箱の中身が一覧へ漏れる事故と、逆にゴミ箱が
-  空に見える事故の両方を起こしやすい。実現方法はTASK-008で確定する。
+  空に見える事故の両方を起こしやすい。**2026-10-05にTASK-008で実装した。**`dots.trashed_at`（NULLが
+  ゴミ箱の外）を持ち、取得する場所ごとに`Dot.kept`・`Dot.trashed`のscopeを明示する。履歴の取得は
+  ゴミ箱の外だけの部分索引（`user_id, date, started_at, id`）で引く。ゴミ箱へ移す・戻す操作はTASK-013。
 - **`dots`は`started_at`（定義は[dot-history §2](dot-history.md)。MVPの音声入力では録音開始操作の受理時刻・UTC）を持ち、`date`はそこから算出した
   Asia/Tokyoの暦日と
-  する**（2026-09-29にTASK-004で採用。正本は[dot-history.md](dot-history.md) §2）。作成時刻を日付の
+  する**（2026-09-29にTASK-004で採用。正本は[dot-history.md](dot-history.md) §2）。`date`は
+  `started_at`からDBが算出する生成列にし、`started_at`と食い違う値を書けないようにした（TASK-008）。作成時刻を日付の
   根拠にしない。送信・生成・保存の失敗を24時間以内に再試行しても日付が動かないようにするため。
   `started_at`の定義は[dot-history §2](dot-history.md)を正本とする。**MVPの入力手段は音声だけなので、
   実際には録音開始操作の受理時刻になる。**実際の録音開始操作に対して発行する
@@ -192,8 +205,8 @@ Browser（音声は memory のみ。storage へ書かない）
   決定）。例外として、Dotの完全削除・退会・処理の取り消しの後は、同じattemptで消したものが作り直されないよう、
   attemptの`id`と期限だけを期限まで残す（[privacy.md §5-1](privacy.md)）。一覧の並びと「最新」の判定にも
   `started_at`を使い、同値のときはDotの識別子で決める。
-- **`sentence`と`summary`の更新APIを持つ**（2026-09-29に追加）。`date`・`started_at`・`duration`は
-  更新させない。
+- **`sentence`と`summary`の更新APIを持つ**（2026-09-29に追加。`PATCH /api/v1/dots/{dot_id}`として
+  2026-10-05にTASK-008で実装）。`date`・`started_at`・`duration`は更新させない（送られたら`422`）。
   **アプリは編集前の値を保存しない**（版も履歴も持たない）。消したかった記述が編集履歴に残るのを
   避けるため。ただし**編集より前に取得したbackupには編集前の本文が残る。**「編集前の値はどこにも
   残らない」とは書かない。

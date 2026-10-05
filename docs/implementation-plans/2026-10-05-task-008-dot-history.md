@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中（2026-10-05着手）。
+完了（2026-10-05）。機械のレビューの結果は各サブのPRに記録する。
 
 ## 2. Goal
 
@@ -60,7 +60,40 @@ Dotを作る入口（音声の送信と生成）はTASK-009が作り、本タス
 
 ### 今回確定しない事項
 
-- なし（下記§12の判断はすべて上流の決定から導けるため、人間の判断を求めない）。
+- 着手時点ではなし（下記§12の判断はすべて上流の決定から導けるため）。レビュー中に生じた判断は次のとおり。
+- **判断待ち（2026-10-05、PR 3/3のレビュー中に発生）: JSON以外のbodyと、不正なUTF-8を含むformのbodyの扱い。**
+  - 確認済みの事実（request specの形で再現した）:
+    - `PATCH /api/v1/dots/{dot_id}`は、`Content-Type: application/x-www-form-urlencoded`の`sentence=...`でも
+      `200`で更新する。契約のrequestBodyは`application/json`だけである。認証のendpoint（`JsonParams`の
+      `require_strings`、TASK-006）も同じ作りである。
+    - formの値に不正なUTF-8（`%FF`）があると、Rackのformのparserの後でRailsが本文を含むmessageの
+      `ActionController::BadRequest`を起こす。`rescue_from`の外なのでHTMLの`400`になり、messageが
+      errorのログに残る（本番の既定のlevelでも出る）。JSONのparserの置き換え（`json_request_body.rb`）
+      では塞がらない。
+  - 選択肢:
+    - A: すべてのendpointの共通の入口（Rackのmiddleware）で、bodyを持つrequestのContent-Typeが
+      `application/json`でなければ、bodyを解析する前に`422 body invalid_format`で拒否する。あわせて、
+      paramsのencodingの例外（`ActionDispatch::ParamError`）を捕まえ、messageを出さずにProblemで返す。
+      契約は変えず、TASK-006の認証のendpointも同時に直る。OmniAuthの開始（`/auth/google_oauth2`の
+      POST）を対象から外す扱いが要る。
+    - B: Aと同じだが、Content-Typeの違いは`415`にする。意味は正確だが、契約へ`415`を足す変更になる。
+    - C: TASK-008では直さず、security.md §6に未対策と明記し、横断の修正を別タスクにする。
+  - 推奨: A。契約を変えずに済み、ログへ本文が出る経路を全endpointでまとめて塞げる。
+  - **決定（2026-10-05、人間の判断）: A。**`lib/middleware/api_request_guard.rb`として実装した（§16の実装差異）。
+- **判断待ち（2026-10-05）: PR 3/3のサブエージェントのレビューが、同じ段階で3回LGTMにならなかった（上限）。**
+  - 3回目の指摘（🟡、request specの形で再現した）: `ApiRequestGuard`は正規化前の`request.path`を`/api/`と
+    前方一致で比べる。Railsのrouterは`//`をまとめるため、`PATCH //api/v1/dots/:id`にformのbodyを送ると
+    検査を通らずに`200`で更新される。不正なUTF-8の値なら、塞いだはずの`BadRequest`のログの経路も開く。
+  - 修正案: 比べる前に`ActionDispatch::Journey::Router::Utils.normalize_path`でrouterと同じ正規化をし、
+    前方一致と`NON_JSON_BODIES`の照合の両方に使う。`//api/...`が`422`になるrequest specを足す。
+  - 選択肢: A: 修正案で直し、サブエージェントのレビューを続ける。B: ここで打ち切り、別のタスクで直す。
+  - 推奨: A。直し方は決まっており、塞いだと書いた保証を成り立たせるため。
+  - **決定（2026-10-05、人間の判断）: A。**pathを正規化してから比べるようにし、レビューを続けた（§16の実装差異）。
+- **判断待ち（2026-10-05）: PR 2/3のCodexの最終チェックが実行できなかった。**SQLをscopeへ移した修正
+  （`687aefc`・`6a02563`）の後、サブエージェントのレビューはLGTMになった。Codexは利用上限
+  （`You've hit your usage limit`、16:11以降に再試行できると表示）で失敗した。
+  - 選択肢: A: 上限が戻ってから再実行する。B: 追加のcreditを買う。C: 今回はCodexを省き、人間のレビューで確かめる。
+  - **決定（2026-10-05、人間の判断）: A。**16:13に再実行し、LGTM（`b337dd6`）。
 
 ## 6. References and Documents to Update
 
@@ -289,6 +322,13 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
   従う。`started_at`はserverがattemptごとにマイクロ秒で決めるため、同値はほぼ起きず、起きても
   並びは決定的（cursorで欠落・重複しない）である。
 - **ゴミ箱のendpointも本タスクで作る**: TASK-013の作業範囲に明記されているため作らない。
+- **件数・最新のDotを取るSQLをServiceに直接書く**: 最初は`TodaySummary`に`COUNT(*) OVER ()`、`DayList`に
+  `array_agg(...)`の文字列を置いていたが、どの行をどう取るかはmodelの責務なので、`Dot`のscope
+  （`with_total_count`・`by_day`）と`pluck_day_summaries`へ移した（2026-10-05に人間が判断）。「今日」の判定と
+  Dayのresponseの形はServiceに残す。
+- **`duration_seconds`を持たない**: 画面での使い道はまだ決まっていないが、外すと契約（TASK-005）の変更になり、
+  音声を消した後では値を復元できない。持つ負担も小さいため、持ち続ける（2026-10-05に人間が判断）。使い道は
+  TASK-012で決める。
 
 ## 13. Risks / Things to Watch
 
@@ -346,4 +386,80 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
 
 ## 16. Completion Record
 
-（完了時に記入する）
+- 状態: 2026-10-05に実装と検証を終えた。タスクの完了条件はすべてtestで確かめたため、タスクをDoneにする。
+- 関連: メインのPR #60（統合ブランチ`feat/task-008-dot-history-integration`）と、そこへ向けた3つのサブのPR。
+
+### 実装差異（Planから変えた点と理由）
+
+- **今日の取得もServiceにした（`TodaySummary`）。**件数と最新のDotを別々のqueryで引くと、間にDotが
+  ゴミ箱へ移ったとき「件数はあるのに最新のDotが無い」responseを作り得る。1つのquery（`COUNT(*) OVER ()`）
+  で取る処理をcontrollerに置くと読みにくいため、Serviceに分けた。SQLの部分は`Dot`のscope
+  （`with_total_count`）に置き、Serviceには「今日」の判定とresponseの形への組み立てだけを残す（§12）。
+- **serializerを4つにした**（`DotSerializer`・`DayListSerializer`・`TodaySerializer`・`DayDetailSerializer`）。
+  Zeitwerkは1ファイル1定数のため。PR 2/3のレビュー対象は20ファイル（上限ちょうど）。
+- **`dots`の`user_id`・`generation_id`・`started_at`・`duration_seconds`を`attr_readonly`にし、`date`への
+  代入を拒否した。**生成列は代入しても保存されず、手元の値だけが食い違うため。編集できる項目を
+  modelでも`sentence`と`summary`に限る。
+- **PATCHでParamsWrapperを切った（`wrap_parameters false`）。**Railsの既定でJSONの項目が`dot`に包まれ、
+  `request_parameters`に足されるため、許可しない項目として数えてしまう。JSONのobjectでないbody
+  （配列・文字列）はRailsが`_json`に入れるので、`body`の`invalid_format`にした。
+- **日の詳細のcursorの時刻を、そのcursorの日（Asia/Tokyo）の中に限った。**形式だけを確かめていたため、
+  作り替えたcursorでPostgreSQLのtimestampの範囲を超える時刻を渡すと`500`になっていた（PR 2/3の
+  セルフレビューで発見）。範囲外は`400 cursor_invalid`にし、同じ種類の見落としを拾う観点を
+  `docs/code-review/backend/security.md` §2に足した。
+- **JSONのrequest bodyを、本文をログへ出さずに解析するようにした（`config/initializers/json_request_body.rb`）。**
+  Railsの既定では、(1) 解析の失敗時に生のbodyを`filter_parameters`を通さずdebugのログへ書き、(2) 不正な
+  UTF-8（生の不正なbyte列、対のない`\udc00`）を含むJSONは解析に成功した後、本文を含むmessageの
+  `ActionController::BadRequest`になる。(2)は`rescue_from`の外で起き、Problem形式でない`400`とerrorの
+  ログを出す。Dotの本文（認証のendpointならpassword）が残るため、JSONのparserを置き換えて不正なUTF-8を
+  解析の失敗にし（壊れたJSONと同じ`422 body invalid_format`）、失敗のログからbodyを外した。(1)は
+  PR 3/3のCodexの最終チェック、(2)はその修正後のサブエージェントのレビューで発見した。(1)はRailsの
+  非公開のmethodを置き換えるため、request specで本文が出ないことを固定した。
+- **`/api/`のbodyを`application/json`だけにし、paramsを解釈できないrequestを`422`にした
+  （`lib/middleware/api_request_guard.rb`。§5の判断待ちを人間がAに決めた）。**formのbodyでも更新でき、
+  不正なUTF-8の値で本文を含む`BadRequest`がerrorのログに出ることを、JSONのparserの修正後の
+  サブエージェントのレビューで発見し、再現した。認証のendpoint（TASK-006）も同時に直る。
+  `DebugExceptions`の内側に置き、Railsの`BadRequest`がerrorのログへ出る前に捕まえる。
+  pathはrouterと同じ規則で正規化してから比べる（生のpathでは`//api/...`で迂回できることを、3回目の
+  サブエージェントのレビューで発見し、人間の判断で続けて直した）。paramsを解釈できない場合のfieldは、
+  pathの誤りも含むため`request`にした。
+- **objectでないJSONのbodyを入れる`_json`を`filter_parameters`に足した。**文字列・配列として送った本文が、
+  `422`で拒否しても`Parameters:`のログ（info）に残っていた（PR 3/3のCodexの2回目の最終チェックで発見）。
+  あわせて、`ApiRequestGuard`が`BadRequest`を捕まえる範囲を、コメントのとおり`/api/`に限った。
+- `filter_parameters`は完全一致ではなく部分一致（`%i[sentence summary]`）にした。隠しすぎて困る項目が無いため。
+
+### 検証結果
+
+実行したcommand（`apps/api`、DBは`FOD_DB_SUFFIX=_task_008`の専用DB）:
+
+- `bundle exec rspec` — 419 examples, 0 failures（追加: model 20、service 20、request 44）
+- `bundle exec rubocop` — no offenses
+- `bundle exec brakeman -q` — No warnings found
+- `RAILS_ENV=test bin/rails db:drop db:create db:schema:load`の後に`dot_spec`・`days_spec`を実行し、
+  `schema.rb`から作ったDBでも生成列が再現されることを確かめた（CIと同じ作り方）。
+- rootの検査（`pnpm check`・`pnpm type-check`・`pnpm test`）は品質ゲートとpre-pushで実行する。
+
+完了条件ごとの確認:
+
+| 完了条件 | 確かめたtest |
+| --- | --- |
+| 利用者に関連付けた永続保存、過去のDotを失わない | `dot_spec`「同じ日に録音しても追記」「同じ処理から2件目のDotを作らない」「保存に失敗したら行を残さない」。Dotを作るendpointはTASK-009で、本タスクは`user.dots.create!`で保存できるmodelと制約まで |
+| 同日の複数録音・日付境界・表示順・Dayのデータ | `dot_spec`「0:00 JSTの前後」「保存時刻ではなくstarted_at」、`days_spec`「今日の最新のDot」「0:00で切り替わる」「started_atの降順」 |
+| 一覧・日付指定の取得、続き、0件の区別 | `day_list_spec`・`day_dots_spec`の続きの欠落・重複（同じ`started_at`、途中のゴミ箱移動を含む）、`days_spec`の0件（記録なし・全件ゴミ箱・完全削除）が`200` |
+| 未認証・別利用者の拒否、更新は本人だけ | `days_spec`・`dots_spec`の`401`、他人のDotが出ないこと、他人・存在しない・ゴミ箱の中のPATCHが`404`、CSRFなしの`403` |
+| 契約どおりの項目、保存失敗と未取得の区別 | すべてのrequest specで`assert_response_schema_confirm`。PATCHの失敗は`422`/`404`で値が変わらないこと、0件は`200`の空配列 |
+| 現行仕様・architectureへの反映 | architecture・dot-history・journaling・productを更新（PR 3/3） |
+
+「必要な検証」のうち「復元で戻る」は、復元のendpointがTASK-013のため、`trashed_at`を直接戻して
+一覧・Day・詳細へ戻ることを確かめた（`days_spec`「ゴミ箱」）。endpointとしての復元はTASK-013で確かめる。
+
+### 未実施の確認と理由
+
+- Webからの実際の呼び出し: 画面（TASK-012）とWebの認証接続（TASK-007）が未実装のため。
+- 退会中の`409 account_deletion_in_progress`: 退会の状態を持つ列がまだ無い。TASK-013で退会を実装する
+  ときに、本タスクのendpointへも適用する。
+- 編集とゴミ箱への移動・完全削除が同時に起きたときの扱い: PATCHは`kept`で探してから`update!`で書き、
+  その間の移動を確かめない。ゴミ箱・削除のendpointがまだ無いため今は起きない。TASK-013で、条件付きの
+  更新（`kept.where(id:)`の影響行数を見る）か行lockのどちらにするかを決めて足す。
+- 大量件数での実行計画の確認（`EXPLAIN`）: ローカルの少量のデータでは索引の選択が本番と変わり得るため、
+  実データの規模が出てから確かめる。

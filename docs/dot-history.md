@@ -29,11 +29,13 @@ Focus on Dotでは「Dot = その日の自分」を、UIで丸として表す。
 一覧の配置、並び順、日付境界、同日の複数録音、記録のない日の表現は下記「MVPの履歴ルール」で
 決めた。検索、カテゴリ、期間フィルタは、このMVP受け入れ条件に含めない。
 
-### MVPの履歴ルール（2026-09-29採用、未実装）
+### MVPの履歴ルール（2026-09-29採用。serverの保存・取得は実装済み、画面は未実装）
 
 [TASK-004 Plan §17–§26](implementation-plans/2026-09-28-task-004-history-design.md)で採用した。
-実装済みの挙動ではない。endpointとschemaの具体は[`contracts/openapi.yaml`](../contracts/openapi.yaml)（TASK-005）、保存・取得の実装はTASK-008、
-画面の実装はTASK-012が扱う。
+endpointとschemaの具体は[`contracts/openapi.yaml`](../contracts/openapi.yaml)（TASK-005）が扱う。
+serverの保存先・日付の算出・日単位の集約・cursorによる続きの取得・ゴミ箱の除外は、2026-10-05に
+[TASK-008](implementation-plans/2026-10-05-task-008-dot-history.md)でRails APIに実装した。Dotを作る入口
+（TASK-009）と画面（TASK-012）は未実装で、利用者がこの体験をまだ使えるわけではない。
 
 - **保存単位**: 録音1回ごとにDotを1件保存する。同日の再録音は追記であり、過去のDotを上書き・
   統合しない。表示上の「1日=1つのDot」は一覧の見せ方であり、保存件数ではない。

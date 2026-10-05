@@ -2,8 +2,8 @@
 
 この文書は、Rails APIのsecurity reviewで必ず確認する観点である。個人データの扱いは
 [`../../privacy.md`](../../privacy.md)を仕様の正本として確認する。認証はRails側をTASK-006で実装した
-（[architecture](../../architecture.md)「認証詳細」）。Dotなどのプロダクト API・Webの接続・公開配信は
-未実装である。採用決定と実装・実機検証を区別し、実装される変更で適切な確認を行う。
+（[architecture](../../architecture.md)「認証詳細」）。Dotの履歴の取得・編集のRails側はTASK-008で実装した。
+Dotを作る入口・ゴミ箱と削除の操作・Webの接続・公開配信は未実装である。採用決定と実装・実機検証を区別し、実装される変更で適切な確認を行う。
 
 ## 1. 認証・認可とresource所有権 🔴
 
@@ -18,6 +18,9 @@
 - [ ] strong parametersまたは同等の許可listで、受け取るfieldを限定しているか。ID、所有者、状態、
   provider設定などをmass assignmentできないか。
 - [ ] 型、長さ、形式、content type、アップロード容量、関連resourceの所有権を検証しているか。
+- [ ] 形式を確かめた値（cursor・数値・日付など）から作る値が、DBの型の範囲（timestamp・integer等）に
+  収まるか。形式だけを確かめると、作り替えた値でDBの例外が起き、`400` / `422`ではなく`500`になる。
+  意味の上で取りうる範囲（例: その日の中の時刻）に限り、範囲外を拒否するtestを置く。
 - [ ] API responseは明示したfieldだけで構成し、暗号化情報、token、内部state、外部provider response、
   他人のデータを含めていないか。
 - [ ] credentialがsource、test fixture、例外、ログ、response、CI出力へ入っていないか。Railsの
@@ -62,9 +65,29 @@
 
 ## 6. 現在の構成での補足
 
-- RailsはAPI-onlyで、routeは`GET /up`と認証（`/api/v1/session`等、`/auth/google_oauth2`）だけ。
-  保護するendpointは`before_action :authenticate_user!`と`current_user`を使い、JSONの項目はbodyからだけ
-  受け取る（`JsonParams`。password・tokenをURLに載せない）。`/up`への変更でも不要な内部情報を
-  responseへ追加しない。
+- RailsはAPI-onlyで、routeは`GET /up`と認証（`/api/v1/session`等、`/auth/google_oauth2`）、Dotの
+  履歴の取得・編集（`/api/v1/days`・`/api/v1/dots/{dot_id}`。TASK-008）だけ。保護するendpointは
+  `before_action :authenticate_user!`と`current_user`を使い、JSONの項目はbodyからだけ受け取る
+  （`JsonParams`。password・tokenをURLに載せない）。`/up`への変更でも不要な内部情報をresponseへ
+  追加しない。
+- Railsがparamsを解析するときに、本文が`filter_parameters`を通らずログへ出る経路を塞いでいる（TASK-008）。
+  - `/api/`のbodyは`application/json`だけを受け付け、それ以外は解析する前に`422 body invalid_format`に
+    する（`lib/middleware/api_request_guard.rb`）。formの不正なUTF-8から本文を含むmessageの
+    `BadRequest`が起きるため。JSON以外を受け取るendpointを足すとき（TASK-009のmultipart）は、同ファイルの
+    `NON_JSON_BODIES`へ足し、その解析で同じ経路が開かないか確かめる。
+  - paramsを解釈できない`ActionController::BadRequest`（path・queryの不正なUTF-8など）は`rescue_from`の外で
+    起き、値を含むmessageがerrorのログに出るため、同じmiddlewareが`DebugExceptions`の内側で捕まえて
+    `422`にする。
+  - objectでないJSONのbody（文字列・配列）はRailsが`_json`に入れ、項目名で隠す`filter_parameters`を
+    すり抜けて`Parameters:`のログ（info）に出るため、`_json`を値ごと隠している。
+  - JSONの不正なUTF-8は解析の失敗にし、解析の失敗のログから生のbodyを外す
+    （`config/initializers/json_request_body.rb`。非公開のmethodを置き換えるため、Railsを上げたときに
+    前提が保たれているか確かめる）。
+  - frameworkが自分でログへ書く経路（解析の失敗、例外のmessage、SQL）は`filter_parameters`で隠れるとは
+    限らない。個人データを受け取る変更では、debugのログを取り込むrequest spec・model spec
+    （`spec/support/log_helpers.rb`の`captured_log`）で本文が出ないことを確かめているか。
+  - このmiddlewareはpathをrouterと同じ規則（`Journey::Router::Utils.normalize_path`）で正規化してから
+    比べる（§5の「frameworkと同じ正規化」）。`/api/`の判定を変えるときは、`//api/...`のような表記の
+    request specを保つ。
 - `apps/api/config/initializers/filter_parameter_logging.rb`は防御の補助であり、将来追加する音声・
   生成データの安全なログ運用を保証しない。
