@@ -27,8 +27,9 @@ module FocusOnDotApi
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.
-    # omniauth/はinitializerでOmniAuthへ登録するため、再読込の対象から外してrequireで読む。
-    config.autoload_lib(ignore: %w[assets tasks omniauth])
+    # omniauth/はinitializerでOmniAuthへ登録するため、再読込の対象から外してrequireで読む。middleware/も
+    # middlewareの列に積むため同じく外す。
+    config.autoload_lib(ignore: %w[assets tasks omniauth middleware])
 
     # Configuration for the application, engines, and railties goes here.
     #
@@ -52,6 +53,11 @@ module FocusOnDotApi
                          secure: Rails.env.production?
     config.middleware.use ActionDispatch::Cookies
     config.middleware.use config.session_store, config.session_options
+
+    # `/api/`のJSON以外のbodyと、解釈できないparamsを、本文をログへ出さずにProblemで返す。Railsが
+    # 起こすBadRequestを捕まえるため、DebugExceptions（errorのログを出す）の内側に置く。
+    require_relative "../lib/middleware/api_request_guard"
+    config.middleware.insert_after ActionDispatch::DebugExceptions, ApiRequestGuard
 
     # 確認・再設定・解除のメールに載せるSPAのorigin（例: https://app.example.com）。
     config.x.app_base_url = ENV.fetch("APP_BASE_URL", "http://localhost:5173")
