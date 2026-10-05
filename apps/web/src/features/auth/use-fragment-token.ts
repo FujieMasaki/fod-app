@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 
+// 古いタブの可能性（csrf・schemaの不一致）を示すときの案内。tokenはURLから消してあるため、再読み込みではなく
+// メールのリンクを開き直してもらう。
+export const REOPEN_LINK_MESSAGE =
+  "画面が古くなっている可能性があります。メールのリンクをもう一度開いてから、お試しください。";
+
 // 契約のTokenOnly・PasswordReset（token: maxLength 256）
 const MAX_TOKEN_LENGTH = 256;
 

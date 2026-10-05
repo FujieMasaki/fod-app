@@ -75,6 +75,35 @@ describe("メールのリンクのtoken", () => {
     expect(document.body.textContent).not.toContain("secret-token");
   });
 
+  it("実際のrouterの上でも、消したtokenをURLへ書き戻さず、遷移して戻ってもtoken付きのURLにならない", async () => {
+    const { createRootRoute, createRoute, createRouter, createBrowserHistory, RouterProvider } =
+      await vi.importActual<typeof import("@tanstack/react-router")>("@tanstack/react-router");
+    mockApi({});
+    openLink("/password/reset", "secret-token");
+    const rootRoute = createRootRoute();
+    const resetRoute = createRoute({ getParentRoute: () => rootRoute, path: "/password/reset", component: PasswordResetScreen });
+    const loginRoute = createRoute({ getParentRoute: () => rootRoute, path: "/login", component: () => <p>ログイン画面</p> });
+    const router = createRouter({
+      routeTree: rootRoute.addChildren([resetRoute, loginRoute]),
+      history: createBrowserHistory(),
+    });
+    renderScreen(<RouterProvider router={router} />);
+
+    await screen.findByLabelText("新しいパスワード");
+    await waitFor(() => expect(window.location.hash).toBe(""));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(window.location.hash).toBe("");
+
+    await act(() => router.navigate({ to: "/login" }));
+    await screen.findByText("ログイン画面");
+    await act(async () => {
+      window.history.back();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(window.location.pathname).toBe("/password/reset");
+    expect(window.location.hash).toBe("");
+  });
+
   it("開いただけではserverへ送らず、操作で送る", async () => {
     const requests = mockApi({ "PATCH /api/v1/confirmation": { status: 204 } });
     openLink("/confirmation", "secret-token");
@@ -131,6 +160,19 @@ describe("ConfirmationScreen", () => {
     renderScreen(<ConfirmationScreen />);
     expect(await screen.findByRole("button", { name: "確認のメールを送る" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "メールアドレスを確認する" })).not.toBeInTheDocument();
+  });
+});
+
+describe("tokenの画面での古いタブの案内", () => {
+  it("CSRFの再送の後も合わなければ、再読み込みではなくメールのリンクを開き直すよう示す（tokenはURLから消してあるため）", async () => {
+    mockApi({ "PATCH /api/v1/confirmation": problem(403, "csrf_invalid") });
+    openLink("/confirmation", "secret-token");
+    renderScreen(<ConfirmationScreen />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "メールアドレスを確認する" }));
+
+    expect(await screen.findByText(/メールのリンクをもう一度開いてから/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "再読み込み" })).not.toBeInTheDocument();
   });
 });
 
@@ -275,7 +317,9 @@ describe("PasswordResetScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
 
     expect(await screen.findByText("パスワードを再設定しました")).toBeInTheDocument();
-    expect(screen.getByText("status:anonymous")).toBeInTheDocument();
+    // 古い応答が届き、その後に再設定の後の取り直し（3回目）が終わってから確かめる
+    await waitFor(() => expect(sessionCount).toBe(3));
+    await waitFor(() => expect(screen.getByText("status:anonymous")).toBeInTheDocument());
   });
 
   it("再設定がserverで済んだのに応答を失っても、状態を取り直して未認証にする", async () => {
@@ -538,6 +582,97 @@ describe("PasswordResetScreen", () => {
 
     expect(await screen.findByText("8文字以上で入力してください。")).toBeInTheDocument();
     expect(screen.getByText("status:authenticated")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["未認証", { authenticated: false, csrf_token: "t0" }],
+    [
+      "別の利用者",
+      {
+        authenticated: true,
+        csrf_token: "t0",
+        expires_at: "2099-01-01T00:00:00Z",
+        account_status: "active",
+        user: {
+          id: "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
+          email: "b@example.com",
+          email_confirmed: true,
+          sign_in_methods: ["password"],
+        },
+      },
+    ],
+  ])("cacheが%sでも、再設定の前に送られた取得の認証済みを信じない", async (_, initial) => {
+    // 別のタブでtokenの持ち主Aとしてloginした後、このタブへ戻った取り直しの応答が、再設定の後に届く
+    const signedInA = {
+      authenticated: true,
+      csrf_token: "t1",
+      expires_at: "2099-01-01T00:00:00Z",
+      account_status: "active",
+      user: {
+        id: "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10",
+        email: "a@example.com",
+        email_confirmed: true,
+        sign_in_methods: ["password"],
+      },
+    };
+    let sessionCount = 0;
+    let releaseStale: () => void = () => undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        if (path === "/api/v1/session") {
+          sessionCount += 1;
+          if (sessionCount === 1) return Response.json(initial);
+          if (sessionCount === 2) {
+            return new Promise<Response>((resolve) => {
+              releaseStale = () => resolve(Response.json(signedInA));
+            });
+          }
+          return Response.json({ authenticated: false, csrf_token: "t2" });
+        }
+        if (init?.method === "PATCH" && path === "/api/v1/password") {
+          setTimeout(() => releaseStale(), 0);
+          return new Response(null, { status: 204 });
+        }
+        throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
+      }),
+    );
+    function StatusProbe() {
+      return <p>{`status:${useAuth().status}`}</p>;
+    }
+    openLink("/password/reset", "reset-token");
+    renderScreen(
+      <>
+        <PasswordResetScreen />
+        <StatusProbe />
+      </>,
+    );
+    await waitFor(() => expect(sessionCount).toBe(1));
+    await screen.findByText(/status:(anonymous|authenticated)/);
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(sessionCount).toBe(2));
+
+    fireEvent.change(screen.getByLabelText("新しいパスワード"), { target: { value: "new-password-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
+
+    expect(await screen.findByText("パスワードを再設定しました")).toBeInTheDocument();
+    await waitFor(() => expect(sessionCount).toBe(3));
+    await waitFor(() => expect(screen.getByText("status:anonymous")).toBeInTheDocument());
+  });
+
+  it("送り直してtoken_invalidになったら、済んでいる可能性とログインへの導線を示す", async () => {
+    mockApi({ "PATCH /api/v1/password": problem(422, "token_invalid") });
+    openLink("/password/reset", "used-token");
+    renderScreen(<PasswordResetScreen />);
+
+    fireEvent.change(await screen.findByLabelText("新しいパスワード"), { target: { value: "new-password-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
+
+    expect(await screen.findByText(/直前に再設定した場合は、新しいパスワードでログインできます/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "ログインへ" })).toBeInTheDocument();
   });
 
   it("passwordが短ければ項目に示す", async () => {

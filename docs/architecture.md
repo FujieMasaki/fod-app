@@ -14,7 +14,7 @@
 - Auth Provider（`features/auth`）は`GET /api/v1/session`をTanStack Queryで取得し、認証状態・
   CSRF token・期限を持つ（2026-10-05にTASK-007で実装）。保護APIは`useAuth().request`から呼び、
   `csrf_invalid`の1回の再送と`401`の検出をここに集める。利用者が変わったら（logout・期限切れ・
-  別タブでの入れ替わり・login）、認証以外のquery cacheを消し、購読者（`subscribeIdentityChange`）へ
+  別タブでの入れ替わり・login・login中のpassword再設定）、認証以外のquery cacheを消し、購読者（`subscribeIdentityChange`）へ
   通知する。Session Providerはこの通知で録音時間と現在のDotを消す。
 - `apps/web/src/libs/api-client`がRails APIを同一originで呼ぶ入口で、失敗を`problem`・`network`・
   `schema`・`http`に分ける。開発ではViteのproxyが`/api`・`/auth`をRailsへ送る（Hostを書き換えない）。

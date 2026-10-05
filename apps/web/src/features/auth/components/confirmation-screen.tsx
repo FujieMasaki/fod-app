@@ -5,7 +5,7 @@ import { isProblem } from "@/libs/api-client/request";
 import { confirmEmail, resendConfirmation } from "../api";
 import { useAuth } from "../auth-provider";
 import { errorMessage, fieldErrors, needsReload } from "../messages";
-import { useFragmentToken } from "../use-fragment-token";
+import { REOPEN_LINK_MESSAGE, useFragmentToken } from "../use-fragment-token";
 import { AuthScreen, FormMessage, ReloadNotice, TextField, TextLink } from "./auth-layout";
 
 const TOKEN_MESSAGES = {
@@ -67,7 +67,7 @@ export function ConfirmationScreen() {
   return (
     <AuthScreen title="メールアドレスの確認" lead="ボタンを押すと、このメールアドレスの確認が済みます。">
       {needsReload(error) ? (
-        <ReloadNotice />
+        <FormMessage tone="error">{REOPEN_LINK_MESSAGE}</FormMessage>
       ) : (
         error !== null && <FormMessage tone="error">{errorMessage(error)}</FormMessage>
       )}
