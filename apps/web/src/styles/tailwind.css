@@ -68,7 +68,12 @@
   --tracking-wide: var(--fod-tracking-wide);
 }
 
-/* 入力欄に本文の書体を継承させる（preflightを読まないため、inputはbrowserの既定の書体になる）。 */
+/*
+ * 入力欄に本文の書体を継承させる（preflightを読まないため、inputはbrowserの既定の書体になる）。
+ * 大きさ・行間はtext-*・leading-*で指定するため、`font`のshorthandではなく書体・太さ・字間だけを継承する。
+ */
 @utility font-inherit {
-  font: inherit;
+  font-family: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
 }
