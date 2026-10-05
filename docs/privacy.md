@@ -158,6 +158,59 @@ MVP全体の範囲は[product](./product.md)を正本とする。
 **採用済み・未実装である。**2026-09-28に採用し、2026-09-29にゴミ箱と編集を追加した。実装はTASK-009 /
 010 / 011 / 013 / 014、検証はTASK-015が担当する。
 
+録音1回分のデータが、どこへ渡り、何を契機に削除処理を始めるかを図にする。図は下の5-1の要約であり、
+条件は5-1の表を正とする。処理の順序と状態遷移は[architecture](./architecture.md)「生成の実行方式」を見る。
+
+```mermaid
+sequenceDiagram
+    participant B as 端末（Browser）
+    participant R as Rails（API・Job）
+    participant DB as RDS（dots・処理の記録）
+    participant S3 as S3東京（一時object）
+    participant T as Amazon Transcribe（東京）
+    participant AI as Amazon BedrockのClaude
+    B->>R: 録音attemptの発行（started_atが決まる）
+    B->>R: 音声を送信（端末ではmemoryにだけ置く）
+    R->>DB: 処理の記録を作る（uploadより先）
+    R->>S3: 音声を一時objectとして保存する
+    R-->>B: 処理IDと再試行期限（受理から24時間）
+    Note over S3,T: ここから元音声が外部の委託先へ渡る
+    R->>T: 文字起こしを依頼する（Job・非同期）
+    S3->>T: 音声を読ませる
+    T->>S3: 文字起こし全文を書き出す
+    S3-->>R: 文字起こし全文を読む（Jobのmemoryを通る）
+    R->>AI: 文字起こし全文を渡し、sentenceとsummaryを生成する
+    AI-->>R: sentenceとsummaryを返す
+    Note over B,R: 端末はこの間も結果の照会（polling）を続け、失敗もそこで分かる
+    alt 成功（JobがDotを保存した）
+        R->>DB: Dotを保存する（成功の確定）
+        R->>S3: 音声の削除処理を始める
+        B->>R: 結果を照会する（polling）
+        R-->>B: Dotと文字起こし全文（端末ではsessionStorageへ）
+        alt 端末が全文を受け取ったと通知した
+            B->>R: 全文を保存し終えたと通知する（受領ACK）
+        else ACKが来ないまま受理から24時間
+            Note over R: 全文はもう端末へ返さない
+        end
+        R->>S3: 文字起こし全文の削除処理を始める
+        R->>T: jobの削除処理を始める（終端になるまで追う）
+        Note over R,DB: 後片付けが全部終わってから処理の記録を削除する
+    else 再試行できる失敗で、期限内
+        B->>R: 同じ処理IDで再試行（全文が残っていれば生成からやり直す）
+    else 期限到来・処理の取り消し・退会（いずれもDotになる前）
+        opt 処理の取り消し
+            B->>R: 処理の取り消しを要求する
+        end
+        R->>S3: 音声・文字起こし全文の削除処理を始める
+        R->>T: jobの削除処理を始める
+        Note over R,DB: 後片付けが終わってから処理の記録を削除する
+    end
+    Note over B,AI: Dotができた後の完全削除・退会では、dotsの行・残っている一時object・job・処理の記録が対象（範囲は5-1と5-2）。取り消し・完全削除・退会では、使用済みattemptのidと期限を期限まで残す
+```
+
+図は主な経路だけを示し、すべての契機を挙げてはいない。ACK前の完全削除、Dotの保持（ゴミ箱を含む）、端末の
+`sessionStorage`、ログ・backup、委託先の内部に残り得る分などは、5-1と5-2を正とする。
+
 ### 5-1. データ別の条件
 
 | データ | 保持する目的 | 起点 | 削除を始める条件 | 完了の扱い | 残る例外 |
