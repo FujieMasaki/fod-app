@@ -29,17 +29,25 @@ export function PasswordResetScreen() {
   const [done, setDone] = useState(false);
 
   // 再設定でserverは既存のCookieを無効にする。login中だった場合に古い認証済みが残らないよう、再設定が済んだ
-  // かもしれないとき（成功・応答を失った・再試行がtoken_invalid）は、serverの応答を待たずに未認証として置き、
-  // 個人データを消す（取り直しがofflineで止まっても残さない）。そのうえで取り直してserverの状態に合わせる。
-  // refreshは実行中の取得を共有するため、先に再設定の前に始まった取得を終わらせ（後から認証済みで上書き
-  // されないように）、置いた後に始まる取得の結果を最後に置く。取り直しの失敗は再設定の成否に関わらない。
-  async function endSessionAfterReset() {
-    await refresh().catch(() => undefined);
+  // かもしれないとき（成功・応答を失った・再試行がtoken_invalid）は、通信を待たずにその場で未認証として置き、
+  // 個人データを消す（取り直しが返らない・offlineで止まっても、完了の案内と入力の消去を止めない）。
+  // その後の取り直しはbackgroundで行う。再設定の前に始まった取得が後から前の利用者の認証済みを返したら、
+  // 無効になったCookieの古い結果なので、もう一度未認証として置いてから取り直す。
+  function endSessionAfterReset() {
     const current = queryClient.getQueryData<Session>(SESSION_QUERY_KEY);
-    if (current?.authenticated) {
-      queryClient.setQueryData<Session>(SESSION_QUERY_KEY, { authenticated: false, csrf_token: current.csrf_token });
-    }
-    await refresh().catch(() => undefined);
+    if (!current?.authenticated) return;
+    const endedUserId = current.user.id;
+    const setAnonymous = (csrfToken: string) =>
+      queryClient.setQueryData<Session>(SESSION_QUERY_KEY, { authenticated: false, csrf_token: csrfToken });
+    setAnonymous(current.csrf_token);
+    void (async () => {
+      await refresh().catch(() => undefined);
+      const after = queryClient.getQueryData<Session>(SESSION_QUERY_KEY);
+      if (after?.authenticated && after.user.id === endedUserId) {
+        setAnonymous(after.csrf_token);
+        await refresh().catch(() => undefined);
+      }
+    })();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -49,12 +57,12 @@ export function PasswordResetScreen() {
     setError(null);
     try {
       await withCsrf((csrfToken) => resetPassword(csrfToken, token, password));
-      await endSessionAfterReset();
+      endSessionAfterReset();
       setDone(true);
     } catch (caught) {
       // 失敗に見えても、serverでは済んでいることがある（応答だけを失った、再試行がtoken_invalidになった）。
       if ((caught instanceof ApiError && caught.kind === "network") || isProblem(caught, "token_invalid")) {
-        await endSessionAfterReset();
+        endSessionAfterReset();
       }
       setError(caught);
     } finally {

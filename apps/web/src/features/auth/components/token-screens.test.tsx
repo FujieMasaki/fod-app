@@ -372,6 +372,52 @@ describe("PasswordResetScreen", () => {
     expect(screen.getByText("status:anonymous")).toBeInTheDocument();
   });
 
+  it("再設定の後の取り直しが返らなくても、待たずに未認証にして完了を示す", async () => {
+    let patched = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        if (path === "/api/v1/session") {
+          if (patched) return new Promise<Response>(() => undefined);
+          return Response.json({
+            authenticated: true,
+            csrf_token: "t1",
+            expires_at: "2099-01-01T00:00:00Z",
+            account_status: "active",
+            user: {
+              id: "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10",
+              email: "a@example.com",
+              email_confirmed: true,
+              sign_in_methods: ["password"],
+            },
+          });
+        }
+        if (init?.method === "PATCH" && path === "/api/v1/password") {
+          patched = true;
+          return new Response(null, { status: 204 });
+        }
+        throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
+      }),
+    );
+    function StatusProbe() {
+      return <p>{`status:${useAuth().status}`}</p>;
+    }
+    openLink("/password/reset", "reset-token");
+    renderScreen(
+      <>
+        <PasswordResetScreen />
+        <StatusProbe />
+      </>,
+    );
+    await screen.findByText("status:authenticated");
+
+    fireEvent.change(screen.getByLabelText("新しいパスワード"), { target: { value: "new-password-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
+
+    expect(await screen.findByText("パスワードを再設定しました")).toBeInTheDocument();
+    expect(screen.getByText("status:anonymous")).toBeInTheDocument();
+  });
+
   it("再設定を受け付けなかった（入力の誤り）ときは、認証済みのままにする", async () => {
     vi.stubGlobal(
       "fetch",
