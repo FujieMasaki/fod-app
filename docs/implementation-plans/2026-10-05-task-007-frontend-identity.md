@@ -235,9 +235,10 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 | `apps/web/src/providers.tsx` | 変更 | `AuthProvider`の配置 |
 | `apps/web/src/features/session/session-context.tsx` | 変更 | 切り替わりで`reset()` |
 | `apps/web/src/features/session/session-context.test.tsx` | 新規 | 切り替わりで消えること |
-| `apps/web/src/features/processing/components/processing-indicator/processing-indicator.test.tsx` | 変更 | `SessionProvider`が`AuthProvider`を要るため包む |
+| `apps/web/src/features/processing/components/processing-indicator/processing-indicator.tsx` | 変更 | 整理の途中で利用者が切り替わったら結果を捨てる（Codexの指摘で追加） |
+| `apps/web/src/features/processing/components/processing-indicator/processing-indicator.test.tsx` | 変更 | `SessionProvider`が`AuthProvider`を要るため包む。切り替わりで結果を捨てること |
 
-レビュー対象 14。
+レビュー対象 15。
 
 ### PR 2/3: ログイン・登録・guard・アカウント画面（`feat/task-007-2-sign-in-screens`、base PR 1）
 
