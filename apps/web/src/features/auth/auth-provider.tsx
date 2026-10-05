@@ -68,7 +68,11 @@ type AuthContextValue = {
   /** 保護APIを呼ぶ入口（後続の機能はこれを使う） */
   request: AuthorizedRequest;
   signIn: (credentials: Credentials) => Promise<void>;
-  /** 失敗したら投げる。serverで終わったと確認できるまでlogin中のまま */
+  /**
+   * 失敗したら投げる。serverで終わったと確認できるまでlogin中のまま。投げるのは`ApiError`（通信の失敗・
+   * 実行中の通信を待ちきれなかった）か、送り直しても認証が残ったときの`Error("sign_out_unconfirmed")`。
+   * 画面はどちらも「確かめられなかった」として扱う。
+   */
   signOut: () => Promise<void>;
   /** ページ遷移を伴うlogin（Google）の前に呼ぶ。前の利用者の個人データを先に消す */
   prepareExternalSignIn: () => void;
@@ -88,10 +92,6 @@ const MAX_TIMER_MS = 2_147_483_647;
 const EXPIRY_RECHECK_MS = 30_000;
 // login・logoutの前に、実行中の通信の応答を待つ上限。offlineで止まった通信を待ち続けないため。
 const SETTLE_TIMEOUT_MS = 10_000;
-
-function delay(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /** 認証済みなら利用者のid、未認証ならnull、まだ分からなければundefined */
 function identityOf(session: Session | undefined): string | null | undefined {
@@ -222,10 +222,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (queryClient.isFetching({ queryKey: SESSION_QUERY_KEY }) > 0) {
           pending.push(queryClient.fetchQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession }));
         }
+        let timer: ReturnType<typeof setTimeout> | undefined;
         const settled = await Promise.race([
           Promise.allSettled(pending).then(() => true),
-          delay(SETTLE_TIMEOUT_MS).then(() => false),
+          new Promise<boolean>((resolve) => {
+            timer = setTimeout(() => resolve(false), SETTLE_TIMEOUT_MS);
+          }),
         ]);
+        clearTimeout(timer);
         // 待ちきれなかった通信の応答は、後から届いてCookieを戻し得る。送らずに失敗にする（利用者が再試行する）。
         if (!settled) throw new ApiError("network");
         return operation();
@@ -296,8 +300,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (credentials: Credentials) => {
-      const next = await runExclusively(() => withCsrf((csrfToken) => createSession(csrfToken, credentials)));
-      queryClient.setQueryData(SESSION_QUERY_KEY, next);
+      // 排他を解く前にloginの結果を置く（待たされていた通信が、login前の無効なtokenで送られないように）。
+      await runExclusively(async () => {
+        const next = await withCsrf((csrfToken) => createSession(csrfToken, credentials));
+        queryClient.setQueryData(SESSION_QUERY_KEY, next);
+      });
       // 新しいCookieで取り直して確かめる（実行中の取り直しがあれば結果を捨てて止まる）。cancelQueriesは
       // 取り消しの際に取り直し前の値へ非同期に戻すため、置いたloginの結果を消し得るので使わない。
       void refresh();
