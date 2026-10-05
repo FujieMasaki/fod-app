@@ -315,7 +315,9 @@ export function analyzeEmphasis(source, relativePath) {
   });
 
   flush();
-  // 閉じていないfence・HTMLコメントは、その後の行がすべて無検査になる。黙って通さずに報告する。
+  // 行を飛ばす状態（fence・HTMLコメント・frontmatter）が開いたまま終わると、その後の行が
+  // すべて無検査になる。**3つすべてを報告する**。1つでも漏らすと、そのファイルが丸ごと
+  // 検査されないままCIが緑になる。
   if (fence !== null) {
     errors.push(
       `${relativePath}: ${fence} で開いたcode blockが閉じていません。そこから後の行を検査していません。`,
@@ -324,6 +326,12 @@ export function analyzeEmphasis(source, relativePath) {
   if (inComment) {
     errors.push(
       `${relativePath}: HTMLコメント（<!--）が閉じていません。そこから後の行を検査していません。`,
+    );
+  }
+  if (inFrontmatter) {
+    errors.push(
+      `${relativePath}: YAML frontmatter（1行目の---）が閉じていません。` +
+        "ファイル全体を検査していません。前付けでなければ1行目に`---`を置かないでください。",
     );
   }
   return { errors, swaps };

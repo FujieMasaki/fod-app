@@ -215,10 +215,21 @@ test("コードスパン・code blockの中の`<!--`でコメントの状態を�
   assert.equal(findEmphasisErrors("```text\n<!-- 例\n```\n\n**崩れている。**続き\n", "a.md").length, 1);
 });
 
-test("閉じていないHTMLコメントを報告する", () => {
+test("行を飛ばす状態が開いたまま終わったら、3つすべて報告する", () => {
+  // 1つでも漏らすと、そのファイルが丸ごと検査されないままCIが緑になる。
+  assert.deepEqual(findEmphasisErrors("```sh\ncmd\n\n**崩れている。**続き\n", "a.md"), [
+    "a.md: ``` で開いたcode blockが閉じていません。そこから後の行を検査していません。",
+  ]);
   assert.deepEqual(findEmphasisErrors("<!-- 未完\n\n**崩れている。**続き\n", "a.md"), [
     "a.md: HTMLコメント（<!--）が閉じていません。そこから後の行を検査していません。",
   ]);
+  assert.equal(findEmphasisErrors("---\n本文の**強調。**続き\nもっと**崩れ\n", "a.md").length, 1);
+  assert.match(
+    findEmphasisErrors("---\n本文の**強調。**続き\n", "a.md")[0],
+    /YAML frontmatter（1行目の---）が閉じていません/,
+  );
+  // 1行目の`---`を水平線として書いた場合も、黙らずに報告する。
+  assert.equal(findEmphasisErrors("---\n\n本文の**強調。**続き\n", "a.md").length, 1);
 });
 
 test("maskHtmlCommentsは長さとマーカーを保つ", () => {
