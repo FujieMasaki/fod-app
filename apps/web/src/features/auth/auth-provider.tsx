@@ -103,11 +103,16 @@ function clearPrivateQueries(queryClient: QueryClient) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
+  // login・logoutの送信中は、認証状態の取り直しを始めない。RailsのCookieStoreは`GET /api/v1/session`の
+  // 応答でもCookieを書き直すため、login・logoutの前に送った取り直しの応答が後から届くと、Cookieが前の
+  // 状態へ戻る（logoutが取り消される、loginしたのに未認証になる）。
+  const [authBusy, setAuthBusy] = useState(false);
+  const authBusyRef = useRef(false);
   const sessionQuery = useQuery({
     queryKey: SESSION_QUERY_KEY,
     queryFn: getSession,
     // 別タブでのlogout・loginを、画面へ戻ったときに検出する。
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: !authBusy,
     staleTime: 0,
   });
   const session = sessionQuery.data;
@@ -168,15 +173,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 期限の時刻に取り直す。端末のsleepなどで遅れても、画面へ戻ったときの取り直しと保護APIの401で補う。
   // 端末の時計がserverより進んでいると期限の前に取り直してしまい、まだ認証済みが返る。そのときは
   // 取り直すたびに（dataUpdatedAtが変わる）、間隔を空けて予約し直す。
+  // 取り直しが失敗したとき（errorUpdatedAtが変わる）も予約し直す。
   const expiresAt = authenticatedSession?.expires_at ?? null;
   const sessionUpdatedAt = sessionQuery.dataUpdatedAt;
+  const sessionErrorAt = sessionQuery.errorUpdatedAt;
   useEffect(() => {
     if (!expiresAt) return;
     const remaining = Date.parse(expiresAt) - Date.now();
     const delay = remaining > 0 ? Math.min(remaining + 1000, MAX_TIMER_MS) : EXPIRY_RECHECK_MS;
-    const timer = setTimeout(() => void refresh(), delay);
+    const timer = setTimeout(() => {
+      if (!authBusyRef.current) void refresh();
+    }, delay);
     return () => clearTimeout(timer);
-  }, [expiresAt, sessionUpdatedAt, refresh]);
+  }, [expiresAt, sessionUpdatedAt, sessionErrorAt, authBusy, refresh]);
+
+  // login・logoutの間は取り直しを止め、送る前に実行中の取り直しの応答を受け取り終える（上のauthBusyの理由）。
+  const runExclusively = useCallback(
+    async <T,>(operation: () => Promise<T>): Promise<T> => {
+      authBusyRef.current = true;
+      setAuthBusy(true);
+      try {
+        // 実行中の取り直しがあればその応答を待つ（実行中ならfetchQueryは新しく送らず、同じ応答を待つ）。
+        if (queryClient.isFetching({ queryKey: SESSION_QUERY_KEY }) > 0) {
+          await queryClient.fetchQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession }).catch(() => undefined);
+        }
+        return await operation();
+      } finally {
+        authBusyRef.current = false;
+        setAuthBusy(false);
+      }
+    },
+    [queryClient],
+  );
 
   const currentCsrfToken = useCallback(async () => {
     const cached = queryClient.getQueryData<Session>(SESSION_QUERY_KEY);
@@ -214,28 +242,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(
     async (credentials: Credentials) => {
-      const next = await withCsrf((csrfToken) => createSession(csrfToken, credentials));
+      const next = await runExclusively(() => withCsrf((csrfToken) => createSession(csrfToken, credentials)));
       queryClient.setQueryData(SESSION_QUERY_KEY, next);
-      // login前のCookieで送った取り直し（画面へ戻ったときなど）が後から届いて、未認証で上書きしないよう、
-      // 新しいCookieで取り直す（実行中の取り直しは結果を捨てて止まる）。cancelQueriesは取り消しの際に
-      // 取り直し前の値へ非同期に戻すため、置いたloginの結果を消し得る。
+      // 新しいCookieで取り直して確かめる（実行中の取り直しがあれば結果を捨てて止まる）。cancelQueriesは
+      // 取り消しの際に取り直し前の値へ非同期に戻すため、置いたloginの結果を消し得るので使わない。
       void refresh();
     },
-    [queryClient, refresh, withCsrf],
+    [queryClient, refresh, runExclusively, withCsrf],
   );
 
   const signOut = useCallback(async () => {
     // serverの応答を待たずに、前の利用者の個人データを画面から外す。
     notifyIdentityChange();
+    const confirmSignedOut = () =>
+      queryClient.fetchQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession, staleTime: 0 });
     try {
-      await withCsrf((csrfToken) => deleteSession(csrfToken));
+      await runExclusively(async () => {
+        await withCsrf((csrfToken) => deleteSession(csrfToken));
+        // serverで終わったことを確かめる。まだ認証済みなら1回だけ送り直し、それでも残れば失敗にする
+        // （共有端末で、logoutしたつもりのCookieを残さないため。TASK-001 Plan §20）。
+        if (!(await confirmSignedOut()).authenticated) return;
+        await withCsrf((csrfToken) => deleteSession(csrfToken));
+        if ((await confirmSignedOut()).authenticated) throw new Error("sign_out_unconfirmed");
+      });
     } catch (error) {
-      // 終わったと断定せず、login中のまま状態を確かめ直す（TASK-001 Plan §20）。
+      // 終わったと断定せず、login中のまま状態を確かめ直す。
       void refresh();
       throw error;
     }
-    markEnded("signed_out");
-  }, [markEnded, notifyIdentityChange, refresh, withCsrf]);
+    setEndReason("signed_out");
+  }, [notifyIdentityChange, queryClient, refresh, runExclusively, withCsrf]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

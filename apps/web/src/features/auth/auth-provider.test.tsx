@@ -136,13 +136,18 @@ describe("login", () => {
     expect(onIdentityChange).toHaveBeenCalledTimes(1);
   });
 
-  it("login前に始まった取り直しが後から届いても、未認証へ戻さない", async () => {
+  it("login前に始まった取り直しの応答を受け取ってからloginを送り、未認証へ戻さない", async () => {
     let releaseStale: (response: Response) => void = () => undefined;
     let getCount = 0;
+    let postedAfterGet: boolean | null = null;
+    let staleDone = false;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_path: string, init?: RequestInit) => {
-        if (init?.method === "POST") return Response.json(authenticated(USER_A, "t2").body);
+        if (init?.method === "POST") {
+          postedAfterGet = staleDone;
+          return Response.json(authenticated(USER_A, "t2").body);
+        }
         getCount += 1;
         if (getCount === 1) return Response.json(anonymous("t1").body);
         // 2回目（画面へ戻ったときの取り直し）はlogin前のCookieで送られ、遅れて未認証を返す
@@ -162,9 +167,15 @@ describe("login", () => {
       focusManager.setFocused(true);
     });
     await waitFor(() => expect(getCount).toBe(2));
-    await act(() => auth().signIn({ email: "user@example.com", password: "password123" }));
-    await act(async () => releaseStale(Response.json(anonymous("t1").body)));
+    const signingIn = auth().signIn({ email: "user@example.com", password: "password123" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(postedAfterGet).toBeNull();
 
+    staleDone = true;
+    releaseStale(Response.json(anonymous("t1").body));
+    await act(() => signingIn);
+
+    expect(postedAfterGet).toBe(true);
     await waitFor(() => expect(getCount).toBe(3));
     expect(auth().status).toBe("authenticated");
     expect(auth().endReason).toBeNull();
@@ -279,6 +290,78 @@ describe("logout", () => {
     expect(onIdentityChange).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(auth().status).toBe("authenticated"));
     expect(auth().endReason).toBeNull();
+  });
+
+  it("logoutの後もserverで認証済みなら1回だけ送り直し、それでも残れば失敗にする", async () => {
+    const calls = mockApi({
+      // 前の取り直しの応答でCookieが戻った、などでlogoutが効いていない
+      "GET /api/v1/session": [authenticated(USER_A, "t1")],
+      "DELETE /api/v1/session": [{ status: 204 }],
+    });
+    const { auth } = await renderAndSubscribe();
+
+    await expect(auth().signOut()).rejects.toThrow("sign_out_unconfirmed");
+
+    expect(calls.filter((c) => c.key === "DELETE /api/v1/session")).toHaveLength(2);
+    expect(auth().status).toBe("authenticated");
+    expect(auth().endReason).toBeNull();
+  });
+
+  it("送り直しで終われば成功にする", async () => {
+    const calls = mockApi({
+      "GET /api/v1/session": [authenticated(USER_A, "t1"), authenticated(USER_A, "t2"), anonymous("t3")],
+      "DELETE /api/v1/session": [{ status: 204 }],
+    });
+    const { auth } = await renderAndSubscribe();
+
+    await act(() => auth().signOut());
+
+    expect(calls.filter((c) => c.key === "DELETE /api/v1/session").map((c) => c.csrf)).toEqual(["t1", "t2"]);
+    await waitFor(() => expect(auth().status).toBe("anonymous"));
+    expect(auth().endReason).toBe("signed_out");
+  });
+
+  it("実行中の取り直しの応答を受け取ってからDELETEを送る", async () => {
+    const order: string[] = [];
+    let releaseGet: (response: Response) => void = () => undefined;
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_path: string, init?: RequestInit) => {
+        if (init?.method === "DELETE") {
+          order.push("DELETE");
+          return new Response(null, { status: 204 });
+        }
+        getCount += 1;
+        order.push(`GET${getCount}`);
+        if (getCount === 1) return Response.json(authenticated(USER_A, "t1").body);
+        if (getCount === 2) {
+          return new Promise<Response>((resolve) => {
+            releaseGet = (response) => {
+              order.push("GET2 done");
+              resolve(response);
+            };
+          });
+        }
+        return Response.json(anonymous("t3").body);
+      }),
+    );
+    const { auth } = await renderAndSubscribe();
+
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(getCount).toBe(2));
+    const signingOut = auth().signOut();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(order).not.toContain("DELETE");
+
+    releaseGet(Response.json(authenticated(USER_A, "t1").body));
+    await act(() => signingOut);
+
+    expect(order.indexOf("GET2 done")).toBeLessThan(order.indexOf("DELETE"));
+    expect(auth().endReason).toBe("signed_out");
   });
 });
 
