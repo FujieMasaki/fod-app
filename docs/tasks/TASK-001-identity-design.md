@@ -37,7 +37,7 @@
 
 ## 関連Implementation Plan
 
-[認証と利用者識別の設計比較Plan](../implementation-plans/2026-09-21-task-001-identity-design.md)。採用済みの基礎方針は§**45–48**、認証詳細は§**50–54と§56**、残作業は§**57**。§49・§55は前回までの検証記録。§16–44は過去の比較記録であり、現在の採用条件にしない。構成の正本は[architecture](../architecture.md)。
+[認証と利用者識別の設計比較Plan](../implementation-plans/2026-09-21-task-001-identity-design.md)。採用済みの基礎方針は **§45–48**、認証詳細は **§50–54と§56**、残作業は **§57**。§49・§55は前回までの検証記録。§16–44は過去の比較記録であり、現在の採用条件にしない。構成の正本は[architecture](../architecture.md)。
 
 ## 採用済み事項と残作業（2026-09-24 Devise切替）
 
