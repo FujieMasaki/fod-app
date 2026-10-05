@@ -158,6 +158,42 @@ MVP全体の範囲は[product](./product.md)を正本とする。
 **採用済み・未実装である。**2026-09-28に採用し、2026-09-29にゴミ箱と編集を追加した。実装はTASK-009 /
 010 / 011 / 013 / 014、検証はTASK-015が担当する。
 
+録音1回分のデータが、どこへ渡り、何を契機に削除処理を始めるかを図にする。図は下の5-1の要約であり、
+条件は5-1の表を正とする。処理の順序と状態遷移は[architecture](./architecture.md)「生成の実行方式」を見る。
+
+```mermaid
+sequenceDiagram
+    participant B as 端末（Browser）
+    participant R as Rails（API・Job）
+    participant S3 as S3東京（一時object）
+    participant T as Amazon Transcribe（東京）
+    participant AI as Amazon BedrockのClaude
+    participant DB as RDS（dots）
+    B->>R: 録音attemptの発行（started_atが決まる）
+    B->>R: 音声を送信（端末ではmemoryにだけ置く）
+    R->>S3: 処理の記録を作ってから、音声を一時objectとして保存する
+    R-->>B: 処理IDと再試行期限（受理から24時間）
+    Note over S3,T: ここから元音声が外部の委託先へ渡る
+    R->>T: 文字起こしを依頼する（Job・非同期）
+    T->>S3: 音声を読み、文字起こし全文を書き出す
+    R->>AI: 文字起こし全文を渡し、sentenceとsummaryを生成する
+    R->>DB: Dotを保存する（成功の確定）
+    R->>S3: 音声の削除処理を始める
+    B->>R: 結果を照会する（polling）
+    R-->>B: Dotと文字起こし全文（端末ではsessionStorageへ）
+    B->>R: 文字起こし全文の受領ACK
+    R->>S3: 文字起こし全文とTranscribeのjobの削除処理を始める
+    Note over R: 後片付けが全部終わってから処理の記録を削除する
+    alt 失敗して期限内
+        B->>R: 同じ処理IDで再試行（全文が残っていれば生成からやり直す）
+    else 期限到来・Dotの完全削除・退会・処理の取り消し
+        R->>S3: 音声・文字起こし全文・jobの削除処理を始める
+    end
+```
+
+外部の委託先（Transcribe・Bedrock）へ渡った分は、Focus on Dot側から即時に消せない。RDSのDotは、
+本人がゴミ箱へ入れる・完全削除する・退会するまで残り、期間による自動削除はしない。
+
 ### 5-1. データ別の条件
 
 | データ | 保持する目的 | 起点 | 削除を始める条件 | 完了の扱い | 残る例外 |
