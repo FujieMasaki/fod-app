@@ -484,3 +484,94 @@ describe("SignInScreen（開いている間の変化）", () => {
     expect(await screen.findByText("navigate:/settings")).toBeInTheDocument();
   });
 });
+
+describe("録音画面へ入るときの確かめ直し（verifyOnEnter）", () => {
+  function Toggle({ children }: { children: ReactNode }) {
+    const [open, setOpen] = useState(false);
+    return (
+      <div>
+        <button onClick={() => setOpen(true)}>enter</button>
+        {open && children}
+      </div>
+    );
+  }
+
+  it("cacheでは認証済みでも、確かめ直して未認証なら中身を一度も出さずログインへ移る", async () => {
+    locationMock.pathname = "/record";
+    const requests = mockApi({ "GET /api/v1/session": [signedIn, anonymous] });
+    renderWithAuth(
+      <Toggle>
+        <RequireAuth verifyOnEnter>録音画面</RequireAuth>
+      </Toggle>,
+    );
+    await waitFor(() => expect(requests.filter((r) => r.key === "GET /api/v1/session")).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    fireEvent.click(screen.getByRole("button", { name: "enter" }));
+
+    expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
+    expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
+    expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
+    expect(requests.filter((r) => r.key === "GET /api/v1/session")).toHaveLength(2);
+  });
+
+  it("確かめ直して認証済みなら中身を出す", async () => {
+    const requests = mockApi({ "GET /api/v1/session": [signedIn] });
+    renderWithAuth(
+      <Toggle>
+        <RequireAuth verifyOnEnter>録音画面</RequireAuth>
+      </Toggle>,
+    );
+    await waitFor(() => expect(requests).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    fireEvent.click(screen.getByRole("button", { name: "enter" }));
+
+    expect(await screen.findByText("録音画面")).toBeInTheDocument();
+    expect(requests.filter((r) => r.key === "GET /api/v1/session")).toHaveLength(2);
+  });
+});
+
+describe("メールでのlogin中のGoogle", () => {
+  it("loginを送っている間はGoogleのformを送らない", async () => {
+    let releasePost: (response: Response) => void = () => undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          return new Promise<Response>((resolve) => {
+            releasePost = resolve;
+          });
+        }
+        return Response.json(anonymous.body);
+      }),
+    );
+    const onIdentityChange = vi.fn();
+    function Subscriber() {
+      const { subscribeIdentityChange } = useAuth();
+      useState(() => subscribeIdentityChange(onIdentityChange));
+      return null;
+    }
+    const { container } = renderWithAuth(
+      <>
+        <Subscriber />
+        <SignInScreen redirect="/" />
+      </>,
+    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeEnabled());
+
+    fillSignIn();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeDisabled());
+    const form = container.querySelector('form[action="/auth/google_oauth2"]') as HTMLFormElement;
+    const submitted = fireEvent.submit(form);
+
+    // 送信は取り消され（preventDefault）、個人データを消す通知も出ない
+    expect(submitted).toBe(false);
+    expect(onIdentityChange).not.toHaveBeenCalled();
+    releasePost(new Response(JSON.stringify(problem(401, "invalid_credentials").body), {
+      status: 401,
+      headers: { "Content-Type": "application/problem+json" },
+    }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeEnabled());
+  });
+});

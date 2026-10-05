@@ -147,7 +147,7 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
         </Button>
       </form>
 
-      <GoogleSignInForm returnTo={redirect} />
+      <GoogleSignInForm returnTo={redirect} disabled={submitting} />
 
       <div className="flex flex-col items-start gap-2">
         <TextLink to="/signup">はじめての方は新規登録</TextLink>

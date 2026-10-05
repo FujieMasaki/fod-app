@@ -45,7 +45,7 @@ function HomePage() {
 function RecordPage() {
   return (
     <ScreenLayout>
-      <RequireAuth>
+      <RequireAuth verifyOnEnter>
         <RecordingStage />
       </RequireAuth>
     </ScreenLayout>

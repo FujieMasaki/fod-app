@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Navigate, useLocation } from "@tanstack/react-router";
 
 import { ErrorState } from "@/components/error-state/error-state";
@@ -11,12 +11,41 @@ import { safeRedirect } from "../redirect";
  * 取得の失敗（unknown）は未認証と同じには扱わず、再試行を出す（TASK-001 Plan §20）。
  * 期限切れ・別タブでのlogoutで状態が変わったときも、ここでログインへ移る。
  */
-export function RequireAuth({ children }: { children: ReactNode }) {
+type RequireAuthProps = {
+  children: ReactNode;
+  /**
+   * trueなら、開いたときにserverへ認証を確かめ直し、その応答で認証済みと分かるまで中身を出さない。
+   * 録音画面で使う（マイクを開始する前にRailsで確かめる。journaling.md §4「録音前認証と期限切れ」）。
+   */
+  verifyOnEnter?: boolean;
+};
+
+export function RequireAuth({ children, verifyOnEnter = false }: RequireAuthProps) {
   const { status, endReason, refresh } = useAuth();
   const { pathname } = useLocation();
+  const [verified, setVerified] = useState(!verifyOnEnter);
+
+  useEffect(() => {
+    if (!verifyOnEnter) return;
+    let active = true;
+    // 取り直しが終わってから中身を出す。失敗・未認証なら、状態がunknown・anonymousになって下の分岐が扱う。
+    void refresh().finally(() => {
+      if (active) setVerified(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [verifyOnEnter, refresh]);
 
   switch (status) {
     case "authenticated":
+      if (!verified) {
+        return (
+          <div className="flex h-full items-center justify-center">
+            <Spinner label="ログインの状態を確かめています" />
+          </div>
+        );
+      }
       return children;
     case "checking":
       return (
