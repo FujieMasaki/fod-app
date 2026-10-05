@@ -108,6 +108,16 @@ describe("認証状態", () => {
     await waitFor(() => expect(auth().status).toBe("anonymous"));
   });
 
+  it("取り直しに失敗したら、前に得た認証済みのままにせずunknownにする", async () => {
+    mockApi({ "GET /api/v1/session": [authenticated(USER_A, "t1"), new TypeError("Failed to fetch")] });
+    const { auth } = renderAuth();
+    await waitFor(() => expect(auth().status).toBe("authenticated"));
+
+    await act(() => auth().refresh());
+
+    await waitFor(() => expect(auth().status).toBe("unknown"));
+  });
+
   it("退会を受理した利用者はdeletion_in_progressにする", async () => {
     const reply = authenticated(USER_A, "t1");
     mockApi({
@@ -179,6 +189,50 @@ describe("login", () => {
     await waitFor(() => expect(getCount).toBe(3));
     expect(auth().status).toBe("authenticated");
     expect(auth().endReason).toBeNull();
+  });
+
+  it("loginを待っている間に保護APIが401を返しても、loginより前に取り直しを送らない", async () => {
+    const order: string[] = [];
+    let releaseApi: (response: Response) => void = () => undefined;
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        const key = `${init?.method ?? "GET"} ${path}`;
+        if (key === "GET /api/v1/session") {
+          getCount += 1;
+          order.push(`GET${getCount}`);
+          // 1回目はloginの前（Aのsessionが残っている）、2回目以降はloginの後
+          return Response.json(getCount === 1 ? authenticated(USER_A, "t1").body : authenticated(USER_B, "t3").body);
+        }
+        order.push(key);
+        if (key === "PATCH /api/v1/dots/a") {
+          return new Promise<Response>((resolve) => {
+            releaseApi = resolve;
+          });
+        }
+        return Response.json(authenticated(USER_B, "t2").body);
+      }),
+    );
+    const { auth } = await renderAndSubscribe();
+
+    const pendingApi = auth()
+      .request("/api/v1/dots/a", { method: "PATCH", body: {} })
+      .catch(() => undefined);
+    await waitFor(() => expect(order).toContain("PATCH /api/v1/dots/a"));
+    const signingIn = auth().signIn({ email: "b@example.com", password: "password123" });
+    releaseApi(
+      new Response(JSON.stringify(problem(401, "unauthenticated").body), {
+        status: 401,
+        headers: { "Content-Type": "application/problem+json" },
+      }),
+    );
+    await act(() => pendingApi);
+    await act(() => signingIn);
+
+    // loginのPOSTより前に、2回目の取り直し（401による）が送られていない
+    expect(order.indexOf("POST /api/v1/session")).toBeLessThan(order.indexOf("GET2"));
+    await waitFor(() => expect(auth().user?.id).toBe(USER_B));
   });
 
   it("csrf_invalidならtokenを取り直して1回だけ再送する", async () => {

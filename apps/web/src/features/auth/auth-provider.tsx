@@ -102,6 +102,9 @@ function identityOf(session: Session | undefined): string | null | undefined {
 function deriveStatus(session: Session | undefined, isError: boolean): AuthStatus {
   if (!session) return isError ? "unknown" : "checking";
   if (!session.authenticated) return "anonymous";
+  // 取り直しに失敗したら、前に得た認証済みのまま保護する画面を見せ続けない（確かめられない状態にする）。
+  // 未認証のcacheは、失敗しても安全側なのでそのまま使う。
+  if (isError) return "unknown";
   return session.account_status === "deletion_in_progress" ? "deletion_in_progress" : "authenticated";
 }
 
@@ -181,7 +184,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setEndReason(reason);
         queryClient.setQueryData<Session>(SESSION_QUERY_KEY, { authenticated: false, csrf_token: current.csrf_token });
       }
-      void refresh();
+      // login・logoutの間は取り直さない（その応答がCookieを戻し得るため）。login・logoutが終わった後に取り直す。
+      if (!authBusyRef.current) void refresh();
     },
     [queryClient, refresh],
   );
