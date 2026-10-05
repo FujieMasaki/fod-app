@@ -6,9 +6,13 @@
  * - フォントはbodyの指定（globals.css）をそのまま使う。--font-*を定義するとglobals.cssの
  *   --font-sansを上書きしてしまうため、ここでは定義しない。
  */
-@layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
-@import "tailwindcss/utilities.css" layer(utilities);
+/*
+ * utilitiesはlayerに入れない。globals.cssのreset（`*`のmargin・padding、`a`の色・下線など）はlayerに入って
+ * いないため、utilitiesをlayerに入れるとcascade layersの規則で常にresetが勝ち、余白や下線が効かない。
+ * layerに入れなければ詳細度で比べられ、classのutilities（0,1,0）が`*`・`a`のresetに勝つ。
+ */
+@import "tailwindcss/utilities.css";
 
 @theme {
   --*: initial;
