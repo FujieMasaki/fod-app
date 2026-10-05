@@ -79,7 +79,16 @@ function EntryVerifiedGuard({ children }: { children: ReactNode }) {
     const timer = setTimeout(() => {
       if (active) setTimedOut(true);
     }, VERIFY_TIMEOUT_MS);
-    void refresh().finally(() => {
+    const verify = async () => {
+      await refresh();
+      // 直接開いた・再読み込みしたときは、このeffectがAuthProviderの購読より先に動き、queryがまだ使われていない
+      // 扱いのため、refreshは取得せずに返る。一度も取得が終わっていなければ、最初の取得を待つ（実行中なら共有する）。
+      const state = queryClient.getQueryState<Session>(SESSION_QUERY_KEY);
+      if (!state || state.dataUpdateCount + state.errorUpdateCount === 0) {
+        await queryClient.fetchQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession }).catch(() => undefined);
+      }
+    };
+    void verify().finally(() => {
       if (!active) return;
       // offlineでは取り直しが一時停止（paused）したまま、refreshはすぐに返る。cacheで判断しない。
       const verdict = liveVerdictOf(queryClient.getQueryState<Session>(SESSION_QUERY_KEY));

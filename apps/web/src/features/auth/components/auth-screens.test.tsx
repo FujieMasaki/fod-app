@@ -833,6 +833,32 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     expect(screen.queryByText(/navigate:/)).not.toBeInTheDocument();
   });
 
+  it.each([false, true])(
+    "直接開いた（ProviderとguardのmountがStrictMode=%s で同時）ときも、最初の取得を待って認証済みなら中身を出す",
+    async (strict) => {
+      mockApi({ "GET /api/v1/session": [signedIn] });
+      const tree = (
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <AuthProvider>
+            <RequireAuth startsOnEnter>録音画面</RequireAuth>
+          </AuthProvider>
+        </QueryClientProvider>
+      );
+      render(strict ? <StrictMode>{tree}</StrictMode> : tree);
+
+      expect(await screen.findByText("録音画面")).toBeInTheDocument();
+      expect(screen.queryByText(/navigate:/)).not.toBeInTheDocument();
+    },
+  );
+
+  it("直接開いて未認証なら、最初の取得を待ってログインへ移る", async () => {
+    mockApi({ "GET /api/v1/session": [anonymous] });
+    renderWithAuth(<RequireAuth startsOnEnter>録音画面</RequireAuth>);
+
+    expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
+    expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
+  });
+
   it("確かめ直して認証済みなら中身を出す", async () => {
     const requests = mockApi({ "GET /api/v1/session": [signedIn] });
     renderWithAuth(
