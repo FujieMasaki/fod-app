@@ -633,6 +633,35 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
   });
 
+  it("前の取得が失敗していても、入るときの確かめ直しで認証済みと分かれば中身を出す", async () => {
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        getCount += 1;
+        // 1回目（起動）は失敗してunknown、2回目（入るときの確かめ直し）は認証済み
+        if (getCount === 1) throw new TypeError("Failed to fetch");
+        return Response.json(signedIn.body);
+      }),
+    );
+    mounted.count = 0;
+    renderWithAuth(
+      <Toggle>
+        <RequireAuth startsOnEnter>
+          <CountingScreen />
+        </RequireAuth>
+      </Toggle>,
+    );
+    await waitFor(() => expect(getCount).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    fireEvent.click(screen.getByRole("button", { name: "enter" }));
+
+    expect(await screen.findByText("録音画面")).toBeInTheDocument();
+    expect(mounted.count).toBe(1);
+    expect(screen.queryByText(/navigate:/)).not.toBeInTheDocument();
+  });
+
   it("確かめ直して認証済みなら中身を出す", async () => {
     const requests = mockApi({ "GET /api/v1/session": [signedIn] });
     renderWithAuth(

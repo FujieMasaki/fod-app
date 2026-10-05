@@ -50,6 +50,8 @@ export function RequireAuth({ children, startsOnEnter = false }: RequireAuthProp
   const [check, setCheck] = useState<"pending" | "verified" | "anonymous" | "unconfirmed">(
     startsOnEnter ? "pending" : "verified",
   );
+  // 中身を一度出したか。出した後に認証済みでなくなったときだけ「離れる」と決める。
+  const shownRef = useRef(false);
   // 一度離れると決めたら、状態が戻っても（画面の遷移が終わる前に戻っても）中身を出し直さない。
   const leftRef = useRef<"login" | "home" | null>(null);
 
@@ -75,7 +77,7 @@ export function RequireAuth({ children, startsOnEnter = false }: RequireAuthProp
       leftRef.current = "login";
     } else if (check === "unconfirmed") {
       leftRef.current = "home";
-    } else if (check === "verified" && status !== "authenticated" && status !== "checking") {
+    } else if (check === "verified" && shownRef.current && status !== "authenticated" && status !== "checking") {
       // 中身を出した後に認証済みでなくなった。後の自動の取り直し（focus・再接続）で戻っても中身を出さず、
       // 利用者がもう一度始める。
       leftRef.current = status === "anonymous" ? "login" : "home";
@@ -84,7 +86,9 @@ export function RequireAuth({ children, startsOnEnter = false }: RequireAuthProp
   if (leftRef.current !== null) {
     return leftRef.current === "login" ? <Navigate to="/login" replace /> : <Navigate to="/" replace />;
   }
-  if (startsOnEnter && check === "pending") {
+  // 確かめ直しで認証済みと分かっても、contextの状態はTanStack Queryの通知が届くまで前の値（unknown・anonymous）
+  // のことがある。中身を出す前なら、追いつくまで待つ（離れたと誤って判断しない）。
+  if (startsOnEnter && (check === "pending" || (check === "verified" && !shownRef.current && status !== "authenticated"))) {
     return (
       <div className="flex h-full items-center justify-center">
         <Spinner label="ログインの状態を確かめています" />
@@ -94,6 +98,7 @@ export function RequireAuth({ children, startsOnEnter = false }: RequireAuthProp
 
   switch (status) {
     case "authenticated":
+      shownRef.current = true;
       return children;
     case "checking":
       return (
