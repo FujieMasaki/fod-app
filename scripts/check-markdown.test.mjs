@@ -177,6 +177,19 @@ test("4空白インデントのcode blockと種類の違うfenceの中は見な�
   assert.equal(findEmphasisErrors("````\n**a。**b\n````\n**崩れている。**続き\n", "a.md").length, 1);
 });
 
+test("fenceのインデントは3空白まで、閉じていなければ報告する", () => {
+  // 4空白のcode blockの中のfence行で状態を反転させない（以降の全行が無検査になる）。
+  const indentedFence = "文\n\n    ```sh\n    cmd\n\n**崩れている。**続き\n";
+  assert.equal(findEmphasisErrors(indentedFence, "a.md").length, 1);
+  assert.match(findEmphasisErrors(indentedFence, "a.md")[0], /^a\.md:6:/);
+  // 3空白までは有効なfence。
+  assert.deepEqual(findEmphasisErrors("   ```sh\n**a。**b\n   ```\n", "a.md"), []);
+  // 閉じていないfenceは黙って通さない。
+  assert.deepEqual(findEmphasisErrors("```sh\ncmd\n\n**崩れている。**続き\n", "a.md"), [
+    "a.md: ``` で開いたcode blockが閉じていません。そこから後の行を検査していません。",
+  ]);
+});
+
 test("水平線の`***`は強調として扱わない", () => {
   assert.deepEqual(findEmphasisErrors("文\n\n***\n\n次の段落\n", "a.md"), []);
   assert.deepEqual(findEmphasisErrors("文\n\n * * *\n\n次の段落\n", "a.md"), []);

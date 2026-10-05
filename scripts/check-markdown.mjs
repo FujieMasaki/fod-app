@@ -206,7 +206,9 @@ export function analyzeEmphasis(source, relativePath) {
 
     // 閉じfenceは開きと同じ記号で、同じ長さ以上である必要がある。長さを捨てると
     // ````で開いたblockの中の```で閉じてしまい、code blockの中を本文として解析する。
-    const fenceStart = /^\s*(```+|~~~+)/.exec(rawLine);
+    // インデントは3空白まで（CommonMark）。`^\s*`にすると、4空白のcode blockの中に書いた
+    // fence行で状態が反転し、閉じないままEOFへ達して以降の全行が無検査になる。
+    const fenceStart = /^ {0,3}(```+|~~~+)/.exec(rawLine);
     if (fenceStart && (fence === null || fenceStart[1].startsWith(fence))) {
       flush();
       fence = fence === null ? fenceStart[1] : null;
@@ -258,6 +260,12 @@ export function analyzeEmphasis(source, relativePath) {
   });
 
   flush();
+  // 閉じていないfenceは、その後の行がすべて無検査になる。黙って通さずに報告する。
+  if (fence !== null) {
+    errors.push(
+      `${relativePath}: ${fence} で開いたcode blockが閉じていません。そこから後の行を検査していません。`,
+    );
+  }
   return { errors, swaps };
 }
 
