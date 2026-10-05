@@ -18,6 +18,9 @@
 - [ ] strong parametersまたは同等の許可listで、受け取るfieldを限定しているか。ID、所有者、状態、
   provider設定などをmass assignmentできないか。
 - [ ] 型、長さ、形式、content type、アップロード容量、関連resourceの所有権を検証しているか。
+- [ ] 形式を確かめた値（cursor・数値・日付など）から作る値が、DBの型の範囲（timestamp・integer等）に
+  収まるか。形式だけを確かめると、作り替えた値でDBの例外が起き、`400` / `422`ではなく`500`になる。
+  意味の上で取りうる範囲（例: その日の中の時刻）に限り、範囲外を拒否するtestを置く。
 - [ ] API responseは明示したfieldだけで構成し、暗号化情報、token、内部state、外部provider response、
   他人のデータを含めていないか。
 - [ ] credentialがsource、test fixture、例外、ログ、response、CI出力へ入っていないか。Railsの
