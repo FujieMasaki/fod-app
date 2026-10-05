@@ -92,6 +92,10 @@ TASK-006で実装したRailsの認証（Devise + OmniAuth Google + CookieStore�
   - product: §3の区分（Web接続を実装済みへ）
   - frontend.md: 保護APIの呼び方、認証の終了・切り替わりの購読、Tailwindの使い始め
   - design-system: 「既存実装との関係」（Tailwindを導入した範囲）
+  - code-review/frontend: security.md §6・README §3の`fod.session.v1`（保存・復元をやめたこと）と、Cookieの
+    書き直しの競合・切り替わりの照合のレビュー観点（再発防止）
+  - privacy: `fod.session.v1`を起動時に消すようにしたこと
+  - TASK-014: 完了条件のうち`fod.session.v1`の扱いを本タスクで済ませたこと
 
 ## 7. Proposed Approach
 
@@ -238,9 +242,11 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 | `apps/web/src/features/session/session-context.test.tsx` | 新規 | 切り替わりで消えること、起動時に復元せず消すこと |
 | `apps/web/src/features/session/types.ts` | 変更 | `hydrated`の意味（復元をやめたため） |
 | `apps/web/src/features/processing/components/processing-indicator/processing-indicator.tsx` | 変更 | 整理の途中で利用者が切り替わったら結果を捨てる（Codexの指摘で追加） |
+| `apps/web/src/features/recording/components/recording-stage/recording-stage.tsx` | 変更 | 録音の途中で利用者が切り替わったら録音時間を残さない |
+| `apps/web/src/features/recording/components/recording-stage/recording-stage.test.tsx` | 新規 | 上の確認 |
 | `apps/web/src/features/processing/components/processing-indicator/processing-indicator.test.tsx` | 変更 | `SessionProvider`が`AuthProvider`を要るため包む。切り替わりで結果を捨てること |
 
-レビュー対象 16。
+レビュー対象 18。
 
 ### PR 2/3: ログイン・登録・guard・アカウント画面（`feat/task-007-2-sign-in-screens`、base PR 1）
 
@@ -319,11 +325,12 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
   切り替わりの前に始まった非同期処理（Dot生成のmutation、`request`のpromise）は止めない。終わった後に結果を
   stateへ書き戻すと前の利用者のデータが残るため、`useAuth().identityEpoch`（切り替わりごとに増える番号）を
   始めたときに控え、結果を保存・表示する前に比べて違えば捨てる。現在のDot生成（`ProcessingIndicator`）は
-  これで捨て、Homeへ戻す。TASK-011・014で足す処理も同じ照合をする。Mutation cacheも今は消していない。`removeQueries`はmount中の
+  これで捨て、Homeへ戻す。録音時間（`RecordingStage`）も、録音を始めたときの番号と比べて違えば残さない。
+  TASK-010・011・014で足す処理も同じ照合をする。Mutation cacheも今は消していない。`removeQueries`はmount中の
   `useQuery`が持つ表示中のdataまでは消さないため、個人データのqueryは`status`で`enabled`を切るかguardでunmountする。
 - **通信のtimeout**: `apiRequest`はtimeoutもAbortSignalも持たない。応答が止まるとlogin・logoutの送信中の表示が
   解けない。保護APIを足すTASK-008以降で、`signal`を通すかを決める。
-- **featureをまたぐ依存**: `features/session`と`features/processing`が`features/auth`の`index.ts`（`useAuth`）に
+- **featureをまたぐ依存**: `features/session`・`features/processing`・`features/recording`が`features/auth`の`index.ts`（`useAuth`）に
   依存する（逆向きはない）。認証の切り替わりを個人データのstateへ伝える境界（§7-3）を、各featureが購読・照合する
   ためで、frontend.md §1の「公開する最小APIを`index.ts`からexportする」形に収める。`features/auth`が他の
   featureの内部をimportする必要が出たら、境界の置き場所を見直す。
@@ -365,9 +372,12 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
   - logoutの後はserverに確かめ、まだ認証済みなら1回だけ送り直し、それでも残れば失敗にする。
   - 別タブの通信と、`request`を通さない`fetch`は止められないため、完全には防げない（その場合も、logoutの
     確認で失敗として示す）。後続の機能はRails APIを必ず`request`・`withCsrf`から呼ぶ（frontend.md §2）。
-- **切り替わりの通知の時機**: 利用者の切り替わりは描画後のeffectで通知するため、新しい利用者の状態で
-  描画した1フレームだけ前の利用者のqueryが残り得る。個人データのqueryを足すTASK-008以降は、
-  query keyに`user.id`を含めるか、`enabled`を利用者で絞る。
+- **切り替わりの通知の時機**: 個人データを消す通知は描画後のeffectで行うため、新しい利用者の状態で描画した
+  1回だけ前の利用者の値が残り得る。そのため`identityEpoch`は描画の中で（前回の利用者と比べて）増やし、新しい
+  利用者と同じcommitに入れる。`SessionProvider`は値を書いたときの番号と一緒に持ち、番号が違えば見せない。
+  Dot生成の結果も、始めたときの番号と比べて捨てる（Codexの最終チェックで、Bの認証とAのDotが同じcommitに
+  出ることを再現されたため）。個人データのqueryを足すTASK-008以降は、query keyに`user.id`か`identityEpoch`を
+  含める。
 - **logoutの失敗**: 個人データを外した後に失敗しても、ログイン画面へ進めない（別の利用者がloginして前の
   Cookieと混ざるのを防ぐ）。
 - **Googleから戻った直後**: ページの読み込み直しで前の利用者と比べられないため、遷移の前に切り替わりを通知して
@@ -426,7 +436,7 @@ PR 1/3のCodexの最終チェックが5回続けてLGTMにならず、`pr-review
 | 2 | 取り直しの失敗で認証済みが残る（Medium）／login中の401で取り直しが先に送られる（Medium） | `unknown`にする／login・logoutの後に回す |
 | 3 | 切り替わりの後に前の利用者の生成結果が戻る（High）／公開の`refresh`が排他を迂回する（Medium） | `identityEpoch`で照合して捨てる／排他の後に回す |
 | 4 | 重なった取り直しの取り消しで、logoutが古い応答を待てない（High） | 取り消さずに共有する（`cancelRefetch: false`） |
-| 5 | login・logoutを呼んだ直後のfocusで、取り直しが待つ対象から漏れる（High） | refでその場で判定する（このコミットで修正。レビューは未実施） |
+| 5 | login・logoutを呼んだ直後のfocusで、取り直しが待つ対象から漏れる（High） | refでその場で判定する（停止の記録の時点では修正のみ。その後、選択肢Aの決定を受けてレビューした） |
 
 指摘はすべて「CookieStoreがどの応答でもCookieを書き直す」ことから来る、通信の順序の競合（と、切り替わりの前の
 結果の扱い）で、回ごとに別の経路が見つかっている。同じ問題の繰り返しではないが、収束していない。

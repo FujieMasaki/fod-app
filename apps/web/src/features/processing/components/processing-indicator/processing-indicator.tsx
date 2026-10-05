@@ -43,8 +43,14 @@ export function ProcessingIndicator() {
     navigate({ to: "/dot", replace: true });
   }, [status, data, identityEpoch, setDotSession, navigate]);
 
+  // 失敗の後に利用者が切り替わっていたら、新しい利用者に前の利用者の整理を再試行させずHomeへ戻す。
+  const switchedAfterFailure = status === "error" && startedEpochRef.current !== identityEpoch;
+  useEffect(() => {
+    if (switchedAfterFailure) navigate({ to: "/", replace: true });
+  }, [switchedAfterFailure, navigate]);
+
   if (status === "error") {
-    return <ErrorState onRetry={start} />;
+    return switchedAfterFailure ? null : <ErrorState onRetry={start} />;
   }
 
   return (

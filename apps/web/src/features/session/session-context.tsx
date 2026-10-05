@@ -33,10 +33,11 @@ function removeLegacyStorage() {
  * browserのstorageへは書かない（frontend.md §2。正本はserver）。
  */
 export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const [recordedDurationSec, setRecordedDurationSec] = useState<Seconds | null>(
-    null,
-  );
-  const [dotSession, setDotSessionState] = useState<DotSession | null>(null);
+  const { identityEpoch, subscribeIdentityChange } = useAuth();
+  // 値は、書いたときの利用者の世代番号と一緒に持つ。番号が今と違えば前の利用者の値なので見せない
+  // （切り替わりの描画では、消す通知より先に新しい利用者が描画されるため。TASK-007 Plan §7-3）。
+  const [recorded, setRecorded] = useState<{ epoch: number; value: Seconds } | null>(null);
+  const [dot, setDot] = useState<{ epoch: number; value: DotSession } | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
   // 起動時に古い保存値を消す。復元はしない。
@@ -45,23 +46,31 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setHydrated(true);
   }, []);
 
-  const setRecordedDuration = useCallback((sec: Seconds) => {
-    setRecordedDurationSec(sec);
-  }, []);
+  const setRecordedDuration = useCallback(
+    (sec: Seconds) => {
+      setRecorded({ epoch: identityEpoch, value: sec });
+    },
+    [identityEpoch],
+  );
 
-  const setDotSession = useCallback((session: DotSession) => {
-    setDotSessionState(session);
-  }, []);
+  const setDotSession = useCallback(
+    (session: DotSession) => {
+      setDot({ epoch: identityEpoch, value: session });
+    },
+    [identityEpoch],
+  );
 
   const reset = useCallback(() => {
-    setRecordedDurationSec(null);
-    setDotSessionState(null);
+    setRecorded(null);
+    setDot(null);
     removeLegacyStorage();
   }, []);
 
-  // 認証の終了・利用者の切り替わりで、前の利用者の録音時間とDotを残さない（TASK-007 Plan §7-3）。
-  const { subscribeIdentityChange } = useAuth();
+  // 認証の終了・利用者の切り替わりで、前の利用者の録音時間とDotを消す（TASK-007 Plan §7-3）。
   useEffect(() => subscribeIdentityChange(reset), [subscribeIdentityChange, reset]);
+
+  const recordedDurationSec = recorded && recorded.epoch === identityEpoch ? recorded.value : null;
+  const dotSession = dot && dot.epoch === identityEpoch ? dot.value : null;
 
   const value = useMemo<SessionContextValue>(
     () => ({

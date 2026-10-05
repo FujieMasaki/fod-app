@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
 
 import { AuthProvider, useAuth } from "@/features/auth";
 import { sampleSession } from "@/mocks/sample-session";
@@ -68,6 +68,7 @@ function renderSession() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  focusManager.setFocused(undefined);
   window.localStorage.clear();
 });
 
@@ -97,6 +98,46 @@ describe("端末のジャーナリング状態", () => {
 
     expect(screen.getByText(sampleSession.sentence)).toBeInTheDocument();
     expect(window.localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull();
+  });
+
+  it("別の利用者へ切り替わった描画で、前の利用者のDotを1回も描画しない", async () => {
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        getCount += 1;
+        return Response.json(getCount === 1 ? signedInAs(USER_A) : signedInAs(USER_B));
+      }),
+    );
+    const renders: { user: string | undefined; dot: string | null }[] = [];
+    function Recorder() {
+      const { dotSession } = useSession();
+      const { user } = useAuth();
+      renders.push({ user: user?.id, dot: dotSession?.sentence ?? null });
+      return null;
+    }
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <AuthProvider>
+          <SessionProvider>
+            <Probe />
+            <Recorder />
+          </SessionProvider>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("authenticated")).toBeInTheDocument());
+    act(() => screen.getByText("record").click());
+    expect(screen.getByText(sampleSession.sentence)).toBeInTheDocument();
+
+    // 画面へ戻ったときの取り直しで、別の利用者（B）に変わっている
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    await waitFor(() => expect(renders.at(-1)?.user).toBe(USER_B));
+    expect(renders.filter((r) => r.user === USER_B && r.dot !== null)).toEqual([]);
   });
 
   it("利用者が切り替わったら録音時間とDotを消す", async () => {

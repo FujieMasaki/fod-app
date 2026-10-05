@@ -158,14 +158,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 実行中のlogin・logout。重なって呼ばれたら順に実行する（先に終わった側が排他を解かないように）。
   const exclusiveRef = useRef<Promise<unknown> | null>(null);
 
-  // 利用者が切り替わるたびに増える番号。切り替わりの前に始めた処理の結果を、後で捨てるために使う。
-  const [identityEpoch, setIdentityEpoch] = useState(0);
+  // 確定した利用者（認証済みならid、未認証ならnull、まだ分からなければundefined）。
+  const identity = authenticatedSession ? authenticatedSession.user.id : status === "anonymous" ? null : undefined;
+
+  // 利用者が切り替わるたびに増える番号。切り替わりの前に始めた処理の結果や、前の利用者の端末の値を捨てるために使う。
+  // 描画の後のeffectで増やすと、新しい利用者と古い番号が同じ描画に出て、前の利用者のDotが1回描画され得る。
+  // そのため、描画の中で前回の利用者と比べて増やす（Reactの「描画の中でstateを調整する」形。同じcommitに入る）。
+  // 初回の確定（まだ分からない状態から）では増やさない。
+  const [epochState, setEpochState] = useState<{ identity: string | null | undefined; epoch: number }>({
+    identity: undefined,
+    epoch: 0,
+  });
+  let identityEpoch = epochState.epoch;
+  if (identity !== undefined && identity !== epochState.identity) {
+    const next = { identity, epoch: epochState.epoch + (epochState.identity === undefined ? 0 : 1) };
+    setEpochState(next);
+    identityEpoch = next.epoch;
+  }
+
   const listenersRef = useRef(new Set<() => void>());
-  const notifyIdentityChange = useCallback(() => {
-    setIdentityEpoch((current) => current + 1);
+  // 認証以外のqueryを消し、購読者（端末の個人データ）へ伝える。
+  const clearPrivateState = useCallback(() => {
     clearPrivateQueries(queryClient);
     for (const listener of listenersRef.current) listener();
   }, [queryClient]);
+  // 利用者が変わる前に呼ぶ（logoutの開始・Googleへの遷移）。番号も増やす。
+  const notifyIdentityChange = useCallback(() => {
+    setEpochState((current) => ({ ...current, epoch: current.epoch + 1 }));
+    clearPrivateState();
+  }, [clearPrivateState]);
 
   const subscribeIdentityChange = useCallback((listener: () => void) => {
     listenersRef.current.add(listener);
@@ -174,8 +195,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // 確定した利用者が前回と変わったら通知する。初回の確定（checkingから）は通知しない。
-  const identity = authenticatedSession ? authenticatedSession.user.id : status === "anonymous" ? null : undefined;
+  // 確定した利用者が前回と変わったら、終了の理由を決めて個人データを消す。初回の確定（checkingから）は通知しない。
+  // 番号は上の描画の中で既に増えている。
   const previousRef = useRef<{ identity: string | null; expiresAt: string | null } | undefined>(undefined);
   // このタブでlogoutしている間に未認証へ変わったら、理由はlogoutにする（描画の順序に依らないように）。
   const signingOutRef = useRef(false);
@@ -193,8 +214,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       setEndReason(null);
     }
-    notifyIdentityChange();
-  }, [identity, authenticatedSession?.expires_at, notifyIdentityChange]);
+    clearPrivateState();
+  }, [identity, authenticatedSession?.expires_at, clearPrivateState]);
 
   // login・logoutの間に呼ばれたら、終わるまで待ってから取り直す（その応答がCookieを戻し得るため）。
   // 実行中の取り直しは取り消さずに共有する（cancelRefetch: false）。取り消してもfetchの通信は止まらず、
@@ -284,11 +305,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const withCsrf = useCallback(
     async <T,>(operation: (csrfToken: string) => Promise<T>, calledAs?: string | null): Promise<T> => {
+      // 401を受けたときに、始めたときの利用者と今の利用者を比べるために控える。
+      let startedAsRef: string | null | undefined = calledAs;
       try {
         const csrfToken = await currentCsrfToken();
         // 始めたときの利用者。再送の前に変わっていたら送らない（Aとして始めた操作をBの認証で送らないため）。
         // 呼び出し側がlogin・logoutを待つ前の利用者を渡したときは、それを使う。
         const startedAs = calledAs !== undefined ? calledAs : identityOf(queryClient.getQueryData<Session>(SESSION_QUERY_KEY));
+        startedAsRef = startedAs;
         try {
           return await operation(csrfToken);
         } catch (error) {
@@ -298,12 +322,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return await operation(fresh.csrf_token);
         }
       } catch (error) {
-        if (isProblem(error, "session_expired")) markEnded("expired");
-        else if (isProblem(error, "unauthenticated")) markEnded("session_lost");
+        if (isProblem(error, "session_expired", "unauthenticated")) {
+          // 前の利用者として送った通信の401で、既に切り替わった後の利用者を未認証にしない（取り直して確かめるだけにする）。
+          const stillSameUser =
+            startedAsRef === undefined ||
+            identityOf(queryClient.getQueryData<Session>(SESSION_QUERY_KEY)) === startedAsRef;
+          if (!stillSameUser) void refresh();
+          else markEnded(isProblem(error, "session_expired") ? "expired" : "session_lost");
+        }
         throw error;
       }
     },
-    [currentCsrfToken, markEnded, queryClient],
+    [currentCsrfToken, markEnded, queryClient, refresh],
   );
 
   // 後続の機能へ公開する入口。login・logoutの間は始めずに待ち、実行中のものはlogin・logoutが待てるよう数える。
