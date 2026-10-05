@@ -115,9 +115,11 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
 
 - `docs/architecture.md`: 「データ所在地と費用」を正本として変更（「保存は日本国内」の射程とdata retention
   modeの条件を含む）。2つの経路図の註、Bedrockのモデル選定、「未決定」への越境移転の確認の追加。
-- `docs/privacy.md`: §4のTASK-003の行へ方針の変更と残る確認。§5-1の外部provider行へ正本への参照。
+- `docs/privacy.md`: §4のTASK-003の行へ方針の変更と残る確認。§5-1の外部provider行へ正本への参照と、
+  Transcribeのjob記録の保持期間（90日・調整不可）。
 - `docs/product.md`・`docs/journaling.md`: 所在地の記述を新しい方針へ揃えた。product.mdは§5へ
-  「委託先の構成」の保留事項（案Cが保留になったことと再検討条件）も追加した。
+  「委託先の構成」の保留事項（案Cが保留になったことと再検討条件）と、TASK-017の行への越境移転の
+  追記も行った。
 - `docs/tasks/TASK-001-identity-design.md`: 所在地の要約を正本への参照へ置き換えた。
 - 過去のPlanは、**「現在」を名乗っている箇所だけ**を直した。AGENTS.mdの「過去のPlanのCurrent Stateは
   当時の記録であり、現在の状態へ書き換えない」に従い、**日付や旧構成（Cognito等）で当時の記録と分かる
@@ -127,6 +129,7 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
     置く**現在の**方針」）。いずれも単独で読むと現行方針を名乗るため。
   - 触っていない箇所: 同Plan §40「公開MVPの採用決定（2026-09-24）」の表と §41。見出しに日付があり、
     本文がCognito構成（その後Deviseへ変更済み）を前提にしているので当時の記録と読める。
+    `2026-09-28-task-002-data-lifecycle.md`の当時のarchitectureの引用も、**引用そのものなので触らない。**
 - `docs/tasks/TASK-003-generation-design.md`: 所在地方針の変更、案Cの保留、委託先の構成の再検討条件の
   担当（`product.md §5`が正本）。
 - `docs/tasks/TASK-009-backend-audio-generation.md`: model id選定の前提。
