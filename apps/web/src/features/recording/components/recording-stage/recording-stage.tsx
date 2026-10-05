@@ -16,15 +16,14 @@ export function RecordingStage() {
   const { identityEpoch } = useAuth();
   const { elapsedSec, isRecording, getAmplitude, start, stop } = useRecorder();
   const [stopping, setStopping] = useState(false);
-  const startedRef = useRef(false);
   // 録音を始めたときの利用者の世代。止めたときに利用者が切り替わっていたら、前の利用者の録音時間を残さない。
   const startedEpochRef = useRef(identityEpoch);
   const currentEpochRef = useRef(identityEpoch);
   currentEpochRef.current = identityEpoch;
 
+  // 録音はmountで始め、unmountでuseRecorderが片付ける。StrictModeの再実行では、片付けた後に新しく始め直す
+  // （一度だけ始める形にすると、片付けた録音のまま止まる）。
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
     void start();
   }, [start]);
 
