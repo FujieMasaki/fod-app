@@ -178,12 +178,14 @@ sequenceDiagram
     R->>T: 文字起こしを依頼する（Job・非同期）
     S3->>T: 音声を読ませる
     T->>S3: 文字起こし全文を書き出す
+    S3-->>R: 文字起こし全文を読む（Jobのmemoryを通る）
     R->>AI: 文字起こし全文を渡し、sentenceとsummaryを生成する
     AI-->>R: sentenceとsummaryを返す
-    B->>R: 結果を照会する（polling。処理中も続け、失敗もここで分かる）
-    alt 成功
+    Note over B,R: 端末はこの間も結果の照会（polling）を続け、失敗もそこで分かる
+    alt 成功（JobがDotを保存した）
         R->>DB: Dotを保存する（成功の確定）
         R->>S3: 音声の削除処理を始める
+        B->>R: 結果を照会する（polling）
         R-->>B: Dotと文字起こし全文（端末ではsessionStorageへ）
         alt 端末が全文を受け取ったと通知した
             B->>R: 全文を保存し終えたと通知する（受領ACK）
