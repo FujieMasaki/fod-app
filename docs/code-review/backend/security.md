@@ -65,8 +65,8 @@
 
 ## 6. 現在の構成での補足
 
-- RailsはAPI-onlyで、routeは`GET /up`と認証（`/api/v1/session`等、`/auth/google_oauth2`）だけ。
-  保護するendpointは`before_action :authenticate_user!`と`current_user`を使い、JSONの項目はbodyからだけ
+- RailsはAPI-onlyで、routeは`GET /up`と認証（`/api/v1/session`等、`/auth/google_oauth2`）、Dotの
+  履歴の取得・編集（`/api/v1/days`・`/api/v1/dots/{dot_id}`。TASK-008）だけ。保護するendpointは`before_action :authenticate_user!`と`current_user`を使い、JSONの項目はbodyからだけ
   受け取る（`JsonParams`。password・tokenをURLに載せない）。`/up`への変更でも不要な内部情報を
   responseへ追加しない。
 - `apps/api/config/initializers/filter_parameter_logging.rb`は防御の補助であり、将来追加する音声・
