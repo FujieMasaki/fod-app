@@ -410,13 +410,16 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
   pathはrouterと同じ規則で正規化してから比べる（生のpathでは`//api/...`で迂回できることを、3回目の
   サブエージェントのレビューで発見し、人間の判断で続けて直した）。paramsを解釈できない場合のfieldは、
   pathの誤りも含むため`request`にした。
+- **objectでないJSONのbodyを入れる`_json`を`filter_parameters`に足した。**文字列・配列として送った本文が、
+  `422`で拒否しても`Parameters:`のログ（info）に残っていた（PR 3/3のCodexの2回目の最終チェックで発見）。
+  あわせて、`ApiRequestGuard`が`BadRequest`を捕まえる範囲を、コメントのとおり`/api/`に限った。
 - `filter_parameters`は完全一致ではなく部分一致（`%i[sentence summary]`）にした。隠しすぎて困る項目が無いため。
 
 ### 検証結果
 
 実行したcommand（`apps/api`、DBは`FOD_DB_SUFFIX=_task_008`の専用DB）:
 
-- `bundle exec rspec` — 416 examples, 0 failures（追加: model 18、service 20、request 43）
+- `bundle exec rspec` — 417 examples, 0 failures（追加: model 18、service 20、request 44）
 - `bundle exec rubocop` — no offenses
 - `bundle exec brakeman -q` — No warnings found
 - `RAILS_ENV=test bin/rails db:drop db:create db:schema:load`の後に`dot_spec`・`days_spec`を実行し、

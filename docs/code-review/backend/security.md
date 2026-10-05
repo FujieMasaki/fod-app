@@ -78,6 +78,8 @@ Dotを作る入口・ゴミ箱と削除の操作・Webの接続・公開配信�
   - paramsを解釈できない`ActionController::BadRequest`（path・queryの不正なUTF-8など）は`rescue_from`の外で
     起き、値を含むmessageがerrorのログに出るため、同じmiddlewareが`DebugExceptions`の内側で捕まえて
     `422`にする。
+  - objectでないJSONのbody（文字列・配列）はRailsが`_json`に入れ、項目名で隠す`filter_parameters`を
+    すり抜けて`Parameters:`のログ（info）に出るため、`_json`を値ごと隠している。
   - JSONの不正なUTF-8は解析の失敗にし、解析の失敗のログから生のbodyを外す
     （`config/initializers/json_request_body.rb`。非公開のmethodを置き換えるため、Railsを上げたときに
     前提が保たれているか確かめる）。
