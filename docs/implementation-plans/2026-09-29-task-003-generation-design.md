@@ -123,6 +123,8 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
   `docs/implementation-plans/2026-09-28-task-004-history-design.md`: **過去のPlanのうち「現在は〜」と
   現行方針を名乗っていた註記だけを「当時」へ直した。**採用内容の表など当時の記録そのものは
   AGENTS.mdのとおり触っていない。
+- `docs/tasks/TASK-003-generation-design.md`: 所在地方針の変更、案Cの保留、委託先の構成の再検討条件の
+  担当（`product.md §5`が正本）。
 - `docs/tasks/TASK-009-backend-audio-generation.md`: model id選定の前提。
 - `docs/tasks/TASK-010-frontend-recording.md`: 送信先（国内/国外）を録音前の案内へ反映する条件。
 - `docs/tasks/TASK-017-breach-response-design.md`: 越境移転の規律を作業範囲と完了条件へ追加。

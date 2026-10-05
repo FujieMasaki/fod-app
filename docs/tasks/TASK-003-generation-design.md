@@ -15,6 +15,8 @@
 
 2026-09-29にTASK-004で、Dotの`date`を`started_at`（録音開始操作をserverが受理した時刻。定義は[dot-history §2](../dot-history.md)）から算出し、その値を**録音attempt**から決めると採用した。冪等性の検討に次を含める。**attemptの識別子を初回uploadで処理の記録へ原子的に関連付けて一回性を担保する**、同じattemptの再送には同じ処理を返すか明示的な競合を返す、**upload受理後の24時間再試行はattemptの再利用ではなく処理の記録を使う**、再試行やJob再実行でも元のattempt由来の`started_at`を維持する。不変条件は[TASK-004 Plan §18-3](../implementation-plans/2026-09-28-task-004-history-design.md)、契約化はTASK-005。
 
+**2026-10-03に、providerの比較を一次資料で確認し直してデータ所在地の方針を変更した**（[architecture.md](../architecture.md)「データ所在地と費用」を正本として「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」へ）。**採用は案A（AWSで統一）のままだが、続ける理由が所在地から「委託先を増やさないこと・25MBの上限が無いこと・外部裁量に依存しないこと」へ変わり、案C（OpenAIに統一）は不採用ではなく保留になった。**比較表に案D（Google統一）・案E（Azure統一）も追加した。経緯は[Plan §18](../implementation-plans/2026-09-29-task-003-generation-design.md)「2026-10-03の再確認」、判断の記録は同§25。**委託先の構成の再検討条件は[product.md §5](../product.md)が正本で、担当はこのタスクである。**
+
 ## 確認可能な完了条件
 
 - [x] provider、promptと生成結果の必要項目、文字起こしの採否・用途が決まり、録音内容からDotを生成する方法を説明できる。
