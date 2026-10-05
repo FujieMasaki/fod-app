@@ -9,6 +9,8 @@ const webPaths = new Set([
   "eslint.config.mjs",
   "scripts/check-naming.mjs",
   "scripts/check-naming.test.mjs",
+  "scripts/check-docs-markdown.mjs",
+  "scripts/check-docs-markdown.test.mjs",
 ]);
 
 const documentationPaths = new Set([

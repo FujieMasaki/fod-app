@@ -239,7 +239,7 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
 
 - **文字起こしと生成の委託先をAWSに統一する。**委託先が1社に集約され、確認すべき9項目
   （[privacy.md §5-1](privacy.md)の外部provider行）の対象が1つになる。**認証はECS task roleの
-  IAMで行い、**長期固定のAPIキーをアプリで持たない**（ECSはSDKへ一時credentialを供給するため、
+  IAMで行い、長期固定のAPIキーをアプリで持たない**（ECSはSDKへ一時credentialを供給するため、
   鍵の確認項目が無くなるわけではない）。対象bucketと対象モデルだけを許す最小権限にする。
   **9項目は未確認で、確認は公開前に人間が行う。**
 - **Transcribeについて、AWS OrganizationsのAI services opt-out policyの適用を必須とする。**
@@ -293,7 +293,7 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   引けなくなる。**同じkeyでの再送は2件目のDotを作らず既存を返す。
   **二重のDotは防ぐが、外部AI処理の二重消費は防がない。**処理の記録にも同じunique制約を置き、
   同じ処理IDのPOSTが並行しても記録とJobを二重に作らない。**AWSのjob名とS3のkeyは、clientが
-  発行する値ではなく**serverが発行する処理ID（＝TASK-004の録音attemptの識別子）から導く**（job名はAWSアカウント内で一意で
+  発行する値ではなく、serverが発行する処理ID（＝TASK-004の録音attemptの識別子）から導く**（job名はAWSアカウント内で一意で
   なければならず、利用者間で衝突し得るため）。
 - **再試行は、文字起こし結果が残っていれば生成からやり直す。**残っていなければ文字起こしから
   やり直す。Transcribeは費用の支配項目なので、手元に全文があるのに再実行しない。
