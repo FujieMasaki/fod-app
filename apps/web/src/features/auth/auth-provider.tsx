@@ -86,6 +86,12 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 const MAX_TIMER_MS = 2_147_483_647;
 // 端末の時計では期限を過ぎたのにserverがまだ認証済みと返したとき、次に確かめるまでの間隔。
 const EXPIRY_RECHECK_MS = 30_000;
+// login・logoutの前に、実行中の通信の応答を待つ上限。offlineで止まった通信を待ち続けないため。
+const SETTLE_TIMEOUT_MS = 10_000;
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function deriveStatus(session: Session | undefined, isError: boolean): AuthStatus {
   if (!session) return isError ? "unknown" : "checking";
@@ -103,8 +109,8 @@ function clearPrivateQueries(queryClient: QueryClient) {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  // login・logoutの送信中は、認証状態の取り直しを始めない。RailsのCookieStoreは`GET /api/v1/session`の
-  // 応答でもCookieを書き直すため、login・logoutの前に送った取り直しの応答が後から届くと、Cookieが前の
+  // login・logoutの送信中は、ほかの通信を始めない。RailsのCookieStoreはどの応答でもCookieを書き直すため
+  // （`GET /api/v1/session`も保護APIも）、login・logoutの前に送った通信の応答が後から届くと、Cookieが前の
   // 状態へ戻る（logoutが取り消される、loginしたのに未認証になる）。
   const [authBusy, setAuthBusy] = useState(false);
   const authBusyRef = useRef(false);
@@ -113,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryFn: getSession,
     // 別タブでのlogout・loginを、画面へ戻ったときに検出する。
     refetchOnWindowFocus: !authBusy,
+    refetchOnReconnect: !authBusy,
     staleTime: 0,
   });
   const session = sessionQuery.data;
@@ -136,6 +143,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // 確定した利用者が前回と変わったら通知する。初回の確定（checkingから）は通知しない。
   const identity = authenticatedSession ? authenticatedSession.user.id : status === "anonymous" ? null : undefined;
   const previousRef = useRef<{ identity: string | null; expiresAt: string | null } | undefined>(undefined);
+  // このタブでlogoutしている間に未認証へ変わったら、理由はlogoutにする（描画の順序に依らないように）。
+  const signingOutRef = useRef(false);
   useEffect(() => {
     if (identity === undefined) return;
     const previous = previousRef.current;
@@ -145,7 +154,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (identity === null) {
       // serverは期限切れを未認証として返すため、期限を過ぎていれば期限切れと判断する。
       const expired = previous.expiresAt !== null && Date.parse(previous.expiresAt) <= Date.now();
-      setEndReason((current) => current ?? (expired ? "expired" : "session_lost"));
+      const reason = signingOutRef.current ? "signed_out" : expired ? "expired" : "session_lost";
+      setEndReason((current) => current ?? reason);
     } else {
       setEndReason(null);
     }
@@ -180,28 +190,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!expiresAt) return;
     const remaining = Date.parse(expiresAt) - Date.now();
-    const delay = remaining > 0 ? Math.min(remaining + 1000, MAX_TIMER_MS) : EXPIRY_RECHECK_MS;
+    const wait = remaining > 0 ? Math.min(remaining + 1000, MAX_TIMER_MS) : EXPIRY_RECHECK_MS;
     const timer = setTimeout(() => {
       if (!authBusyRef.current) void refresh();
-    }, delay);
+    }, wait);
     return () => clearTimeout(timer);
   }, [expiresAt, sessionUpdatedAt, sessionErrorAt, authBusy, refresh]);
 
-  // login・logoutの間は取り直しを止め、送る前に実行中の取り直しの応答を受け取り終える（上のauthBusyの理由）。
+  // 実行中の保護API（request・withCsrf）。login・logoutはこれらの応答を受け取り終えてから送る。
+  const inflightRef = useRef(new Set<Promise<unknown>>());
+  // 実行中のlogin・logout。重なって呼ばれたら順に実行する（先に終わった側が排他を解かないように）。
+  const exclusiveRef = useRef<Promise<unknown> | null>(null);
+
+  // login・logoutの間は取り直しとほかの通信を止め、送る前に実行中の通信の応答を受け取り終える
+  // （上のauthBusyの理由）。offlineで止まった通信を待ち続けないよう、待つ時間には上限を置く。
   const runExclusively = useCallback(
-    async <T,>(operation: () => Promise<T>): Promise<T> => {
-      authBusyRef.current = true;
-      setAuthBusy(true);
-      try {
+    <T,>(operation: () => Promise<T>): Promise<T> => {
+      const previous = exclusiveRef.current;
+      const run = (async () => {
+        await previous?.catch(() => undefined);
+        authBusyRef.current = true;
+        setAuthBusy(true);
+        const pending: Promise<unknown>[] = [...inflightRef.current];
         // 実行中の取り直しがあればその応答を待つ（実行中ならfetchQueryは新しく送らず、同じ応答を待つ）。
         if (queryClient.isFetching({ queryKey: SESSION_QUERY_KEY }) > 0) {
-          await queryClient.fetchQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession }).catch(() => undefined);
+          pending.push(queryClient.fetchQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession }));
         }
-        return await operation();
-      } finally {
+        await Promise.race([Promise.allSettled(pending), delay(SETTLE_TIMEOUT_MS)]);
+        return operation();
+      })();
+      exclusiveRef.current = run;
+      return run.finally(() => {
+        if (exclusiveRef.current !== run) return;
+        exclusiveRef.current = null;
         authBusyRef.current = false;
         setAuthBusy(false);
-      }
+      });
     },
     [queryClient],
   );
@@ -231,13 +255,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [currentCsrfToken, markEnded, queryClient],
   );
 
+  // 後続の機能へ公開する入口。login・logoutの間は始めずに待ち、実行中のものはlogin・logoutが待てるよう数える。
+  const trackedWithCsrf = useCallback(
+    async <T,>(operation: (csrfToken: string) => Promise<T>): Promise<T> => {
+      while (exclusiveRef.current) await exclusiveRef.current.catch(() => undefined);
+      const running = withCsrf(operation);
+      inflightRef.current.add(running);
+      try {
+        return await running;
+      } finally {
+        inflightRef.current.delete(running);
+      }
+    },
+    [withCsrf],
+  );
+
   const request = useCallback(
     <T,>(path: string, options: RequestOptions & { schema?: z.ZodType<T> } = {}) =>
-      withCsrf((csrfToken) =>
+      trackedWithCsrf((csrfToken) =>
         // overloadの実装側。schemaの有無による戻り値の違いは、AuthorizedRequestの型で呼び出し側へ示す。
         apiRequest(path, { ...options, csrfToken } as ApiRequestOptions & { schema: z.ZodType<T> }),
       ),
-    [withCsrf],
+    [trackedWithCsrf],
   ) as AuthorizedRequest;
 
   const signIn = useCallback(
@@ -256,6 +295,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     notifyIdentityChange();
     const confirmSignedOut = () =>
       queryClient.fetchQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession, staleTime: 0 });
+    signingOutRef.current = true;
     try {
       await runExclusively(async () => {
         await withCsrf((csrfToken) => deleteSession(csrfToken));
@@ -269,6 +309,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 終わったと断定せず、login中のまま状態を確かめ直す。
       void refresh();
       throw error;
+    } finally {
+      signingOutRef.current = false;
     }
     setEndReason("signed_out");
   }, [notifyIdentityChange, queryClient, refresh, runExclusively, withCsrf]);
@@ -281,7 +323,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       csrfToken: session?.csrf_token ?? null,
       endReason,
       refresh,
-      withCsrf,
+      withCsrf: trackedWithCsrf,
       request,
       signIn,
       signOut,
@@ -295,7 +337,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session?.csrf_token,
       endReason,
       refresh,
-      withCsrf,
+      trackedWithCsrf,
       request,
       signIn,
       signOut,

@@ -363,6 +363,49 @@ describe("logout", () => {
     expect(order.indexOf("GET2 done")).toBeLessThan(order.indexOf("DELETE"));
     expect(auth().endReason).toBe("signed_out");
   });
+
+  it("実行中の保護APIの応答を受け取ってからDELETEを送り、logout中に始めた保護APIは後で送る", async () => {
+    const order: string[] = [];
+    let releaseApi: (response: Response) => void = () => undefined;
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        const key = `${init?.method ?? "GET"} ${path}`;
+        order.push(key);
+        if (key === "DELETE /api/v1/session") return new Response(null, { status: 204 });
+        if (key === "PATCH /api/v1/dots/a") {
+          return new Promise<Response>((resolve) => {
+            releaseApi = (response) => {
+              order.push("PATCH a done");
+              resolve(response);
+            };
+          });
+        }
+        if (key === "PATCH /api/v1/dots/b") return new Response(null, { status: 204 });
+        getCount += 1;
+        return Response.json(getCount === 1 ? authenticated(USER_A, "t1").body : anonymous("t2").body);
+      }),
+    );
+    const { auth } = await renderAndSubscribe();
+
+    const first = auth().request("/api/v1/dots/a", { method: "PATCH", body: {} });
+    await waitFor(() => expect(order).toContain("PATCH /api/v1/dots/a"));
+    const signingOut = auth().signOut();
+    const second = auth().request("/api/v1/dots/b", { method: "PATCH", body: {} }).catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(order).not.toContain("DELETE /api/v1/session");
+    expect(order).not.toContain("PATCH /api/v1/dots/b");
+
+    releaseApi(new Response(null, { status: 204 }));
+    await act(() => first);
+    await act(() => signingOut);
+    await act(() => second);
+
+    expect(order.indexOf("PATCH a done")).toBeLessThan(order.indexOf("DELETE /api/v1/session"));
+    expect(order.indexOf("DELETE /api/v1/session")).toBeLessThan(order.indexOf("PATCH /api/v1/dots/b"));
+    expect(auth().endReason).toBe("signed_out");
+  });
 });
 
 describe("別タブ・期限での変化", () => {
