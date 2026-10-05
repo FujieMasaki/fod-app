@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 import { AuthProvider, useAuth } from "../auth-provider";
@@ -59,6 +59,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  focusManager.setFocused(undefined);
   vi.unstubAllGlobals();
 });
 
@@ -206,6 +207,68 @@ describe("PasswordResetScreen", () => {
       </>,
     );
     await screen.findByText("status:authenticated");
+
+    fireEvent.change(screen.getByLabelText("新しいパスワード"), { target: { value: "new-password-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
+
+    expect(await screen.findByText("パスワードを再設定しました")).toBeInTheDocument();
+    expect(screen.getByText("status:anonymous")).toBeInTheDocument();
+  });
+
+  it("再設定の前に始まった取り直しが認証済みを返しても、再設定の後に取り直して未認証にする", async () => {
+    const signedIn = {
+      authenticated: true,
+      csrf_token: "t1",
+      expires_at: "2099-01-01T00:00:00Z",
+      account_status: "active",
+      user: {
+        id: "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10",
+        email: "a@example.com",
+        email_confirmed: true,
+        sign_in_methods: ["password"],
+      },
+    };
+    let sessionCount = 0;
+    let releaseStale: () => void = () => undefined;
+    let patched = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        if (path === "/api/v1/session") {
+          sessionCount += 1;
+          if (sessionCount === 1) return Response.json(signedIn);
+          // 2回目（再設定の前に始まった取り直し）は、再設定の後に認証済みを返す
+          if (sessionCount === 2) {
+            return new Promise<Response>((resolve) => {
+              releaseStale = () => resolve(Response.json(signedIn));
+            });
+          }
+          return Response.json(patched ? { authenticated: false, csrf_token: "t2" } : signedIn);
+        }
+        if (init?.method === "PATCH" && path === "/api/v1/password") {
+          patched = true;
+          setTimeout(() => releaseStale(), 0);
+          return new Response(null, { status: 204 });
+        }
+        throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
+      }),
+    );
+    function StatusProbe() {
+      return <p>{`status:${useAuth().status}`}</p>;
+    }
+    openLink("/password/reset", "reset-token");
+    renderScreen(
+      <>
+        <PasswordResetScreen />
+        <StatusProbe />
+      </>,
+    );
+    await screen.findByText("status:authenticated");
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(sessionCount).toBe(2));
 
     fireEvent.change(screen.getByLabelText("新しいパスワード"), { target: { value: "new-password-1" } });
     fireEvent.click(screen.getByRole("button", { name: "再設定する" }));

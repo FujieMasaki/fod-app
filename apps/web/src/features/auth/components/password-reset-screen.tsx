@@ -34,6 +34,9 @@ export function PasswordResetScreen() {
       await withCsrf((csrfToken) => resetPassword(csrfToken, token, password));
       // 再設定でserverは既存のCookieを無効にする。login中だった場合に古い認証済みが残らないよう、取り直してから
       // ログインへ案内する（取り直しの失敗は再設定の成否に関わらないため、案内は出す）。
+      // refreshは実行中の取得を共有するため、1回目で再設定の前に始まった取得を終わらせ、2回目で再設定の後に
+      // 始まる取得の結果を置く。
+      await refresh().catch(() => undefined);
       await refresh().catch(() => undefined);
       setDone(true);
     } catch (caught) {
