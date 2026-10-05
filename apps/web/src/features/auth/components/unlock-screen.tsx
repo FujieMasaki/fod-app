@@ -5,8 +5,8 @@ import { isProblem } from "@/libs/api-client/request";
 import { unlockAccount } from "../api";
 import { useAuth } from "../auth-provider";
 import { errorMessage, needsReload } from "../messages";
-import { useFragmentToken } from "../use-fragment-token";
-import { AuthScreen, FormMessage, ReloadNotice, TextLink } from "./auth-layout";
+import { REOPEN_LINK_MESSAGE, useFragmentToken } from "../use-fragment-token";
+import { AuthScreen, FormMessage, TextLink } from "./auth-layout";
 
 const INVALID_MESSAGE =
   "このリンクは使えません。使用済みか、正しくないリンクです。ロックは1時間で自動で解除されます。";
@@ -57,7 +57,7 @@ export function UnlockScreen() {
   return (
     <AuthScreen title="ロックの解除" lead="ログインの失敗が続いたため、アカウントをロックしています。">
       {needsReload(error) ? (
-        <ReloadNotice />
+        <FormMessage tone="error">{REOPEN_LINK_MESSAGE}</FormMessage>
       ) : (
         error !== null && <FormMessage tone="error">{errorMessage(error)}</FormMessage>
       )}

@@ -300,9 +300,10 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 | `apps/web/src/router.tsx` | 変更 | route追加 |
 | `docs/architecture.md`・`docs/journaling.md`・`docs/product.md`・`docs/development/frontend.md`・`docs/design-system.md` | 変更 | §6の現行文書 |
 | `docs/privacy.md`・`docs/tasks/TASK-014-frontend-private-data.md` | 変更 | `fod.session.v1`の起動時の削除を実装済みとする |
+| `apps/web/src/features/auth/auth-provider.tsx` | 変更 | `endSessionAfterCredentialChange`（再設定の後に古い認証済みを残さない。レビューで追加） |
 | 本Plan・`docs/tasks/TASK-007-frontend-identity.md` | 変更 | Completion Record・完了条件 |
 
-レビュー対象 18。
+レビュー対象 19。
 
 レビュー観点の追記（`docs/code-review/frontend/README.md`・`security.md`）は、PR 2/3の判断（選択肢A）に合わせて、
 別の関連PR（#71、`docs/task-007-extra-review-viewpoints`）にする。観点の文が`fod.session.v1`をやめた実装を
@@ -410,11 +411,14 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 - **入力欄の文字数**: パスワードの欄は`maxLength`で制限しない。HTMLはUTF-16の単位で数え、Railsは文字の単位で
   数えるため、補助文字を含む有効なパスワードを切り詰める（Codexの指摘）。メールアドレスの254は残す。
 
-- **login中のpassword再設定**: serverは再設定で既存のCookieを無効にするため、Webは再設定が済んだかもしれない
-  ときに、通信を待たずにSessionのcacheを未認証として置き（利用者の切り替わりとして個人データを消す）、取り直しは
-  backgroundで行う。再設定の前に始まった取得が後から同じ利用者の認証済みを返したら、もう一度未認証として置いて
-  取り直す。行われなかったと分かる失敗では何もしない（個人データを消さない）。応答を失ったときは、送り直すと
-  tokenが使用済みになるため、先にログインを試すよう案内する。
+- **login中のpassword再設定**: serverは再設定で既存のCookieを無効にする。Webは再設定が済んだかもしれないときに
+  `useAuth().endSessionAfterCredentialChange()`を呼ぶ。通信を待たずにSessionのcacheを未認証として置き（利用者の
+  切り替わりとして個人データを消す）、取り直しはbackgroundで行う。呼んだ時点で実行中だった取得は再設定の前に
+  送られたかもしれないため、その結果が誰の認証済みでも信じず、受け取り終えた後に送る取得で確かめる。行われ
+  なかったと分かる失敗では呼ばない（個人データを消さない）。応答を失ったとき・送り直して`token_invalid`になった
+  ときは、送り直すとtokenが使用済みになるため、先にログインを試すよう案内する。tokenの画面で古いタブを示すときは、
+  tokenをURLから消してあるため、再読み込みではなくメールのリンクを開き直すよう案内する。将来、アカウント画面で
+  passwordを変える操作（TASK-001 Plan §54）を足すときも、同じ入口を使う。
 
 後続のタスクへの申し送り（PR 2/3のレビューで見つかり、範囲外として直さなかったもの）:
 

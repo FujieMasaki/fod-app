@@ -1,23 +1,29 @@
 import { useState, type FormEvent } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/design-system";
 import { ApiError, isProblem } from "@/libs/api-client/request";
-import type { Session } from "@/libs/api-contract/schemas";
 import { resetPassword } from "../api";
-import { SESSION_QUERY_KEY, useAuth } from "../auth-provider";
+import { useAuth } from "../auth-provider";
 import { errorMessage, fieldErrors, needsReload } from "../messages";
-import { useFragmentToken } from "../use-fragment-token";
-import { AuthScreen, FormMessage, ReloadNotice, TextField, TextLink } from "./auth-layout";
+import { REOPEN_LINK_MESSAGE, useFragmentToken } from "../use-fragment-token";
+import { AuthScreen, FormMessage, TextField, TextLink } from "./auth-layout";
 
 const TOKEN_MESSAGES = {
-  token_invalid: "このリンクは使えません。使用済みか、正しくないリンクです。最新のメールのリンクを使うか、送り直してください。",
+  token_invalid:
+    "このリンクは使えません。使用済みか、正しくないリンクです。直前に再設定した場合は、新しいパスワードでログインできます。そうでなければ、最新のメールのリンクを使うか、送り直してください。",
   token_expired: "このリンクの有効期限（6時間）が過ぎています。再設定のメールを送り直してください。",
 };
 
 // 再設定が行われなかったと分かる失敗。これ以外の失敗（通信・serverのerror・再試行のtoken_invalid）は、serverで
 // 済んでいる（応答だけを失った）ことがある。
 const NOT_APPLIED_CODES = ["validation_failed", "token_expired", "rate_limited", "csrf_invalid"] as const;
+
+// 再設定が済んだか分からない失敗（応答を失った・serverのerror）。
+function outcomeUnknown(error: unknown): boolean {
+  return (
+    error instanceof ApiError && (error.kind === "network" || error.kind === "http" || isProblem(error, "internal_error"))
+  );
+}
 
 function mayHaveReset(error: unknown): boolean {
   // 利用者が切り替わっていて送らなかった（withCsrfの`identity_changed`）
@@ -31,34 +37,11 @@ function mayHaveReset(error: unknown): boolean {
  */
 export function PasswordResetScreen() {
   const token = useFragmentToken();
-  const { withCsrf, refresh } = useAuth();
-  const queryClient = useQueryClient();
+  const { withCsrf, endSessionAfterCredentialChange } = useAuth();
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState(false);
-
-  // 再設定でserverは既存のCookieを無効にする。login中だった場合に古い認証済みが残らないよう、再設定が済んだ
-  // かもしれないとき（成功・応答を失った・再試行がtoken_invalid）は、通信を待たずにその場で未認証として置き、
-  // 個人データを消す（取り直しが返らない・offlineで止まっても、完了の案内と入力の消去を止めない）。
-  // その後の取り直しはbackgroundで行う。再設定の前に始まった取得が後から前の利用者の認証済みを返したら、
-  // 無効になったCookieの古い結果なので、もう一度未認証として置いてから取り直す。
-  function endSessionAfterReset() {
-    const current = queryClient.getQueryData<Session>(SESSION_QUERY_KEY);
-    if (!current?.authenticated) return;
-    const endedUserId = current.user.id;
-    const setAnonymous = (csrfToken: string) =>
-      queryClient.setQueryData<Session>(SESSION_QUERY_KEY, { authenticated: false, csrf_token: csrfToken });
-    setAnonymous(current.csrf_token);
-    void (async () => {
-      await refresh().catch(() => undefined);
-      const after = queryClient.getQueryData<Session>(SESSION_QUERY_KEY);
-      if (after?.authenticated && after.user.id === endedUserId) {
-        setAnonymous(after.csrf_token);
-        await refresh().catch(() => undefined);
-      }
-    })();
-  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -67,11 +50,12 @@ export function PasswordResetScreen() {
     setError(null);
     try {
       await withCsrf((csrfToken) => resetPassword(csrfToken, token, password));
-      endSessionAfterReset();
+      // 再設定でserverは既存のCookieを無効にする。login中だった場合に古い認証済みを残さない。
+      endSessionAfterCredentialChange();
       setDone(true);
     } catch (caught) {
       // 失敗に見えても、serverでは済んでいることがある（応答だけを失った、再試行がtoken_invalidになった）。
-      if (mayHaveReset(caught)) endSessionAfterReset();
+      if (mayHaveReset(caught)) endSessionAfterCredentialChange();
       setError(caught);
     } finally {
       setSubmitting(false);
@@ -94,7 +78,10 @@ export function PasswordResetScreen() {
         <FormMessage tone="error">
           {token ? errorMessage(error, TOKEN_MESSAGES) : "リンクが正しくありません。メールのリンクを開き直してください。"}
         </FormMessage>
-        <TextLink to="/password/forgot">再設定のメールを送り直す</TextLink>
+        <div className="flex flex-col items-start gap-2">
+          {token && <TextLink to="/login">ログインへ</TextLink>}
+          <TextLink to="/password/forgot">再設定のメールを送り直す</TextLink>
+        </div>
       </AuthScreen>
     );
   }
@@ -116,10 +103,7 @@ export function PasswordResetScreen() {
           onChange={(event) => setPassword(event.target.value)}
           error={fields.password}
         />
-        {needsReload(error) ? (
-          <ReloadNotice />
-        ) : (error instanceof ApiError && (error.kind === "network" || error.kind === "http")) ||
-          isProblem(error, "internal_error") ? (
+        {outcomeUnknown(error) ? (
           // 応答を失っただけで、再設定は済んでいることがある。送り直すとtokenが使用済みになるため、先にログインを示す。
           <div className="flex flex-col gap-2">
             <FormMessage tone="error">
@@ -128,6 +112,9 @@ export function PasswordResetScreen() {
             </FormMessage>
             <TextLink to="/login">ログインへ</TextLink>
           </div>
+        ) : needsReload(error) ? (
+          // 古いタブの可能性。tokenはURLから消してあるため、再読み込みではなくメールのリンクを開き直す。
+          <FormMessage tone="error">{REOPEN_LINK_MESSAGE}</FormMessage>
         ) : (
           error !== null && !fields.password && <FormMessage tone="error">{errorMessage(error)}</FormMessage>
         )}
