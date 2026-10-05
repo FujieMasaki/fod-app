@@ -61,6 +61,24 @@ Dotを作る入口（音声の送信と生成）はTASK-009が作り、本タス
 ### 今回確定しない事項
 
 - なし（下記§12の判断はすべて上流の決定から導けるため、人間の判断を求めない）。
+- **判断待ち（2026-10-05、PR 3/3のレビュー中に発生）: JSON以外のbodyと、不正なUTF-8を含むformのbodyの扱い。**
+  - 確認済みの事実（request specの形で再現した）:
+    - `PATCH /api/v1/dots/{dot_id}`は、`Content-Type: application/x-www-form-urlencoded`の`sentence=...`でも
+      `200`で更新する。契約のrequestBodyは`application/json`だけである。認証のendpoint（`JsonParams`の
+      `require_strings`、TASK-006）も同じ作りである。
+    - formの値に不正なUTF-8（`%FF`）があると、Rackのformのparserの後でRailsが本文を含むmessageの
+      `ActionController::BadRequest`を起こす。`rescue_from`の外なのでHTMLの`400`になり、messageが
+      errorのログに残る（本番の既定のlevelでも出る）。JSONのparserの置き換え（`json_request_body.rb`）
+      では塞がらない。
+  - 選択肢:
+    - A: すべてのendpointの共通の入口（Rackのmiddleware）で、bodyを持つrequestのContent-Typeが
+      `application/json`でなければ、bodyを解析する前に`422 body invalid_format`で拒否する。あわせて、
+      paramsのencodingの例外（`ActionDispatch::ParamError`）を捕まえ、messageを出さずにProblemで返す。
+      契約は変えず、TASK-006の認証のendpointも同時に直る。OmniAuthの開始（`/auth/google_oauth2`の
+      POST）を対象から外す扱いが要る。
+    - B: Aと同じだが、Content-Typeの違いは`415`にする。意味は正確だが、契約へ`415`を足す変更になる。
+    - C: TASK-008では直さず、security.md §6に未対策と明記し、横断の修正を別タスクにする。
+  - 推奨: A。契約を変えずに済み、ログへ本文が出る経路を全endpointでまとめて塞げる。
 
 ## 6. References and Documents to Update
 
