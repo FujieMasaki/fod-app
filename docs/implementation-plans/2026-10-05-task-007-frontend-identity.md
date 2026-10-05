@@ -312,9 +312,10 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 - **logout中の再取得（後続への申し送り）**: logoutの開始でQuery cacheを消しても、mount中の`useQuery`は
   DELETEが終わる前（Cookieが前の利用者のまま）に取り直し得る。今は個人データのqueryがないため影響はない。
   TASK-008以降で保護APIのqueryを足すときは、`status`が`authenticated`のときだけ`enabled`にするなどで防ぐ。
-  同じく、切り替わりの前に始まった非同期処理（Dot生成のmutation、`request`のpromise）は止めないため、終わった後に
-  結果をstateへ書き戻すと前の利用者のデータが残り得る。TASK-011・014で、切り替わりの後に終わった処理の結果を
-  捨てる（世代番号やAbortSignalで照合する）。Mutation cacheも今は消していない。`removeQueries`はmount中の
+  切り替わりの前に始まった非同期処理（Dot生成のmutation、`request`のpromise）は止めない。終わった後に結果を
+  stateへ書き戻すと前の利用者のデータが残るため、`useAuth().identityEpoch`（切り替わりごとに増える番号）を
+  始めたときに控え、結果を保存・表示する前に比べて違えば捨てる。現在のDot生成（`ProcessingIndicator`）は
+  これで捨て、Homeへ戻す。TASK-011・014で足す処理も同じ照合をする。Mutation cacheも今は消していない。`removeQueries`はmount中の
   `useQuery`が持つ表示中のdataまでは消さないため、個人データのqueryは`status`で`enabled`を切るかguardでunmountする。
 - **通信のtimeout**: `apiRequest`はtimeoutもAbortSignalも持たない。応答が止まるとlogin・logoutの送信中の表示が
   解けない。保護APIを足すTASK-008以降で、`signal`を通すかを決める。
@@ -329,7 +330,8 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
   - login・logoutは、実行中の取り直しと`request`・`withCsrf`の応答を受け取ってから送る。重なって呼ばれたら
     順に実行する。offlineで止まった通信を待ち続けないよう、10秒で待ちきれなければ送らずに失敗にする
     （待ちきれなかった通信の応答が後から届くと、logoutの確認の後でもCookieを戻し得るため）。
-  - login・logoutの間に保護APIが`401`を返しても、取り直しはlogin・logoutの後に回す。
+  - login・logoutの間に保護APIが`401`を返しても、取り直しはlogin・logoutの後に回す。公開している`refresh`も、
+    login・logoutの間に呼ばれたら終わってから取り直す。
   - 残るすき間（後続への申し送り）: login・logoutを始めた直後、`refetchOnWindowFocus`の切り替えが次の描画で
     反映されるまでの間にfocusすると、取り直しが送られ得る。
 - **取り直しの失敗**: 前に認証済みを得ていても、最後の取り直しが失敗したら`unknown`にし、保護する画面を閉じて
