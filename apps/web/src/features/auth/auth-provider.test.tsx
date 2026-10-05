@@ -235,6 +235,42 @@ describe("login", () => {
     await waitFor(() => expect(auth().user?.id).toBe(USER_B));
   });
 
+  it("loginの間に呼ばれたrefreshは、loginが終わってから取り直す", async () => {
+    const order: string[] = [];
+    let releasePost: (response: Response) => void = () => undefined;
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_path: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          order.push("POST");
+          return new Promise<Response>((resolve) => {
+            releasePost = (response) => {
+              order.push("POST done");
+              resolve(response);
+            };
+          });
+        }
+        getCount += 1;
+        order.push(`GET${getCount}`);
+        return Response.json(getCount === 1 ? anonymous("t1").body : authenticated(USER_A, "t3").body);
+      }),
+    );
+    const { auth } = await renderAndSubscribe();
+
+    const signingIn = auth().signIn({ email: "user@example.com", password: "password123" });
+    await waitFor(() => expect(order).toContain("POST"));
+    const refreshing = auth().refresh();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(order).not.toContain("GET2");
+
+    releasePost(Response.json(authenticated(USER_A, "t2").body));
+    await act(() => signingIn);
+    await act(() => refreshing);
+
+    expect(order.indexOf("POST done")).toBeLessThan(order.indexOf("GET2"));
+  });
+
   it("csrf_invalidならtokenを取り直して1回だけ再送する", async () => {
     const calls = mockApi({
       "GET /api/v1/session": [anonymous("old"), anonymous("new"), authenticated(USER_A, "t2")],

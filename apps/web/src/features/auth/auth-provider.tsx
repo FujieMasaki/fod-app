@@ -58,8 +58,13 @@ type AuthContextValue = {
   /** Googleのform POSTに入れるCSRF token。取得できていなければnull */
   csrfToken: string | null;
   endReason: EndReason | null;
-  /** 認証状態を取り直す */
+  /** 認証状態を取り直す（login・logoutの間に呼ばれたら、終わってから取り直す） */
   refresh: () => Promise<void>;
+  /**
+   * 利用者が切り替わるたびに増える番号。時間のかかる処理は始めたときの値を控え、結果を表示・保存する前に
+   * 今の値と比べる。違えば切り替わりの前に始めた処理なので、結果を捨てる（前の利用者の結果を見せない）。
+   */
+  identityEpoch: number;
   /**
    * 状態を変える操作を、最新のCSRF tokenで実行する。`csrf_invalid`ならtokenを取り直して1回だけ再送し、
    * `401`なら認証の終了として扱ってから投げ直す。
@@ -136,8 +141,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const authenticatedSession = session?.authenticated ? session : null;
   const [endReason, setEndReason] = useState<EndReason | null>(null);
 
+  // 実行中の保護API（request・withCsrf）。login・logoutはこれらの応答を受け取り終えてから送る。
+  const inflightRef = useRef(new Set<Promise<unknown>>());
+  // 実行中のlogin・logout。重なって呼ばれたら順に実行する（先に終わった側が排他を解かないように）。
+  const exclusiveRef = useRef<Promise<unknown> | null>(null);
+
+  // 利用者が切り替わるたびに増える番号。切り替わりの前に始めた処理の結果を、後で捨てるために使う。
+  const [identityEpoch, setIdentityEpoch] = useState(0);
   const listenersRef = useRef(new Set<() => void>());
   const notifyIdentityChange = useCallback(() => {
+    setIdentityEpoch((current) => current + 1);
     clearPrivateQueries(queryClient);
     for (const listener of listenersRef.current) listener();
   }, [queryClient]);
@@ -171,7 +184,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     notifyIdentityChange();
   }, [identity, authenticatedSession?.expires_at, notifyIdentityChange]);
 
+  // login・logoutの間に呼ばれたら、終わるまで待ってから取り直す（その応答がCookieを戻し得るため）。
   const refresh = useCallback(async () => {
+    while (exclusiveRef.current) await exclusiveRef.current.catch(() => undefined);
     await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
   }, [queryClient]);
 
@@ -206,11 +221,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, wait);
     return () => clearTimeout(timer);
   }, [expiresAt, sessionUpdatedAt, sessionErrorAt, authBusy, refresh]);
-
-  // 実行中の保護API（request・withCsrf）。login・logoutはこれらの応答を受け取り終えてから送る。
-  const inflightRef = useRef(new Set<Promise<unknown>>());
-  // 実行中のlogin・logout。重なって呼ばれたら順に実行する（先に終わった側が排他を解かないように）。
-  const exclusiveRef = useRef<Promise<unknown> | null>(null);
 
   // login・logoutの間は取り直しとほかの通信を止め、送る前に実行中の通信の応答を受け取り終える
   // （上のauthBusyの理由）。offlineで止まった通信を待ち続けないよう、待つ時間には上限を置く。
@@ -349,6 +359,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       csrfToken: session?.csrf_token ?? null,
       endReason,
       refresh,
+      identityEpoch,
       withCsrf: trackedWithCsrf,
       request,
       signIn,
@@ -363,6 +374,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session?.csrf_token,
       endReason,
       refresh,
+      identityEpoch,
       trackedWithCsrf,
       request,
       signIn,
