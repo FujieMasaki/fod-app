@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Navigate } from "@tanstack/react-router";
 
 import { Button } from "@/design-system";
@@ -29,7 +29,12 @@ type SignInScreenProps = {
  * 自分専用端末向けで7日保たれ、共有端末では使用後にlogoutすることを示す（product.md §4「認証体験」）。
  */
 export function SignInScreen({ redirect, authError }: SignInScreenProps) {
-  const { status, endReason, signIn, withCsrf } = useAuth();
+  const { status, endReason, acknowledgeEndReason, signIn, withCsrf } = useAuth();
+  // 終了の理由は開いたときに1回だけ案内し、案内したら消す（古い案内が残り続けず、後の戻り先の判断も誤らないように）。
+  const [shownEndReason] = useState(endReason);
+  useEffect(() => {
+    acknowledgeEndReason();
+  }, [acknowledgeEndReason]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -77,7 +82,7 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
       title="ログイン"
       lead="自分専用の端末向けです。ログインは7日間保たれます。共有の端末では、使い終わったらログアウトしてください。"
     >
-      {endReason && <FormMessage tone="info">{endReasonMessage(endReason)}</FormMessage>}
+      {shownEndReason && <FormMessage tone="info">{endReasonMessage(shownEndReason)}</FormMessage>}
       {authError && <FormMessage tone="error">{authErrorMessage(authError)}</FormMessage>}
 
       <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>

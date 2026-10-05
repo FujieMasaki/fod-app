@@ -46,6 +46,10 @@ export function SignUpScreen() {
   }
 
   const fields = fieldErrors(error);
+  // 項目の横に出せない失敗（項目ごとでない失敗と、emailとpassword以外の項目）は、共通の文言で示す
+  const fieldNames = Object.keys(fields);
+  const showGeneralError =
+    error !== null && (fieldNames.length === 0 || fieldNames.some((field) => field !== "email" && field !== "password"));
 
   return (
     <AuthScreen title="新規登録" lead="登録したメールアドレスに確認のメールを送ります。">
@@ -77,7 +81,7 @@ export function SignUpScreen() {
         {needsReload(error) ? (
           <ReloadNotice />
         ) : (
-          error !== null && Object.keys(fields).length === 0 && <FormMessage tone="error">{errorMessage(error)}</FormMessage>
+          showGeneralError && <FormMessage tone="error">{errorMessage(error)}</FormMessage>
         )}
         <Button type="submit" fullWidth disabled={submitting}>
           登録する

@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
-import { AuthProvider } from "../auth-provider";
+import { AuthProvider, useAuth } from "../auth-provider";
 import { AccountScreen } from "./account-screen";
 import { RequireAuth } from "./require-auth";
 import { SignInScreen } from "./sign-in-screen";
+import { SignUpScreen } from "./sign-up-screen";
 
 // 画面遷移は、遷移先を文字で表すだけの差し替えで確かめる。
 const locationMock = vi.hoisted(() => ({ pathname: "/record" }));
@@ -219,5 +220,117 @@ describe("AccountScreen", () => {
 
     expect(await screen.findByText(/ログアウトできたか確かめられませんでした/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "ログアウト" })).toBeEnabled();
+  });
+});
+
+describe("logoutの後の案内と戻り先", () => {
+  it("設定画面でlogoutしたら、戻り先を付けずにログインへ移る", async () => {
+    locationMock.pathname = "/settings";
+    mockApi({
+      "GET /api/v1/session": [signedIn, anonymous],
+      "DELETE /api/v1/session": [{ status: 204 }],
+    });
+    renderWithAuth(
+      <RequireAuth>
+        <AccountScreen />
+      </RequireAuth>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "ログアウト" }));
+
+    expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
+    expect(screen.queryByText(/redirect=/)).not.toBeInTheDocument();
+  });
+
+  it("「ログアウトしました」は1回だけ案内し、次に開いたときは出さない", async () => {
+    mockApi({
+      "GET /api/v1/session": [signedIn, anonymous],
+      "DELETE /api/v1/session": [{ status: 204 }],
+    });
+    function Harness() {
+      const { signOut } = useAuth();
+      const [openCount, setOpenCount] = useState(0);
+      return (
+        <div>
+          <button onClick={() => void signOut()}>logout</button>
+          <button onClick={() => setOpenCount((n) => n + 1)}>open</button>
+          {openCount > 0 && <SignInScreen key={openCount} redirect="/" />}
+        </div>
+      );
+    }
+    renderWithAuth(<Harness />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "logout" })).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: "logout" }));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(3));
+    fireEvent.click(screen.getByRole("button", { name: "open" }));
+    expect(await screen.findByText("ログアウトしました。")).toBeInTheDocument();
+
+    // 開き直すと、もう案内しない
+    fireEvent.click(screen.getByRole("button", { name: "open" }));
+    await waitFor(() => expect(screen.queryByText("ログアウトしました。")).not.toBeInTheDocument());
+  });
+});
+
+describe("SignUpScreen", () => {
+  function fillSignUp(password = "password1234") {
+    fireEvent.change(screen.getByLabelText("メールアドレス"), { target: { value: "new@example.com" } });
+    fireEvent.change(screen.getByLabelText("パスワード"), { target: { value: password } });
+    fireEvent.click(screen.getByRole("button", { name: "登録する" }));
+  }
+
+  it("登録済みかどうかにかかわらず同じ受付を示す", async () => {
+    const requests = mockApi({ "GET /api/v1/session": [anonymous], "POST /api/v1/registration": [{ status: 202 }] });
+    renderWithAuth(<SignUpScreen />);
+    await screen.findByRole("button", { name: "登録する" });
+
+    fillSignUp();
+
+    expect(await screen.findByText(/すでに登録済みの場合は、ログイン方法の案内が届きます/)).toBeInTheDocument();
+    expect(JSON.parse(requests.find((r) => r.key === "POST /api/v1/registration")!.body!)).toEqual({
+      email: "new@example.com",
+      password: "password1234",
+    });
+  });
+
+  it("項目ごとの失敗は項目に示し、共通の文言は出さない", async () => {
+    mockApi({
+      "GET /api/v1/session": [anonymous],
+      "POST /api/v1/registration": [
+        problem(422, "validation_failed", { errors: [{ field: "password", code: "out_of_range" }] }),
+      ],
+    });
+    renderWithAuth(<SignUpScreen />);
+    await screen.findByRole("button", { name: "登録する" });
+
+    fillSignUp("short");
+
+    expect(await screen.findByText("8文字以上で入力してください。")).toBeInTheDocument();
+    expect(screen.queryByText("入力内容を確かめてください。")).not.toBeInTheDocument();
+  });
+
+  it("項目の横に出せない項目の失敗は、共通の文言で示す", async () => {
+    mockApi({
+      "GET /api/v1/session": [anonymous],
+      "POST /api/v1/registration": [
+        problem(422, "validation_failed", { errors: [{ field: "base", code: "not_allowed" }] }),
+      ],
+    });
+    renderWithAuth(<SignUpScreen />);
+    await screen.findByRole("button", { name: "登録する" });
+
+    fillSignUp();
+
+    expect(await screen.findByText("入力内容を確かめてください。")).toBeInTheDocument();
+  });
+
+  it("csrf_invalidが続いたら再読み込みを案内する", async () => {
+    mockApi({ "GET /api/v1/session": [anonymous], "POST /api/v1/registration": [problem(403, "csrf_invalid")] });
+    renderWithAuth(<SignUpScreen />);
+    await screen.findByRole("button", { name: "登録する" });
+
+    fillSignUp();
+
+    expect(await screen.findByRole("button", { name: "再読み込み" })).toBeInTheDocument();
   });
 });
