@@ -45,6 +45,7 @@ function renderProcessing() {
 }
 
 afterEach(() => {
+  focusManager.setFocused(undefined);
   navigateMock.mockReset();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -132,7 +133,6 @@ describe("整理が終わると今日の一文へ進む", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalled());
     expect(navigateMock).not.toHaveBeenCalledWith({ to: "/dot", replace: true });
     expect(screen.getByText("no-dot")).toBeInTheDocument();
-    focusManager.setFocused(undefined);
   });
 
   it("整理の途中で利用者が切り替わったら、前の利用者の結果を保存・表示しない", async () => {
