@@ -68,8 +68,10 @@ jobs:
 
   # 文書だけの変更ではweb・apiのジョブが走らないため、markdownの検査は常に実行する。
   # pre-commitのhookは別環境や --no-verify で外れるので、ここが唯一確実な実行点になる。
+  # scriptsのtestも一緒に走らせる（文書だけの変更でもcheckerのtestが動くようにするため。
+  # webが対象の変更では tests ジョブと重複するが、常に走ることを優先する）。
   markdown:
-    name: Markdown
+    name: Docs & scripts
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

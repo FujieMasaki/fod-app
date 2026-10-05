@@ -35,10 +35,10 @@ const skipDirectories = new Set([
 // `--fix`を渡すと、崩れている`**`と隣の句読点を入れ替えて直す。入れ替えは長さを変えないので
 // 位置がずれず、`*`を除いた本文も変わらない。
 //
-// 既知の制限（いずれも現状の文書では実害が無いため、検出漏れとして受け入れている）:
-//   - 2連backtick以上のコードスパン（``code``）は中身を除去しない
-//   - 4空白インデントのコードblockは本文として解析する
-//   - fenceは``` と ~~~ を区別せずトグルする
+// 既知の制限:
+//   - setext見出し（`===`・`---`の下線）を見出しとして扱わない。段落として解析する
+//   - code blockの判定はfenceと4空白インデントだけで、list項目の中の深いインデントは
+//     段落の続きとして扱う（CommonMarkより緩い）
 
 // CommonMarkの「punctuation character」はASCII punctuationとUnicodeのP*である。
 // `\p{P}`に入らないASCII punctuation（`$ + < = > ^ ` | ~`）を足す。
@@ -69,9 +69,12 @@ export function flanking(previousCharacter, nextCharacter) {
 }
 
 // コードスパンの中身は見たくないが、消すと位置がずれて元の行の列が引けなくなる。
-// 同じ長さのplaceholderへ置き換える（前後の`**`も隣接しない）。
+// 同じ長さのplaceholderへ置き換える。
+// **backtickは残す。** CommonMarkはコードスパンを強調より先に解析するので、隣接する`**`から見た
+// 実際の隣の文字はbacktick（punctuation）である。`x`に化かすと flanking の判定が変わり、
+// `値は**`code`**である。`（`**`が本文に出る）を見逃す。
 export function stripInlineCode(line) {
-  return line.replace(/`[^`]*`/g, (match) => "x".repeat(match.length));
+  return line.replace(/(`+)[^`]*\1/g, (match, fence) => fence + "x".repeat(match.length - fence.length * 2) + fence);
 }
 
 function isListItemStart(line) {
@@ -111,7 +114,9 @@ export function analyzeEmphasis(source, relativePath) {
   const swaps = [];
   const lines = source.split("\n");
 
-  let inFence = false;
+  // 開いたfenceの記号を覚える。``` と ~~~ を区別しないと、片方の中にもう片方が出た時点で
+  // 状態が反転し、code blockの中を本文として解析してしまう。
+  let fence = null;
   let block = null;
 
   const flush = () => {
@@ -168,12 +173,17 @@ export function analyzeEmphasis(source, relativePath) {
   lines.forEach((rawLine, index) => {
     const lineNumber = index + 1;
 
-    if (/^\s*(?:```|~~~)/.test(rawLine)) {
+    const fenceStart = /^\s*(```+|~~~+)/.exec(rawLine);
+    if (fenceStart && (fence === null || fenceStart[1].startsWith(fence))) {
       flush();
-      inFence = !inFence;
+      fence = fence === null ? fenceStart[1].slice(0, 3) : null;
       return;
     }
-    if (inFence) return;
+    if (fence !== null) return;
+
+    // 4空白インデントのcode block。空行のあとに始まるものだけが該当する
+    // （段落の続きの行は中断できない）。中身を本文として扱うと`--fix`がコマンド例を書き換える。
+    if (block === null && /^ {4,}\S/.test(rawLine)) return;
 
     const line = stripInlineCode(rawLine);
 
@@ -230,7 +240,7 @@ function swapRange(swap) {
 // 句読点と`**`を入れ替える。長さが変わらないので、重ならない限り同じ行へ同時に適用できる。
 // 重なるswap（`A**、**C`のように`**`が1文字しか離れていない場合）は適用せず、次のpassへ回す。
 export function applySwaps(source, swaps) {
-  if (swaps.length === 0) return source;
+  if (swaps.length === 0) return { text: source, applied: 0 };
   const lines = source.split("\n");
   const byLine = new Map();
   for (const swap of swaps) {

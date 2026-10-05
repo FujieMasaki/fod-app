@@ -140,9 +140,37 @@ test("コードblockとコードスパンの中は見ない", () => {
   assert.deepEqual(findEmphasisErrors("| **`started_at`** | **定義** |\n", "a.md"), []);
 });
 
-test("stripInlineCodeは長さを保ったまま置き換える", () => {
-  assert.equal(stripInlineCode("a `code` b"), "a xxxxxx b");
-  assert.equal(stripInlineCode("**`x`**").length, "**`x`**".length);
+test("stripInlineCodeは長さとbacktickを保ったまま置き換える", () => {
+  // backtickを残さないと、隣接する`**`から見た隣の文字が句読点でなくなり判定が変わる。
+  assert.equal(stripInlineCode("a `code` b"), "a `xxxx` b");
+  assert.equal(stripInlineCode("**`x`**"), "**`x`**");
+  assert.equal(stripInlineCode("値は ``a**b`` だ"), "値は ``xxxx`` だ");
+  assert.equal(stripInlineCode("値は ``a**b`` だ").length, "値は ``a**b`` だ".length);
+});
+
+test("コードスパンに隣接した`**`は強調にならないので検出する", () => {
+  // GitHubの`/markdown` APIで確認: `値は**`code`**である。`は`**`が本文に出る。
+  const { errors, swaps } = analyzeEmphasis("値は**`code`**である。\n", "a.md");
+  assert.ok(errors.length >= 1);
+  assert.match(errors[0], /開き側に使えません/);
+  // backtickと入れ替えるとコードスパンが壊れるので、自動修正はしない。
+  assert.deepEqual(swaps, []);
+  // 空白を挟めば成立する。
+  assert.deepEqual(findEmphasisErrors("値は **`code`** である。\n", "a.md"), []);
+  assert.deepEqual(findEmphasisErrors("| **`started_at`** | **定義** |\n", "a.md"), []);
+});
+
+test("4空白インデントのcode blockと種類の違うfenceの中は見ない", () => {
+  // `--fix`がコマンド例を書き換えないこと。
+  const indented = "文\n\n    cmd --flag **a。**b\n\n次の段落\n";
+  assert.deepEqual(findEmphasisErrors(indented, "a.md"), []);
+  assert.equal(applySwaps(indented, analyzeEmphasis(indented, "a.md").swaps).applied, 0);
+  // 段落の続きの行はcode blockにならない（4空白でも本文として見る）。
+  assert.deepEqual(findEmphasisErrors("文のつづき\n    **崩れている。**続き\n", "a.md"), [
+    "a.md:2: 句読点の直後の `**` は閉じ側に使えません。`**強調**。` の形にするか、閉じの後に空白を置いてください（`--fix` で直せます）。",
+  ]);
+  // ``` の中に ~~~ が出てもfenceは閉じない。
+  assert.deepEqual(findEmphasisErrors("```text\n~~~\n**a。**b\n```\n", "a.md"), []);
 });
 
 test("同じ行の複数箇所を1回のpassで直せる（入れ替えが長さを変えないため）", () => {
