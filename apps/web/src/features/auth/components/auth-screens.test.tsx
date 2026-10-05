@@ -359,11 +359,18 @@ describe("SignInPrompt", () => {
 
   it("login中は出さない", async () => {
     mockApi({ "GET /api/v1/session": [signedIn] });
-    const { container } = renderWithAuth(<SignInPrompt />);
+    function StatusProbe() {
+      return <p>{`status:${useAuth().status}`}</p>;
+    }
+    renderWithAuth(
+      <>
+        <StatusProbe />
+        <SignInPrompt />
+      </>,
+    );
 
-    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalled());
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(container.textContent).toBe("");
+    await screen.findByText("status:authenticated");
+    expect(screen.queryByRole("link", { name: "ログイン・新規登録" })).not.toBeInTheDocument();
   });
 });
 
@@ -375,10 +382,76 @@ describe("SignInScreen（login済み）", () => {
     expect(await screen.findByText("navigate:/settings")).toBeInTheDocument();
   });
 
-  it("logoutの失敗後に状態も確かめられないときは、logoutが済んでいない可能性を示す", async () => {
+  it("状態を確かめられないまま開いたら、logoutが済んでいない可能性を示す", async () => {
     mockApi({ "GET /api/v1/session": [new TypeError("Failed to fetch")] });
-    renderWithAuth(<RequireAuth>本人の画面</RequireAuth>);
+    renderWithAuth(<SignInScreen redirect="/" />);
 
     expect(await screen.findByText(/まだログアウトできていない可能性があります/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "状態を確かめ直す" })).toBeInTheDocument();
+  });
+});
+
+describe("logoutに失敗したとき（共有端末で済んだと思わせない）", () => {
+  it("logoutも状態の取り直しも失敗したら、設定画面の代わりにlogoutが済んでいない可能性を示す", async () => {
+    locationMock.pathname = "/settings";
+    mockApi({
+      "GET /api/v1/session": [signedIn, new TypeError("Failed to fetch")],
+      "DELETE /api/v1/session": [new TypeError("Failed to fetch")],
+    });
+    renderWithAuth(
+      <RequireAuth>
+        <AccountScreen />
+      </RequireAuth>,
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "ログアウト" }));
+
+    expect(await screen.findByText(/まだログアウトできていない可能性があります/)).toBeInTheDocument();
+    expect(screen.queryByText(/navigate:\/login/)).not.toBeInTheDocument();
+  });
+});
+
+describe("Googleでのlogin", () => {
+  it("formを送る前に、前の利用者の個人データを消すよう通知する", async () => {
+    mockApi({ "GET /api/v1/session": [anonymous] });
+    const onIdentityChange = vi.fn();
+    function Subscriber() {
+      const { subscribeIdentityChange } = useAuth();
+      useState(() => subscribeIdentityChange(onIdentityChange));
+      return null;
+    }
+    const { container } = renderWithAuth(
+      <>
+        <Subscriber />
+        <SignInScreen redirect="/" />
+      </>,
+    );
+    await waitFor(() => expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeEnabled());
+
+    fireEvent.submit(container.querySelector('form[action="/auth/google_oauth2"]') as HTMLFormElement);
+
+    expect(onIdentityChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("確認メールの再送", () => {
+  it("未確認と分かったときに送ったメールアドレスへ頼む（入力欄を後で書き換えても変わらない）", async () => {
+    const requests = mockApi({
+      "GET /api/v1/session": [anonymous],
+      "POST /api/v1/session": [problem(403, "email_unconfirmed")],
+      "POST /api/v1/confirmation": [{ status: 202 }],
+    });
+    renderWithAuth(<SignInScreen redirect="/" />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "ログイン" })).toBeEnabled());
+
+    fillSignIn();
+    const resend = await screen.findByRole("button", { name: "確認メールを送り直す" });
+    fireEvent.change(screen.getByLabelText("メールアドレス"), { target: { value: "other@example.com" } });
+    fireEvent.click(resend);
+
+    await screen.findByText(/確認が済んでいない登録があれば/);
+    expect(JSON.parse(requests.find((r) => r.key === "POST /api/v1/confirmation")!.body!)).toEqual({
+      email: "user@example.com",
+    });
   });
 });

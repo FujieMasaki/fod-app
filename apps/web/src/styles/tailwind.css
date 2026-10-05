@@ -1,8 +1,9 @@
 /*
  * 新しいUIのTailwind CSS v4（docs/design-system.md「StylingとDesign Token」）。
  * - 既存画面のCSS Modulesとresetを変えないよう、preflightは読み込まずthemeとutilitiesだけを使う。
- * - Tailwindの既定のthemeは消し、既存の--fod-* tokenだけを割り当てる。token外の色・余白・文字の
- *   classは生成されない。新しい値が要るときは、先にtokens.cssへtokenを足してからここへ割り当てる。
+ * - Tailwindの既定のthemeは消し、既存の--fod-* tokenだけを割り当てる。token外の名前付きの色・余白・文字の
+ *   classは生成されない。ただし任意値（`p-[13px]`など）は生成されるため、使わないことはレビューで確かめる。
+ *   新しい値が要るときは、先にtokens.cssへtokenを足してからここへ割り当てる。
  * - フォントはbodyの指定（globals.css）をそのまま使う。--font-*を定義するとglobals.cssの
  *   --font-sansを上書きしてしまうため、ここでは定義しない。
  */
