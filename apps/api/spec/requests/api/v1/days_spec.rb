@@ -213,6 +213,15 @@ RSpec.describe "Days" do
       assert_response_schema_confirm(400)
     end
 
+    it "DBの範囲を超える時刻のcursorは500にせず400 cursor_invalid" do
+      cursor = Base64.urlsafe_encode64("v1:2026-09-28:#{'9' * 20}:#{SecureRandom.uuid}", padding: false)
+
+      get "/api/v1/days/2026-09-28", params: { cursor: }
+
+      expect(problem_code).to eq("cursor_invalid")
+      assert_response_schema_confirm(400)
+    end
+
     it "日付の形が違う、または存在しない暦日なら422 validation_failed" do
       %w[2026-9-28 2026-02-30 today2].each do |date|
         get "/api/v1/days/#{date}"

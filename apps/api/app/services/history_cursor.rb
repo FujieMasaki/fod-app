@@ -25,13 +25,17 @@ module HistoryCursor
   # 日の詳細の続き。最後に返したDotの`started_at`（マイクロ秒）と`id`、どの日のcursorかを持つ。
   def for_dot(dot) = encode(dot.date.iso8601, (dot.started_at.to_r * 1_000_000).to_i, dot.id)
 
-  # 別の日のcursorは使い回させない（続きの位置が意味を持たないため）。
+  # 別の日のcursorは使い回させない（続きの位置が意味を持たないため）。時刻もその日（Asia/Tokyo）の中に
+  # 限る。作り替えた値でDBの範囲を超える時刻を渡し、`400`ではなく`500`にさせないため。
   def after_dot(cursor, date:)
     cursor_date, microseconds, id = decode(cursor, size: 3)
     raise Invalid unless parse_date(cursor_date) == date
     raise Invalid unless MICROSECONDS_FORMAT.match?(microseconds) && UUID_FORMAT.match?(id)
 
-    [Time.zone.at(Rational(microseconds.to_i, 1_000_000)), id]
+    started_at = Time.zone.at(Rational(microseconds.to_i, 1_000_000))
+    raise Invalid unless Dot.date_for(started_at) == date
+
+    [started_at, id]
   end
 
   def encode(*values) = Base64.urlsafe_encode64([VERSION, *values].join(":"), padding: false)

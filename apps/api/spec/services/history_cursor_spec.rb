@@ -48,4 +48,15 @@ RSpec.describe HistoryCursor do
       expect { described_class.after_dot(cursor, date:) }.to raise_error(HistoryCursor::Invalid), cursor.inspect
     end
   end
+
+  it "日の詳細のcursorの時刻がその日の外ならInvalidにする（DBの範囲を超える時刻を含む）" do
+    date = Date.new(2026, 9, 28)
+    previous_day = (Time.zone.parse("2026-09-27 23:59:59 +09:00").to_r * 1_000_000).to_i
+    invalid = ["v1:2026-09-28:#{previous_day}:#{SecureRandom.uuid}", "v1:2026-09-28:#{'9' * 20}:#{SecureRandom.uuid}"]
+              .map { Base64.urlsafe_encode64(it, padding: false) }
+
+    invalid.each do |cursor|
+      expect { described_class.after_dot(cursor, date:) }.to raise_error(HistoryCursor::Invalid), cursor.inspect
+    end
+  end
 end
