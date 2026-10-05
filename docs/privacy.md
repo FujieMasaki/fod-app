@@ -178,12 +178,16 @@ sequenceDiagram
     R->>T: 文字起こしを依頼する（Job・非同期）
     T->>S3: 音声を読み、文字起こし全文を書き出す
     R->>AI: 文字起こし全文を渡し、sentenceとsummaryを生成する
+    B->>R: 結果を照会する（polling。処理中も続け、失敗もここで分かる）
     alt 成功
         R->>DB: Dotを保存する（成功の確定）
         R->>S3: 音声の削除処理を始める
-        B->>R: 結果を照会する（polling）
         R-->>B: Dotと文字起こし全文（端末ではsessionStorageへ）
-        B->>R: 文字起こし全文の受領ACK
+        alt 端末が受領ACKを送った
+            B->>R: 文字起こし全文の受領ACK
+        else ACKが来ないまま受理から24時間
+            Note over R: 全文はもう端末へ返さない
+        end
         R->>S3: 文字起こし全文の削除処理を始める
         R->>T: jobの削除処理を始める（終端になるまで追う）
         Note over R,DB: 後片付けが全部終わってから処理の記録を削除する
@@ -194,10 +198,11 @@ sequenceDiagram
         R->>T: jobの削除処理を始める
         Note over R,DB: 後片付けが終わってから処理の記録を削除する
     end
-    Note over B,AI: Dotができた後の完全削除・退会は、dotsの行・残っている一時object・job・処理の記録が対象（範囲は5-1と5-2）
+    Note over B,AI: Dotができた後の完全削除・退会は、dotsの行・残っている一時object・job・処理の記録が対象（範囲は5-1と5-2）。取り消し・完全削除・退会では、使用済みattemptのidと期限を期限まで残す
 ```
 
-外部の委託先（Transcribe・Bedrock）へ渡った分は、Focus on Dot側から即時に消せない。RDSのDotは、
+Transcribeのjobの削除はアプリが行うが、外部の委託先（Transcribe・Bedrock）の内部で保持され得る分は、
+Focus on Dot側から即時に消せない。RDSのDotは、
 本人がゴミ箱へ入れる・完全削除する・退会するまで残り、期間による自動削除はしない。
 
 ### 5-1. データ別の条件
