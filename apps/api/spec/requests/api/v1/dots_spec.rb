@@ -49,7 +49,7 @@ RSpec.describe "Dots" do
         expect(Dot.where(sentence: "元の一文")).not_to exist
       end
 
-      it "編集で保存日時・日付・開始時刻・長さ・所有者が動かない" do
+      it "編集で日付・開始時刻・長さ・所有者・処理IDが動かない" do
         before = dot.attributes.slice("date", "started_at", "duration_seconds", "user_id", "generation_id")
         travel 3.days
 
