@@ -277,6 +277,55 @@ describe("PasswordResetScreen", () => {
     expect(screen.getByText("status:anonymous")).toBeInTheDocument();
   });
 
+  it("再設定がserverで済んだのに応答を失っても、状態を取り直して未認証にする", async () => {
+    let patched = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        if (path === "/api/v1/session") {
+          return Response.json(
+            patched
+              ? { authenticated: false, csrf_token: "t2" }
+              : {
+                  authenticated: true,
+                  csrf_token: "t1",
+                  expires_at: "2099-01-01T00:00:00Z",
+                  account_status: "active",
+                  user: {
+                    id: "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10",
+                    email: "a@example.com",
+                    email_confirmed: true,
+                    sign_in_methods: ["password"],
+                  },
+                },
+          );
+        }
+        if (init?.method === "PATCH" && path === "/api/v1/password") {
+          // serverでは再設定が済み、応答だけが届かない
+          patched = true;
+          throw new TypeError("Failed to fetch");
+        }
+        throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
+      }),
+    );
+    function StatusProbe() {
+      return <p>{`status:${useAuth().status}`}</p>;
+    }
+    openLink("/password/reset", "reset-token");
+    renderScreen(
+      <>
+        <PasswordResetScreen />
+        <StatusProbe />
+      </>,
+    );
+    await screen.findByText("status:authenticated");
+
+    fireEvent.change(screen.getByLabelText("新しいパスワード"), { target: { value: "new-password-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
+
+    expect(await screen.findByText("status:anonymous")).toBeInTheDocument();
+  });
+
   it("passwordが短ければ項目に示す", async () => {
     mockApi({
       "PATCH /api/v1/password": {

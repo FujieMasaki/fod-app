@@ -25,6 +25,14 @@ export function PasswordResetScreen() {
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState(false);
 
+  // 再設定でserverは既存のCookieを無効にする。login中だった場合に古い認証済みが残らないよう、送った後は成否に
+  // かかわらず取り直す（取り直しの失敗は再設定の成否に関わらないため、案内は出す）。refreshは実行中の取得を
+  // 共有するため、1回目で再設定の前に始まった取得を終わらせ、2回目で再設定の後に始まる取得の結果を置く。
+  async function refreshAfterReset() {
+    await refresh().catch(() => undefined);
+    await refresh().catch(() => undefined);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!token) return;
@@ -32,14 +40,11 @@ export function PasswordResetScreen() {
     setError(null);
     try {
       await withCsrf((csrfToken) => resetPassword(csrfToken, token, password));
-      // 再設定でserverは既存のCookieを無効にする。login中だった場合に古い認証済みが残らないよう、取り直してから
-      // ログインへ案内する（取り直しの失敗は再設定の成否に関わらないため、案内は出す）。
-      // refreshは実行中の取得を共有するため、1回目で再設定の前に始まった取得を終わらせ、2回目で再設定の後に
-      // 始まる取得の結果を置く。
-      await refresh().catch(() => undefined);
-      await refresh().catch(() => undefined);
+      await refreshAfterReset();
       setDone(true);
     } catch (caught) {
+      // 失敗に見えても、serverでは済んでいることがある（応答だけを失った、再試行がtoken_invalidになった）。
+      await refreshAfterReset();
       setError(caught);
     } finally {
       setSubmitting(false);
