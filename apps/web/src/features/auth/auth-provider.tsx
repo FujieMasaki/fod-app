@@ -132,9 +132,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sessionQuery = useQuery({
     queryKey: SESSION_QUERY_KEY,
     queryFn: getSession,
-    // 別タブでのlogout・loginを、画面へ戻ったときに検出する。
-    refetchOnWindowFocus: !authBusy,
-    refetchOnReconnect: !authBusy,
+    // 別タブでのlogout・loginを、画面へ戻ったときに検出する。login・logoutの間は止める。stateではなくrefで
+    // その場で判定する（stateだと次の描画まで反映されず、その間に始まった取り直しが待つ対象から漏れるため）。
+    refetchOnWindowFocus: () => !authBusyRef.current,
+    refetchOnReconnect: () => !authBusyRef.current,
     staleTime: 0,
   });
   const session = sessionQuery.data;
@@ -230,10 +231,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const runExclusively = useCallback(
     <T,>(operation: () => Promise<T>): Promise<T> => {
       const previous = exclusiveRef.current;
+      // 呼ばれたその場で取り直しを止める（awaitの後に立てると、その間に始まった取り直しが待つ対象から漏れる）。
+      authBusyRef.current = true;
+      setAuthBusy(true);
       const run = (async () => {
         await previous?.catch(() => undefined);
-        authBusyRef.current = true;
-        setAuthBusy(true);
         const pending: Promise<unknown>[] = [...inflightRef.current];
         // 実行中の取り直しがあればその応答を待つ（実行中ならfetchQueryは新しく送らず、同じ応答を待つ）。
         if (queryClient.isFetching({ queryKey: SESSION_QUERY_KEY }) > 0) {

@@ -235,6 +235,36 @@ describe("login", () => {
     await waitFor(() => expect(auth().user?.id).toBe(USER_B));
   });
 
+  it("loginを呼んだ直後（次の描画の前）にfocusしても、取り直しを送らない", async () => {
+    const order: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_path: string, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          order.push("POST");
+          return Response.json(authenticated(USER_B, "t2").body);
+        }
+        order.push("GET");
+        return Response.json(order.includes("POST") ? authenticated(USER_B, "t3").body : authenticated(USER_A, "t1").body);
+      }),
+    );
+    const { auth } = await renderAndSubscribe();
+    order.length = 0;
+
+    // signInを呼んだ同じ処理の中で、描画を待たずにfocusを起こす
+    let signingIn: Promise<void> = Promise.resolve();
+    act(() => {
+      signingIn = auth().signIn({ email: "b@example.com", password: "password123" });
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await act(() => signingIn);
+
+    // login前の取り直し（前の利用者のCookie）は送られず、最初の通信がloginになる
+    expect(order[0]).toBe("POST");
+    await waitFor(() => expect(auth().user?.id).toBe(USER_B));
+  });
+
   it("loginの間に呼ばれたrefreshは、loginが終わってから取り直す", async () => {
     const order: string[] = [];
     let releasePost: (response: Response) => void = () => undefined;
