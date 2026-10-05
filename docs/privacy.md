@@ -165,30 +165,36 @@ MVP全体の範囲は[product](./product.md)を正本とする。
 sequenceDiagram
     participant B as 端末（Browser）
     participant R as Rails（API・Job）
+    participant DB as RDS（dots・処理の記録）
     participant S3 as S3東京（一時object）
     participant T as Amazon Transcribe（東京）
     participant AI as Amazon BedrockのClaude
-    participant DB as RDS（dots）
     B->>R: 録音attemptの発行（started_atが決まる）
     B->>R: 音声を送信（端末ではmemoryにだけ置く）
-    R->>S3: 処理の記録を作ってから、音声を一時objectとして保存する
+    R->>DB: 処理の記録を作る（uploadより先）
+    R->>S3: 音声を一時objectとして保存する
     R-->>B: 処理IDと再試行期限（受理から24時間）
     Note over S3,T: ここから元音声が外部の委託先へ渡る
     R->>T: 文字起こしを依頼する（Job・非同期）
     T->>S3: 音声を読み、文字起こし全文を書き出す
     R->>AI: 文字起こし全文を渡し、sentenceとsummaryを生成する
-    R->>DB: Dotを保存する（成功の確定）
-    R->>S3: 音声の削除処理を始める
-    B->>R: 結果を照会する（polling）
-    R-->>B: Dotと文字起こし全文（端末ではsessionStorageへ）
-    B->>R: 文字起こし全文の受領ACK
-    R->>S3: 文字起こし全文とTranscribeのjobの削除処理を始める
-    Note over R: 後片付けが全部終わってから処理の記録を削除する
-    alt 失敗して期限内
+    alt 成功
+        R->>DB: Dotを保存する（成功の確定）
+        R->>S3: 音声の削除処理を始める
+        B->>R: 結果を照会する（polling）
+        R-->>B: Dotと文字起こし全文（端末ではsessionStorageへ）
+        B->>R: 文字起こし全文の受領ACK
+        R->>S3: 文字起こし全文の削除処理を始める
+        R->>T: jobの削除処理を始める（終端になるまで追う）
+        Note over R,DB: 後片付けが全部終わってから処理の記録を削除する
+    else いずれかの段階で失敗し、期限内
         B->>R: 同じ処理IDで再試行（全文が残っていれば生成からやり直す）
-    else 期限到来・Dotの完全削除・退会・処理の取り消し
-        R->>S3: 音声・文字起こし全文・jobの削除処理を始める
+    else 期限到来・処理の取り消し（どちらもDotになる前）
+        R->>S3: 音声・文字起こし全文の削除処理を始める
+        R->>T: jobの削除処理を始める
+        Note over R,DB: 後片付けが終わってから処理の記録を削除する
     end
+    Note over B,AI: Dotができた後の完全削除・退会は、dotsの行・残っている一時object・job・処理の記録が対象（範囲は5-1と5-2）
 ```
 
 外部の委託先（Transcribe・Bedrock）へ渡った分は、Focus on Dot側から即時に消せない。RDSのDotは、
