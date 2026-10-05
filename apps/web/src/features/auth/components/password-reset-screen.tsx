@@ -15,6 +15,16 @@ const TOKEN_MESSAGES = {
   token_expired: "このリンクの有効期限（6時間）が過ぎています。再設定のメールを送り直してください。",
 };
 
+// 再設定が行われなかったと分かる失敗。これ以外の失敗（通信・serverのerror・再試行のtoken_invalid）は、serverで
+// 済んでいる（応答だけを失った）ことがある。
+const NOT_APPLIED_CODES = ["validation_failed", "token_expired", "rate_limited", "csrf_invalid"] as const;
+
+function mayHaveReset(error: unknown): boolean {
+  // 利用者が切り替わっていて送らなかった（withCsrfの`identity_changed`）
+  if (error instanceof Error && !(error instanceof ApiError) && error.message === "identity_changed") return false;
+  return !isProblem(error, ...NOT_APPLIED_CODES);
+}
+
 /**
  * 再設定メールのリンク（`/password/reset#token=`）。成功してもloginはしないので、ログインへ案内する
  * （契約のresetPassword）。
@@ -61,9 +71,7 @@ export function PasswordResetScreen() {
       setDone(true);
     } catch (caught) {
       // 失敗に見えても、serverでは済んでいることがある（応答だけを失った、再試行がtoken_invalidになった）。
-      if ((caught instanceof ApiError && caught.kind === "network") || isProblem(caught, "token_invalid")) {
-        endSessionAfterReset();
-      }
+      if (mayHaveReset(caught)) endSessionAfterReset();
       setError(caught);
     } finally {
       setSubmitting(false);
@@ -110,6 +118,16 @@ export function PasswordResetScreen() {
         />
         {needsReload(error) ? (
           <ReloadNotice />
+        ) : (error instanceof ApiError && (error.kind === "network" || error.kind === "http")) ||
+          isProblem(error, "internal_error") ? (
+          // 応答を失っただけで、再設定は済んでいることがある。送り直すとtokenが使用済みになるため、先にログインを示す。
+          <div className="flex flex-col gap-2">
+            <FormMessage tone="error">
+              再設定できたか確かめられませんでした。済んでいることがあるため、まず新しいパスワードでログインできるか
+              お試しください。ログインできなければ、もう一度再設定してください。
+            </FormMessage>
+            <TextLink to="/login">ログインへ</TextLink>
+          </div>
         ) : (
           error !== null && !fields.password && <FormMessage tone="error">{errorMessage(error)}</FormMessage>
         )}

@@ -410,6 +410,12 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 - **入力欄の文字数**: パスワードの欄は`maxLength`で制限しない。HTMLはUTF-16の単位で数え、Railsは文字の単位で
   数えるため、補助文字を含む有効なパスワードを切り詰める（Codexの指摘）。メールアドレスの254は残す。
 
+- **login中のpassword再設定**: serverは再設定で既存のCookieを無効にするため、Webは再設定が済んだかもしれない
+  ときに、通信を待たずにSessionのcacheを未認証として置き（利用者の切り替わりとして個人データを消す）、取り直しは
+  backgroundで行う。再設定の前に始まった取得が後から同じ利用者の認証済みを返したら、もう一度未認証として置いて
+  取り直す。行われなかったと分かる失敗では何もしない（個人データを消さない）。応答を失ったときは、送り直すと
+  tokenが使用済みになるため、先にログインを試すよう案内する。
+
 後続のタスクへの申し送り（PR 2/3のレビューで見つかり、範囲外として直さなかったもの）:
 
 - **unknownでのlogin**: 状態を確かめられない（`unknown`）ままでもログイン画面からloginできる。Railsがloginで
@@ -517,6 +523,11 @@ PR 3/3（#67）のCodexの最終チェックが5回続けてLGTMにならず、`
 - 選択肢B: 再設定の画面をlogin中には使わせない（login中ならlogoutを先に求める、またはアカウント画面からの
   変更をTASK-001 Plan §54の重要操作として別に設ける）。範囲と体験の判断が要る。
 
+**決定（2026-10-05、人間）: 修正を仕上げ、セルフレビューとサブエージェントのレビューを経てからCodexへ戻す
+（選択肢Aの進め方）。**セルフレビューで、行われなかったと分かる失敗（`validation_failed`・`token_expired`・
+`rate_limited`・`csrf_invalid`・送らなかった`identity_changed`）以外はすべて「済んだかもしれない」と扱うよう
+広げ（serverの500を含む）、応答を失ったときは送り直す前にログインを試すよう案内を足した（§13）。
+
 ## 15. Definition of Done
 
 - TASK-007の完了条件と必要な検証を満たし、検証できなかったものを理由とともに記録している。
@@ -546,7 +557,7 @@ PR 3/3（#67）のCodexの最終チェックが5回続けてLGTMにならず、`
 | --- | --- |
 | `pnpm check`（ESLint・命名・契約のlint・生成した型の最新確認） | 通過 |
 | `pnpm type-check` | 通過（Zodの`Session`と契約の型の一致を含む） |
-| `pnpm test` | scripts 173件・web 325件、すべて通過 |
+| `pnpm test` | scripts 173件・web 336件、すべて通過 |
 | `pnpm --filter @focus-on-dot/web build` | 通過。生成したCSSにpreflightがなく、使ったutilityが`--fod-*` tokenを参照することを確認 |
 
 proxy越しの確認（Rails 3107・Vite 5207を起動し、`curl`でWebと同じrequestの形を送った）:

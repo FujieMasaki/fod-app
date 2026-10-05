@@ -325,6 +325,9 @@ describe("PasswordResetScreen", () => {
     fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
 
     expect(await screen.findByText("status:anonymous")).toBeInTheDocument();
+    // 送り直すとtokenが使用済みになるため、済んでいる可能性とログインへの導線を示す
+    expect(screen.getByText(/再設定できたか確かめられませんでした/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "ログインへ" })).toBeInTheDocument();
   });
 
   it("再設定の直後にofflineになっても、認証済みを残さない", async () => {
@@ -416,6 +419,73 @@ describe("PasswordResetScreen", () => {
 
     expect(await screen.findByText("パスワードを再設定しました")).toBeInTheDocument();
     expect(screen.getByText("status:anonymous")).toBeInTheDocument();
+  });
+
+  it.each([
+    ["serverのerror（500）", 500, "internal_error", "status:anonymous"],
+    ["回数の制限（429）", 429, "rate_limited", "status:authenticated"],
+    ["期限切れ（422）", 422, "token_expired", "status:authenticated"],
+    ["CSRF（403）", 403, "csrf_invalid", "status:authenticated"],
+  ])("%s: 済んだかもしれない失敗なら未認証に、行われなかった失敗なら認証済みのままにする", async (_, status, code, expected) => {
+    let sessionCount = 0;
+    let patchSent = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        if (path === "/api/v1/session") {
+          sessionCount += 1;
+          // 送った後の取り直しは少し遅れて返す（その間の表示も確かめるため）
+          if (sessionCount > 1) await new Promise((resolve) => setTimeout(resolve, 20));
+          // 500の後の取り直しは、serverで済んでいたとして未認証を返す
+          if (sessionCount > 1 && code === "internal_error") return Response.json({ authenticated: false, csrf_token: "t2" });
+          return Response.json({
+            authenticated: true,
+            csrf_token: "t1",
+            expires_at: "2099-01-01T00:00:00Z",
+            account_status: "active",
+            user: {
+              id: "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10",
+              email: "a@example.com",
+              email_confirmed: true,
+              sign_in_methods: ["password"],
+            },
+          });
+        }
+        if (init?.method === "PATCH" && path === "/api/v1/password") {
+          patchSent = true;
+          return Response.json(
+            { type: `urn:focus-on-dot:problem:${code}`, title: "x", status, code, retry_after_seconds: 60 },
+            { status, headers: { "Content-Type": "application/problem+json" } },
+          );
+        }
+        throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
+      }),
+    );
+    function StatusProbe() {
+      const { status, identityEpoch } = useAuth();
+      return <p>{`status:${status} epoch:${identityEpoch}`}</p>;
+    }
+    openLink("/password/reset", "reset-token");
+    renderScreen(
+      <>
+        <PasswordResetScreen />
+        <StatusProbe />
+      </>,
+    );
+    const before = (await screen.findByText(/status:authenticated/)).textContent;
+
+    fireEvent.change(screen.getByLabelText("新しいパスワード"), { target: { value: "new-password-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
+
+    // 送った後の処理（取り直しを含む）が落ち着くまで待ってから、状態を確かめる
+    await waitFor(() => expect(patchSent).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    if (expected === "status:authenticated") {
+      // 行われなかった失敗では、一度も未認証にせず、個人データを消さない（利用者の世代が変わらない）
+      expect(screen.getByText(/status:/).textContent).toBe(before);
+    } else {
+      expect(screen.getByText(new RegExp(expected))).toBeInTheDocument();
+    }
   });
 
   it("再設定を受け付けなかった（入力の誤り）ときは、認証済みのままにする", async () => {
