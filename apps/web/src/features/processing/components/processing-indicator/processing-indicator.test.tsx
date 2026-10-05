@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { AuthProvider } from "@/features/auth";
+import { AuthProvider, useAuth } from "@/features/auth";
 import { SessionProvider } from "@/features/session";
 import { sampleSession } from "@/mocks/sample-session";
 import { ProcessingIndicator } from "./processing-indicator";
@@ -78,5 +78,44 @@ describe("整理が終わると今日の一文へ進む", () => {
     fireEvent.click(retry);
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/dot", replace: true }));
+  });
+
+  it("整理の途中で利用者が切り替わったら、前の利用者の結果を保存・表示しない", async () => {
+    vi.stubEnv("VITE_DOT_API_URL", "http://api.test");
+    let releaseDot: (value: unknown) => void = () => undefined;
+    stubFetch(
+      vi.fn(
+        () =>
+          new Promise((resolve) => {
+            releaseDot = resolve;
+          }),
+      ),
+    );
+    let switchUser: () => void = () => undefined;
+    function SwitchProbe() {
+      switchUser = useAuth().prepareExternalSignIn;
+      return null;
+    }
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <SessionProvider>
+            <ProcessingIndicator />
+            <SwitchProbe />
+          </SessionProvider>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("もう少しだけお待ちください")).toBeInTheDocument());
+
+    // 利用者の切り替わり（ここでは遷移前の通知）が起きた後に、前の利用者の結果が届く
+    act(() => switchUser());
+    await act(async () => releaseDot({ ok: true, json: async () => sampleSession }));
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true }));
+    expect(navigateMock).not.toHaveBeenCalledWith({ to: "/dot", replace: true });
+    expect(window.localStorage.getItem("fod.session.v1")).toBeNull();
   });
 });
