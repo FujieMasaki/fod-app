@@ -641,9 +641,8 @@ opt-outを設定すると、それ以前に送った音声の**保存データ�
    **OpenAIの事前承認（sales）が必要**である。
    （[Data controls in the OpenAI platform](https://developers.openai.com/api/docs/guides/your-data)）
 2. **OpenAIのデータレジデンシーは、地域内処理（inference）に対応する地域が限られ、日本は
-   「地域内保存のみ」である。**対応する地域として確認できたのは米国と欧州（EEA+スイス）で、
-   **UAEを挙げる記述もあるが一次資料で確認できていない**（判断に効くのは「日本が地域内処理に
-   対応しない」ことなので、対応地域の全量は確定させない）。
+   「地域内保存のみ」である。**対応する地域として挙がっているのは米国・欧州（EEA+スイス）と、
+   一部のモデル向けのUAEである。**判断に効くのは「日本が地域内処理に対応しない」ことである。**
    > "If you select a region that supports regional processing, as specifically identified below, the
    > services will perform inference for your Customer Content in the selected region as well."
 
@@ -1311,7 +1310,7 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
    Amazon BedrockのClaudeで生成する。決め手はモデル性能ではなく**完了条件7の重さ**で、9項目の
    確認が1社分で済み、鍵の項目（項目8）は長期固定キーの管理が不要になる（項目自体は消えない）。
    **ただし採用後の調査で、案Aの成立には§18の6つの必須条件（Transcribeのopt-out適用、
-   モデルの推論経路の選定、data retention modeの確認、録音形式の疎通、文字起こし結果を
+   モデルの推論経路の選定、使う構成の保存先と閲覧元の確認（data retention modeを含む）、録音形式の疎通、文字起こし結果を
    自前S3へ出すこと、`aws-sdk-bedrockruntime`で呼べる経路から選ぶこと）が要ることが分かった。**
    判断そのものは変えないが、これらを満たさないまま公開しない。
    **2026-10-03に案Aを続ける理由が変わった。**所在地方針を「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を
