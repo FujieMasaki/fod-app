@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/features/auth";
 import { SessionProvider, useSession } from "@/features/session";
 import { sampleSession } from "@/mocks/sample-session";
@@ -85,6 +85,54 @@ describe("整理が終わると今日の一文へ進む", () => {
     fireEvent.click(retry);
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/dot", replace: true }));
+  });
+
+  it("取り直しで別の利用者へ切り替わった後に前の利用者の結果が届いても、保存・表示しない", async () => {
+    vi.stubEnv("VITE_DOT_API_URL", "http://api.test");
+    const signedInAs = (id: string) => ({
+      authenticated: true,
+      csrf_token: "t",
+      expires_at: "2099-01-01T00:00:00Z",
+      account_status: "active",
+      user: { id, email: "a@example.com", email_confirmed: true, sign_in_methods: ["password"] },
+    });
+    let sessionCount = 0;
+    let releaseDot: (value: unknown) => void = () => undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: unknown) => {
+        if (path === "/api/v1/session") {
+          sessionCount += 1;
+          return Response.json(
+            signedInAs(sessionCount === 1 ? "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10" : "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f"),
+          );
+        }
+        return new Promise((resolve) => {
+          releaseDot = resolve;
+        });
+      }),
+    );
+    renderProcessing();
+    await waitFor(() => expect(sessionCount).toBe(1));
+    await screen.findByText("もう少しだけお待ちください");
+
+    // 画面へ戻ったときの取り直しでBに変わる（logoutの開始・Googleへの遷移による通知は経ない）
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(sessionCount).toBe(2));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // その後に、Aとして始めた整理の結果が届く
+    await act(async () => releaseDot({ ok: true, json: async () => sampleSession }));
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalled());
+    expect(navigateMock).not.toHaveBeenCalledWith({ to: "/dot", replace: true });
+    expect(screen.getByText("no-dot")).toBeInTheDocument();
+    focusManager.setFocused(undefined);
   });
 
   it("整理の途中で利用者が切り替わったら、前の利用者の結果を保存・表示しない", async () => {
