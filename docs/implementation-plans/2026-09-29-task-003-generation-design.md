@@ -146,7 +146,7 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
 - `docs/tasks/README.md`: TASK-017の要判断事項。
 
 **この1文の全出現箇所は`grep -rn '保存と閲覧は日本国内' --include='*.md'`で引く**
-（2026-10-05時点で10ファイル・23行）。[`documentation.md`](../code-review/documentation.md) §3が、
+（件数は増減するので書かない）。[`documentation.md`](../code-review/documentation.md) §3が、
 要約を下流へ置いた場合は検索語をPlanへ書き残すことを求めている。
 
 同じ変更単位で行った**再発防止の仕組み化**（強調の崩れを検出するlint、CIでの常時実行、仕様・設計文書の
