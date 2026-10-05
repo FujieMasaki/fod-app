@@ -454,6 +454,48 @@ describe("logout", () => {
     expect(auth().endReason).toBe("signed_out");
   });
 
+  it("取り直しが重なっても、先に始まった取り直しの応答を受け取ってからDELETEを送る", async () => {
+    const order: string[] = [];
+    let releaseGet2: (response: Response) => void = () => undefined;
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_path: string, init?: RequestInit) => {
+        if (init?.method === "DELETE") {
+          order.push("DELETE");
+          return new Response(null, { status: 204 });
+        }
+        getCount += 1;
+        order.push(`GET${getCount}`);
+        if (getCount === 1) return Response.json(authenticated(USER_A, "t1").body);
+        if (getCount === 2) {
+          return new Promise<Response>((resolve) => {
+            releaseGet2 = (response) => {
+              order.push("GET2 done");
+              resolve(response);
+            };
+          });
+        }
+        return Response.json(anonymous("t3").body);
+      }),
+    );
+    const { auth } = await renderAndSubscribe();
+
+    // 1つ目の取り直しが応答を待っている間に、2つ目を呼ぶ（取り消さずに共有する）
+    void auth().refresh();
+    await waitFor(() => expect(getCount).toBe(2));
+    void auth().refresh();
+    const signingOut = auth().signOut();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(order).not.toContain("DELETE");
+
+    releaseGet2(Response.json(authenticated(USER_A, "t1").body));
+    await act(() => signingOut);
+
+    expect(order.indexOf("GET2 done")).toBeLessThan(order.indexOf("DELETE"));
+    expect(auth().endReason).toBe("signed_out");
+  });
+
   it("実行中の通信を待ちきれなければ、DELETEを送らずに失敗にする", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const order: string[] = [];
@@ -481,7 +523,7 @@ describe("logout", () => {
     expect(auth().endReason).toBeNull();
   });
 
-  it("実行中の保護APIの応答を受け取ってからDELETEを送り、logout中に始めた保護APIは後で送る", async () => {
+  it("実行中の保護APIの応答を受け取ってからDELETEを送り、logout中にAとして呼んだ保護APIは送らない", async () => {
     const order: string[] = [];
     let releaseApi: (response: Response) => void = () => undefined;
     let getCount = 0;
@@ -509,7 +551,9 @@ describe("logout", () => {
     const first = auth().request("/api/v1/dots/a", { method: "PATCH", body: {} });
     await waitFor(() => expect(order).toContain("PATCH /api/v1/dots/a"));
     const signingOut = auth().signOut();
-    const second = auth().request("/api/v1/dots/b", { method: "PATCH", body: {} }).catch(() => undefined);
+    const second = auth()
+      .request("/api/v1/dots/b", { method: "PATCH", body: {} })
+      .catch((e: unknown) => e);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(order).not.toContain("DELETE /api/v1/session");
     expect(order).not.toContain("PATCH /api/v1/dots/b");
@@ -517,11 +561,45 @@ describe("logout", () => {
     releaseApi(new Response(null, { status: 204 }));
     await act(() => first);
     await act(() => signingOut);
-    await act(() => second);
 
     expect(order.indexOf("PATCH a done")).toBeLessThan(order.indexOf("DELETE /api/v1/session"));
-    expect(order.indexOf("DELETE /api/v1/session")).toBeLessThan(order.indexOf("PATCH /api/v1/dots/b"));
+    // Aとして呼んだ操作は、logoutの後（未認証）では送らない
+    expect(await second).toEqual(new Error("identity_changed"));
+    expect(order).not.toContain("PATCH /api/v1/dots/b");
     expect(auth().endReason).toBe("signed_out");
+  });
+
+  it("loginを待っている間に利用者が変わったら、前の利用者として呼んだ保護APIを送らない", async () => {
+    const order: string[] = [];
+    let releasePost: (response: Response) => void = () => undefined;
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string, init?: RequestInit) => {
+        const key = `${init?.method ?? "GET"} ${path}`;
+        order.push(key);
+        if (key === "POST /api/v1/session") {
+          return new Promise<Response>((resolve) => {
+            releasePost = resolve;
+          });
+        }
+        getCount += 1;
+        return Response.json(getCount === 1 ? authenticated(USER_A, "t1").body : authenticated(USER_B, "t3").body);
+      }),
+    );
+    const { auth } = await renderAndSubscribe();
+
+    // AのままBとしてloginし直している間に、Aとして保護APIを呼ぶ
+    const signingIn = auth().signIn({ email: "b@example.com", password: "password123" });
+    await waitFor(() => expect(order).toContain("POST /api/v1/session"));
+    const queued = auth()
+      .request("/api/v1/recording_attempts", { method: "POST", body: {} })
+      .catch((e: unknown) => e);
+    releasePost(Response.json(authenticated(USER_B, "t2").body));
+    await act(() => signingIn);
+
+    expect(await queued).toEqual(new Error("identity_changed"));
+    expect(order).not.toContain("POST /api/v1/recording_attempts");
   });
 });
 

@@ -67,7 +67,8 @@ type AuthContextValue = {
   identityEpoch: number;
   /**
    * 状態を変える操作を、最新のCSRF tokenで実行する。`csrf_invalid`ならtokenを取り直して1回だけ再送し、
-   * `401`なら認証の終了として扱ってから投げ直す。
+   * `401`なら認証の終了として扱ってから投げ直す。login・logoutの間に呼ばれたら終わるまで待ち、その間に
+   * 利用者が変わっていたら送らずに`Error("identity_changed")`を投げる（`request`も同じ）。
    */
   withCsrf: <T>(operation: (csrfToken: string) => Promise<T>) => Promise<T>;
   /** 保護APIを呼ぶ入口（後続の機能はこれを使う） */
@@ -185,9 +186,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [identity, authenticatedSession?.expires_at, notifyIdentityChange]);
 
   // login・logoutの間に呼ばれたら、終わるまで待ってから取り直す（その応答がCookieを戻し得るため）。
+  // 実行中の取り直しは取り消さずに共有する（cancelRefetch: false）。取り消してもfetchの通信は止まらず、
+  // isFetchingだけが0になるため、login・logoutがその応答を待てなくなる。
   const refresh = useCallback(async () => {
     while (exclusiveRef.current) await exclusiveRef.current.catch(() => undefined);
-    await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY });
+    await queryClient.invalidateQueries({ queryKey: SESSION_QUERY_KEY }, { cancelRefetch: false });
   }, [queryClient]);
 
   // serverが認証の終了を返した。取り直しが失敗しても保護する画面を閉じられるよう、先に未認証として置く。
@@ -266,11 +269,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const withCsrf = useCallback(
-    async <T,>(operation: (csrfToken: string) => Promise<T>): Promise<T> => {
+    async <T,>(operation: (csrfToken: string) => Promise<T>, calledAs?: string | null): Promise<T> => {
       try {
         const csrfToken = await currentCsrfToken();
         // 始めたときの利用者。再送の前に変わっていたら送らない（Aとして始めた操作をBの認証で送らないため）。
-        const startedAs = identityOf(queryClient.getQueryData<Session>(SESSION_QUERY_KEY));
+        // 呼び出し側がlogin・logoutを待つ前の利用者を渡したときは、それを使う。
+        const startedAs = calledAs !== undefined ? calledAs : identityOf(queryClient.getQueryData<Session>(SESSION_QUERY_KEY));
         try {
           return await operation(csrfToken);
         } catch (error) {
@@ -289,10 +293,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   // 後続の機能へ公開する入口。login・logoutの間は始めずに待ち、実行中のものはlogin・logoutが待てるよう数える。
+  // 待っている間に利用者が変わったら送らない（Aとして呼んだ操作をBの認証で送らないため。journaling §4）。
   const trackedWithCsrf = useCallback(
     async <T,>(operation: (csrfToken: string) => Promise<T>): Promise<T> => {
+      const calledAs = identityOf(queryClient.getQueryData<Session>(SESSION_QUERY_KEY));
       while (exclusiveRef.current) await exclusiveRef.current.catch(() => undefined);
-      const running = withCsrf(operation);
+      // まだ認証状態が分からないうちに呼ばれたもの（公開の画面の登録など）は照合しない。
+      if (calledAs !== undefined && identityOf(queryClient.getQueryData<Session>(SESSION_QUERY_KEY)) !== calledAs) {
+        throw new Error("identity_changed");
+      }
+      const running = withCsrf(operation, calledAs);
       inflightRef.current.add(running);
       try {
         return await running;
@@ -300,7 +310,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         inflightRef.current.delete(running);
       }
     },
-    [withCsrf],
+    [queryClient, withCsrf],
   );
 
   const request = useCallback(
@@ -319,8 +329,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const next = await withCsrf((csrfToken) => createSession(csrfToken, credentials));
         queryClient.setQueryData(SESSION_QUERY_KEY, next);
       });
-      // 新しいCookieで取り直して確かめる（実行中の取り直しがあれば結果を捨てて止まる）。cancelQueriesは
-      // 取り消しの際に取り直し前の値へ非同期に戻すため、置いたloginの結果を消し得るので使わない。
+      // 新しいCookieで取り直して確かめる。login前に始まった取り直しはlogin前に受け取り終えている
+      // （runExclusively）。cancelQueriesは取り消しの際に取り直し前の値へ非同期に戻し、置いたloginの結果を
+      // 消し得るので使わない。
       void refresh();
     },
     [queryClient, refresh, runExclusively, withCsrf],
