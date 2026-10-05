@@ -31,10 +31,12 @@ type SignInScreenProps = {
 export function SignInScreen({ redirect, authError }: SignInScreenProps) {
   const { status, endReason, acknowledgeEndReason, refresh, signIn, withCsrf } = useAuth();
   // 終了の理由は開いたときに1回だけ案内し、案内したら消す（古い案内が残り続けず、後の戻り先の判断も誤らないように）。
-  const [shownEndReason] = useState(endReason);
+  // 開いている間に新しく理由が入った（状態を確かめ直したら未認証だった、など）ときも、取り込んでから消す。
+  const [shownEndReason, setShownEndReason] = useState(endReason);
   useEffect(() => {
+    if (endReason) setShownEndReason(endReason);
     acknowledgeEndReason();
-  }, [acknowledgeEndReason]);
+  }, [endReason, acknowledgeEndReason]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);

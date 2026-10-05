@@ -106,15 +106,16 @@ describe("RequireAuth", () => {
   });
 
   it("未認証なら今の画面を戻り先にしてログインへ移る", async () => {
+    locationMock.pathname = "/dot";
     mockApi({ "GET /api/v1/session": [anonymous] });
     renderWithAuth(<RequireAuth>本人の画面</RequireAuth>);
 
-    expect(await screen.findByText("navigate:/login?redirect=%2Frecord")).toBeInTheDocument();
+    expect(await screen.findByText("navigate:/login?redirect=%2Fdot")).toBeInTheDocument();
     expect(screen.queryByText("本人の画面")).not.toBeInTheDocument();
   });
 
-  it("戻り先にできない画面からはredirectを付けない", async () => {
-    locationMock.pathname = "/processing";
+  it.each(["/processing", "/record"])("戻り先にできない画面（%s）からはredirectを付けない", async (pathname) => {
+    locationMock.pathname = pathname;
     mockApi({ "GET /api/v1/session": [anonymous] });
     renderWithAuth(<RequireAuth>本人の画面</RequireAuth>);
 
@@ -149,12 +150,12 @@ describe("SignInScreen", () => {
   it("成功したら戻り先へ進む", async () => {
     // login後の取り直しは新しいCookieで送られ、認証済みを返す
     const requests = mockApi({ "GET /api/v1/session": [anonymous, signedIn], "POST /api/v1/session": [signedIn] });
-    renderWithAuth(<SignInScreen redirect="/record" />);
+    renderWithAuth(<SignInScreen redirect="/settings" />);
     await waitFor(() => expect(screen.getByRole("button", { name: "ログイン" })).toBeEnabled());
 
     fillSignIn();
 
-    expect(await screen.findByText("navigate:/record")).toBeInTheDocument();
+    expect(await screen.findByText("navigate:/settings")).toBeInTheDocument();
     expect(JSON.parse(requests.find((r) => r.key === "POST /api/v1/session")!.body!)).toEqual({
       email: "user@example.com",
       password: "password123",
@@ -200,7 +201,7 @@ describe("SignInScreen", () => {
 
   it("GoogleのformにCSRF tokenと戻り先を入れる", async () => {
     mockApi({ "GET /api/v1/session": [anonymous] });
-    const { container } = renderWithAuth(<SignInScreen redirect="/record" />);
+    const { container } = renderWithAuth(<SignInScreen redirect="/settings" />);
     await waitFor(() => expect(screen.getByRole("button", { name: "Googleでログイン" })).toBeEnabled());
 
     const form = container.querySelector('form[action="/auth/google_oauth2"]') as HTMLFormElement;
@@ -208,7 +209,7 @@ describe("SignInScreen", () => {
     expect(Object.fromEntries(new FormData(form))).toEqual({
       authenticity_token: "t1",
       intent: "sign_in",
-      return_to: "/record",
+      return_to: "/settings",
     });
   });
 });
@@ -347,14 +348,11 @@ describe("SignUpScreen", () => {
 });
 
 describe("SignInPrompt", () => {
-  it("未認証のときだけ、録音へ戻るログインの導線を出す", async () => {
+  it("未認証のときだけログインの導線を出し、ログイン後はHomeへ戻す（録音を自動で始めない）", async () => {
     mockApi({ "GET /api/v1/session": [anonymous] });
     renderWithAuth(<SignInPrompt />);
 
-    expect(await screen.findByRole("link", { name: "ログイン・新規登録" })).toHaveAttribute(
-      "href",
-      "/login?redirect=%2Frecord",
-    );
+    expect(await screen.findByRole("link", { name: "ログイン・新規登録" })).toHaveAttribute("href", "/login");
   });
 
   it("login中は出さない", async () => {
@@ -453,5 +451,36 @@ describe("確認メールの再送", () => {
     expect(JSON.parse(requests.find((r) => r.key === "POST /api/v1/confirmation")!.body!)).toEqual({
       email: "user@example.com",
     });
+  });
+});
+
+describe("SignInScreen（開いている間の変化）", () => {
+  it("開いている間に入った終了の理由も案内する", async () => {
+    mockApi({
+      "GET /api/v1/session": [signedIn, anonymous],
+      "DELETE /api/v1/session": [{ status: 204 }],
+    });
+    function Harness() {
+      const { signOut } = useAuth();
+      return (
+        <div>
+          <button onClick={() => void signOut()}>logout</button>
+          <SignInScreen redirect="/" />
+        </div>
+      );
+    }
+    renderWithAuth(<Harness />);
+    await screen.findByText("navigate:/");
+
+    fireEvent.click(screen.getByRole("button", { name: "logout" }));
+
+    expect(await screen.findByText("ログアウトしました。")).toBeInTheDocument();
+  });
+
+  it("退会の手続き中なら戻り先へ進む（案内はguardが出す）", async () => {
+    mockApi({ "GET /api/v1/session": [{ ...signedIn, body: { ...signedIn.body, account_status: "deletion_in_progress" } }] });
+    renderWithAuth(<SignInScreen redirect="/settings" />);
+
+    expect(await screen.findByText("navigate:/settings")).toBeInTheDocument();
   });
 });

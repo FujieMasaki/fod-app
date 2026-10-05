@@ -62,11 +62,13 @@ describe("auth_error", () => {
 
 describe("safeRedirect", () => {
   it("許可した画面だけを戻り先にし、それ以外は/にする", () => {
-    expect(safeRedirect("/record")).toBe("/record");
+    expect(safeRedirect("/dot")).toBe("/dot");
+    // 録音画面は開くとすぐ録音を始めるため、ログインの後に自動で戻さない
+    expect(safeRedirect("/record")).toBe("/");
     expect(safeRedirect("/processing")).toBe("/");
     expect(safeRedirect("//evil.example")).toBe("/");
-    expect(safeRedirect("https://evil.example/record")).toBe("/");
-    expect(safeRedirect("/record\n")).toBe("/");
+    expect(safeRedirect("https://evil.example/dot")).toBe("/");
+    expect(safeRedirect("/dot\n")).toBe("/");
     expect(safeRedirect(undefined)).toBe("/");
   });
 });
