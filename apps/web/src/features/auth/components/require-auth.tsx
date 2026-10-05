@@ -34,12 +34,17 @@ type SessionQueryState = Pick<QueryState<Session>, "status" | "fetchStatus" | "d
 // - anonymous: 未認証と返している
 // - lost: 取得に失敗した・退会中
 // - busy: 取得中・offlineで一時停止中（まだ分からない）
+// serverが最後に未認証・退会中と返していれば、次の取り直しの最中でも待たずにそれを使う（認証済みの判断だけを、
+// 取り直しが終わるまで保留する）。
 function liveVerdictOf(state: SessionQueryState | undefined): "ok" | "anonymous" | "lost" | "busy" {
-  if (!state || state.fetchStatus !== "idle") return "busy";
+  if (!state) return "busy";
+  if (state.status === "success" && state.data) {
+    if (!state.data.authenticated) return "anonymous";
+    if (state.data.account_status !== "active") return "lost";
+  }
+  if (state.fetchStatus !== "idle") return "busy";
   if (state.status === "error") return "lost";
-  if (!state.data) return "busy";
-  if (!state.data.authenticated) return "anonymous";
-  return state.data.account_status === "active" ? "ok" : "lost";
+  return state.data ? "ok" : "busy";
 }
 
 // 副作用を始める画面で、中身を出すまで待つ上限。offlineで取り直しが止まったまま、回線が戻ったときに

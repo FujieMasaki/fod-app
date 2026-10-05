@@ -727,6 +727,54 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     expect(mounted.count).toBe(1);
   });
 
+  it("未認証の応答の直後に次の取り直しが始まっても、待たずに中身を閉じてログインへ移る", async () => {
+    let getCount = 0;
+    let releaseAnonymous: () => void = () => undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        getCount += 1;
+        if (getCount <= 2) return Response.json(signedIn.body);
+        // 3回目（focus）は未認証、4回目（続けてのfocus）は返らない
+        if (getCount === 3) {
+          return new Promise<Response>((resolve) => {
+            releaseAnonymous = () => resolve(Response.json(anonymous.body));
+          });
+        }
+        return new Promise<Response>(() => undefined);
+      }),
+    );
+    mounted.count = 0;
+    renderWithAuth(
+      <Toggle>
+        <RequireAuth startsOnEnter>
+          <CountingScreen />
+        </RequireAuth>
+      </Toggle>,
+    );
+    await waitFor(() => expect(getCount).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.click(screen.getByRole("button", { name: "enter" }));
+    await screen.findByText("録音画面");
+
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(getCount).toBe(3));
+    // 未認証の応答が届き、Reactへの通知（setTimeout 0）より前に次の取り直しを始める
+    await act(async () => {
+      releaseAnonymous();
+      for (let i = 0; i < 50; i += 1) await Promise.resolve();
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(getCount).toBe(4));
+
+    expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
+    expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
+  });
+
   it("中身を出した後に退会の手続き中になったら、中身を出し直さずHomeへ移る", async () => {
     let getCount = 0;
     vi.stubGlobal(
