@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider, useAuth } from "@/features/auth";
-import { SessionProvider } from "@/features/session";
+import { SessionProvider, useSession } from "@/features/session";
 import { sampleSession } from "@/mocks/sample-session";
 import { ProcessingIndicator } from "./processing-indicator";
 
@@ -22,6 +22,12 @@ function stubFetch(dotApi: (...args: unknown[]) => unknown) {
   );
 }
 
+// 整理の結果が確定した現在のDot（SessionProviderのmemory）を表示する。
+function DotProbe() {
+  const { dotSession } = useSession();
+  return <p>{dotSession ? `dot:${dotSession.sentence}` : "no-dot"}</p>;
+}
+
 function renderProcessing() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -31,6 +37,7 @@ function renderProcessing() {
       <AuthProvider>
         <SessionProvider>
           <ProcessingIndicator />
+          <DotProbe />
         </SessionProvider>
       </AuthProvider>
     </QueryClientProvider>,
@@ -56,9 +63,9 @@ describe("整理が終わると今日の一文へ進む", () => {
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/dot", replace: true }));
 
-    // セッション（今日の一文）が localStorage に確定している
-    const stored = JSON.parse(window.localStorage.getItem("fod.session.v1") ?? "{}");
-    expect(stored.dotSession?.sentence).toBe(sampleSession.sentence);
+    // 今日の一文がセッション（memory）に確定し、browserのstorageへは書かない
+    expect(screen.getByText(`dot:${sampleSession.sentence}`)).toBeInTheDocument();
+    expect(window.localStorage.getItem("fod.session.v1")).toBeNull();
   });
 
   it("失敗しても不安にさせず、もう一度試すと今日の一文へ進む", async () => {
@@ -104,6 +111,7 @@ describe("整理が終わると今日の一文へ進む", () => {
           <SessionProvider>
             <ProcessingIndicator />
             <SwitchProbe />
+            <DotProbe />
           </SessionProvider>
         </AuthProvider>
       </QueryClientProvider>,
@@ -116,6 +124,6 @@ describe("整理が終わると今日の一文へ進む", () => {
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true }));
     expect(navigateMock).not.toHaveBeenCalledWith({ to: "/dot", replace: true });
-    expect(window.localStorage.getItem("fod.session.v1")).toBeNull();
+    expect(screen.getByText("no-dot")).toBeInTheDocument();
   });
 });
