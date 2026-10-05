@@ -60,7 +60,7 @@ Dotを作る入口（音声の送信と生成）はTASK-009が作り、本タス
 
 ### 今回確定しない事項
 
-- なし（下記§12の判断はすべて上流の決定から導けるため、人間の判断を求めない）。
+- 着手時点ではなし（下記§12の判断はすべて上流の決定から導けるため）。レビュー中に生じた判断は次のとおり。
 - **判断待ち（2026-10-05、PR 3/3のレビュー中に発生）: JSON以外のbodyと、不正なUTF-8を含むformのbodyの扱い。**
   - 確認済みの事実（request specの形で再現した）:
     - `PATCH /api/v1/dots/{dot_id}`は、`Content-Type: application/x-www-form-urlencoded`の`sentence=...`でも
@@ -79,6 +79,7 @@ Dotを作る入口（音声の送信と生成）はTASK-009が作り、本タス
     - B: Aと同じだが、Content-Typeの違いは`415`にする。意味は正確だが、契約へ`415`を足す変更になる。
     - C: TASK-008では直さず、security.md §6に未対策と明記し、横断の修正を別タスクにする。
   - 推奨: A。契約を変えずに済み、ログへ本文が出る経路を全endpointでまとめて塞げる。
+  - **決定（2026-10-05、人間の判断）: A。**`lib/middleware/api_request_guard.rb`として実装した（§16の実装差異）。
 
 ## 6. References and Documents to Update
 
@@ -392,13 +393,18 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
   解析の失敗にし（壊れたJSONと同じ`422 body invalid_format`）、失敗のログからbodyを外した。(1)は
   PR 3/3のCodexの最終チェック、(2)はその修正後のサブエージェントのレビューで発見した。(1)はRailsの
   非公開のmethodを置き換えるため、request specで本文が出ないことを固定した。
+- **`/api/`のbodyを`application/json`だけにし、paramsを解釈できないrequestを`422`にした
+  （`lib/middleware/api_request_guard.rb`。§5の判断待ちを人間がAに決めた）。**formのbodyでも更新でき、
+  不正なUTF-8の値で本文を含む`BadRequest`がerrorのログに出ることを、JSONのparserの修正後の
+  サブエージェントのレビューで発見し、再現した。認証のendpoint（TASK-006）も同時に直る。
+  `DebugExceptions`の内側に置き、Railsの`BadRequest`がerrorのログへ出る前に捕まえる。
 - `filter_parameters`は完全一致ではなく部分一致（`%i[sentence summary]`）にした。隠しすぎて困る項目が無いため。
 
 ### 検証結果
 
 実行したcommand（`apps/api`、DBは`FOD_DB_SUFFIX=_task_008`の専用DB）:
 
-- `bundle exec rspec` — 410 examples, 0 failures（追加: model 18、service 20、request 37）
+- `bundle exec rspec` — 414 examples, 0 failures（追加: model 18、service 20、request 41）
 - `bundle exec rubocop` — no offenses
 - `bundle exec brakeman -q` — No warnings found
 - `RAILS_ENV=test bin/rails db:drop db:create db:schema:load`の後に`dot_spec`・`days_spec`を実行し、

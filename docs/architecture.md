@@ -45,6 +45,12 @@
   - APIはコードを生成せず手で書き、request specでresponseを契約と照合する（committee-rails）。
   - 契約のexamplesを、WebのZodとAPIの検証器の両方で読み、同じ意味で解釈することを確かめる。
   - 運用・error code・互換性の規則は[`contracts/README.md`](../contracts/README.md)。
+- **`/api/`のrequest bodyは`application/json`だけを受け付ける**（2026-10-05にTASK-008で採用）。それ以外の
+  Content-Typeは、Railsがbodyを解析する前に`422 body invalid_format`で拒否し、paramsを解釈できない
+  requestも`422`のProblemで返す（`apps/api/lib/middleware/api_request_guard.rb`）。Railsの既定では、
+  不正なUTF-8の値から本文を含む例外のmessageがerrorのログに残り、Problem形式でない`400`になるため。
+  JSON以外を受け取るendpoint（TASK-009の`POST /api/v1/dots`のmultipart）は、同ファイルの一覧で個別に
+  許す。契約には`415`を足さず、既存の`422 invalid_format`に寄せた。
 - API、Web、契約は同じPRで更新するか、PRを分ける場合は統合ブランチに集めて、mainへは一度に入れる
   （2026-10-03に分けることを許可。手順は[`contracts/README.md`](../contracts/README.md) §2）。
   同一PRでもWebとAPIのデプロイ時差（古いタブ、deploy中の新旧タスクの併存）があり得るため、1回のreleaseでは両方向で壊れない変更だけを入れ、それ以外は

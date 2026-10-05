@@ -66,15 +66,23 @@ Dotを作る入口・ゴミ箱と削除の操作・Webの接続・公開配信�
 ## 6. 現在の構成での補足
 
 - RailsはAPI-onlyで、routeは`GET /up`と認証（`/api/v1/session`等、`/auth/google_oauth2`）、Dotの
-  履歴の取得・編集（`/api/v1/days`・`/api/v1/dots/{dot_id}`。TASK-008）だけ。保護するendpointは`before_action :authenticate_user!`と`current_user`を使い、JSONの項目はbodyからだけ
-  受け取る（`JsonParams`。password・tokenをURLに載せない）。`/up`への変更でも不要な内部情報を
-  responseへ追加しない。
-- Railsは解析できなかったJSONのbodyを`filter_parameters`を通さずdebugのログへ出し、不正なUTF-8を含む
-  JSONでは本文を含むmessageの`BadRequest`を`rescue_from`の外で起こす（errorのログに残り、Problem形式で
-  ない`400`になる）。どちらも`config/initializers/json_request_body.rb`で塞ぎ、`422 body invalid_format`に
-  している（TASK-008）。frameworkが自分でログへ書く経路（解析の失敗、例外のmessage、SQL）は
-  `filter_parameters`で隠れるとは限らない。個人データを受け取る変更では、
-  debugのログを取り込むrequest spec・model specで本文が出ないことを確かめているか。Railsを上げたときに
-  このinitializerの前提（非公開のmethod）が保たれているかも確かめる。
+  履歴の取得・編集（`/api/v1/days`・`/api/v1/dots/{dot_id}`。TASK-008）だけ。保護するendpointは
+  `before_action :authenticate_user!`と`current_user`を使い、JSONの項目はbodyからだけ受け取る
+  （`JsonParams`。password・tokenをURLに載せない）。`/up`への変更でも不要な内部情報をresponseへ
+  追加しない。
+- Railsがparamsを解析するときに、本文が`filter_parameters`を通らずログへ出る経路を塞いでいる（TASK-008）。
+  - `/api/`のbodyは`application/json`だけを受け付け、それ以外は解析する前に`422 body invalid_format`に
+    する（`lib/middleware/api_request_guard.rb`）。formの不正なUTF-8から本文を含むmessageの
+    `BadRequest`が起きるため。JSON以外を受け取るendpointを足すとき（TASK-009のmultipart）は、同ファイルの
+    `NON_JSON_BODIES`へ足し、その解析で同じ経路が開かないか確かめる。
+  - paramsを解釈できない`ActionController::BadRequest`（queryの不正なUTF-8など）は`rescue_from`の外で
+    起き、値を含むmessageがerrorのログに出るため、同じmiddlewareが`DebugExceptions`の内側で捕まえて
+    `422`にする。
+  - JSONの不正なUTF-8は解析の失敗にし、解析の失敗のログから生のbodyを外す
+    （`config/initializers/json_request_body.rb`。非公開のmethodを置き換えるため、Railsを上げたときに
+    前提が保たれているか確かめる）。
+  - frameworkが自分でログへ書く経路（解析の失敗、例外のmessage、SQL）は`filter_parameters`で隠れるとは
+    限らない。個人データを受け取る変更では、debugのログを取り込むrequest spec・model specで本文が出ない
+    ことを確かめているか。
 - `apps/api/config/initializers/filter_parameter_logging.rb`は防御の補助であり、将来追加する音声・
   生成データの安全なログ運用を保証しない。
