@@ -11,6 +11,7 @@ import {
   findEmphasisErrors,
   flanking,
   keepsProse,
+  maskHtmlComments,
   stripInlineCode,
 } from "./check-markdown.mjs";
 
@@ -188,6 +189,34 @@ test("fenceのインデントは3空白まで、閉じていなければ報告�
   assert.deepEqual(findEmphasisErrors("```sh\ncmd\n\n**崩れている。**続き\n", "a.md"), [
     "a.md: ``` で開いたcode blockが閉じていません。そこから後の行を検査していません。",
   ]);
+});
+
+test("HTMLコメントとYAML frontmatterの中は見ない", () => {
+  // 表示されない文字列を`--fix`が書き換えないようにする。
+  for (const source of [
+    "文\n\n<!-- **メモ。**続き -->\n",
+    "文\n\n<!--\n**メモ。**続き\n-->\n",
+    "---\nname: a\ndescription: **説明である。**続き\n---\n\n本文\n",
+  ]) {
+    assert.deepEqual(findEmphasisErrors(source, "a.md"), [], source);
+    assert.equal(applySwaps(source, analyzeEmphasis(source, "a.md").swaps).applied, 0, source);
+  }
+  // コメントの外、前付けの後は従来どおり検出する。
+  assert.equal(findEmphasisErrors("<!-- メモ -->\n**崩れている。**続き\n", "a.md").length, 1);
+  assert.equal(findEmphasisErrors("---\nname: a\n---\n\n**崩れている。**続き\n", "a.md").length, 1);
+  // 2行目以降の`---`は前付けの開始ではない（水平線かsetextの下線）。
+  assert.equal(findEmphasisErrors("本文\n\n---\n\n**崩れている。**続き\n", "a.md").length, 1);
+});
+
+test("maskHtmlCommentsは長さとマーカーを保つ", () => {
+  const line = "前 <!-- **メモ。**続き --> 後";
+  const masked = maskHtmlComments(line);
+  assert.equal(masked.line.length, line.length);
+  assert.equal(masked.line, "前 <!--xxxxxxxxxxx--> 後");
+  assert.equal(masked.inComment, false);
+  // 閉じていないコメントは次の行へ続く。
+  assert.equal(maskHtmlComments("<!-- 続く").inComment, true);
+  assert.equal(maskHtmlComments("まだ中 -->", true).inComment, false);
 });
 
 test("水平線の`***`は強調として扱わない", () => {

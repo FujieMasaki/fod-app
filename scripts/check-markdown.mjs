@@ -39,12 +39,14 @@ const skipDirectories = new Set([
 //   - setext見出し（`===`・`---`の下線）を見出しとして扱わない。段落として解析する
 //   - code blockの判定はfenceと4空白インデントだけで、list項目の中の深いインデントは
 //     段落の続きとして扱う（CommonMarkより緩い）
+//   - `__太字__`は同じ形で壊れるが見ない（この文書群では使っていない）
 //
 // 既知の制限（誤検知）:
 //   - HTMLブロック（`<div>`・`<details>`から空行まで）の中を本文として解析する。
 //     GitHubはrawで通すので、`**`を含むHTMLブロックを書くと指摘が出る
 //   - コードスパンに入れていない裸の`**`（globやURL）は「閉じていません」になる。
 //     `` `apps/web/src/**` ``のようにコードスパンへ入れる運用で避ける
+//   - 先頭の`|`が無いGFMの表（`a | b`）は段落として扱い、cellごとに区切らない
 
 // CommonMarkの「punctuation character」はASCII punctuationとUnicodeのP*である。
 // `\p{P}`に入らないASCII punctuation（`$ + < = > ^ ` | ~`）を足す。
@@ -53,7 +55,9 @@ const punctuation = /[\p{P}$+<=>^`|~]/u;
 // `**`と入れ替えても読み方が変わらない文字だけを`--fix`の対象にする。
 // 対になる括弧・鉤括弧は入れない。片方だけを強調の外へ出すと範囲が割れて読みにくくなるため、
 // 人に返す。リンクとコードスパンの境界（`[` `` ` ``）も、入れ替えると構文が変わるので入れない。
-const swappable = /^[、。，．・：；？！…―〜§]$/u;
+// `§`も外す。入れ替えると`§**45**`のように記号だけが強調の外へ出て、同じ行の他の`§`が中に
+// 入っている形と混ざる。開きの前に空白を置けば記号ごと強調に入るので、人に返す。
+const swappable = /^[、。，．・：；？！…―〜]$/u;
 
 function isWhitespace(character) {
   return character === undefined || /\s/u.test(character);
@@ -81,6 +85,35 @@ export function flanking(previousCharacter, nextCharacter) {
 // `値は**`code`**である。`（`**`が本文に出る）を見逃す。
 export function stripInlineCode(line) {
   return line.replace(/(`+)[^`]*\1/g, (match, fence) => fence + "x".repeat(match.length - fence.length * 2) + fence);
+}
+
+// HTMLコメントの中身を同じ長さのplaceholderへ置き換える。`<!--`・`-->`は残す。
+// 行をまたぐので、直前の行から続いているかを受け取って返す。
+export function maskHtmlComments(line, inComment = false) {
+  let result = "";
+  let index = 0;
+  while (index < line.length) {
+    if (inComment) {
+      const end = line.indexOf("-->", index);
+      if (end === -1) {
+        result += "x".repeat(line.length - index);
+        break;
+      }
+      result += "x".repeat(end - index) + "-->";
+      index = end + 3;
+      inComment = false;
+    } else {
+      const start = line.indexOf("<!--", index);
+      if (start === -1) {
+        result += line.slice(index);
+        break;
+      }
+      result += line.slice(index, start) + "<!--";
+      index = start + 4;
+      inComment = true;
+    }
+  }
+  return { line: result, inComment };
 }
 
 function isListItemStart(line) {
@@ -143,6 +176,8 @@ export function analyzeEmphasis(source, relativePath) {
   // 状態が反転し、code blockの中を本文として解析してしまう。
   let fence = null;
   let block = null;
+  let inFrontmatter = false;
+  let inComment = false;
 
   const flush = () => {
     if (!block) return;
@@ -195,8 +230,25 @@ export function analyzeEmphasis(source, relativePath) {
     block = null;
   };
 
-  lines.forEach((rawLine, index) => {
+  lines.forEach((originalLine, index) => {
     const lineNumber = index + 1;
+
+    // YAML frontmatterは本文ではない。1行目の`---`だけを前付けの開始として扱う
+    // （2行目以降の`---`は水平線かsetextの下線）。`--fix`がYAMLのスカラを書き換えないため。
+    if (index === 0 && originalLine.trim() === "---") {
+      inFrontmatter = true;
+      return;
+    }
+    if (inFrontmatter) {
+      if (originalLine.trim() === "---") inFrontmatter = false;
+      return;
+    }
+
+    // HTMLコメントの中身は表示されない。`--fix`が不可視の文字列を書き換えないよう、
+    // 同じ長さのplaceholderへ置き換える（位置は保つ）。
+    const masked = maskHtmlComments(originalLine, inComment);
+    inComment = masked.inComment;
+    const rawLine = masked.line;
 
     // 水平線（`***`だけの行）は強調ではないので先に外す。
     if (fence === null && /^ {0,3}\*[\s*]*$/.test(rawLine) && (rawLine.match(/\*/g) ?? []).length >= 3) {
