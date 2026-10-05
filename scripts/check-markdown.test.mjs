@@ -171,6 +171,22 @@ test("4空白インデントのcode blockと種類の違うfenceの中は見な�
   ]);
   // ``` の中に ~~~ が出てもfenceは閉じない。
   assert.deepEqual(findEmphasisErrors("```text\n~~~\n**a。**b\n```\n", "a.md"), []);
+  // 閉じfenceは開きと同じ長さ以上が必要。````の中の```では閉じない。
+  assert.deepEqual(findEmphasisErrors("````markdown\n```\n**a。**b\n```\n````\n", "a.md"), []);
+  // ````は````で閉じ、そのあとの行は本文として見る。
+  assert.equal(findEmphasisErrors("````\n**a。**b\n````\n**崩れている。**続き\n", "a.md").length, 1);
+});
+
+test("水平線の`***`は強調として扱わない", () => {
+  assert.deepEqual(findEmphasisErrors("文\n\n***\n\n次の段落\n", "a.md"), []);
+  assert.deepEqual(findEmphasisErrors("文\n\n * * *\n\n次の段落\n", "a.md"), []);
+  // 本文中の`***`は従来どおり指摘する。
+  assert.ok(findEmphasisErrors("これは***だめ***です\n", "a.md").length >= 1);
+});
+
+test("表のescapeした縦棒はcellの区切りにしない", () => {
+  // GitHubは`<strong>あ|い</strong>`を返す。分割で落とすと強調が割れて誤検知になる。
+  assert.deepEqual(findEmphasisErrors("| a | **あ\\|い** |\n", "a.md"), []);
 });
 
 test("同じ行の複数箇所を1回のpassで直せる（入れ替えが長さを変えないため）", () => {
@@ -217,6 +233,11 @@ test("--fixで直せない崩れはファイルを書き換えず指摘を残す
     assert.equal(fixedFiles, 0);
     assert.ok(errors.length >= 1);
     assert.match(errors[0], /開き側に使えません/);
+    // 行番号つきの指摘が出ること（手で直す人が場所を得られる）。
+    assert.ok(
+      errors.every((error) => /^a\.md:\d+:/.test(error)),
+      `行番号の無い指摘がある: ${JSON.stringify(errors)}`,
+    );
     assert.equal(await readFile(filePath, "utf8"), source, "直せないのに書き換えている");
   });
 });

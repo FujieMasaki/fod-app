@@ -35,10 +35,16 @@ const skipDirectories = new Set([
 // `--fix`を渡すと、崩れている`**`と隣の句読点を入れ替えて直す。入れ替えは長さを変えないので
 // 位置がずれず、`*`を除いた本文も変わらない。
 //
-// 既知の制限:
+// 既知の制限（検出漏れ）:
 //   - setext見出し（`===`・`---`の下線）を見出しとして扱わない。段落として解析する
 //   - code blockの判定はfenceと4空白インデントだけで、list項目の中の深いインデントは
 //     段落の続きとして扱う（CommonMarkより緩い）
+//
+// 既知の制限（誤検知）:
+//   - HTMLブロック（`<div>`・`<details>`から空行まで）の中を本文として解析する。
+//     GitHubはrawで通すので、`**`を含むHTMLブロックを書くと指摘が出る
+//   - コードスパンに入れていない裸の`**`（globやURL）は「閉じていません」になる。
+//     `` `apps/web/src/**` ``のようにコードスパンへ入れる運用で避ける
 
 // CommonMarkの「punctuation character」はASCII punctuationとUnicodeのP*である。
 // `\p{P}`に入らないASCII punctuation（`$ + < = > ^ ` | ~`）を足す。
@@ -83,6 +89,25 @@ function isListItemStart(line) {
 
 function isTableRow(line) {
   return /^\s*\|/.test(line);
+}
+
+// escapeした縦棒（`\|`）はcellの区切りではない。分割で落とすと強調が割れて誤検知になる。
+function splitTableCells(line) {
+  const cells = [];
+  let current = "";
+  for (let index = 0; index < line.length; index += 1) {
+    if (line[index] === "\\" && line[index + 1] === "|") {
+      current += "\\|";
+      index += 1;
+    } else if (line[index] === "|") {
+      cells.push(current);
+      current = "";
+    } else {
+      current += line[index];
+    }
+  }
+  cells.push(current);
+  return cells;
 }
 
 function isHeading(line) {
@@ -173,10 +198,18 @@ export function analyzeEmphasis(source, relativePath) {
   lines.forEach((rawLine, index) => {
     const lineNumber = index + 1;
 
+    // 水平線（`***`だけの行）は強調ではないので先に外す。
+    if (fence === null && /^ {0,3}\*[\s*]*$/.test(rawLine) && (rawLine.match(/\*/g) ?? []).length >= 3) {
+      flush();
+      return;
+    }
+
+    // 閉じfenceは開きと同じ記号で、同じ長さ以上である必要がある。長さを捨てると
+    // ````で開いたblockの中の```で閉じてしまい、code blockの中を本文として解析する。
     const fenceStart = /^\s*(```+|~~~+)/.exec(rawLine);
     if (fenceStart && (fence === null || fenceStart[1].startsWith(fence))) {
       flush();
-      fence = fence === null ? fenceStart[1].slice(0, 3) : null;
+      fence = fence === null ? fenceStart[1] : null;
       return;
     }
     if (fence !== null) return;
@@ -202,7 +235,7 @@ export function analyzeEmphasis(source, relativePath) {
     if (isTableRow(line)) {
       flush();
       let offset = 0;
-      for (const cell of line.split("|")) {
+      for (const cell of splitTableCells(line)) {
         if (cell.trim() !== "") {
           block = makeBlock();
           block.push(cell, lineNumber, offset);
@@ -306,7 +339,9 @@ export async function checkMarkdown(directory = rootDir, { fix = false } = {}) {
   const errors = [];
   let fixedFiles = 0;
   for (const filePath of (await walk(directory)).sort()) {
-    const relativePath = path.relative(rootDir, filePath);
+    // 走査対象からの相対パスにする（rootDir固定にすると、別のディレクトリを渡したときに
+    // `../../..`が並んで読めなくなる）。
+    const relativePath = path.relative(directory, filePath);
     const source = await readFile(filePath, "utf8");
     const analysis = analyzeEmphasis(source, relativePath);
 
@@ -320,6 +355,8 @@ export async function checkMarkdown(directory = rootDir, { fix = false } = {}) {
         if (result.applied === 0) break; // これ以上は進まない
         if (!keepsProse(source, result.text)) {
           errors.push(`${relativePath}: --fix が本文を変えてしまうため中止しました。手で直してください。`);
+          // 手で直す人が行番号を得られるよう、元の違反も併せて出す。
+          errors.push(...analysis.errors);
           aborted = true;
           break;
         }
