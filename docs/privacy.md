@@ -185,8 +185,8 @@ sequenceDiagram
         R->>DB: Dotを保存する（成功の確定）
         R->>S3: 音声の削除処理を始める
         R-->>B: Dotと文字起こし全文（端末ではsessionStorageへ）
-        alt 端末が受領ACKを送った
-            B->>R: 文字起こし全文の受領ACK
+        alt 端末が全文を受け取ったと通知した
+            B->>R: 全文を保存し終えたと通知する（受領ACK）
         else ACKが来ないまま受理から24時間
             Note over R: 全文はもう端末へ返さない
         end
