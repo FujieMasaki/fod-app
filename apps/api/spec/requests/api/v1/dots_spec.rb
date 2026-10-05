@@ -8,16 +8,6 @@ RSpec.describe "Dots" do
 
   def field_errors = response.parsed_body["errors"]
 
-  def captured_log
-    log = StringIO.new
-    logger = ActiveSupport::Logger.new(log, level: :debug)
-    Rails.logger.broadcast_to(logger)
-    yield
-    log.string
-  ensure
-    Rails.logger.stop_broadcasting_to(logger)
-  end
-
   describe "PATCH /api/v1/dots/{dot_id}" do
     context "without login" do
       it "401 unauthenticated" do
