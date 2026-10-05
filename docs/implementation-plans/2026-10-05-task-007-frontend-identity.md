@@ -321,11 +321,16 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 - **`libs/api-client`の位置づけ**: frontend.md §1が保留する「通信専用directory・repository層」ではなく、
   `libs/`の定義（Browser APIの小さいラッパー。React stateを持たない）に収まるfetchの薄い包みとして置く。
   endpointごとの通信関数は各featureに置く方針を変えない。
-- **Cookieの書き直しの競合**: RailsのCookieStoreは`GET /api/v1/session`の応答でもCookieを書き直す。
-  login・logoutの前に送った取り直しの応答が後から届くと、Cookieが前の状態へ戻る（logoutが取り消される、
-  loginしたのに未認証になる）。そのためlogin・logoutの間は取り直しを始めず、実行中の取り直しの応答を
-  受け取ってから送る。logoutの後はserverに確かめ、まだ認証済みなら1回だけ送り直し、それでも残れば失敗にする。
-  別タブの取り直しは止められないため、完全には防げない（その場合も、logoutの確認で失敗として示す）。
+- **Cookieの書き直しの競合**: RailsのCookieStoreは、`GET /api/v1/session`も保護APIも、どの応答でもCookieを
+  書き直す。login・logoutの前に送った通信の応答が後から届くと、Cookieが前の状態へ戻る（logoutが取り消される、
+  loginしたのに未認証になる）。そのため次のようにする。
+  - login・logoutの間は、取り直し（focus・再接続・期限のtimer）を始めない。`request`・`withCsrf`で新しく
+    始める通信は、login・logoutが終わるまで待たせる。
+  - login・logoutは、実行中の取り直しと`request`・`withCsrf`の応答を受け取ってから送る（offlineで止まった
+    通信を待ち続けないよう、待つのは10秒まで）。重なって呼ばれたら順に実行する。
+  - logoutの後はserverに確かめ、まだ認証済みなら1回だけ送り直し、それでも残れば失敗にする。
+  - 別タブの通信と、`request`を通さない`fetch`は止められないため、完全には防げない（その場合も、logoutの
+    確認で失敗として示す）。後続の機能はRails APIを必ず`request`・`withCsrf`から呼ぶ（frontend.md §2）。
 - **切り替わりの通知の時機**: 利用者の切り替わりは描画後のeffectで通知するため、新しい利用者の状態で
   描画した1フレームだけ前の利用者のqueryが残り得る。個人データのqueryを足すTASK-008以降は、
   query keyに`user.id`を含めるか、`enabled`を利用者で絞る。
