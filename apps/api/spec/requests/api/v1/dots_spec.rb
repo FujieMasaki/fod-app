@@ -136,6 +136,22 @@ RSpec.describe "Dots" do
         assert_response_schema_confirm(422)
       end
 
+      it "壊れたJSONの本文をdebugのログにも出さない" do
+        log = StringIO.new
+        logger = ActiveSupport::Logger.new(log, level: :debug)
+        Rails.logger.broadcast_to(logger)
+        begin
+          headers = { "CONTENT_TYPE" => "application/json", "X-CSRF-Token" => csrf_token }
+          patch "/api/v1/dots/#{dot.id}", params: %({"sentence":"ログに出したくない一文"), headers:
+        ensure
+          Rails.logger.stop_broadcasting_to(logger)
+        end
+
+        expect(response).to have_http_status(:unprocessable_content)
+        expect(log.string).to include("Error occurred while parsing request parameters")
+        expect(log.string).not_to include("ログに出したくない一文")
+      end
+
       it "編集した内容は履歴の取得にも反映される" do
         update_dot({ sentence: "直した一文" })
 
