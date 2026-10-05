@@ -366,11 +366,14 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
   作り替えたcursorでPostgreSQLのtimestampの範囲を超える時刻を渡すと`500`になっていた（PR 2/3の
   セルフレビューで発見）。範囲外は`400 cursor_invalid`にし、同じ種類の見落としを拾う観点を
   `docs/code-review/backend/security.md` §2に足した。
-- **解析できなかったJSONのbodyをdebugのログへ出さないようにした（`config/initializers/parse_error_logging.rb`）。**
-  Railsは解析の失敗時に生のbodyを`filter_parameters`を通さずdebugのログへ書くため、壊れたJSONに入った
-  Dotの本文（認証のendpointならpassword）が`RAILS_LOG_LEVEL=debug`やdevelopmentで残っていた（PR 3/3の
-  Codexの最終チェックで発見）。Railsの非公開のmethodを置き換えるため、request specで本文が出ないことを
-  固定し、Railsの更新で前提が崩れたら失敗するようにした。
+- **JSONのrequest bodyを、本文をログへ出さずに解析するようにした（`config/initializers/json_request_body.rb`）。**
+  Railsの既定では、(1) 解析の失敗時に生のbodyを`filter_parameters`を通さずdebugのログへ書き、(2) 不正な
+  UTF-8（生の不正なbyte列、対のない`\udc00`）を含むJSONは解析に成功した後、本文を含むmessageの
+  `ActionController::BadRequest`になる。(2)は`rescue_from`の外で起き、Problem形式でない`400`とerrorの
+  ログを出す。Dotの本文（認証のendpointならpassword）が残るため、JSONのparserを置き換えて不正なUTF-8を
+  解析の失敗にし（壊れたJSONと同じ`422 body invalid_format`）、失敗のログからbodyを外した。(1)は
+  PR 3/3のCodexの最終チェック、(2)はその修正後のサブエージェントのレビューで発見した。(1)はRailsの
+  非公開のmethodを置き換えるため、request specで本文が出ないことを固定した。
 - `filter_parameters`は完全一致ではなく部分一致（`%i[sentence summary]`）にした。隠しすぎて困る項目が無いため。
 
 ### 検証結果

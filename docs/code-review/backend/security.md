@@ -69,9 +69,11 @@ Dotを作る入口・ゴミ箱と削除の操作・Webの接続・公開配信�
   履歴の取得・編集（`/api/v1/days`・`/api/v1/dots/{dot_id}`。TASK-008）だけ。保護するendpointは`before_action :authenticate_user!`と`current_user`を使い、JSONの項目はbodyからだけ
   受け取る（`JsonParams`。password・tokenをURLに載せない）。`/up`への変更でも不要な内部情報を
   responseへ追加しない。
-- Railsは解析できなかったbodyを`filter_parameters`を通さずdebugのログへ出すため、`config/initializers/
-  parse_error_logging.rb`で出さないようにしている（TASK-008）。frameworkが自分でログへ書く経路（解析の
-  失敗、例外のmessage、SQL）は`filter_parameters`で隠れるとは限らない。個人データを受け取る変更では、
+- Railsは解析できなかったJSONのbodyを`filter_parameters`を通さずdebugのログへ出し、不正なUTF-8を含む
+  JSONでは本文を含むmessageの`BadRequest`を`rescue_from`の外で起こす（errorのログに残り、Problem形式で
+  ない`400`になる）。どちらも`config/initializers/json_request_body.rb`で塞ぎ、`422 body invalid_format`に
+  している（TASK-008）。frameworkが自分でログへ書く経路（解析の失敗、例外のmessage、SQL）は
+  `filter_parameters`で隠れるとは限らない。個人データを受け取る変更では、
   debugのログを取り込むrequest spec・model specで本文が出ないことを確かめているか。Railsを上げたときに
   このinitializerの前提（非公開のmethod）が保たれているかも確かめる。
 - `apps/api/config/initializers/filter_parameter_logging.rb`は防御の補助であり、将来追加する音声・
