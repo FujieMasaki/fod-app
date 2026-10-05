@@ -17,8 +17,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": { target: apiTarget, changeOrigin: false },
-      "/auth": { target: apiTarget, changeOrigin: false },
+      // 前方一致だと/authorsのような画面のpathまで送るため、区切りの/まで含めて正規表現で指定する。
+      "^/api/": { target: apiTarget, changeOrigin: false },
+      "^/auth/": { target: apiTarget, changeOrigin: false },
     },
   },
 });

@@ -10,38 +10,28 @@ import {
 } from "react";
 import { useAuth } from "@/features/auth";
 import type { Seconds } from "@/types";
-import { dotSessionSchema, type DotSession } from "./schema";
+import type { DotSession } from "./schema";
 import type { SessionContextValue } from "./types";
 
-const STORAGE_KEY = "fod.session.v1";
+// 以前に録音時間と現在のDotを保存していたkey。利用者を区別しないため、前の利用者の値を別の利用者の
+// 画面へ復元してしまう。読み取りをやめ、起動時に消す（journaling.md §2。TASK-007 Plan §13）。
+const LEGACY_STORAGE_KEY = "fod.session.v1";
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-type Persisted = {
-  recordedDurationSec: Seconds | null;
-  dotSession: DotSession | null;
-};
-
-function loadPersisted(): Persisted {
-  if (typeof window === "undefined") {
-    return { recordedDurationSec: null, dotSession: null };
-  }
+function removeLegacyStorage() {
+  if (typeof window === "undefined") return;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { recordedDurationSec: null, dotSession: null };
-    const parsed = JSON.parse(raw) as Partial<Persisted>;
-    const dotSession = parsed.dotSession
-      ? dotSessionSchema.parse(parsed.dotSession)
-      : null;
-    return {
-      recordedDurationSec: parsed.recordedDurationSec ?? null,
-      dotSession,
-    };
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {
-    return { recordedDurationSec: null, dotSession: null };
+    // storageを使えない環境では、消すものもない。
   }
 }
 
+/**
+ * routeをまたぐ短いジャーナリング途中の状態（録音時間と現在のDot）をmemoryにだけ持つ。
+ * browserのstorageへは書かない（frontend.md §2。正本はserver）。
+ */
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [recordedDurationSec, setRecordedDurationSec] = useState<Seconds | null>(
     null,
@@ -49,46 +39,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [dotSession, setDotSessionState] = useState<DotSession | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
-  // localStorage からハイドレート（永続化は Phase 1 仕様に準拠）。
-  // マウント時に外部ストア(localStorage)と同期する正当な用途のため、当該ルールを局所的に無効化する。
+  // 起動時に古い保存値を消す。復元はしない。
   useEffect(() => {
-    const persisted = loadPersisted();
-    setRecordedDurationSec(persisted.recordedDurationSec);
-    setDotSessionState(persisted.dotSession);
+    removeLegacyStorage();
     setHydrated(true);
   }, []);
 
-  const persist = useCallback((next: Persisted) => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  const setRecordedDuration = useCallback((sec: Seconds) => {
+    setRecordedDurationSec(sec);
   }, []);
 
-  const setRecordedDuration = useCallback(
-    (sec: Seconds) => {
-      setRecordedDurationSec(sec);
-      persist({ recordedDurationSec: sec, dotSession });
-    },
-    [dotSession, persist],
-  );
-
-  const setDotSession = useCallback(
-    (session: DotSession) => {
-      setDotSessionState(session);
-      persist({ recordedDurationSec, dotSession: session });
-    },
-    [recordedDurationSec, persist],
-  );
+  const setDotSession = useCallback((session: DotSession) => {
+    setDotSessionState(session);
+  }, []);
 
   const reset = useCallback(() => {
     setRecordedDurationSec(null);
     setDotSessionState(null);
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
+    removeLegacyStorage();
   }, []);
 
   // 認証の終了・利用者の切り替わりで、前の利用者の録音時間とDotを残さない（TASK-007 Plan §7-3）。
-  // fod.session.v1の扱いそのもの（読み取りをやめる・起動時に消す）はTASK-014で決める。
   const { subscribeIdentityChange } = useAuth();
   useEffect(() => subscribeIdentityChange(reset), [subscribeIdentityChange, reset]);
 
