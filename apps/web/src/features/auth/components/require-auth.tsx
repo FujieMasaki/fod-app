@@ -42,8 +42,9 @@ function liveVerdictOf(state: SessionQueryState | undefined): "ok" | "anonymous"
   return state.data.account_status === "active" ? "ok" : "lost";
 }
 
-// 副作用を始める画面で、入るときの確かめ直しを待つ上限。offlineで取り直しが止まったまま、回線が戻った
-// ときに利用者の操作なしに録音が始まらないよう、待ちきれなければHomeへ戻す。
+// 副作用を始める画面で、中身を出すまで待つ上限。offlineで取り直しが止まったまま、回線が戻ったときに
+// 利用者の操作なしに録音が始まらないよう、それまでに中身を出せなければHomeへ戻す（確かめ直しが済んだ
+// 直後に別の取り直しが始まって止まった場合も含む）。
 const VERIFY_TIMEOUT_MS = 10_000;
 
 export function RequireAuth({ children, startsOnEnter = false }: RequireAuthProps) {
@@ -61,7 +62,9 @@ function EntryVerifiedGuard({ children }: { children: ReactNode }) {
   const live = useQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession, enabled: false });
   // 入るときの確かめ直しの結果。確かめ直しが終わった時点のqueryの状態から決める。
   const [check, setCheck] = useState<"pending" | "verified" | "anonymous" | "unconfirmed">("pending");
-  // 中身を一度出したか。出した後の取り直しの間は中身を保つ（出し直しで録音・生成が始め直されないように）。
+  const [timedOut, setTimedOut] = useState(false);
+  // 中身を一度出した（commitした）か。出した後の取り直しの間は中身を保つ（出し直しで録音・生成が始め直され
+  // ないように）。捨てられる描画で立たないよう、commit後のeffectで立てる。
   const shownRef = useRef(false);
   // 一度離れると決めたら、状態が戻っても（画面の遷移が終わる前に戻っても）中身を出し直さない。
   const leftRef = useRef<"login" | "home" | null>(null);
@@ -69,7 +72,7 @@ function EntryVerifiedGuard({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     const timer = setTimeout(() => {
-      if (active) setCheck((current) => (current === "pending" ? "unconfirmed" : current));
+      if (active) setTimedOut(true);
     }, VERIFY_TIMEOUT_MS);
     void refresh().finally(() => {
       if (!active) return;
@@ -85,22 +88,31 @@ function EntryVerifiedGuard({ children }: { children: ReactNode }) {
   }, [refresh, queryClient]);
 
   const verdict = liveVerdictOf(live);
+  const showing =
+    leftRef.current === null &&
+    check === "verified" &&
+    (verdict === "ok" || (verdict === "busy" && shownRef.current));
+  useEffect(() => {
+    if (showing) shownRef.current = true;
+  }, [showing]);
+
   if (leftRef.current === null) {
     if (check === "anonymous" || (check === "verified" && verdict === "anonymous")) {
       leftRef.current = "login";
-    } else if (check === "unconfirmed" || (check === "verified" && verdict === "lost")) {
-      // 確かめ直しで認証済みと分からなかった、または中身を出す前後に認証済みでなくなった。後の自動の取り直し
-      // （focus・再接続）で戻っても中身を出さず、利用者がもう一度始める。
+    } else if (
+      check === "unconfirmed" ||
+      (check === "verified" && verdict === "lost") ||
+      (timedOut && !shownRef.current)
+    ) {
+      // 確かめ直しで認証済みと分からなかった、中身を出す前後に認証済みでなくなった、または上限までに中身を
+      // 出せなかった。後の自動の取り直し（focus・再接続）で戻っても中身を出さず、利用者がもう一度始める。
       leftRef.current = "home";
     }
   }
   if (leftRef.current !== null) {
     return leftRef.current === "login" ? <Navigate to="/login" replace /> : <Navigate to="/" replace />;
   }
-  if (check === "verified" && (verdict === "ok" || (verdict === "busy" && shownRef.current))) {
-    shownRef.current = true;
-    return children;
-  }
+  if (showing) return children;
   return (
     <div className="flex h-full items-center justify-center">
       <Spinner label="ログインの状態を確かめています" />

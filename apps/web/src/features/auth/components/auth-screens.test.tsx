@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@tanstack/react-query";
-import { useState, type ReactNode } from "react";
+import { StrictMode, useState, type ReactNode } from "react";
 
 import { AuthProvider, useAuth } from "../auth-provider";
 import { AccountScreen } from "./account-screen";
@@ -633,6 +633,40 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
   });
 
+  it("入るときの確かめ直しの応答が返らなければ、待ちきれずにHomeへ移り、後で返っても中身を出さない", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let getCount = 0;
+    let releaseGet: (response: Response) => void = () => undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        getCount += 1;
+        if (getCount === 1) return Response.json(signedIn.body);
+        return new Promise<Response>((resolve) => {
+          releaseGet = resolve;
+        });
+      }),
+    );
+    mounted.count = 0;
+    renderWithAuth(
+      <Toggle>
+        <RequireAuth startsOnEnter>
+          <CountingScreen />
+        </RequireAuth>
+      </Toggle>,
+    );
+    await waitFor(() => expect(getCount).toBe(1));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    fireEvent.click(screen.getByRole("button", { name: "enter" }));
+    await act(() => vi.advanceTimersByTimeAsync(10_500));
+    expect(screen.getByText("navigate:/")).toBeInTheDocument();
+
+    await act(async () => releaseGet(Response.json(signedIn.body)));
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(mounted.count).toBe(0);
+  });
+
   it("前の取得が失敗していても、入るときの確かめ直しで認証済みと分かれば中身を出す", async () => {
     let getCount = 0;
     vi.stubGlobal(
@@ -691,6 +725,64 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
 
     expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
     expect(mounted.count).toBe(1);
+  });
+
+  it("中身を出した後に退会の手続き中になったら、中身を出し直さずHomeへ移る", async () => {
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        getCount += 1;
+        return Response.json(
+          getCount <= 2 ? signedIn.body : { ...signedIn.body, account_status: "deletion_in_progress" },
+        );
+      }),
+    );
+    mounted.count = 0;
+    renderWithAuth(
+      <Toggle>
+        <RequireAuth startsOnEnter>
+          <CountingScreen />
+        </RequireAuth>
+      </Toggle>,
+    );
+    await waitFor(() => expect(getCount).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    fireEvent.click(screen.getByRole("button", { name: "enter" }));
+    await screen.findByText("録音画面");
+
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+
+    expect(await screen.findByText("navigate:/")).toBeInTheDocument();
+    expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
+    expect(mounted.count).toBe(1);
+  });
+
+  it("StrictModeで二重に実行されても、確かめ直しは1回の取得を共有して中身を出す", async () => {
+    const requests = mockApi({ "GET /api/v1/session": [signedIn] });
+    render(
+      <StrictMode>
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <AuthProvider>
+            <Toggle>
+              <RequireAuth startsOnEnter>録音画面</RequireAuth>
+            </Toggle>
+          </AuthProvider>
+        </QueryClientProvider>
+      </StrictMode>,
+    );
+    await waitFor(() => expect(requests).toHaveLength(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    fireEvent.click(screen.getByRole("button", { name: "enter" }));
+
+    expect(await screen.findByText("録音画面")).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(requests.filter((r) => r.key === "GET /api/v1/session")).toHaveLength(2);
+    expect(screen.queryByText(/navigate:/)).not.toBeInTheDocument();
   });
 
   it("確かめ直して認証済みなら中身を出す", async () => {
