@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, render, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@tanstack/react-query";
 
 import { ApiError, isProblem } from "@/libs/api-client/request";
 import { AuthProvider, useAuth } from "./auth-provider";
@@ -83,6 +83,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
   focusManager.setFocused(undefined);
+  onlineManager.setOnline(true);
 });
 
 describe("認証状態", () => {
@@ -329,6 +330,23 @@ describe("login", () => {
     expect(calls.filter((c) => c.key === "POST /api/v1/session")).toHaveLength(2);
   });
 
+  it("loginの応答を読めなければ、serverで済んだかを取り直して確かめる", async () => {
+    const calls = mockApi({
+      "GET /api/v1/session": [anonymous("t1"), authenticated(USER_A, "t3")],
+      // 成功の応答だが契約と合わない（古いタブ）
+      "POST /api/v1/session": [{ status: 200, body: { authenticated: true } }],
+    });
+    const { auth } = await renderAndSubscribe();
+
+    const error = await auth()
+      .signIn({ email: "user@example.com", password: "password123" })
+      .catch((e: unknown) => e);
+
+    expect((error as ApiError).kind).toBe("schema");
+    await waitFor(() => expect(calls.filter((c) => c.key === "GET /api/v1/session")).toHaveLength(2));
+    await waitFor(() => expect(auth().status).toBe("authenticated"));
+  });
+
   it("passwordの不一致では認証の終了として扱わない", async () => {
     mockApi({
       "GET /api/v1/session": [anonymous("t1")],
@@ -524,6 +542,38 @@ describe("logout", () => {
 
     expect(order.indexOf("GET2 done")).toBeLessThan(order.indexOf("DELETE"));
     expect(auth().endReason).toBe("signed_out");
+  });
+
+  it("別タブで既にlogoutされていてDELETEがcsrf_invalidになっても、未認証なら成功にする", async () => {
+    const calls = mockApi({
+      "GET /api/v1/session": [authenticated(USER_A, "old"), anonymous("new")],
+      "DELETE /api/v1/session": [problem(403, "csrf_invalid")],
+    });
+    const { auth } = await renderAndSubscribe();
+
+    await act(() => auth().signOut());
+
+    expect(calls.filter((c) => c.key === "DELETE /api/v1/session")).toHaveLength(1);
+    expect(auth().status).toBe("anonymous");
+    expect(auth().endReason).toBe("signed_out");
+  });
+
+  it("offlineで一時停止している取り直しも待つ対象にし、待ちきれなければDELETEを送らない", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const calls = mockApi({
+      "GET /api/v1/session": [authenticated(USER_A, "t1")],
+      "DELETE /api/v1/session": [{ status: 204 }],
+    });
+    const { auth, queryClient } = await renderAndSubscribe();
+
+    act(() => onlineManager.setOnline(false));
+    void auth().refresh();
+    await waitFor(() => expect(queryClient.getQueryState(["auth", "session"])?.fetchStatus).toBe("paused"));
+    const signingOut = auth().signOut().catch((e: unknown) => e);
+    await act(() => vi.advanceTimersByTimeAsync(10_500));
+
+    expect(await signingOut).toBeInstanceOf(ApiError);
+    expect(calls.some((c) => c.key === "DELETE /api/v1/session")).toBe(false);
   });
 
   it("実行中の通信を待ちきれなければ、DELETEを送らずに失敗にする", async () => {

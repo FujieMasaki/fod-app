@@ -98,6 +98,14 @@ const MAX_TIMER_MS = 2_147_483_647;
 const EXPIRY_RECHECK_MS = 30_000;
 // login・logoutの前に、実行中の通信の応答を待つ上限。offlineで止まった通信を待ち続けないため。
 const SETTLE_TIMEOUT_MS = 10_000;
+// serverがloginを拒んだと読み取れる失敗。これ以外（通信・schema）はloginが済んだか分からない。
+const LOGIN_REJECTIONS = [
+  "invalid_credentials",
+  "email_unconfirmed",
+  "validation_failed",
+  "rate_limited",
+  "csrf_invalid",
+] as const;
 
 /** 認証済みなら利用者のid、未認証ならnull、まだ分からなければundefined */
 function identityOf(session: Session | undefined): string | null | undefined {
@@ -238,7 +246,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await previous?.catch(() => undefined);
         const pending: Promise<unknown>[] = [...inflightRef.current];
         // 実行中の取り直しがあればその応答を待つ（実行中ならfetchQueryは新しく送らず、同じ応答を待つ）。
-        if (queryClient.isFetching({ queryKey: SESSION_QUERY_KEY }) > 0) {
+        // offlineで一時停止している取り直し（paused）も、onlineへ戻ると送られるため待つ対象に含める。
+        const sessionFetch = queryClient.getQueryState(SESSION_QUERY_KEY)?.fetchStatus ?? "idle";
+        if (sessionFetch !== "idle") {
           pending.push(queryClient.fetchQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession }));
         }
         let timer: ReturnType<typeof setTimeout> | undefined;
@@ -327,10 +337,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = useCallback(
     async (credentials: Credentials) => {
       // 排他を解く前にloginの結果を置く（待たされていた通信が、login前の無効なtokenで送られないように）。
-      await runExclusively(async () => {
-        const next = await withCsrf((csrfToken) => createSession(csrfToken, credentials));
-        queryClient.setQueryData(SESSION_QUERY_KEY, next);
-      });
+      try {
+        await runExclusively(async () => {
+          const next = await withCsrf((csrfToken) => createSession(csrfToken, credentials));
+          queryClient.setQueryData(SESSION_QUERY_KEY, next);
+        });
+      } catch (error) {
+        // 応答を読めない失敗（通信・schema）では、serverでloginが済んだかが分からないため確かめ直す。
+        if (!isProblem(error, ...LOGIN_REJECTIONS)) void refresh();
+        throw error;
+      }
       // 新しいCookieで取り直して確かめる。login前に始まった取り直しはlogin前に受け取り終えている
       // （runExclusively）。cancelQueriesは取り消しの際に取り直し前の値へ非同期に戻し、置いたloginの結果を
       // 消し得るので使わない。
@@ -347,7 +363,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signingOutRef.current = true;
     try {
       await runExclusively(async () => {
-        await withCsrf((csrfToken) => deleteSession(csrfToken));
+        try {
+          await withCsrf((csrfToken) => deleteSession(csrfToken));
+        } catch (error) {
+          // 別タブのlogoutや期限切れで既に終わっていると、古いCSRF tokenのDELETEはcsrf_invalidになり、取り直した
+          // Sessionは未認証になる（withCsrfが取り直してcacheを置き換える）。serverで終わっているので成功とする。
+          const current = queryClient.getQueryData<Session>(SESSION_QUERY_KEY);
+          if (isProblem(error, "csrf_invalid") && current && !current.authenticated) return;
+          throw error;
+        }
         // serverで終わったことを確かめる。まだ認証済みなら1回だけ送り直し、それでも残れば失敗にする
         // （共有端末で、logoutしたつもりのCookieを残さないため。TASK-001 Plan §20）。
         if (!(await confirmSignedOut()).authenticated) return;
