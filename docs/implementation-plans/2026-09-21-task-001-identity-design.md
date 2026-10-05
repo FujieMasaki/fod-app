@@ -423,7 +423,7 @@ IdP自身のhosted loginを通すためlocalのRailsにパスワードやpasskey
 
 これは国内保管要件を整理する前の推奨記録。現行MVPには§40のAWS東京 + Cognitoを採用し、以下のRender/Auth0・必須MFA案は適用しない。Auth0は日本テナントを作成可能であり、海外アプリ配信とIdPの保存地域は別々に選べる（§35–36）。
 
-**H1（RenderにReact成果物を同梱したRails + 有料Postgres）+ I1（Auth0 Essentialsを基準に評価**）を第一推奨とする。ログインはメールOTP + passkey登録を優先し、Googleを併設候補、Appleは利用者層に応じて追加する。公開MVPのMFAは§28のTOTP追加案を比較の基準とする。
+**H1（RenderにReact成果物を同梱したRails + 有料Postgres）+ I1（Auth0 Essentialsを基準に評価）** を第一推奨とする。ログインはメールOTP + passkey登録を優先し、Googleを併設候補、Appleは利用者層に応じて追加する。公開MVPのMFAは§28のTOTP追加案を比較の基準とする。
 
 理由は、アプリの公開経路を1つにし、認証のhosted UI・MFA・利用者管理を利用しながら、日記の所有権とsession失効を既存Rails/PostgreSQLで説明できるため。これは公式サービスの優劣を示す実測ではなく、現在のチーム規模と構成への設計評価。
 

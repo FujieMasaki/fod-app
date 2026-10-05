@@ -245,7 +245,7 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
 - **Transcribeについて、AWS OrganizationsのAI services opt-out policyの適用を必須とする。**
   AWSのAIサービスは**既定では顧客コンテンツをサービス改善に利用し、利用リージョン外へ保存し得る**。
   Transcribeはこのopt-out policyの対象サービスで、**設定しない限りopt-inのままである。**
-  適用せずに音声を送ると、上記「保存と閲覧は日本国内」が成り立たない（改善目的で利用リージョン外へ
+  適用せずに音声を送ると、下記「データ所在地と費用」の「保存と閲覧は日本国内」が成り立たない（改善目的で利用リージョン外へ
   保存され得るため。**推論の所在地を緩めても、保存を日本国内に限る前提は変わらない（自分たちのRDS・S3は東京、Transcribeは`ap-northeast-1`）**）。
   適用後にeffective policyを照会して効いていることを確認する（TASK-009/015）。
   なおBedrockはこのopt-out policyの対象外で、モデルごとのdata retention modeで別に確認する。
