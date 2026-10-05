@@ -3,8 +3,9 @@ import { Navigate, useLocation } from "@tanstack/react-router";
 
 import { ErrorState } from "@/components/error-state/error-state";
 import { Spinner, Text } from "@/design-system";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, type QueryState } from "@tanstack/react-query";
 
+import type { Session } from "@/libs/api-contract/schemas";
 import { SESSION_QUERY_KEY, useAuth } from "../auth-provider";
 import { safeRedirect } from "../redirect";
 
@@ -25,6 +26,14 @@ type RequireAuthProps = {
   startsOnEnter?: boolean;
 };
 
+// 確かめ直しが終わった時点のqueryの状態から、中身を出してよいかを決める。
+function verdictOf(state: QueryState<Session> | undefined): "verified" | "anonymous" | "unconfirmed" {
+  // offlineでは取り直しが一時停止（paused）したまま、refreshはすぐに返る。cacheで判断しない。
+  if (!state || state.fetchStatus !== "idle" || state.status !== "success" || !state.data) return "unconfirmed";
+  if (!state.data.authenticated) return "anonymous";
+  return state.data.account_status === "active" ? "verified" : "unconfirmed";
+}
+
 // 副作用を始める画面で、入るときの確かめ直しを待つ上限。offlineで取り直しが止まったまま、回線が戻った
 // ときに利用者の操作なしに録音が始まらないよう、待ちきれなければHomeへ戻す。
 const VERIFY_TIMEOUT_MS = 10_000;
@@ -33,8 +42,14 @@ export function RequireAuth({ children, startsOnEnter = false }: RequireAuthProp
   const { status, endReason, refresh } = useAuth();
   const queryClient = useQueryClient();
   const { pathname } = useLocation();
-  // 入るときの確かめ直しが終わったか（startsOnEnterのとき）。"timeout"なら待ちきれなかった。
-  const [check, setCheck] = useState<"pending" | "done" | "timeout">(startsOnEnter ? "pending" : "done");
+  // 入るときの確かめ直しの結果（startsOnEnterのとき）。contextのstatusではなく、確かめ直しが終わった時点の
+  // queryの状態から決める（TanStack Queryは描画の通知を遅らせるため、contextはまだ前のcacheの認証済みであり得る）。
+  // - verified: serverが認証済み（退会中でない）と返した
+  // - anonymous: 未認証と返した
+  // - unconfirmed: 失敗した・退会中・offlineで終わらない・待ちきれなかった
+  const [check, setCheck] = useState<"pending" | "verified" | "anonymous" | "unconfirmed">(
+    startsOnEnter ? "pending" : "verified",
+  );
   // 一度離れると決めたら、状態が戻っても（画面の遷移が終わる前に戻っても）中身を出し直さない。
   const leftRef = useRef<"login" | "home" | null>(null);
 
@@ -42,14 +57,12 @@ export function RequireAuth({ children, startsOnEnter = false }: RequireAuthProp
     if (!startsOnEnter) return;
     let active = true;
     const timer = setTimeout(() => {
-      if (active) setCheck((current) => (current === "pending" ? "timeout" : current));
+      if (active) setCheck((current) => (current === "pending" ? "unconfirmed" : current));
     }, VERIFY_TIMEOUT_MS);
     void refresh().finally(() => {
       if (!active) return;
-      // offlineでは取り直しが一時停止（paused）したまま、refreshはすぐに返る。cacheの認証済みで中身を出さないよう、
-      // 確かめられなかったとして扱う。
-      const paused = queryClient.getQueryState(SESSION_QUERY_KEY)?.fetchStatus === "paused";
-      setCheck((current) => (current === "pending" ? (paused ? "timeout" : "done") : current));
+      const result = verdictOf(queryClient.getQueryState<Session>(SESSION_QUERY_KEY));
+      setCheck((current) => (current === "pending" ? result : current));
     });
     return () => {
       active = false;
@@ -58,11 +71,13 @@ export function RequireAuth({ children, startsOnEnter = false }: RequireAuthProp
   }, [startsOnEnter, refresh, queryClient]);
 
   if (startsOnEnter && leftRef.current === null) {
-    if (check === "timeout") {
+    if (check === "anonymous") {
+      leftRef.current = "login";
+    } else if (check === "unconfirmed") {
       leftRef.current = "home";
-    } else if (check === "done" && status !== "authenticated") {
-      // 入るときの確かめ直しで認証済みと分からなかった、または中身を出した後に認証済みでなくなった。
-      // どちらも、後の自動の取り直し（focus・再接続）で戻っても中身を出さず、利用者がもう一度始める。
+    } else if (check === "verified" && status !== "authenticated" && status !== "checking") {
+      // 中身を出した後に認証済みでなくなった。後の自動の取り直し（focus・再接続）で戻っても中身を出さず、
+      // 利用者がもう一度始める。
       leftRef.current = status === "anonymous" ? "login" : "home";
     }
   }

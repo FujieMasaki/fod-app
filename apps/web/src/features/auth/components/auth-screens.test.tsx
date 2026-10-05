@@ -489,6 +489,15 @@ describe("SignInScreen（開いている間の変化）", () => {
 });
 
 describe("副作用を始める画面のguard（startsOnEnter）", () => {
+  // mountされた回数を数える（一瞬だけのmountでもマイクの開始が走るため、表示の有無ではなく回数で確かめる）
+  const mounted = { count: 0 };
+  function CountingScreen() {
+    useState(() => {
+      mounted.count += 1;
+    });
+    return <p>録音画面</p>;
+  }
+
   function Toggle({ children }: { children: ReactNode }) {
     const [open, setOpen] = useState(false);
     return (
@@ -499,12 +508,15 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     );
   }
 
-  it("cacheでは認証済みでも、確かめ直して未認証なら中身を一度も出さずログインへ移る", async () => {
+  it("cacheでは認証済みでも、確かめ直して未認証なら中身を一度もmountせずログインへ移る", async () => {
     locationMock.pathname = "/record";
+    mounted.count = 0;
     const requests = mockApi({ "GET /api/v1/session": [signedIn, anonymous] });
     renderWithAuth(
       <Toggle>
-        <RequireAuth startsOnEnter>録音画面</RequireAuth>
+        <RequireAuth startsOnEnter>
+          <CountingScreen />
+        </RequireAuth>
       </Toggle>,
     );
     await waitFor(() => expect(requests.filter((r) => r.key === "GET /api/v1/session")).toHaveLength(1));
@@ -514,7 +526,8 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
 
     expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
     expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
-    expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mounted.count).toBe(0);
     expect(requests.filter((r) => r.key === "GET /api/v1/session")).toHaveLength(2);
   });
 
@@ -565,7 +578,8 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
   });
 
-  it("入るときの確かめ直しが失敗したら、後の取り直しで戻っても中身を出さずHomeへ移る", async () => {
+  it("入るときの確かめ直しが失敗したら、一度もmountせず、後の取り直しで戻っても出さずHomeへ移る", async () => {
+    mounted.count = 0;
     let getCount = 0;
     vi.stubGlobal(
       "fetch",
@@ -578,7 +592,9 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     );
     renderWithAuth(
       <Toggle>
-        <RequireAuth startsOnEnter>録音画面</RequireAuth>
+        <RequireAuth startsOnEnter>
+          <CountingScreen />
+        </RequireAuth>
       </Toggle>,
     );
     await waitFor(() => expect(getCount).toBe(1));
@@ -593,7 +609,7 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     });
     await waitFor(() => expect(getCount).toBeGreaterThanOrEqual(3));
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
+    expect(mounted.count).toBe(0);
   });
 
   it("入るときの確かめ直しが終わらなければ（offline）、待ちきれずにHomeへ移り、回線が戻っても中身を出さない", async () => {
