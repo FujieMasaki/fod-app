@@ -208,6 +208,19 @@ test("HTMLコメントとYAML frontmatterの中は見ない", () => {
   assert.equal(findEmphasisErrors("本文\n\n---\n\n**崩れている。**続き\n", "a.md").length, 1);
 });
 
+test("コードスパン・code blockの中の`<!--`でコメントの状態を反転させない", () => {
+  // 反転すると、そこから後の行が黙って無検査になる。
+  assert.equal(findEmphasisErrors("書き方は `<!--` である\n\n**崩れている。**続き\n", "a.md").length, 1);
+  assert.equal(findEmphasisErrors("文\n\n    <!-- 例\n\n**崩れている。**続き\n", "a.md").length, 1);
+  assert.equal(findEmphasisErrors("```text\n<!-- 例\n```\n\n**崩れている。**続き\n", "a.md").length, 1);
+});
+
+test("閉じていないHTMLコメントを報告する", () => {
+  assert.deepEqual(findEmphasisErrors("<!-- 未完\n\n**崩れている。**続き\n", "a.md"), [
+    "a.md: HTMLコメント（<!--）が閉じていません。そこから後の行を検査していません。",
+  ]);
+});
+
 test("maskHtmlCommentsは長さとマーカーを保つ", () => {
   const line = "前 <!-- **メモ。**続き --> 後";
   const masked = maskHtmlComments(line);

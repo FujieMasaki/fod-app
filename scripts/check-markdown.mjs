@@ -37,9 +37,11 @@ const skipDirectories = new Set([
 //
 // 既知の制限（検出漏れ）:
 //   - setext見出し（`===`・`---`の下線）を見出しとして扱わない。段落として解析する
-//   - code blockの判定はfenceと4空白インデントだけで、list項目の中の深いインデントは
-//     段落の続きとして扱う（CommonMarkより緩い）
-//   - `__太字__`は同じ形で壊れるが見ない（この文書群では使っていない）
+//   - `__太字__`・`*斜体*`は同じ形で壊れるが見ない（この文書群では使っていない）
+//   - **空行の後の4空白インデント行はcode blockとして飛ばす。** list項目の継続段落でも飛ばすので、
+//     その中の崩れは検出しない（listの文脈を見ないとCommonMarkどおりには判定できない）
+//   - code blockの判定はfenceと4空白インデントだけで、list項目の中の深いインデントが
+//     段落の続きのときは本文として解析する（CommonMarkより緩い）
 //
 // 既知の制限（誤検知）:
 //   - HTMLブロック（`<div>`・`<details>`から空行まで）の中を本文として解析する。
@@ -244,11 +246,7 @@ export function analyzeEmphasis(source, relativePath) {
       return;
     }
 
-    // HTMLコメントの中身は表示されない。`--fix`が不可視の文字列を書き換えないよう、
-    // 同じ長さのplaceholderへ置き換える（位置は保つ）。
-    const masked = maskHtmlComments(originalLine, inComment);
-    inComment = masked.inComment;
-    const rawLine = masked.line;
+    const rawLine = originalLine;
 
     // 水平線（`***`だけの行）は強調ではないので先に外す。
     if (fence === null && /^ {0,3}\*[\s*]*$/.test(rawLine) && (rawLine.match(/\*/g) ?? []).length >= 3) {
@@ -272,7 +270,12 @@ export function analyzeEmphasis(source, relativePath) {
     // （段落の続きの行は中断できない）。中身を本文として扱うと`--fix`がコマンド例を書き換える。
     if (block === null && /^ {4,}\S/.test(rawLine)) return;
 
-    const line = stripInlineCode(rawLine);
+    // コードスパンを潰したあとでHTMLコメントを外す。この順にすると、CommonMarkと同じ優先順位
+    // （block構造 → コードスパン → raw HTML）になり、コードスパンやcode blockの中の`<!--`で
+    // コメントの状態が反転しない。反転すると、そこから後の行が黙って無検査になる。
+    const masked = maskHtmlComments(stripInlineCode(rawLine), inComment);
+    inComment = masked.inComment;
+    const line = masked.line;
 
     for (const match of line.matchAll(/\*{3,}/g)) {
       errors.push(
@@ -312,10 +315,15 @@ export function analyzeEmphasis(source, relativePath) {
   });
 
   flush();
-  // 閉じていないfenceは、その後の行がすべて無検査になる。黙って通さずに報告する。
+  // 閉じていないfence・HTMLコメントは、その後の行がすべて無検査になる。黙って通さずに報告する。
   if (fence !== null) {
     errors.push(
       `${relativePath}: ${fence} で開いたcode blockが閉じていません。そこから後の行を検査していません。`,
+    );
+  }
+  if (inComment) {
+    errors.push(
+      `${relativePath}: HTMLコメント（<!--）が閉じていません。そこから後の行を検査していません。`,
     );
   }
   return { errors, swaps };
