@@ -14,6 +14,10 @@ Rails.application.routes.draw do
       resource :confirmation, only: %i[create update]
       resource :password, only: %i[create update]
       resource :unlock, only: :update
+
+      # Day・日単位の一覧・日の詳細（契約のhistory tag）。todayを`days/:date`より先に置く。
+      get "days/today", to: "days#today"
+      resources :days, only: %i[index show], param: :date
     end
   end
 
