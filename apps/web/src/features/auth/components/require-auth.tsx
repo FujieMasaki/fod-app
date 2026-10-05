@@ -38,7 +38,7 @@ type SessionQueryState = Pick<QueryState<Session>, "status" | "fetchStatus" | "d
 // - busy: 取得中・offlineで一時停止中（まだ分からない）
 // serverが最後に未認証・退会中と返していれば、次の取り直しの最中でも待たずにそれを使う（認証済みの判断だけを、
 // 取り直しが終わるまで保留する）。
-function liveVerdictOf(state: SessionQueryState | undefined): "ok" | "anonymous" | "lost" | "busy" {
+const liveVerdictOf = (state: SessionQueryState | undefined): "ok" | "anonymous" | "lost" | "busy" => {
   if (!state) return "busy";
   if (state.status === "success" && state.data) {
     if (!state.data.authenticated) return "anonymous";
@@ -47,23 +47,23 @@ function liveVerdictOf(state: SessionQueryState | undefined): "ok" | "anonymous"
   if (state.fetchStatus !== "idle") return "busy";
   if (state.status === "error") return "lost";
   return state.data ? "ok" : "busy";
-}
+};
 
 // 副作用を始める画面で、中身を出すまで待つ上限。offlineで取り直しが止まったまま、回線が戻ったときに
 // 利用者の操作なしに録音が始まらないよう、それまでに中身を出せなければHomeへ戻す（確かめ直しが済んだ
 // 直後に別の取り直しが始まって止まった場合も含む）。
 const VERIFY_TIMEOUT_MS = 10_000;
 
-export function RequireAuth({ children, startsOnEnter = false }: RequireAuthProps) {
+export const RequireAuth = ({ children, startsOnEnter = false }: RequireAuthProps) => {
   if (startsOnEnter) return <EntryVerifiedGuard>{children}</EntryVerifiedGuard>;
   return <SessionGuard>{children}</SessionGuard>;
-}
+};
 
 /**
  * 副作用を始める画面のguard。contextの状態はTanStack Queryの通知が届くまで前の値のことがあるため、使わない。
  * sessionのqueryの今の状態を、取得しない観測者（enabled: false）で購読して判断する。
  */
-function EntryVerifiedGuard({ children }: { children: ReactNode }) {
+const EntryVerifiedGuard = ({ children }: { children: ReactNode }) => {
   const { refresh } = useAuth();
   const queryClient = useQueryClient();
   const live = useQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession, enabled: false });
@@ -134,9 +134,9 @@ function EntryVerifiedGuard({ children }: { children: ReactNode }) {
       <Spinner label="ログインの状態を確かめています" />
     </div>
   );
-}
+};
 
-function SessionGuard({ children }: { children: ReactNode }) {
+const SessionGuard = ({ children }: { children: ReactNode }) => {
   const { status, endReason, refresh } = useAuth();
   const { pathname } = useLocation();
   // 取得の失敗の種類を見るだけの観測者（取得はしない）。schemaに合わない応答は古いタブの可能性がある。
@@ -187,4 +187,4 @@ function SessionGuard({ children }: { children: ReactNode }) {
       return <Navigate to="/login" search={redirect === "/" ? {} : { redirect }} replace />;
     }
   }
-}
+};

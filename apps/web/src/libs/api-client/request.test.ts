@@ -4,21 +4,21 @@ import { z } from "zod";
 import { ApiError, apiRequest, isProblem } from "./request";
 
 // fetchを差し替え、Rails APIの応答（契約の形）を模す。実serverには接続しない。
-function mockFetch(response: Response | Error) {
+const mockFetch = (response: Response | Error) => {
   const fetchMock = vi.fn<(path: string, init?: RequestInit) => Promise<Response>>(async () => {
     if (response instanceof Error) throw response;
     return response;
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
-}
+};
 
-function problemResponse(status: number, body: unknown) {
+const problemResponse = (status: number, body: unknown) => {
   return new Response(JSON.stringify(body), {
     status,
     headers: { "Content-Type": "application/problem+json" },
   });
-}
+};
 
 afterEach(() => {
   vi.unstubAllGlobals();

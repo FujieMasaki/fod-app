@@ -10,7 +10,7 @@ import styles from "./recording-stage.module.css";
 const CIRCLE_SIZE = 176;
 
 /** 録音中の主要ブロック。マウントで録音開始、停止で Processing へ委ねる。 */
-export function RecordingStage() {
+export const RecordingStage = () => {
   const navigate = useNavigate();
   const { setRecordedDuration } = useSession();
   const { identityEpoch } = useAuth();
@@ -81,4 +81,4 @@ export function RecordingStage() {
       </div>
     </div>
   );
-}
+};

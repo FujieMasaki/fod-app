@@ -31,7 +31,7 @@ vi.mock("../../hooks/use-recorder", async (importOriginal) => {
 
 // マイクの許可（getUserMedia）・AudioContext・MediaRecorderを最小の形で差し替え、録音の開始と止めたtrackを数える。
 // holdなら、grantPermissionを呼ぶまで許可を待たせる。
-function stubMicrophone({ hold = false } = {}) {
+const stubMicrophone = ({ hold = false } = {}) => {
   const counts = { recordingStarts: 0, stoppedTracks: 0, requests: 0 };
   const stream = { getTracks: () => [{ stop: () => (counts.stoppedTracks += 1) }] };
   let grant: () => void = () => undefined;
@@ -77,20 +77,20 @@ function stubMicrophone({ hold = false } = {}) {
     },
   );
   return Object.assign(counts, { grantPermission: () => grant() });
-}
+};
 
-function DurationProbe() {
+const DurationProbe = () => {
   const { recordedDurationSec } = useSession();
   return <p>{recordedDurationSec === null ? "no-duration" : `duration:${recordedDurationSec}`}</p>;
-}
+};
 
 let switchUser: () => void = () => undefined;
-function SwitchProbe() {
+const SwitchProbe = () => {
   switchUser = useAuth().prepareExternalSignIn;
   return null;
-}
+};
 
-function renderStage({ strict = false } = {}) {
+const renderStage = ({ strict = false } = {}) => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => Response.json({ authenticated: false, csrf_token: "t" })),
@@ -107,7 +107,7 @@ function renderStage({ strict = false } = {}) {
     </QueryClientProvider>
   );
   render(strict ? <StrictMode>{tree}</StrictMode> : tree);
-}
+};
 
 afterEach(() => {
   recorderMode.useRealRecorder = false;

@@ -11,7 +11,7 @@ type Reply = { status: number; body?: unknown } | Error;
 const USER_A = "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10";
 const USER_B = "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
 
-function authenticated(id: string, token: string, expiresAt = "2099-01-01T00:00:00Z") {
+const authenticated = (id: string, token: string, expiresAt = "2099-01-01T00:00:00Z") => {
   return {
     status: 200,
     body: {
@@ -22,18 +22,18 @@ function authenticated(id: string, token: string, expiresAt = "2099-01-01T00:00:
       user: { id, email: "user@example.com", email_confirmed: true, sign_in_methods: ["password"] },
     },
   };
-}
+};
 
-function anonymous(token: string) {
+const anonymous = (token: string) => {
   return { status: 200, body: { authenticated: false, csrf_token: token } };
-}
+};
 
-function problem(status: number, code: string) {
+const problem = (status: number, code: string) => {
   return { status, body: { type: `urn:focus-on-dot:problem:${code}`, title: "x", status, code } };
-}
+};
 
 /** `METHOD path`ごとに応答の列を用意する。列の最後の応答は使い続ける。 */
-function mockApi(routes: Record<string, Reply[]>) {
+const mockApi = (routes: Record<string, Reply[]>) => {
   const calls: { key: string; csrf?: string }[] = [];
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     const key = `${init?.method ?? "GET"} ${path}`;
@@ -49,18 +49,18 @@ function mockApi(routes: Record<string, Reply[]>) {
   });
   vi.stubGlobal("fetch", fetchMock);
   return calls;
-}
+};
 
-function renderAuth() {
+const renderAuth = () => {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const result: { current: ReturnType<typeof useAuth> | null } = { current: null };
   const onIdentityChange = vi.fn();
 
-  function Probe() {
+  const Probe = () => {
     const auth = useAuth();
     result.current = auth;
     return null;
-  }
+  };
   render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -70,14 +70,14 @@ function renderAuth() {
   );
   const auth = () => result.current!;
   return { auth, queryClient, onIdentityChange };
-}
+};
 
-async function renderAndSubscribe() {
+const renderAndSubscribe = async () => {
   const rendered = renderAuth();
   await waitFor(() => expect(rendered.auth().status).not.toBe("checking"));
   rendered.auth().subscribeIdentityChange(rendered.onIdentityChange);
   return rendered;
-}
+};
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -426,12 +426,12 @@ describe("logout", () => {
     const seen: { status: string; endReason: string | null }[] = [];
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     let current: ReturnType<typeof useAuth> | null = null;
-    function Recorder() {
+    const Recorder = () => {
       const auth = useAuth();
       current = auth;
       seen.push({ status: auth.status, endReason: auth.endReason });
       return null;
-    }
+    };
     render(
       <QueryClientProvider client={queryClient}>
         <AuthProvider>

@@ -31,9 +31,9 @@ export class ApiError extends Error {
   }
 }
 
-export function isProblem(error: unknown, ...codes: Problem["code"][]): error is ApiError & { problem: Problem } {
+export const isProblem = (error: unknown, ...codes: Problem["code"][]): error is ApiError & { problem: Problem } => {
   return error instanceof ApiError && error.problem !== undefined && codes.includes(error.problem.code);
-}
+};
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
@@ -45,12 +45,15 @@ export type ApiRequestOptions = {
 };
 
 // schemaを渡したときだけ本文を返す（渡し忘れて`undefined`を別の型として受け取らないように）。
-export function apiRequest<T>(path: string, options: ApiRequestOptions & { schema: z.ZodType<T> }): Promise<T>;
-export function apiRequest(path: string, options?: ApiRequestOptions & { schema?: undefined }): Promise<void>;
-export async function apiRequest<T>(
+type ApiRequest = {
+  <T>(path: string, options: ApiRequestOptions & { schema: z.ZodType<T> }): Promise<T>;
+  (path: string, options?: ApiRequestOptions & { schema?: undefined }): Promise<void>;
+};
+
+export const apiRequest: ApiRequest = async <T>(
   path: string,
   options: ApiRequestOptions & { schema?: z.ZodType<T> } = {},
-): Promise<T | void> {
+): Promise<T | void> => {
   const url = sameOriginUrl(path);
   const { method = "GET", body, csrfToken, schema } = options;
   const headers: Record<string, string> = { Accept: "application/json" };
@@ -79,7 +82,7 @@ export async function apiRequest<T>(
   const parsed = schema.safeParse(json);
   if (!parsed.success) throw new ApiError("schema", { status: response.status });
   return parsed.data;
-}
+};
 
 /**
  * 同一originのpathだけを送る（CSRF tokenを外部へ送らないため）。文字列の先頭だけで判定すると、
@@ -87,15 +90,15 @@ export async function apiRequest<T>(
  * originを比べる。さらに、解決したpathnameが`//`で始まるものも拒否する（`/.//host`のように`.`・`..`を
  * 挟んだ形はoriginが同じまま、pathnameが`//host`になり、fetchが別のhostとして解決し直すため）。
  */
-function sameOriginUrl(path: string): string {
+const sameOriginUrl = (path: string): string => {
   const url = new URL(path, window.location.origin);
   if (!path.startsWith("/") || url.origin !== window.location.origin || url.pathname.startsWith("//")) {
     throw new TypeError("apiRequest: same-origin path only");
   }
   return `${url.pathname}${url.search}`;
-}
+};
 
-async function toError(response: Response): Promise<ApiError> {
+const toError = async (response: Response): Promise<ApiError> => {
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/problem+json")) {
     return new ApiError("http", { status: response.status });
@@ -103,13 +106,13 @@ async function toError(response: Response): Promise<ApiError> {
   const parsed = problemSchema.safeParse(await readJson(response));
   if (!parsed.success) return new ApiError("schema", { status: response.status });
   return new ApiError("problem", { status: response.status, problem: parsed.data });
-}
+};
 
-async function readJson(response: Response): Promise<unknown> {
+const readJson = async (response: Response): Promise<unknown> => {
   try {
     return await response.json();
   } catch {
     // 本文を読めないことも、契約と合わない応答として扱う。
     return undefined;
   }
-}
+};

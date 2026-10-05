@@ -5,9 +5,9 @@ import type { Problem } from "@/libs/api-contract/schemas";
 import { authErrorMessage, errorMessage, fieldErrors, needsReload, parseAuthError } from "./messages";
 import { safeRedirect } from "./redirect";
 
-function problemError(problem: Problem) {
+const problemError = (problem: Problem) => {
   return new ApiError("problem", { status: problem.status, problem });
-}
+};
 
 const base = { type: "x", title: "serverの文言", detail: "serverの詳細" };
 

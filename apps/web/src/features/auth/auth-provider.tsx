@@ -115,29 +115,29 @@ const LOGIN_REJECTIONS = [
 ] as const;
 
 /** 認証済みなら利用者のid、未認証ならnull、まだ分からなければundefined */
-function identityOf(session: Session | undefined): string | null | undefined {
+const identityOf = (session: Session | undefined): string | null | undefined => {
   if (!session) return undefined;
   return session.authenticated ? session.user.id : null;
-}
+};
 
-function deriveStatus(session: Session | undefined, isError: boolean): AuthStatus {
+const deriveStatus = (session: Session | undefined, isError: boolean): AuthStatus => {
   if (!session) return isError ? "unknown" : "checking";
   if (!session.authenticated) return "anonymous";
   // 取り直しに失敗したら、前に得た認証済みのまま保護する画面を見せ続けない（確かめられない状態にする）。
   // 未認証のcacheは、失敗しても安全側なのでそのまま使う。
   if (isError) return "unknown";
   return session.account_status === "deletion_in_progress" ? "deletion_in_progress" : "authenticated";
-}
+};
 
 // 認証状態のquery以外（前の利用者のresponse）を取り消して消す。
-function clearPrivateQueries(queryClient: QueryClient) {
+const clearPrivateQueries = (queryClient: QueryClient) => {
   const predicate = ({ queryKey }: { queryKey: readonly unknown[] }) =>
     JSON.stringify(queryKey) !== JSON.stringify(SESSION_QUERY_KEY);
   void queryClient.cancelQueries({ predicate });
   queryClient.removeQueries({ predicate });
-}
+};
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const queryClient = useQueryClient();
   // login・logoutの送信中は、ほかの通信を始めない。RailsのCookieStoreはどの応答でもCookieを書き直すため
   // （`GET /api/v1/session`も保護APIも）、login・logoutの前に送った通信の応答が後から届くと、Cookieが前の
@@ -489,10 +489,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
+};
 
-export function useAuth(): AuthContextValue {
+export const useAuth = (): AuthContextValue => {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth は AuthProvider の内側で使用してください。");
   return context;
-}
+};

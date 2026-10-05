@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 export type MicPermission = "granted" | "denied" | "prompt" | "unknown";
 
 /** マイク権限の状態を監視する（UI で無理に急かさないための補助情報）。 */
-export function useMicrophonePermission(): MicPermission {
+export const useMicrophonePermission = (): MicPermission => {
   const [state, setState] = useState<MicPermission>("unknown");
 
   useEffect(() => {
@@ -28,4 +28,4 @@ export function useMicrophonePermission(): MicPermission {
   }, []);
 
   return state;
-}
+};

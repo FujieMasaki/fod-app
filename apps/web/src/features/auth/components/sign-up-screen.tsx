@@ -10,7 +10,7 @@ import { AuthScreen, FormMessage, ReloadNotice, TextField, TextLink } from "./au
  * メールアドレス＋passwordで登録する。登録済みかどうかにかかわらず同じ受付を示す
  * （契約のcreateRegistration。登録済みならログイン方法の案内メールが届く）。
  */
-export function SignUpScreen() {
+export const SignUpScreen = () => {
   const { withCsrf } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -18,7 +18,7 @@ export function SignUpScreen() {
   const [error, setError] = useState<unknown>(null);
   const [accepted, setAccepted] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
@@ -31,7 +31,7 @@ export function SignUpScreen() {
     } finally {
       setSubmitting(false);
     }
-  }
+  };
 
   if (accepted) {
     return (
@@ -89,4 +89,4 @@ export function SignUpScreen() {
       <TextLink to="/login">登録済みの方はログイン</TextLink>
     </AuthScreen>
   );
-}
+};

@@ -8,11 +8,11 @@ export const REOPEN_LINK_MESSAGE =
 // 契約のTokenOnly・PasswordReset（token: maxLength 256）
 const MAX_TOKEN_LENGTH = 256;
 
-function readToken(): string | null {
+const readToken = (): string | null => {
   if (typeof window === "undefined") return null;
   const token = new URLSearchParams(window.location.hash.slice(1)).get("token");
   return token && token.length <= MAX_TOKEN_LENGTH ? token : null;
-}
+};
 
 /**
  * メールのリンク（確認・password再設定・ロック解除）のtokenを、URLのfragment（`#token=`）から読む。
@@ -21,7 +21,7 @@ function readToken(): string | null {
  * tokenは画面に出さず、利用者の操作でだけserverへ送る（メールのscannerがリンクを開いただけで
  * 確定しないように。TASK-007 Plan §7-4）。
  */
-export function useFragmentToken(): string | null {
+export const useFragmentToken = (): string | null => {
   const [token] = useState(readToken);
 
   useEffect(() => {
@@ -31,4 +31,4 @@ export function useFragmentToken(): string | null {
   }, []);
 
   return token;
-}
+};
