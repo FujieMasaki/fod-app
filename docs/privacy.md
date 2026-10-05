@@ -179,6 +179,7 @@ sequenceDiagram
     S3->>T: 音声を読ませる
     T->>S3: 文字起こし全文を書き出す
     R->>AI: 文字起こし全文を渡し、sentenceとsummaryを生成する
+    AI-->>R: sentenceとsummaryを返す
     B->>R: 結果を照会する（polling。処理中も続け、失敗もここで分かる）
     alt 成功
         R->>DB: Dotを保存する（成功の確定）
