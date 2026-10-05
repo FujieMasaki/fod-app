@@ -366,13 +366,18 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
   作り替えたcursorでPostgreSQLのtimestampの範囲を超える時刻を渡すと`500`になっていた（PR 2/3の
   セルフレビューで発見）。範囲外は`400 cursor_invalid`にし、同じ種類の見落としを拾う観点を
   `docs/code-review/backend/security.md` §2に足した。
+- **解析できなかったJSONのbodyをdebugのログへ出さないようにした（`config/initializers/parse_error_logging.rb`）。**
+  Railsは解析の失敗時に生のbodyを`filter_parameters`を通さずdebugのログへ書くため、壊れたJSONに入った
+  Dotの本文（認証のendpointならpassword）が`RAILS_LOG_LEVEL=debug`やdevelopmentで残っていた（PR 3/3の
+  Codexの最終チェックで発見）。Railsの非公開のmethodを置き換えるため、request specで本文が出ないことを
+  固定し、Railsの更新で前提が崩れたら失敗するようにした。
 - `filter_parameters`は完全一致ではなく部分一致（`%i[sentence summary]`）にした。隠しすぎて困る項目が無いため。
 
 ### 検証結果
 
 実行したcommand（`apps/api`、DBは`FOD_DB_SUFFIX=_task_008`の専用DB）:
 
-- `bundle exec rspec` — 409 examples, 0 failures（追加: model 18、service 20、request 36）
+- `bundle exec rspec` — 410 examples, 0 failures（追加: model 18、service 20、request 37）
 - `bundle exec rubocop` — no offenses
 - `bundle exec brakeman -q` — No warnings found
 - `RAILS_ENV=test bin/rails db:drop db:create db:schema:load`の後に`dot_spec`・`days_spec`を実行し、
