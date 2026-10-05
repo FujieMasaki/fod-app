@@ -2,8 +2,8 @@
 
 この文書は、Rails APIのsecurity reviewで必ず確認する観点である。個人データの扱いは
 [`../../privacy.md`](../../privacy.md)を仕様の正本として確認する。認証はRails側をTASK-006で実装した
-（[architecture](../../architecture.md)「認証詳細」）。Dotなどのプロダクト API・Webの接続・公開配信は
-未実装である。採用決定と実装・実機検証を区別し、実装される変更で適切な確認を行う。
+（[architecture](../../architecture.md)「認証詳細」）。Dotの履歴の取得・編集のRails側はTASK-008で実装した。
+Dotを作る入口・ゴミ箱と削除の操作・Webの接続・公開配信は未実装である。採用決定と実装・実機検証を区別し、実装される変更で適切な確認を行う。
 
 ## 1. 認証・認可とresource所有権 🔴
 
