@@ -52,7 +52,13 @@ export function ConfirmationScreen() {
   if (!token || tokenRejected) {
     return (
       <AuthScreen title="確認のメールを送り直す">
-        {tokenRejected && <FormMessage tone="error">{errorMessage(error, TOKEN_MESSAGES)}</FormMessage>}
+        {tokenRejected ? (
+          <FormMessage tone="error">{errorMessage(error, TOKEN_MESSAGES)}</FormMessage>
+        ) : (
+          <FormMessage tone="error">
+            リンクが正しくありません。メールのリンクをもう一度開くか、確認のメールを送り直してください。
+          </FormMessage>
+        )}
         <ResendConfirmationForm />
       </AuthScreen>
     );

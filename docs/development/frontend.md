@@ -63,8 +63,10 @@
 - Rails APIは同一originで、`features/auth`の`useAuth().request`（状態を変える通信関数は
   `useAuth().withCsrf`）から呼ぶ。CSRF tokenの付与・`csrf_invalid`の1回の再送・`401`での認証の終了を
   ここに集めているため、機能ごとに`fetch`でRails APIを呼ばない。
-- 本人の個人データをReact state・Query cache以外（`sessionStorage`など）に持つ機能は、
-  `useAuth().subscribeIdentityChange`を購読し、認証の終了・利用者の切り替わりで消す。Query cacheは
+- 本人の個人データを、Query cacheと、保護する画面の下でunmountされるComponentのstate以外（routeをまたぐ
+  Provider・Contextのstate、`sessionStorage`など）に持つ機能は、`useAuth().subscribeIdentityChange`を購読し、
+  認証の終了・利用者の切り替わりで消す。消すまでの1回の描画で前の利用者の値が出ないよう、値を書いたときの
+  `useAuth().identityEpoch`と一緒に持ち、今の値と違えば見せない（Session Providerの方式）。Query cacheは
   認証（`["auth", ...]`）以外をAuth Providerが消す。
 - Rails APIのresponseは、[`contracts/openapi.yaml`](../../contracts/openapi.yaml)から生成した型
   （`types/api-contract.d.ts`）と完全一致するZod schemaで検証する。schemaは

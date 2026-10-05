@@ -387,8 +387,8 @@ Webの接続は2026-10-05に[TASK-007 Plan](implementation-plans/2026-10-05-task
 - Webは期限を案内用にだけ使い（アカウント画面にJSTで表示）、期限の時刻・画面へ戻ったとき・保護APIの
   `401`でserverに確かめ直す。`GET /api/v1/session`は期限切れを未認証として返すため、直前の期限を過ぎて
   いれば期限切れとして案内する。logoutはserverで終わったと確かめるまでlogin中のままにする。
-  メールのリンクのtokenはfragmentから読んだらURLから消し、利用者の操作で送る（scannerが開いただけで
-  確定しないように）。
+  メールのリンクのtokenはfragmentから読んだらアドレスバーとタブの履歴のentryから消し、利用者の操作で送る
+  （scannerが開いただけで確定しないように）。browserの閲覧履歴には残り得るが、tokenは1回だけ使え、期限がある。
 - Google同一メール衝突時は自動統合も重複User作成もしない。Googleが確認済みとしたメールに限り
   登録方法を案内する。将来の連携は既存Userへのログイン/再認証と追加手段の確認後に限定。
 - メール/password変更・退会はcurrent password、Google専用UserはGoogle再認証を要求する。

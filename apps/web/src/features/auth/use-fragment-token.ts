@@ -11,7 +11,8 @@ function readToken(): string | null {
 
 /**
  * メールのリンク（確認・password再設定・ロック解除）のtokenを、URLのfragment（`#token=`）から読む。
- * fragmentはserverへ送られないが、URLに残るとbrowserの履歴や共有から漏れ得るため、読んだらURLから消す。
+ * fragmentはserverへ送られないが、URLに残るとタブの履歴や共有から漏れ得るため、読んだらアドレスバーとタブの
+ * 履歴のentryから消す（browserの閲覧履歴には残り得るが、tokenは1回だけ使え、期限がある）。
  * tokenは画面に出さず、利用者の操作でだけserverへ送る（メールのscannerがリンクを開いただけで
  * 確定しないように。TASK-007 Plan §7-4）。
  */

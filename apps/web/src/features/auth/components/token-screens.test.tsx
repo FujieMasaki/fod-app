@@ -107,12 +107,28 @@ describe("ConfirmationScreen", () => {
     expect(sentBody(requests, "POST /api/v1/confirmation")).toEqual({ email: "user@example.com" });
   });
 
-  it("tokenがなければ再送の画面にする", async () => {
+  it("tokenがなければ理由を示して再送の画面にする", async () => {
     mockApi({});
     openLink("/confirmation");
     renderScreen(<ConfirmationScreen />);
 
     expect(await screen.findByRole("button", { name: "確認のメールを送る" })).toBeInTheDocument();
+    expect(screen.getByText(/リンクが正しくありません/)).toBeInTheDocument();
+  });
+
+  it("契約の上限（256文字）までのtokenは送り、超えるtokenは使わない", async () => {
+    const requests = mockApi({ "PATCH /api/v1/confirmation": { status: 204 } });
+    openLink("/confirmation", "a".repeat(256));
+    const { unmount } = renderScreen(<ConfirmationScreen />);
+    fireEvent.click(await screen.findByRole("button", { name: "メールアドレスを確認する" }));
+    await screen.findByText("メールアドレスを確認しました");
+    expect(sentBody(requests, "PATCH /api/v1/confirmation")).toEqual({ token: "a".repeat(256) });
+    unmount();
+
+    openLink("/confirmation", "a".repeat(257));
+    renderScreen(<ConfirmationScreen />);
+    expect(await screen.findByRole("button", { name: "確認のメールを送る" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "メールアドレスを確認する" })).not.toBeInTheDocument();
   });
 });
 

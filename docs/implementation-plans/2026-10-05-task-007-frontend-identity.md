@@ -399,8 +399,10 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 - **Googleから戻った直後**: ページの読み込み直しで前の利用者と比べられないため、遷移の前に切り替わりを通知して
   消しておく。
 - **open redirect**: `redirect`は許可した保護する画面のpathだけ。`return_to`もRailsが検証する（二重）。
-- **tokenの漏えい**: fragmentはserverへ送られないが、URLに残るとbrowserの履歴・共有で漏れ得るため、読んだら
-  消す。tokenを画面・ログに出さない。
+- **tokenの漏えい**: fragmentはserverへ送られないが、URLに残るとタブの履歴・共有で漏れ得るため、読んだら
+  アドレスバーとタブの履歴のentryから消す。browserの閲覧履歴には最初に開いたURLが残り得るが、tokenは1回だけ
+  使え、期限がある。tokenを画面・ログに出さない。同じ画面を開いたまま、hashだけ別のtokenに変えた場合は
+  読み直さない（まれな操作のため、後続で必要になれば対応する）。
 - **Tailwindの影響**: preflightを読み込まないので既存画面のresetは変わらない。themeの既定値を消すので、
   token外の色・余白のclassは生成されない。
 - **互換性**: 契約は変えない。Webが新しく読むのは既存の`Session`だけ。
