@@ -305,11 +305,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const withCsrf = useCallback(
     async <T,>(operation: (csrfToken: string) => Promise<T>, calledAs?: string | null): Promise<T> => {
+      // 401を受けたときに、始めたときの利用者と今の利用者を比べるために控える。
+      let startedAsRef: string | null | undefined = calledAs;
       try {
         const csrfToken = await currentCsrfToken();
         // 始めたときの利用者。再送の前に変わっていたら送らない（Aとして始めた操作をBの認証で送らないため）。
         // 呼び出し側がlogin・logoutを待つ前の利用者を渡したときは、それを使う。
         const startedAs = calledAs !== undefined ? calledAs : identityOf(queryClient.getQueryData<Session>(SESSION_QUERY_KEY));
+        startedAsRef = startedAs;
         try {
           return await operation(csrfToken);
         } catch (error) {
@@ -319,12 +322,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return await operation(fresh.csrf_token);
         }
       } catch (error) {
-        if (isProblem(error, "session_expired")) markEnded("expired");
-        else if (isProblem(error, "unauthenticated")) markEnded("session_lost");
+        if (isProblem(error, "session_expired", "unauthenticated")) {
+          // 前の利用者として送った通信の401で、既に切り替わった後の利用者を未認証にしない（取り直して確かめるだけにする）。
+          const stillSameUser =
+            startedAsRef === undefined ||
+            identityOf(queryClient.getQueryData<Session>(SESSION_QUERY_KEY)) === startedAsRef;
+          if (!stillSameUser) void refresh();
+          else markEnded(isProblem(error, "session_expired") ? "expired" : "session_lost");
+        }
         throw error;
       }
     },
-    [currentCsrfToken, markEnded, queryClient],
+    [currentCsrfToken, markEnded, queryClient, refresh],
   );
 
   // 後続の機能へ公開する入口。login・logoutの間は始めずに待ち、実行中のものはlogin・logoutが待てるよう数える。

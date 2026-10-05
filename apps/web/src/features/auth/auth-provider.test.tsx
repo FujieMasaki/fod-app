@@ -817,6 +817,51 @@ describe("後続の機能が使う入口", () => {
     expect(calls.filter((c) => c.key === "POST /api/v1/recording_attempts").map((c) => c.csrf)).toEqual(["csrf-A"]);
   });
 
+  it("前の利用者として送った通信の401で、切り替わった後の利用者を未認証にしない", async () => {
+    let releaseApi: (response: Response) => void = () => undefined;
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string) => {
+        if (path === "/api/v1/dots/a") {
+          return new Promise<Response>((resolve) => {
+            releaseApi = resolve;
+          });
+        }
+        getCount += 1;
+        return Response.json(getCount === 1 ? authenticated(USER_A, "t1").body : authenticated(USER_B, "t2").body);
+      }),
+    );
+    const { auth, onIdentityChange } = await renderAndSubscribe();
+
+    const pending = auth()
+      .request("/api/v1/dots/a", { method: "PATCH", body: {} })
+      .catch((e: unknown) => e);
+    // 応答が届く前に、画面へ戻ったときの取り直しでBに変わる
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(auth().user?.id).toBe(USER_B));
+
+    releaseApi(
+      new Response(JSON.stringify(problem(401, "unauthenticated").body), {
+        status: 401,
+        headers: { "Content-Type": "application/problem+json" },
+      }),
+    );
+    expect(isProblem(await pending, "unauthenticated")).toBe(true);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    // 切り替わりはA→Bの1回だけ（B→未認証→Bと揺れていない）
+    expect(onIdentityChange).toHaveBeenCalledTimes(1);
+    expect(auth().status).toBe("authenticated");
+    expect(auth().user?.id).toBe(USER_B);
+    expect(auth().endReason).toBeNull();
+  });
+
   it("Googleへ遷移する前に、前の利用者の個人データを消すよう通知する", async () => {
     mockApi({ "GET /api/v1/session": [anonymous("t1")] });
     const { auth, queryClient, onIdentityChange } = await renderAndSubscribe();
