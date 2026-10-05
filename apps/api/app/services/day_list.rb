@@ -5,7 +5,6 @@
 # 分断されない。
 class DayList
   DEFAULT_LIMIT = 30
-  LATEST_DOT_ID = Arel.sql("(array_agg(dots.id ORDER BY dots.started_at DESC, dots.id DESC))[1]")
 
   Item = Data.define(:date, :dot_count, :latest_dot_id)
   Page = Data.define(:items, :next_cursor)
@@ -17,7 +16,7 @@ class DayList
   end
 
   def call
-    rows = days.limit(@limit + 1).pluck(:date, Arel.sql("COUNT(*)"), LATEST_DOT_ID)
+    rows = days.limit(@limit + 1).pluck_day_summaries
     items = rows.first(@limit).map { |date, dot_count, latest_dot_id| Item.new(date:, dot_count:, latest_dot_id:) }
     next_cursor = HistoryCursor.for_day(items.last.date) if rows.size > @limit
     Page.new(items:, next_cursor:)
@@ -28,6 +27,6 @@ class DayList
   def days
     scope = @user.dots.kept
     scope = scope.where(date: ...HistoryCursor.after_day(@cursor)) if @cursor
-    scope.group(:date).order(date: :desc)
+    scope.by_day
   end
 end
