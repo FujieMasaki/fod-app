@@ -561,7 +561,7 @@ PR 3/3（#67）のCodexの最終チェックが5回続けてLGTMにならず、`
 | --- | --- |
 | `pnpm check`（ESLint・命名・契約のlint・生成した型の最新確認） | 通過 |
 | `pnpm type-check` | 通過（Zodの`Session`と契約の型の一致を含む） |
-| `pnpm test` | scripts 173件・web 336件、すべて通過 |
+| `pnpm test` | scripts 173件・web 341件、すべて通過 |
 | `pnpm --filter @focus-on-dot/web build` | 通過。生成したCSSにpreflightがなく、使ったutilityが`--fod-*` tokenを参照することを確認 |
 
 proxy越しの確認（Rails 3107・Vite 5207を起動し、`curl`でWebと同じrequestの形を送った）:
