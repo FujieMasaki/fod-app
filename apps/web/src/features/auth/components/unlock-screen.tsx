@@ -9,7 +9,7 @@ import { REOPEN_LINK_MESSAGE, useFragmentToken } from "../use-fragment-token";
 import { AuthScreen, FormMessage, TextLink } from "./auth-layout";
 
 const INVALID_MESSAGE =
-  "このリンクは使えません。使用済みか、正しくないリンクです。ロックは1時間で自動で解除されます。";
+  "このリンクは使えません。使用済みか、正しくないリンクです。直前に解除した場合は、そのままログインできます。ロックは1時間で自動でも解除されます。";
 
 /**
  * ロック解除メールのリンク（`/unlock#token=`）。解除してもloginはしないので、ログインへ案内する

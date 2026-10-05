@@ -18,10 +18,11 @@ const TOKEN_MESSAGES = {
 // 済んでいる（応答だけを失った）ことがある。
 const NOT_APPLIED_CODES = ["validation_failed", "token_expired", "rate_limited", "csrf_invalid"] as const;
 
-// 再設定が済んだか分からない失敗（応答を失った・serverのerror）。
+// 再設定が済んだか分からない失敗（応答を失った・serverのerror・失敗の応答の形が契約と合わない）。
 function outcomeUnknown(error: unknown): boolean {
   return (
-    error instanceof ApiError && (error.kind === "network" || error.kind === "http" || isProblem(error, "internal_error"))
+    error instanceof ApiError &&
+    (error.kind === "network" || error.kind === "http" || error.kind === "schema" || isProblem(error, "internal_error"))
   );
 }
 

@@ -663,6 +663,18 @@ describe("PasswordResetScreen", () => {
     await waitFor(() => expect(screen.getByText("status:anonymous")).toBeInTheDocument());
   });
 
+  it("失敗の応答の形が契約と合わないときも、済んでいる可能性があるためログインを先に示す", async () => {
+    mockApi({ "PATCH /api/v1/password": { status: 422, body: { type: "x", title: "x", status: 422, code: "unknown_code" } } });
+    openLink("/password/reset", "reset-token");
+    renderScreen(<PasswordResetScreen />);
+
+    fireEvent.change(await screen.findByLabelText("新しいパスワード"), { target: { value: "new-password-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "再設定する" }));
+
+    expect(await screen.findByText(/再設定できたか確かめられませんでした/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "ログインへ" })).toBeInTheDocument();
+  });
+
   it("送り直してtoken_invalidになったら、済んでいる可能性とログインへの導線を示す", async () => {
     mockApi({ "PATCH /api/v1/password": problem(422, "token_invalid") });
     openLink("/password/reset", "used-token");
@@ -729,6 +741,8 @@ describe("UnlockScreen", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "ロックを解除する" }));
 
-    expect(await screen.findByText(/1時間で自動で解除されます/)).toBeInTheDocument();
+    expect(await screen.findByText(/1時間で自動でも解除されます/)).toBeInTheDocument();
+    // 応答を失って送り直した場合も分かるよう、解除が済んでいればログインできることを示す
+    expect(screen.getByText(/直前に解除した場合は、そのままログインできます/)).toBeInTheDocument();
   });
 });
