@@ -305,7 +305,8 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 レビュー対象 18。
 
 レビュー観点の追記（`docs/code-review/frontend/README.md`・`security.md`）は、PR 2/3の判断（選択肢A）に合わせて、
-統合ブランチから分けた互いに依存しないサブのPRにする。
+別の関連PR（#71、`docs/task-007-extra-review-viewpoints`）にする。観点の文が`fod.session.v1`をやめた実装を
+前提にするため、統合ブランチからではなく、このPRのブランチの上に積み、このPRの後にマージする（Codexの指摘）。
 
 ## 11. Libraries / APIs
 
@@ -517,7 +518,7 @@ PR 2/3（#66）では、次の3回、止まる条件に当たった。経緯の�
   - 録音・整理の画面のguard（`startsOnEnter`）と、ログインの後にHomeへ戻すこと、終了の理由をmemoryで渡すことを
     足した（§7-4）。
   - 録音の後始末（許可を待っている間の停止・StrictModeの再実行）をPR 2/3で直した（§10）。
-  - レビュー観点の追記は、統合ブランチから分けた独立したPRにした（§10）。
+  - レビュー観点の追記は、このPRの上に積んだ関連PR（#71）にした（§10）。
 
 ### 検証結果
 
