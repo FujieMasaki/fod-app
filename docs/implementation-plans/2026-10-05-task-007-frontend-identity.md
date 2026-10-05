@@ -321,6 +321,10 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
   `useQuery`が持つ表示中のdataまでは消さないため、個人データのqueryは`status`で`enabled`を切るかguardでunmountする。
 - **通信のtimeout**: `apiRequest`はtimeoutもAbortSignalも持たない。応答が止まるとlogin・logoutの送信中の表示が
   解けない。保護APIを足すTASK-008以降で、`signal`を通すかを決める。
+- **featureをまたぐ依存**: `features/session`と`features/processing`が`features/auth`の`index.ts`（`useAuth`）に
+  依存する（逆向きはない）。認証の切り替わりを個人データのstateへ伝える境界（§7-3）を、各featureが購読・照合する
+  ためで、frontend.md §1の「公開する最小APIを`index.ts`からexportする」形に収める。`features/auth`が他の
+  featureの内部をimportする必要が出たら、境界の置き場所を見直す。
 - **`libs/api-client`の位置づけ**: frontend.md §1が保留する「通信専用directory・repository層」ではなく、
   `libs/`の定義（Browser APIの小さいラッパー。React stateを持たない）に収まるfetchの薄い包みとして置く。
   endpointごとの通信関数は各featureに置く方針を変えない。
