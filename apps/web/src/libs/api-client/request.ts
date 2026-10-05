@@ -84,11 +84,12 @@ export async function apiRequest<T>(
 /**
  * 同一originのpathだけを送る（CSRF tokenを外部へ送らないため）。文字列の先頭だけで判定すると、
  * `//host`・`/\\host`や、URLの解析で取り除かれるtab・改行を挟んだ形を見逃すため、URLとして解決してから
- * originを比べる。
+ * originを比べる。さらに、解決したpathnameが`//`で始まるものも拒否する（`/.//host`のように`.`・`..`を
+ * 挟んだ形はoriginが同じまま、pathnameが`//host`になり、fetchが別のhostとして解決し直すため）。
  */
 function sameOriginUrl(path: string): string {
   const url = new URL(path, window.location.origin);
-  if (!path.startsWith("/") || url.origin !== window.location.origin) {
+  if (!path.startsWith("/") || url.origin !== window.location.origin || url.pathname.startsWith("//")) {
     throw new TypeError("apiRequest: same-origin path only");
   }
   return `${url.pathname}${url.search}`;

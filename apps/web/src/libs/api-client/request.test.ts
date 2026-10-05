@@ -103,6 +103,10 @@ describe("apiRequest", () => {
     await expect(apiRequest("/\\evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
     await expect(apiRequest("/\t/evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
     await expect(apiRequest("/\n/evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    // `.`・`..`を挟むと、originは同じままpathnameが`//evil.example/x`になる
+    await expect(apiRequest("/.//evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    await expect(apiRequest("/..//evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    await expect(apiRequest("/a/..//evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
