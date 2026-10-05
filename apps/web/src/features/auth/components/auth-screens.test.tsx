@@ -135,7 +135,8 @@ describe("SignInScreen", () => {
   });
 
   it("成功したら戻り先へ進む", async () => {
-    const requests = mockApi({ "GET /api/v1/session": [anonymous], "POST /api/v1/session": [signedIn] });
+    // login後の取り直しは新しいCookieで送られ、認証済みを返す
+    const requests = mockApi({ "GET /api/v1/session": [anonymous, signedIn], "POST /api/v1/session": [signedIn] });
     renderWithAuth(<SignInScreen redirect="/record" />);
     await waitFor(() => expect(screen.getByRole("button", { name: "ログイン" })).toBeEnabled());
 
