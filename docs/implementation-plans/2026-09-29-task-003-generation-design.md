@@ -127,15 +127,23 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
   - 直した箇所: `2026-09-21-task-001-identity-design.md` §34（「**現在は**東京を基本配置とするが」）と
     §45の表（見出しが「**現在の**採用内容」）、`2026-09-28-task-004-history-design.md`（「原則東京に
     置く**現在の**方針」）。いずれも単独で読むと現行方針を名乗るため。
-  - 触っていない箇所: 同Plan §40「公開MVPの採用決定（2026-09-24）」の表と §41。見出しに日付があり、
-    本文がCognito構成（その後Deviseへ変更済み）を前提にしているので当時の記録と読める。
+  - 触っていない箇所: 同Plan §40「公開MVPの採用決定（2026-09-24）」の表は**見出しに日付がある**ため、
+    §41「採用構成の具体化と安全境界」は**本文がCognito構成（§45でDevise + CookieStoreへ変更済み）を前提に
+    している**ため、どちらも当時の記録と読める（§41の見出しには日付が無いので、根拠は本文の側である）。
     `2026-09-28-task-002-data-lifecycle.md`の当時のarchitectureの引用も、**引用そのものなので触らない。**
 - `docs/tasks/TASK-003-generation-design.md`: 所在地方針の変更、案Cの保留、委託先の構成の再検討条件の
   担当（`product.md §5`が正本）。
 - `docs/tasks/TASK-009-backend-audio-generation.md`: model id選定の前提。
 - `docs/tasks/TASK-010-frontend-recording.md`: 送信先（国内/国外）を録音前の案内へ反映する条件。
+- `docs/tasks/TASK-015-privacy-security-verification.md`: **実際に呼んでいる推論経路・リージョンが
+  TASK-009の記録と一致し、案内の「国内か国外か」も実態と一致していることを公開前に突き合わせる**
+  検証条件を追加（2026-10-05にレビュー指摘で追加。所在地方針の検証の受け皿）。
 - `docs/tasks/TASK-017-breach-response-design.md`: 越境移転の規律を作業範囲と完了条件へ追加。
 - `docs/tasks/README.md`: TASK-017の要判断事項。
+
+同じ変更単位で行った**再発防止の仕組み化**（強調の崩れを検出するlint、CIでの常時実行、仕様・設計文書の
+レビュー入口）は、設計判断が別なので
+[2026-10-05-markdown-emphasis-lint.md](2026-10-05-markdown-emphasis-lint.md)へ分けて記録した。
 
 ## 7. Proposed Approach（採用した方針）
 
@@ -812,7 +820,7 @@ pollingは永遠に`uploading`を返し、退会は「進行中の処理があ�
 - watchdogが、最終進捗時刻から一定時間更新のない`uploading`を検知し、`HeadObject`で判定する。
   - **objectが無い** → `upload_failed`へ。
   - **objectが完成していて、まだenqueueしていない** → `accepted`へ進めてenqueueする。
-  - **世代が合わない、または利用者が退会中** → objectを削除して**`cancel_requested`へ**（そこから`cleanup_pending`へ進む）。状態表を飛ばして直接`cleanup_pending`にしない。
+  - **世代が合わない、または利用者が退会中** → objectを削除して **`cancel_requested`へ**（そこから`cleanup_pending`へ進む）。状態表を飛ばして直接`cleanup_pending`にしない。
 - **再uploadを許すのは、旧leaseを失効させて新しい実行権を取った要求だけ。**「既存の記録が
   あればbodyを受け取らない」は、**生きているuploadと放置されたuploadを区別してから**適用する。
   区別せずに再uploadを許すと、元のrequestと再requestが同じkeyへ並行して書く。
@@ -1179,7 +1187,7 @@ TASK-002 Plan §20は「退会の受理以降は新規の保存・再試行・�
 **終端後にどちらへ進むかは、状態で決める**。同じ`transcribing`から「生成へ進む」と「削除する」の
 両方へ分岐させない（3巡目のレビュー指摘3）。
 
-- 退会・期限到来・明示削除を受理した時点で、記録を**`cancel_requested`**にする。
+- 退会・期限到来・明示削除を受理した時点で、記録を **`cancel_requested`** にする。
   非終端jobはこの状態のまま終端を待つ。
 - **Transcribeが終端したら、Bedrockへ送る前に入口の共通条件をもう一度通す**
   （利用者の行のlock・`active`・世代・期限・現在の状態）。
@@ -1282,7 +1290,7 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
 | 32 | **cleanupが繰り返し失敗する** | `succeeded_cleanup_pending`または`cleanup_pending`に留まる | **終端にしない**。cleanupの認可条件（§20の5契機）で何度でも入れる。期限到来・退会・Dotの完全削除による場合は`active`も期限内も要求しない（4巡目のレビュー指摘1）。残存を検知して運用で拾う |
 | 33 | **退会・期限到来でcleanupが入口を通る** | 利用者は`active`でなく、期限も過ぎている | **通る**。cleanupの認可条件はretryと別で（§20の5契機の表）、`active`と期限内を要求しない。ここを共通にすると`cleanup_pending`から抜け出せない |
 | 35 | **`succeeded_cleanup_pending`のままDotの完全削除・退会を受理する** | Dotは既に消える／消えた。記録はcleanup待ち | **T22で`cancel_requested`へ移す（T17の自己遷移より優先）**。進行中のcleanupの実行があっても、最終的にcancel側の後片付けへ収束させる。ACKを待たずに文字起こし結果とjobも削除へ回す。pollingは以後、全文を返さない（§27の「返さない条件」） |
-| 34 | **`upload_failed`から再uploadする** | 古い実行権が失効している | 新しい実行権を発行して**`uploading`へ戻す**。旧leaseで始まったPUTが後から完成し得るため、**keyを試行番号ごとに分け、記録が持つ有効なkey以外を残存として回収する** |
+| 34 | **`upload_failed`から再uploadする** | 古い実行権が失効している | 新しい実行権を発行して **`uploading`へ戻す**。旧leaseで始まったPUTが後から完成し得るため、**keyを試行番号ごとに分け、記録が持つ有効なkey以外を残存として回収する** |
 | 10 | 同じ冪等性keyで再送 | `dots`のunique制約で衝突する | **2件目のDotを作らず、既存のDotを返す** |
 | 11 | cleanup完了後にDotを完全削除し、同じ処理IDで再送する | `dots`にもcleanup済みの記録にも無いため、**新しい録音として受理される** | これは穴ではない。**cleanupが終わるまで記録が残る**（§20）ので、消し残した音声がある間は記録も残り、unique制約が効く。**旧objectが残ったまま新しいDotが作られる経路は無い**（3巡目のレビュー指摘6で訂正。2巡目の記述は「成功時に記録を即削除する」前提だった） |
 | 31 | **ACKの処理後にresponseが届かない／ACKが重複・並行して届く／fallbackのcleanup後に遅れて届く** | 対象が既に無い場合がある | **所有者を確認したうえで、冪等に成功として扱う**。object・job・記録のいずれが無くても失敗にしない。ACK自体は保存しない（§27） |

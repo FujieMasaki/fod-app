@@ -100,7 +100,7 @@ User、認証、Dot、音声、AI処理のプロダクトAPIは未実装です�
 | [`docs/dot-history.md`](docs/dot-history.md) | 複数Dotの履歴体験と時間軸の検証候補 |
 | [`docs/architecture.md`](docs/architecture.md) | 現在の構成と継続する設計判断 |
 | [`docs/development/`](docs/development/) | frontend / backend実装時の判断基準 |
-| [`docs/code-review/`](docs/code-review/) | frontend / backendレビューの確認・報告方法、Codexの最終チェック |
+| [`docs/code-review/`](docs/code-review/) | frontend / backend / 仕様・設計文書のレビューの確認・報告方法、Codexの最終チェック |
 | [`docs/implementation-plans/`](docs/implementation-plans/) | 変更単位の判断と検証履歴 |
 
 AI作業時の必読順と更新ルールは[`AGENTS.md`](AGENTS.md)を参照してください。
