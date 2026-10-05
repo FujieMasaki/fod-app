@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
 
 import { AuthProvider, useAuth } from "../auth-provider";
@@ -92,6 +92,9 @@ function fillSignIn(password = "password123") {
 }
 
 afterEach(() => {
+  focusManager.setFocused(undefined);
+  onlineManager.setOnline(true);
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   locationMock.pathname = "/record";
 });
@@ -560,7 +563,58 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(mounts).toBe(1);
     expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
-    focusManager.setFocused(undefined);
+  });
+
+  it("入るときの確かめ直しが失敗したら、後の取り直しで戻っても中身を出さずHomeへ移る", async () => {
+    let getCount = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        getCount += 1;
+        // 1回目（起動）は認証済み、2回目（入るときの確かめ直し）は失敗、3回目以降（focus）は認証済み
+        if (getCount === 2) throw new TypeError("Failed to fetch");
+        return Response.json(signedIn.body);
+      }),
+    );
+    renderWithAuth(
+      <Toggle>
+        <RequireAuth startsOnEnter>録音画面</RequireAuth>
+      </Toggle>,
+    );
+    await waitFor(() => expect(getCount).toBe(1));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    fireEvent.click(screen.getByRole("button", { name: "enter" }));
+    expect(await screen.findByText("navigate:/")).toBeInTheDocument();
+
+    act(() => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+    });
+    await waitFor(() => expect(getCount).toBeGreaterThanOrEqual(3));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
+  });
+
+  it("入るときの確かめ直しが終わらなければ（offline）、待ちきれずにHomeへ移り、回線が戻っても中身を出さない", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mockApi({ "GET /api/v1/session": [signedIn] });
+    renderWithAuth(
+      <Toggle>
+        <RequireAuth startsOnEnter>録音画面</RequireAuth>
+      </Toggle>,
+    );
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+    await act(() => vi.advanceTimersByTimeAsync(0));
+
+    act(() => onlineManager.setOnline(false));
+    fireEvent.click(screen.getByRole("button", { name: "enter" }));
+    await act(() => vi.advanceTimersByTimeAsync(10_500));
+    expect(screen.getByText("navigate:/")).toBeInTheDocument();
+
+    act(() => onlineManager.setOnline(true));
+    await act(() => vi.advanceTimersByTimeAsync(100));
+    expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
   });
 
   it("確かめ直して認証済みなら中身を出す", async () => {
