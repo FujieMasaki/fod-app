@@ -2,6 +2,7 @@
 # codeとHTTP statusの対応は`contracts/README.md` §5の表。
 class ProblemDetails
   STATUSES = {
+    cursor_invalid: 400,
     unauthenticated: 401,
     session_expired: 401,
     invalid_credentials: 401,
@@ -18,6 +19,7 @@ class ProblemDetails
   }.freeze
 
   TITLES = {
+    cursor_invalid: "続きを取得できませんでした",
     unauthenticated: "ログインが必要です",
     session_expired: "ログインの有効期限が切れました",
     invalid_credentials: "メールアドレスまたはパスワードが違います",
