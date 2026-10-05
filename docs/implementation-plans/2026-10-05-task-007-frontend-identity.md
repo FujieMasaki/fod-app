@@ -64,8 +64,9 @@ TASK-006で実装したRailsの認証（Devise + OmniAuth Google + CookieStore�
 
 - 退会の画面と状況画面（TASK-014）。`account_status=deletion_in_progress`のときは、保護する画面の代わりに
   「退会の手続き中」であることだけを示す。Railsの退会（TASK-013）も未実装で、現状は常に`active`。
-- `fod.session.v1`の読み取りをやめる・起動時に消す変更と、Dot・文字起こしの端末保持の整理（TASK-014）。
-  本タスクは認証の終了・切り替わりで`SessionProvider`の`reset()`を呼ぶところまで。
+- Dot・文字起こしの端末保持の整理（TASK-014）。`fod.session.v1`の読み取りをやめて起動時に消す変更
+  （journaling §2で決定済み）は、当初TASK-014に回していたが、本タスクで行う（§13「起動時に残っていた
+  ジャーナリング状態」。Codexの最終チェックで、別の利用者のDotが復元されることを再現されたため）。
 - 録音画面に留まったままの再ログインと、memory内の音声の再送（TASK-010 / 011）。現在の録音は音声を
   後続へ渡さないため、失うデータはない。
 - Google専用の利用者の再認証（`intent=reauthenticate`。使うのは退会のTASK-014）。
@@ -142,7 +143,7 @@ TASK-006で実装したRailsの認証（Devise + OmniAuth Google + CookieStore�
   - logoutの開始とGoogleへの遷移の前にも通知する。
 - 通知を受けたら次を行う。
   - TanStack Queryの`auth`以外のqueryを取り消して消す（前の利用者のresponseを再表示しない）。
-  - `SessionProvider`が`reset()`する（録音時間と現在のDot、`fod.session.v1`を消す）。
+  - `SessionProvider`が`reset()`する（録音時間と現在のDotを消す）。
   - 購読は`useAuth().subscribeIdentityChange(listener)`で公開する。TASK-014で端末の個人データ
     （`sessionStorage`の文字起こしなど）を足すときは、ここへ購読を足す。
 - 通知はreact stateではなく購読の関数にする。切り替わりの瞬間に1回だけ実行したい処理で、表示のための
@@ -194,7 +195,7 @@ TASK-006で実装したRailsの認証（Devise + OmniAuth Google + CookieStore�
   → 状態（checking / unknown / anonymous / authenticated / deletion_in_progress）と csrf_token
   → 利用者が前回と違えば「切り替わり」を通知
        → Query cache（auth以外）を取り消して消す
-       → SessionProvider.reset()（録音時間・現在のDot・fod.session.v1）
+       → SessionProvider.reset()（録音時間・現在のDot）
   → RequireAuth: 保護する画面を表示 / ログインへ置き換え遷移
 
 ログイン画面 → POST /api/v1/session（X-CSRF-Token）
@@ -233,12 +234,13 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 | `apps/web/src/features/auth/auth-provider.test.tsx` | 新規 | 状態遷移・再送・切り替わり |
 | `apps/web/src/features/auth/index.ts` | 新規 | 公開API |
 | `apps/web/src/providers.tsx` | 変更 | `AuthProvider`の配置 |
-| `apps/web/src/features/session/session-context.tsx` | 変更 | 切り替わりで`reset()` |
-| `apps/web/src/features/session/session-context.test.tsx` | 新規 | 切り替わりで消えること |
+| `apps/web/src/features/session/session-context.tsx` | 変更 | 切り替わりで`reset()`。`fod.session.v1`の復元をやめ起動時に消す |
+| `apps/web/src/features/session/session-context.test.tsx` | 新規 | 切り替わりで消えること、起動時に復元せず消すこと |
+| `apps/web/src/features/session/types.ts` | 変更 | `hydrated`の意味（復元をやめたため） |
 | `apps/web/src/features/processing/components/processing-indicator/processing-indicator.tsx` | 変更 | 整理の途中で利用者が切り替わったら結果を捨てる（Codexの指摘で追加） |
 | `apps/web/src/features/processing/components/processing-indicator/processing-indicator.test.tsx` | 変更 | `SessionProvider`が`AuthProvider`を要るため包む。切り替わりで結果を捨てること |
 
-レビュー対象 15。
+レビュー対象 16。
 
 ### PR 2/3: ログイン・登録・guard・アカウント画面（`feat/task-007-2-sign-in-screens`、base PR 1）
 
@@ -351,11 +353,13 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 - **待たされた操作の利用者の照合**: `request`・`withCsrf`は呼ばれたときの利用者を控え、login・logoutを待った後に
   変わっていれば送らずに`Error("identity_changed")`を投げる。下の「再送」の照合も、この呼ばれたときの利用者で行う。
   認証状態がまだ分からないうちに呼ばれたもの（公開の画面の登録など）は照合しない。
-- **起動時に残っているジャーナリング状態（TASK-014への申し送り）**: 初回の確定では切り替わりを通知しないため、
-  前の利用者の`fod.session.v1`が復元され得る。閉じている間に期限が切れた後に開いた場合は未認証なので、保護する
-  画面はguardで閉じる。一方、起動時から別の利用者が認証済みの場合（複数タブで、別のタブがGoogleから戻った直後など）
-  はguardを通るため、前の利用者のDotが表示され得る。TASK-014の対応候補は、保存する値に`user.id`を含め、復元の
-  ときに照合すること。
+- **起動時に残っていたジャーナリング状態**: 初回の確定では切り替わりを通知しないため、`fod.session.v1`を
+  復元すると、起動時から別の利用者が認証済みの場合（Aの保存値が残った端末でBとして開く、複数タブで別のタブが
+  Googleから戻った直後など）にguardを通って前の利用者のDotが表示された（Codexの最終チェックで再現）。
+  journaling §2の決定（実サービス化では`fod.session.v1`の読み取りをやめ、起動時に削除する）どおり、
+  `SessionProvider`は録音時間と現在のDotをmemoryにだけ持ち、起動時に`fod.session.v1`を消す。利用者の
+  照合のために利用者のidを端末へ保存する案は、storageへ新しい個人の値を足すため採らなかった。代わりに、
+  mockの体験で、再読み込みすると現在のDotが消える（Dotの正本はserverで、TASK-012の履歴から見直せるようになる）。
 - **CSRF tokenの取り直しの後の再送**: `csrf_invalid`の後に取り直したSessionの利用者が、始めたときと違えば
   再送しない（Aとして始めた操作をBの認証で送らないため。journaling §4の「別Userへ元の録音を送信しない」）。
   - logoutの後はserverに確かめ、まだ認証済みなら1回だけ送り直し、それでも残れば失敗にする。
