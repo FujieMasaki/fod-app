@@ -355,20 +355,24 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
   ゴミ箱へ移ったとき「件数はあるのに最新のDotが無い」responseを作り得る。1つのquery（`COUNT(*) OVER ()`）
   で取る処理をcontrollerに置くと読みにくいため、Serviceに分けた。
 - **serializerを4つにした**（`DotSerializer`・`DayListSerializer`・`TodaySerializer`・`DayDetailSerializer`）。
-  Zeitwerkは1ファイル1定数のため。PR 2/3のレビュー対象は15ファイルで、20以下に収まった。
+  Zeitwerkは1ファイル1定数のため。PR 2/3のレビュー対象は17ファイルで、20以下に収まった。
 - **`dots`の`user_id`・`generation_id`・`started_at`・`duration_seconds`を`attr_readonly`にし、`date`への
   代入を拒否した。**生成列は代入しても保存されず、手元の値だけが食い違うため。編集できる項目を
   modelでも`sentence`と`summary`に限る。
 - **PATCHでParamsWrapperを切った（`wrap_parameters false`）。**Railsの既定でJSONの項目が`dot`に包まれ、
   `request_parameters`に足されるため、許可しない項目として数えてしまう。JSONのobjectでないbody
   （配列・文字列）はRailsが`_json`に入れるので、`body`の`invalid_format`にした。
+- **日の詳細のcursorの時刻を、そのcursorの日（Asia/Tokyo）の中に限った。**形式だけを確かめていたため、
+  作り替えたcursorでPostgreSQLのtimestampの範囲を超える時刻を渡すと`500`になっていた（PR 2/3の
+  セルフレビューで発見）。範囲外は`400 cursor_invalid`にし、同じ種類の見落としを拾う観点を
+  `docs/code-review/backend/security.md` §2に足した。
 - `filter_parameters`は完全一致ではなく部分一致（`%i[sentence summary]`）にした。隠しすぎて困る項目が無いため。
 
 ### 検証結果
 
 実行したcommand（`apps/api`、DBは`FOD_DB_SUFFIX=_task_008`の専用DB）:
 
-- `bundle exec rspec` — 401 examples, 0 failures（追加: model 14、service 17、request 35）
+- `bundle exec rspec` — 409 examples, 0 failures（追加: model 18、service 20、request 36）
 - `bundle exec rubocop` — no offenses
 - `bundle exec brakeman -q` — No warnings found
 - `RAILS_ENV=test bin/rails db:drop db:create db:schema:load`の後に`dot_spec`・`days_spec`を実行し、
