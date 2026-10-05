@@ -119,10 +119,14 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
 - `docs/product.md`・`docs/journaling.md`: 所在地の記述を新しい方針へ揃えた。product.mdは§5へ
   「委託先の構成」の保留事項（案Cが保留になったことと再検討条件）も追加した。
 - `docs/tasks/TASK-001-identity-design.md`: 所在地の要約を正本への参照へ置き換えた。
-- `docs/implementation-plans/2026-09-21-task-001-identity-design.md` §34と
-  `docs/implementation-plans/2026-09-28-task-004-history-design.md`: **過去のPlanのうち「現在は〜」と
-  現行方針を名乗っていた註記だけを「当時」へ直した。**採用内容の表など当時の記録そのものは
-  AGENTS.mdのとおり触っていない。
+- 過去のPlanは、**「現在」を名乗っている箇所だけ**を直した。AGENTS.mdの「過去のPlanのCurrent Stateは
+  当時の記録であり、現在の状態へ書き換えない」に従い、**日付や旧構成（Cognito等）で当時の記録と分かる
+  箇所は触っていない。**
+  - 直した箇所: `2026-09-21-task-001-identity-design.md` §34（「**現在は**東京を基本配置とするが」）と
+    §45の表（見出しが「**現在の**採用内容」）、`2026-09-28-task-004-history-design.md`（「原則東京に
+    置く**現在の**方針」）。いずれも単独で読むと現行方針を名乗るため。
+  - 触っていない箇所: 同Plan §40「公開MVPの採用決定（2026-09-24）」の表と §41。見出しに日付があり、
+    本文がCognito構成（その後Deviseへ変更済み）を前提にしているので当時の記録と読める。
 - `docs/tasks/TASK-003-generation-design.md`: 所在地方針の変更、案Cの保留、委託先の構成の再検討条件の
   担当（`product.md §5`が正本）。
 - `docs/tasks/TASK-009-backend-audio-generation.md`: model id選定の前提。
