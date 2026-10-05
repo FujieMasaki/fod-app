@@ -2,8 +2,8 @@ import { useState } from "react";
 
 import { Button, Text } from "@/design-system";
 import { useAuth, type SessionUser } from "../auth-provider";
-import { errorMessage } from "../messages";
-import { AuthScreen, FormMessage } from "./auth-layout";
+import { errorMessage, needsReload } from "../messages";
+import { AuthScreen, FormMessage, ReloadNotice } from "./auth-layout";
 
 const METHOD_LABELS: Record<SessionUser["sign_in_methods"][number], string> = {
   password: "メールアドレスとパスワード",
@@ -65,11 +65,14 @@ export function AccountScreen() {
         <Text variant="small" tone="secondary">
           共有の端末では、使い終わったらログアウトしてください。ほかの端末のログインは、それぞれの期限まで続きます。
         </Text>
-        {error !== null && (
-          <FormMessage tone="error">
-            ログアウトできたか確かめられませんでした。{errorMessage(error)}
-          </FormMessage>
-        )}
+        {error !== null &&
+          (needsReload(error) ? (
+            <ReloadNotice />
+          ) : (
+            <FormMessage tone="error">
+              ログアウトできたか確かめられませんでした。{errorMessage(error)}
+            </FormMessage>
+          ))}
         <Button variant="secondary" fullWidth onClick={handleSignOut} disabled={signingOut}>
           ログアウト
         </Button>

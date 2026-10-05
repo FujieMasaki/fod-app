@@ -67,3 +67,8 @@
   --tracking-normal: var(--fod-tracking-normal);
   --tracking-wide: var(--fod-tracking-wide);
 }
+
+/* 入力欄に本文の書体を継承させる（preflightを読まないため、inputはbrowserの既定の書体になる）。 */
+@utility font-inherit {
+  font: inherit;
+}
