@@ -398,5 +398,8 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
 - Webからの実際の呼び出し: 画面（TASK-012）とWebの認証接続（TASK-007）が未実装のため。
 - 退会中の`409 account_deletion_in_progress`: 退会の状態を持つ列がまだ無い。TASK-013で退会を実装する
   ときに、本タスクのendpointへも適用する。
+- 編集とゴミ箱への移動・完全削除が同時に起きたときの扱い: PATCHは`kept`で探してから`update!`で書き、
+  その間の移動を確かめない。ゴミ箱・削除のendpointがまだ無いため今は起きない。TASK-013で、条件付きの
+  更新（`kept.where(id:)`の影響行数を見る）か行lockのどちらにするかを決めて足す。
 - 大量件数での実行計画の確認（`EXPLAIN`）: ローカルの少量のデータでは索引の選択が本番と変わり得るため、
   実データの規模が出てから確かめる。
