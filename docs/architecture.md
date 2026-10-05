@@ -18,8 +18,8 @@
   通知する。Session Providerはこの通知で録音時間と現在のDotを消す。
 - `apps/web/src/libs/api-client`がRails APIを同一originで呼ぶ入口で、失敗を`problem`・`network`・
   `schema`・`http`に分ける。開発ではViteのproxyが`/api`・`/auth`をRailsへ送る（Hostを書き換えない）。
-- Session ProviderはReact stateを画面間で共有し、録音時間と現在のDot sessionを
-  `fod.session.v1` というkeyでブラウザの `localStorage` に保存・復元する。
+- Session ProviderはReact stateを画面間で共有し、録音時間と現在のDot sessionをmemoryにだけ持つ。
+  以前に使っていた`localStorage`の`fod.session.v1`は、起動時に消す（2026-10-05にTASK-007で変更）。
 - Dot生成はTanStack Queryのmutationから呼び出す。`VITE_DOT_API_URL` が設定されている場合は
   `dot` endpointへPOSTし、設定されていない場合はローカルmockをZodで検証して返す。
 - 録音処理はブラウザのMediaDevices / MediaRecorder APIを利用する。
