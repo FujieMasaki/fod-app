@@ -142,6 +142,14 @@ describe("PasswordResetScreen", () => {
     expect(sentBody(requests, "PATCH /api/v1/password")).toEqual({ token: "reset-token", password: "new-password-1" });
   });
 
+  it("新しいパスワードの欄は、文字数をHTMLで制限しない（補助文字を含むパスワードを切り詰めない）", async () => {
+    mockApi({});
+    openLink("/password/reset", "reset-token");
+    renderScreen(<PasswordResetScreen />);
+
+    expect(await screen.findByLabelText("新しいパスワード")).not.toHaveAttribute("maxlength");
+  });
+
   it("passwordが短ければ項目に示す", async () => {
     mockApi({
       "PATCH /api/v1/password": {

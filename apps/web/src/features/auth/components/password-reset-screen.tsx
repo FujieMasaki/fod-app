@@ -73,7 +73,6 @@ export function PasswordResetScreen() {
           autoComplete="new-password"
           required
           minLength={8}
-          maxLength={128}
           hint="8文字以上（文字の種類は問いません）"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
