@@ -88,6 +88,7 @@ Dotを作る入口（音声の送信と生成）はTASK-009が作り、本タス
     前方一致と`NON_JSON_BODIES`の照合の両方に使う。`//api/...`が`422`になるrequest specを足す。
   - 選択肢: A: 修正案で直し、サブエージェントのレビューを続ける。B: ここで打ち切り、別のタスクで直す。
   - 推奨: A。直し方は決まっており、塞いだと書いた保証を成り立たせるため。
+  - **決定（2026-10-05、人間の判断）: A。**pathを正規化してから比べるようにし、レビューを続けた（§16の実装差異）。
 
 ## 6. References and Documents to Update
 
@@ -406,13 +407,16 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
   不正なUTF-8の値で本文を含む`BadRequest`がerrorのログに出ることを、JSONのparserの修正後の
   サブエージェントのレビューで発見し、再現した。認証のendpoint（TASK-006）も同時に直る。
   `DebugExceptions`の内側に置き、Railsの`BadRequest`がerrorのログへ出る前に捕まえる。
+  pathはrouterと同じ規則で正規化してから比べる（生のpathでは`//api/...`で迂回できることを、3回目の
+  サブエージェントのレビューで発見し、人間の判断で続けて直した）。paramsを解釈できない場合のfieldは、
+  pathの誤りも含むため`request`にした。
 - `filter_parameters`は完全一致ではなく部分一致（`%i[sentence summary]`）にした。隠しすぎて困る項目が無いため。
 
 ### 検証結果
 
 実行したcommand（`apps/api`、DBは`FOD_DB_SUFFIX=_task_008`の専用DB）:
 
-- `bundle exec rspec` — 414 examples, 0 failures（追加: model 18、service 20、request 41）
+- `bundle exec rspec` — 416 examples, 0 failures（追加: model 18、service 20、request 43）
 - `bundle exec rubocop` — no offenses
 - `bundle exec brakeman -q` — No warnings found
 - `RAILS_ENV=test bin/rails db:drop db:create db:schema:load`の後に`dot_spec`・`days_spec`を実行し、

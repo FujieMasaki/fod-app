@@ -75,14 +75,17 @@ Dotを作る入口・ゴミ箱と削除の操作・Webの接続・公開配信�
     する（`lib/middleware/api_request_guard.rb`）。formの不正なUTF-8から本文を含むmessageの
     `BadRequest`が起きるため。JSON以外を受け取るendpointを足すとき（TASK-009のmultipart）は、同ファイルの
     `NON_JSON_BODIES`へ足し、その解析で同じ経路が開かないか確かめる。
-  - paramsを解釈できない`ActionController::BadRequest`（queryの不正なUTF-8など）は`rescue_from`の外で
+  - paramsを解釈できない`ActionController::BadRequest`（path・queryの不正なUTF-8など）は`rescue_from`の外で
     起き、値を含むmessageがerrorのログに出るため、同じmiddlewareが`DebugExceptions`の内側で捕まえて
     `422`にする。
   - JSONの不正なUTF-8は解析の失敗にし、解析の失敗のログから生のbodyを外す
     （`config/initializers/json_request_body.rb`。非公開のmethodを置き換えるため、Railsを上げたときに
     前提が保たれているか確かめる）。
   - frameworkが自分でログへ書く経路（解析の失敗、例外のmessage、SQL）は`filter_parameters`で隠れるとは
-    限らない。個人データを受け取る変更では、debugのログを取り込むrequest spec・model specで本文が出ない
-    ことを確かめているか。
+    限らない。個人データを受け取る変更では、debugのログを取り込むrequest spec・model spec
+    （`spec/support/log_helpers.rb`の`captured_log`）で本文が出ないことを確かめているか。
+  - このmiddlewareはpathをrouterと同じ規則（`Journey::Router::Utils.normalize_path`）で正規化してから
+    比べる（§5の「frameworkと同じ正規化」）。`/api/`の判定を変えるときは、`//api/...`のような表記の
+    request specを保つ。
 - `apps/api/config/initializers/filter_parameter_logging.rb`は防御の補助であり、将来追加する音声・
   生成データの安全なログ運用を保証しない。
