@@ -22,10 +22,15 @@ export function createRecorder(): RecorderHandle {
   let startedAt = 0;
   let mode: RecorderMode = "silent";
   let running = false;
+  // 片付けた後か。マイクの許可を待っている間に画面を離れると、許可の後にstreamが開いたまま残るため確かめる。
+  let disposed = false;
+  // 許可を待っている間に止められたか（停止を押した・画面を離れた）。許可の後に録音を始めないために確かめる。
+  let cancelled = false;
 
   async function start(): Promise<RecorderMode> {
     startedAt = Date.now();
     running = true;
+    cancelled = false;
     chunks = [];
 
     const md = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
@@ -35,7 +40,13 @@ export function createRecorder(): RecorderHandle {
     }
 
     try {
-      stream = await md.getUserMedia({ audio: true });
+      const granted = await md.getUserMedia({ audio: true });
+      if (disposed || cancelled) {
+        granted.getTracks().forEach((track) => track.stop());
+        mode = "silent";
+        return mode;
+      }
+      stream = granted;
       const Ctx =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -82,6 +93,7 @@ export function createRecorder(): RecorderHandle {
 
   function stop(): Promise<{ blob: Blob | null; durationSec: number }> {
     running = false;
+    cancelled = true;
     const durationSec = Math.round((Date.now() - startedAt) / 1000);
 
     return new Promise((resolve) => {
@@ -109,6 +121,7 @@ export function createRecorder(): RecorderHandle {
   }
 
   function dispose() {
+    disposed = true;
     running = false;
     if (recorder && recorder.state !== "inactive") recorder.stop();
     recorder = null;

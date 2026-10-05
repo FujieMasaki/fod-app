@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Navigate } from "@tanstack/react-router";
 
 import { Button } from "@/design-system";
@@ -29,12 +29,21 @@ type SignInScreenProps = {
  * 自分専用端末向けで7日保たれ、共有端末では使用後にlogoutすることを示す（product.md §4「認証体験」）。
  */
 export function SignInScreen({ redirect, authError }: SignInScreenProps) {
-  const { status, endReason, signIn, withCsrf } = useAuth();
+  const { status, endReason, acknowledgeEndReason, refresh, signIn, withCsrf } = useAuth();
+  // 終了の理由は開いたときに1回だけ案内し、案内したら消す（古い案内が残り続けず、後の戻り先の判断も誤らないように）。
+  // 開いている間に新しく理由が入った（状態を確かめ直したら未認証だった、など）ときも、取り込んでから消す。
+  const [shownEndReason, setShownEndReason] = useState(endReason);
+  useEffect(() => {
+    if (endReason) setShownEndReason(endReason);
+    acknowledgeEndReason();
+  }, [endReason, acknowledgeEndReason]);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [resent, setResent] = useState(false);
+  // 確認メールの再送は、未確認と分かったときに送ったメールアドレスへ頼む（後で入力欄を書き換えても変わらない）。
+  const [submittedEmail, setSubmittedEmail] = useState("");
 
   // login済み（成功直後を含む）なら戻り先へ進む。
   if (status === "authenticated" || status === "deletion_in_progress") {
@@ -46,6 +55,7 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
     setSubmitting(true);
     setError(null);
     setResent(false);
+    setSubmittedEmail(email);
     try {
       await signIn({ email, password });
     } catch (caught) {
@@ -59,7 +69,7 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
   async function handleResend() {
     setSubmitting(true);
     try {
-      await withCsrf((csrfToken) => resendConfirmation(csrfToken, email));
+      await withCsrf((csrfToken) => resendConfirmation(csrfToken, submittedEmail));
       setResent(true);
       setError(null);
     } catch (caught) {
@@ -77,7 +87,18 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
       title="ログイン"
       lead="自分専用の端末向けです。ログインは7日間保たれます。共有の端末では、使い終わったらログアウトしてください。"
     >
-      {endReason && <FormMessage tone="info">{endReasonMessage(endReason)}</FormMessage>}
+      {shownEndReason && <FormMessage tone="info">{endReasonMessage(shownEndReason)}</FormMessage>}
+      {status === "unknown" && (
+        // logoutの失敗の後などに状態を確かめられないまま開いた場合。済んでいると思わせない（RequireAuthと同じ案内）。
+        <div className="flex flex-col gap-2">
+          <FormMessage tone="error">
+            ログインの状態を確かめられませんでした。ログアウトの途中だった場合は、まだログアウトできていない可能性があります。
+          </FormMessage>
+          <Button variant="ghost" onClick={() => void refresh()}>
+            状態を確かめ直す
+          </Button>
+        </div>
+      )}
       {authError && <FormMessage tone="error">{authErrorMessage(authError)}</FormMessage>}
 
       <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
@@ -98,7 +119,6 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
           name="password"
           autoComplete="current-password"
           required
-          maxLength={128}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           error={fields.password}
@@ -118,7 +138,7 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
         )}
         {resent && (
           <FormMessage tone="info">
-            確認のメールを送りました。届いたメールのリンクから確認してから、ログインしてください。
+            確認が済んでいない登録があれば、確認のメールを送ります。届いたメールのリンクから確認してから、ログインしてください。
           </FormMessage>
         )}
         <Button type="submit" fullWidth disabled={submitting || status === "checking"}>
@@ -126,7 +146,7 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
         </Button>
       </form>
 
-      <GoogleSignInForm returnTo={redirect} />
+      <GoogleSignInForm returnTo={redirect} disabled={submitting} />
 
       <div className="flex flex-col items-start gap-2">
         <TextLink to="/signup">はじめての方は新規登録</TextLink>

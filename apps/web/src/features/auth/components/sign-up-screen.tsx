@@ -38,7 +38,7 @@ export function SignUpScreen() {
       <AuthScreen title="メールを送りました">
         <FormMessage tone="info">
           入力したメールアドレス宛てに、手続きのメールを送りました。メールのリンクから確認を済ませてから、
-          ログインしてください。リンクの有効期限は24時間です。すでに登録済みの場合は、ログイン方法の案内が届きます。
+          ログインしてください。リンクはメールに書かれた期限まで使えます（最初に送ってから24時間で、送り直しても延びません）。すでに登録済みの場合は、ログイン方法の案内が届きます。
         </FormMessage>
         <TextLink to="/login">ログインへ</TextLink>
       </AuthScreen>
@@ -46,6 +46,10 @@ export function SignUpScreen() {
   }
 
   const fields = fieldErrors(error);
+  // 項目の横に出せない失敗（項目ごとでない失敗と、emailとpassword以外の項目）は、共通の文言で示す
+  const fieldNames = Object.keys(fields);
+  const showGeneralError =
+    error !== null && (fieldNames.length === 0 || fieldNames.some((field) => field !== "email" && field !== "password"));
 
   return (
     <AuthScreen title="新規登録" lead="登録したメールアドレスに確認のメールを送ります。">
@@ -68,7 +72,6 @@ export function SignUpScreen() {
           autoComplete="new-password"
           required
           minLength={8}
-          maxLength={128}
           hint="8文字以上（文字の種類は問いません）"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
@@ -77,7 +80,7 @@ export function SignUpScreen() {
         {needsReload(error) ? (
           <ReloadNotice />
         ) : (
-          error !== null && Object.keys(fields).length === 0 && <FormMessage tone="error">{errorMessage(error)}</FormMessage>
+          showGeneralError && <FormMessage tone="error">{errorMessage(error)}</FormMessage>
         )}
         <Button type="submit" fullWidth disabled={submitting}>
           登録する

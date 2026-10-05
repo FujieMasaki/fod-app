@@ -30,11 +30,14 @@ export function useRecorder(): UseRecorder {
   }, []);
 
   const start = useCallback(async () => {
+    recorderRef.current?.dispose();
     const recorder = createRecorder();
     recorderRef.current = recorder;
     setElapsedSec(0);
     setIsRecording(true);
     const nextMode = await recorder.start();
+    // 許可を待っている間に止めた・片付けた（StrictModeの再実行を含む）録音では、stateもtimerも動かさない。
+    if (recorderRef.current !== recorder) return;
     setMode(nextMode);
     clearTimer();
     intervalRef.current = setInterval(() => {

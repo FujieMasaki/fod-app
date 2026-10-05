@@ -49,7 +49,7 @@ function HomePage() {
 function RecordPage() {
   return (
     <ScreenLayout>
-      <RequireAuth>
+      <RequireAuth startsOnEnter>
         <RecordingStage />
       </RequireAuth>
     </ScreenLayout>
@@ -59,7 +59,7 @@ function RecordPage() {
 function ProcessingPage() {
   return (
     <ScreenLayout>
-      <RequireAuth>
+      <RequireAuth startsOnEnter>
         <ProcessingIndicator />
       </RequireAuth>
     </ScreenLayout>

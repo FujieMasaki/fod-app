@@ -37,15 +37,21 @@ export function isProblem(error: unknown, ...codes: Problem["code"][]): error is
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
-type RequestOptions<T> = {
+/** 送り方。成功時の本文を検証するschemaは、本文のない成功（202・204）では省く */
+export type ApiRequestOptions = {
   method?: Method;
   body?: unknown;
   csrfToken?: string;
-  /** 成功時の本文を検証するschema。本文のない成功（202・204）では省く */
-  schema?: z.ZodType<T>;
 };
 
-export async function apiRequest<T = undefined>(path: string, options: RequestOptions<T> = {}): Promise<T> {
+// schemaを渡したときだけ本文を返す（渡し忘れて`undefined`を別の型として受け取らないように）。
+export function apiRequest<T>(path: string, options: ApiRequestOptions & { schema: z.ZodType<T> }): Promise<T>;
+export function apiRequest(path: string, options?: ApiRequestOptions & { schema?: undefined }): Promise<void>;
+export async function apiRequest<T>(
+  path: string,
+  options: ApiRequestOptions & { schema?: z.ZodType<T> } = {},
+): Promise<T | void> {
+  const url = sameOriginUrl(path);
   const { method = "GET", body, csrfToken, schema } = options;
   const headers: Record<string, string> = { Accept: "application/json" };
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -53,12 +59,14 @@ export async function apiRequest<T = undefined>(path: string, options: RequestOp
 
   let response: Response;
   try {
-    response = await fetch(path, {
+    response = await fetch(url, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       credentials: "same-origin",
       cache: "no-store",
+      // APIはredirectしない。redirectに従うとCSRF tokenのheaderを別のoriginへ持ち越し得るため、失敗にする。
+      redirect: "error",
     });
   } catch {
     throw new ApiError("network");
@@ -66,11 +74,25 @@ export async function apiRequest<T = undefined>(path: string, options: RequestOp
 
   if (!response.ok) throw await toError(response);
 
-  if (!schema) return undefined as T;
+  if (!schema) return;
   const json = await readJson(response);
   const parsed = schema.safeParse(json);
   if (!parsed.success) throw new ApiError("schema", { status: response.status });
   return parsed.data;
+}
+
+/**
+ * 同一originのpathだけを送る（CSRF tokenを外部へ送らないため）。文字列の先頭だけで判定すると、
+ * `//host`・`/\\host`や、URLの解析で取り除かれるtab・改行を挟んだ形を見逃すため、URLとして解決してから
+ * originを比べる。さらに、解決したpathnameが`//`で始まるものも拒否する（`/.//host`のように`.`・`..`を
+ * 挟んだ形はoriginが同じまま、pathnameが`//host`になり、fetchが別のhostとして解決し直すため）。
+ */
+function sameOriginUrl(path: string): string {
+  const url = new URL(path, window.location.origin);
+  if (!path.startsWith("/") || url.origin !== window.location.origin || url.pathname.startsWith("//")) {
+    throw new TypeError("apiRequest: same-origin path only");
+  }
+  return `${url.pathname}${url.search}`;
 }
 
 async function toError(response: Response): Promise<ApiError> {

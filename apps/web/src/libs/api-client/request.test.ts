@@ -95,6 +95,21 @@ describe("apiRequest", () => {
     expect((error as ApiError).status).toBe(502);
   });
 
+  it("同一originのpath以外は送らない", async () => {
+    const fetchMock = mockFetch(new Response(null, { status: 204 }));
+
+    await expect(apiRequest("https://evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    await expect(apiRequest("//evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    await expect(apiRequest("/\\evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    await expect(apiRequest("/\t/evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    await expect(apiRequest("/\n/evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    // `.`・`..`を挟むと、originは同じままpathnameが`//evil.example/x`になる
+    await expect(apiRequest("/.//evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    await expect(apiRequest("/..//evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    await expect(apiRequest("/a/..//evil.example/x", { csrfToken: "t" })).rejects.toThrow(TypeError);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("届かなければnetworkにし、messageに応答の内容を入れない", async () => {
     mockFetch(new TypeError("Failed to fetch"));
 

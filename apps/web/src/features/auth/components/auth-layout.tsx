@@ -41,12 +41,13 @@ export function TextField({ label, error, hint, ...input }: TextFieldProps) {
       <label htmlFor={id} className="text-small leading-small text-ink-secondary">
         {label}
       </label>
+      {/* 呼び出し側の値で、label・説明・エラーとの関連付けと見た目を上書きさせない */}
       <input
+        {...input}
         id={id}
         aria-invalid={error ? true : undefined}
         aria-describedby={describedBy}
-        className="rounded-md border border-line bg-surface px-3 py-2 text-body leading-body text-ink focus-visible:outline-2 focus-visible:outline-brand aria-invalid:border-danger"
-        {...input}
+        className="font-inherit rounded-md border border-line bg-surface px-3 py-2 text-body leading-body text-ink focus-visible:outline-2 focus-visible:outline-brand aria-invalid:border-danger"
       />
       {hint && (
         <p id={`${id}-hint`} className="text-caption leading-caption text-ink-tertiary">

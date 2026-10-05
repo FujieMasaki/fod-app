@@ -64,8 +64,9 @@ TASK-006で実装したRailsの認証（Devise + OmniAuth Google + CookieStore�
 
 - 退会の画面と状況画面（TASK-014）。`account_status=deletion_in_progress`のときは、保護する画面の代わりに
   「退会の手続き中」であることだけを示す。Railsの退会（TASK-013）も未実装で、現状は常に`active`。
-- `fod.session.v1`の読み取りをやめる・起動時に消す変更と、Dot・文字起こしの端末保持の整理（TASK-014）。
-  本タスクは認証の終了・切り替わりで`SessionProvider`の`reset()`を呼ぶところまで。
+- Dot・文字起こしの端末保持の整理（TASK-014）。`fod.session.v1`の読み取りをやめて起動時に消す変更
+  （journaling §2で決定済み）は、当初TASK-014に回していたが、本タスクで行う（§13「起動時に残っていた
+  ジャーナリング状態」。Codexの最終チェックで、別の利用者のDotが復元されることを再現されたため）。
 - 録音画面に留まったままの再ログインと、memory内の音声の再送（TASK-010 / 011）。現在の録音は音声を
   後続へ渡さないため、失うデータはない。
 - Google専用の利用者の再認証（`intent=reauthenticate`。使うのは退会のTASK-014）。
@@ -91,6 +92,10 @@ TASK-006で実装したRailsの認証（Devise + OmniAuth Google + CookieStore�
   - product: §3の区分（Web接続を実装済みへ）
   - frontend.md: 保護APIの呼び方、認証の終了・切り替わりの購読、Tailwindの使い始め
   - design-system: 「既存実装との関係」（Tailwindを導入した範囲）
+  - code-review/frontend: security.md §6・README §3の`fod.session.v1`（保存・復元をやめたこと）と、Cookieの
+    書き直しの競合・切り替わりの照合のレビュー観点（再発防止）
+  - privacy: `fod.session.v1`を起動時に消すようにしたこと
+  - TASK-014: 完了条件のうち`fod.session.v1`の扱いを本タスクで済ませたこと
 
 ## 7. Proposed Approach
 
@@ -142,7 +147,7 @@ TASK-006で実装したRailsの認証（Devise + OmniAuth Google + CookieStore�
   - logoutの開始とGoogleへの遷移の前にも通知する。
 - 通知を受けたら次を行う。
   - TanStack Queryの`auth`以外のqueryを取り消して消す（前の利用者のresponseを再表示しない）。
-  - `SessionProvider`が`reset()`する（録音時間と現在のDot、`fod.session.v1`を消す）。
+  - `SessionProvider`が`reset()`する（録音時間と現在のDotを消す）。
   - 購読は`useAuth().subscribeIdentityChange(listener)`で公開する。TASK-014で端末の個人データ
     （`sessionStorage`の文字起こしなど）を足すときは、ここへ購読を足す。
 - 通知はreact stateではなく購読の関数にする。切り替わりの瞬間に1回だけ実行したい処理で、表示のための
@@ -194,7 +199,7 @@ TASK-006で実装したRailsの認証（Devise + OmniAuth Google + CookieStore�
   → 状態（checking / unknown / anonymous / authenticated / deletion_in_progress）と csrf_token
   → 利用者が前回と違えば「切り替わり」を通知
        → Query cache（auth以外）を取り消して消す
-       → SessionProvider.reset()（録音時間・現在のDot・fod.session.v1）
+       → SessionProvider.reset()（録音時間・現在のDot）
   → RequireAuth: 保護する画面を表示 / ログインへ置き換え遷移
 
 ログイン画面 → POST /api/v1/session（X-CSRF-Token）
@@ -233,11 +238,15 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 | `apps/web/src/features/auth/auth-provider.test.tsx` | 新規 | 状態遷移・再送・切り替わり |
 | `apps/web/src/features/auth/index.ts` | 新規 | 公開API |
 | `apps/web/src/providers.tsx` | 変更 | `AuthProvider`の配置 |
-| `apps/web/src/features/session/session-context.tsx` | 変更 | 切り替わりで`reset()` |
-| `apps/web/src/features/session/session-context.test.tsx` | 新規 | 切り替わりで消えること |
-| `apps/web/src/features/processing/components/processing-indicator/processing-indicator.test.tsx` | 変更 | `SessionProvider`が`AuthProvider`を要るため包む |
+| `apps/web/src/features/session/session-context.tsx` | 変更 | 切り替わりで`reset()`。`fod.session.v1`の復元をやめ起動時に消す |
+| `apps/web/src/features/session/session-context.test.tsx` | 新規 | 切り替わりで消えること、起動時に復元せず消すこと |
+| `apps/web/src/features/session/types.ts` | 変更 | `hydrated`の意味（復元をやめたため） |
+| `apps/web/src/features/processing/components/processing-indicator/processing-indicator.tsx` | 変更 | 整理の途中で利用者が切り替わったら結果を捨てる（Codexの指摘で追加） |
+| `apps/web/src/features/recording/components/recording-stage/recording-stage.tsx` | 変更 | 録音の途中で利用者が切り替わったら録音時間を残さない |
+| `apps/web/src/features/recording/components/recording-stage/recording-stage.test.tsx` | 新規 | 上の確認 |
+| `apps/web/src/features/processing/components/processing-indicator/processing-indicator.test.tsx` | 変更 | `SessionProvider`が`AuthProvider`を要るため包む。切り替わりで結果を捨てること |
 
-レビュー対象 14。
+レビュー対象 18。
 
 ### PR 2/3: ログイン・登録・guard・アカウント画面（`feat/task-007-2-sign-in-screens`、base PR 1）
 
@@ -298,7 +307,8 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 - **TanStack Routerの`beforeLoad`でguardする**: router contextへ認証状態を渡し、状態が変わるたびに
   `router.invalidate()`が要る。Componentで包む方が、状態の変化（期限切れ・別タブ）にそのまま追従できる。
 - **切り替わりをReactのstate（世代番号）で配る**: 受け取る側がeffectで差分を見ることになり、初回の確定と
-  区別しにくい。購読の関数にした（§7-3）。
+  区別しにくい。通知は購読の関数にした（§7-3）。世代番号（`identityEpoch`）は通知の手段としてではなく、
+  切り替わりの前に始めた処理の結果を捨てる照合のためだけに併せて公開する（§13）。
 - **確認・解除のリンクを開いたら自動で送る**: メールのscannerがリンクを開くだけで確定し得る（TASK-001 Plan
   §52）。ボタンの操作で送る。
 
@@ -306,6 +316,68 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 
 - **期限切れの見逃し**: `expires_at`のtimerは、端末のsleepなどで遅れ得る。画面へ戻ったときの再取得と、保護APIの
   `401`で補う。表示の期限は案内であり、判断はserverに従う。
+- **端末の時計のずれ**: 期限のtimerは端末の時計で決まる。時計が進んでいてserverがまだ認証済みと返したら、
+  30秒ごとに確かめ直す。期限切れ（`expired`）か別の終了（`session_lost`）かの判定も端末の時計を使うため、
+  ずれていると案内の文言だけが変わり得る（保護する画面を閉じる判断には影響しない）。
+- **logout中の再取得（後続への申し送り）**: logoutの開始でQuery cacheを消しても、mount中の`useQuery`は
+  DELETEが終わる前（Cookieが前の利用者のまま）に取り直し得る。今は個人データのqueryがないため影響はない。
+  TASK-008以降で保護APIのqueryを足すときは、`status`が`authenticated`のときだけ`enabled`にするなどで防ぐ。
+  切り替わりの前に始まった非同期処理（Dot生成のmutation、`request`のpromise）は止めない。終わった後に結果を
+  stateへ書き戻すと前の利用者のデータが残るため、`useAuth().identityEpoch`（切り替わりごとに増える番号）を
+  始めたときに控え、結果を保存・表示する前に比べて違えば捨てる。現在のDot生成（`ProcessingIndicator`）は
+  これで捨て、Homeへ戻す。録音時間（`RecordingStage`）も、録音を始めたときの番号と比べて違えば残さない。
+  TASK-010・011・014で足す処理も同じ照合をする。Mutation cacheも今は消していない。`removeQueries`はmount中の
+  `useQuery`が持つ表示中のdataまでは消さないため、個人データのqueryは`status`で`enabled`を切るかguardでunmountする。
+- **通信のtimeout**: `apiRequest`はtimeoutもAbortSignalも持たない。応答が止まるとlogin・logoutの送信中の表示が
+  解けない。保護APIを足すTASK-008以降で、`signal`を通すかを決める。
+- **featureをまたぐ依存**: `features/session`・`features/processing`・`features/recording`が`features/auth`の`index.ts`（`useAuth`）に
+  依存する（逆向きはない）。認証の切り替わりを個人データのstateへ伝える境界（§7-3）を、各featureが購読・照合する
+  ためで、frontend.md §1の「公開する最小APIを`index.ts`からexportする」形に収める。`features/auth`が他の
+  featureの内部をimportする必要が出たら、境界の置き場所を見直す。
+- **`libs/api-client`の位置づけ**: frontend.md §1が保留する「通信専用directory・repository層」ではなく、
+  `libs/`の定義（Browser APIの小さいラッパー。React stateを持たない）に収まるfetchの薄い包みとして置く。
+  endpointごとの通信関数は各featureに置く方針を変えない。
+- **Cookieの書き直しの競合**: RailsのCookieStoreは、`GET /api/v1/session`も保護APIも、どの応答でもCookieを
+  書き直す。login・logoutの前に送った通信の応答が後から届くと、Cookieが前の状態へ戻る（logoutが取り消される、
+  loginしたのに未認証になる）。そのため次のようにする。
+  - login・logoutの間は、取り直し（focus・再接続・期限のtimer）を始めない。`request`・`withCsrf`で新しく
+    始める通信は、login・logoutが終わるまで待たせる。
+  - login・logoutは、実行中の取り直しと`request`・`withCsrf`の応答を受け取ってから送る。重なって呼ばれたら
+    順に実行する。offlineで止まった通信を待ち続けないよう、10秒で待ちきれなければ送らずに失敗にする
+    （待ちきれなかった通信の応答が後から届くと、logoutの確認の後でもCookieを戻し得るため）。
+  - login・logoutの間に保護APIが`401`を返しても、取り直しはlogin・logoutの後に回す。公開している`refresh`も、
+    login・logoutの間に呼ばれたら終わってから取り直す。
+  - focus・再接続での取り直しを止める判定は、stateではなくrefでその場で行い、refはlogin・logoutを呼んだ
+    その場で立てる（次の描画やawaitの後に立てると、その間に始まった取り直しが待つ対象から漏れるため。Codexの
+    5回目の指摘）。
+  - 応答が返らない保護APIが残っていると、10秒待って失敗するため、そのたびにlogin・logoutが失敗する（再読み込み
+    まで続き得る）。TASK-011で時間のかかる処理を`request`に載せるときは、pollingに分けて1回の通信を短く保つか、
+    `signal`・timeoutを通す。
+- **取り直しの失敗**: 前に認証済みを得ていても、最後の取り直しが失敗したら`unknown`にし、保護する画面を閉じて
+  再試行を出す（未認証のcacheはそのまま）。画面へ戻ったときの通信の失敗でも録音画面が閉じるため、録音中の
+  扱いはTASK-010で決める。offline（TanStack Queryの既定の`networkMode: "online"`）では取り直しが始まらず、
+  起動時は`checking`のまま待つ。offlineの案内もTASK-010以降で扱う。
+- **待たされた操作の利用者の照合**: `request`・`withCsrf`は呼ばれたときの利用者を控え、login・logoutを待った後に
+  変わっていれば送らずに`Error("identity_changed")`を投げる。下の「再送」の照合も、この呼ばれたときの利用者で行う。
+  認証状態がまだ分からないうちに呼ばれたもの（公開の画面の登録など）は照合しない。
+- **起動時に残っていたジャーナリング状態**: 初回の確定では切り替わりを通知しないため、`fod.session.v1`を
+  復元すると、起動時から別の利用者が認証済みの場合（Aの保存値が残った端末でBとして開く、複数タブで別のタブが
+  Googleから戻った直後など）にguardを通って前の利用者のDotが表示された（Codexの最終チェックで再現）。
+  journaling §2の決定（実サービス化では`fod.session.v1`の読み取りをやめ、起動時に削除する）どおり、
+  `SessionProvider`は録音時間と現在のDotをmemoryにだけ持ち、起動時に`fod.session.v1`を消す。利用者の
+  照合のために利用者のidを端末へ保存する案は、storageへ新しい個人の値を足すため採らなかった。代わりに、
+  mockの体験で、再読み込みすると現在のDotが消える（Dotの正本はserverで、TASK-012の履歴から見直せるようになる）。
+- **CSRF tokenの取り直しの後の再送**: `csrf_invalid`の後に取り直したSessionの利用者が、始めたときと違えば
+  再送しない（Aとして始めた操作をBの認証で送らないため。journaling §4の「別Userへ元の録音を送信しない」）。
+  - logoutの後はserverに確かめ、まだ認証済みなら1回だけ送り直し、それでも残れば失敗にする。
+  - 別タブの通信と、`request`を通さない`fetch`は止められないため、完全には防げない（その場合も、logoutの
+    確認で失敗として示す）。後続の機能はRails APIを必ず`request`・`withCsrf`から呼ぶ（frontend.md §2）。
+- **切り替わりの通知の時機**: 個人データを消す通知は描画後のeffectで行うため、新しい利用者の状態で描画した
+  1回だけ前の利用者の値が残り得る。そのため`identityEpoch`は描画の中で（前回の利用者と比べて）増やし、新しい
+  利用者と同じcommitに入れる。`SessionProvider`は値を書いたときの番号と一緒に持ち、番号が違えば見せない。
+  Dot生成の結果も、始めたときの番号と比べて捨てる（Codexの最終チェックで、Bの認証とAのDotが同じcommitに
+  出ることを再現されたため）。個人データのqueryを足すTASK-008以降は、query keyに`user.id`か`identityEpoch`を
+  含める。
 - **logoutの失敗**: 個人データを外した後に失敗しても、ログイン画面へ進めない（別の利用者がloginして前の
   Cookieと混ざるのを防ぐ）。
 - **Googleから戻った直後**: ページの読み込み直しで前の利用者と比べられないため、遷移の前に切り替わりを通知して
@@ -332,6 +404,51 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 - Unit: `apiRequest`の失敗の区別、Sessionのexamples、文言の対応、`redirect`の検証。
 - Component: `AuthProvider`（状態・CSRFの再送・`401`・切り替わり・logoutの失敗）、`SessionProvider`の`reset`、
   `RequireAuth`、ログイン・アカウント・token画面。
+
+## 判断が必要な点（2026-10-05、PR 1/3の機械のレビューで停止）
+
+PR 1/3（#65）のサブエージェントのレビューが3回続けてLGTMにならず、`pr-review-cycle`の止まる条件
+（1回のサブエージェント段階で3回）に当たった。各回の指摘はすべて直した。
+
+| 回 | Medium | 対応 |
+| --- | --- | --- |
+| 1 | 端末の時計が進んでいると、期限の前に取り直した後に次の取り直しが予約されない | 30秒ごとに確かめ直す（testで再現・修正を確認） |
+| 2 | `apiRequest`の同一originの判定が、tab・改行を挟んだpathで外部URLになり得る（CSRF tokenの送り先） | URLとして解決したoriginで比べる |
+| 3 | login直前に始まったSessionの取り直しが、login成功のcacheを未認証で上書きし得る | loginの結果を置いた後に新しいCookieで取り直す（実行中の取り直しは結果を捨てて止まる）。初めに入れた`cancelQueries`は、取り消しの際に取り直し前の値へ非同期に戻し、置いた結果を消すことがあった（testが間欠的に失敗して判明） |
+
+各回のLowは直すか、§13へ申し送りとして書いた。指摘は回ごとに別の箇所で、同じ問題の繰り返しではない。
+
+- 選択肢A（推奨）: 3回目の修正を入れた状態で、サブエージェントのレビューをもう1段階（最大3回）続ける。
+- 選択肢B: PR 1/3の範囲（認証状態の扱い）を見直してから再開する。
+
+**決定（2026-10-05、人間）: 選択肢A。**サブエージェントのレビューを新しい段階として再開した。
+なお3回目の修正（取り直しを結果を捨てて止める）は、その後、取り消さずに応答を待つ方式へ変えた（取り消しても
+fetchの通信は止まらず、Cookieが前の状態へ戻るのを防げないため。Codexの4回目）。
+
+## 判断が必要な点（2026-10-05、PR 1/3のCodexの最終チェックで停止）
+
+PR 1/3のCodexの最終チェックが5回続けてLGTMにならず、`pr-review-cycle`の止まる条件（4〜7のループが5回）に
+当たった。各回の指摘はすべて直し、そのたびにサブエージェントのLGTMを得てからCodexへ戻した。
+
+| 回 | 指摘（重大度） | 対応 |
+| --- | --- | --- |
+| 1 | 待ちきれない通信があってもlogoutする（High）／csrfの再送で利用者が変わっても送る（High） | 10秒で待ちきれなければ送らない／利用者を照合して再送しない |
+| 2 | 取り直しの失敗で認証済みが残る（Medium）／login中の401で取り直しが先に送られる（Medium） | `unknown`にする／login・logoutの後に回す |
+| 3 | 切り替わりの後に前の利用者の生成結果が戻る（High）／公開の`refresh`が排他を迂回する（Medium） | `identityEpoch`で照合して捨てる／排他の後に回す |
+| 4 | 重なった取り直しの取り消しで、logoutが古い応答を待てない（High） | 取り消さずに共有する（`cancelRefetch: false`） |
+| 5 | login・logoutを呼んだ直後のfocusで、取り直しが待つ対象から漏れる（High） | refでその場で判定する（停止の記録の時点では修正のみ。その後、選択肢Aの決定を受けてレビューした） |
+
+指摘はすべて「CookieStoreがどの応答でもCookieを書き直す」ことから来る、通信の順序の競合（と、切り替わりの前の
+結果の扱い）で、回ごとに別の経路が見つかっている。同じ問題の繰り返しではないが、収束していない。
+
+- 選択肢A（推奨）: 5回目の修正をサブエージェントでレビューし、Codexの最終チェックをもう1段階（最大5回）続ける。
+- 選択肢B: 競合をWebの順序の制御だけで防ぐのをやめ、server側で根本から防ぐ（例: logoutでUserの世代番号を
+  上げ、古い世代のCookieを拒否する。TASK-001 Plan §54の「全端末logout」と同じ仕組み）。Backendの変更と契約の
+  判断が要るため、別タスクにしてPR 1/3は今の対策で進める。
+- 選択肢C: PR 1/3の範囲を見直してから再開する。
+
+**決定（2026-10-05、人間）: 選択肢A。**5回目の修正をサブエージェントでレビューし、Codexの最終チェックを
+新しい段階として再開した。
 
 ## 15. Definition of Done
 
