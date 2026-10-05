@@ -58,6 +58,8 @@ type AuthContextValue = {
   /** Googleのform POSTに入れるCSRF token。取得できていなければnull */
   csrfToken: string | null;
   endReason: EndReason | null;
+  /** 終了の理由を案内し終えたら呼ぶ（古い案内が残り続けず、次の戻り先の判断にも使われないように） */
+  acknowledgeEndReason: () => void;
   /** 認証状態を取り直す（login・logoutの間に呼ばれたら、終わってから取り直す） */
   refresh: () => Promise<void>;
   /**
@@ -372,6 +374,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (isProblem(error, "csrf_invalid") && current && !current.authenticated) return;
           throw error;
         }
+        // 確かめる取り直しで未認証になると、保護する画面はすぐにログインへ移る。その描画の時点で理由が
+        // logoutになっているよう、先に置く（失敗したら下のcatchで消す）。
+        setEndReason("signed_out");
         // serverで終わったことを確かめる。まだ認証済みなら1回だけ送り直し、それでも残れば失敗にする
         // （共有端末で、logoutしたつもりのCookieを残さないため。TASK-001 Plan §20）。
         if (!(await confirmSignedOut()).authenticated) return;
@@ -380,6 +385,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     } catch (error) {
       // 終わったと断定せず、login中のまま状態を確かめ直す。
+      setEndReason(null);
       void refresh();
       throw error;
     } finally {
@@ -388,6 +394,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setEndReason("signed_out");
   }, [notifyIdentityChange, queryClient, refresh, runExclusively, withCsrf]);
 
+  const acknowledgeEndReason = useCallback(() => setEndReason(null), []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -395,6 +403,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       expiresAt,
       csrfToken: session?.csrf_token ?? null,
       endReason,
+      acknowledgeEndReason,
       refresh,
       identityEpoch,
       withCsrf: trackedWithCsrf,
@@ -410,6 +419,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       expiresAt,
       session?.csrf_token,
       endReason,
+      acknowledgeEndReason,
       refresh,
       identityEpoch,
       trackedWithCsrf,
