@@ -135,6 +135,33 @@ describe("整理が終わると今日の一文へ進む", () => {
     expect(screen.getByText("no-dot")).toBeInTheDocument();
   });
 
+  it("整理に失敗した後に利用者が切り替わったら、再試行を出さずHomeへ戻る", async () => {
+    vi.stubEnv("VITE_DOT_API_URL", "http://api.test");
+    stubFetch(vi.fn(async () => ({ ok: false, json: async () => ({}) })));
+    let switchUser: () => void = () => undefined;
+    function SwitchProbe() {
+      switchUser = useAuth().prepareExternalSignIn;
+      return null;
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <SessionProvider>
+            <ProcessingIndicator />
+            <SwitchProbe />
+          </SessionProvider>
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("button", { name: "もう一度" });
+
+    act(() => switchUser());
+
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true }));
+    expect(screen.queryByRole("button", { name: "もう一度" })).not.toBeInTheDocument();
+  });
+
   it("整理の途中で利用者が切り替わったら、前の利用者の結果を保存・表示しない", async () => {
     vi.stubEnv("VITE_DOT_API_URL", "http://api.test");
     let releaseDot: (value: unknown) => void = () => undefined;
