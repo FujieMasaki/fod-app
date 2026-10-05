@@ -630,7 +630,7 @@ Auth0日本テナント、Render、Lightsailは今回採用しない。App Runne
 - ALB access logはcallback URLのcode等を記録し得るため、初期案では有効化せず、ALB metricsと機密を除外したRailsログを利用する。必要時は認証情報を保存しない経路・記録方法を先に設計する。Rails parameter filterだけでALB側のqueryまで消せると仮定しない。[ALB access logのrequest field](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html)
 - RDS暗号化、自動backup、保持期間の明示、復元試験、秘密情報のサーバー側管理、障害/容量/費用の監視は公開前の確認対象。backup保持・削除記録の再適用はTASK-002、認証・別User拒否はTASK-006/015で検証する。MFAを必須にしない方針をAWS運用管理accountの保護緩和に流用しない。
 
-日記内容、文字起こし、音声、AI入出力をIdP属性・認証メール・通常ログへ含めない。東京を基本配置とする方針は、外部AIやGoogle・メール事業者の処理まで国内であるという保証ではない。TASK-002/003で送信先・目的・保持・削除と利用者への説明を決め、国内限定保証のないことを無制限な送信の許可にしない。
+日記内容、文字起こし、音声、AI入出力をIdP属性・認証メール・通常ログへ含めない。東京を基本配置とする方針（当時。現行は`architecture.md`「データ所在地と費用」が正本）は、外部AIやGoogle・メール事業者の処理まで国内であるという保証ではない。TASK-002/003で送信先・目的・保持・削除と利用者への説明を決め、国内限定保証のないことを無制限な送信の許可にしない。
 
 ## 42. 基盤費の目標と見積もり・費用管理
 

@@ -31,7 +31,8 @@ tools: Read, Grep, Glob
    - `apps/api/`を含む: [`docs/code-review/backend/README.md`](../../docs/code-review/backend/README.md)と
      同じディレクトリの`security.md`
    - `docs/`配下の仕様・設計文書、`docs/tasks/`、`docs/implementation-plans/`を含む:
-     [`docs/code-review/documentation.md`](../../docs/code-review/documentation.md)
+     [`docs/code-review/documentation.md`](../../docs/code-review/documentation.md)と、
+     重大度・報告形式のために[`frontend/README.md`](../../docs/code-review/frontend/README.md) §2・§4
    - API契約（`contracts/`）、両方にまたがる変更、どちらにも当てはまらない変更（設定・CI・
      `.claude/`等）: frontendとbackendの両方
 3. `AGENTS.md`の「作業前に読む文書」の表に従い、関連する仕様・architecture・実装規約・Planを読む。
