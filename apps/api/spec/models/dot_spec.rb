@@ -143,6 +143,28 @@ RSpec.describe Dot do
       expect(described_class.count).to eq(2)
     end
 
+    it "with_total_countは、1件に絞る前の件数を各行に付ける" do
+      user = create(:user)
+      3.times { create(:dot, user:, started_at: Time.zone.parse("2026-09-28 0#{it}:00:00 UTC")) }
+
+      latest = user.dots.newest_first.with_total_count.first
+
+      expect([latest.total_count, latest]).to eq([3, user.dots.newest_first.first])
+    end
+
+    it "by_dayとpluck_day_summariesは、日ごとの件数と、newest_firstの先頭と同じDotのidを新しい日から返す" do
+      user = create(:user)
+      started_at = Time.zone.parse("2026-09-28 03:00:00 UTC")
+      same_time = Array.new(2) { create(:dot, user:, started_at:) }
+      older_day = create(:dot, user:, started_at: started_at - 1.day)
+
+      expect(user.dots.by_day.pluck_day_summaries).to eq(
+        [[Date.new(2026, 9, 28), 2, user.dots.on_date(Date.new(2026, 9, 28)).newest_first.first.id],
+         [Date.new(2026, 9, 27), 1, older_day.id]]
+      )
+      expect(same_time.map(&:id)).to include(user.dots.by_day.pluck_day_summaries.first.last)
+    end
+
     it "newest_firstはstarted_atの降順、同値ならidの降順" do
       started_at = Time.zone.parse("2026-09-28 03:00:00 UTC")
       same = Array.new(2) { create(:dot, started_at:) }

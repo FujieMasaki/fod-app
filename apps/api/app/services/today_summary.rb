@@ -11,8 +11,7 @@ class TodaySummary
   end
 
   def call
-    latest_dot = @user.dots.kept.on_date(@date).newest_first
-                      .select("dots.*", "COUNT(*) OVER () AS day_dot_count").first
-    Result.new(date: @date, dot_count: latest_dot ? latest_dot.day_dot_count : 0, latest_dot:)
+    latest_dot = @user.dots.kept.on_date(@date).newest_first.with_total_count.first
+    Result.new(date: @date, dot_count: latest_dot ? latest_dot.total_count : 0, latest_dot:)
   end
 end

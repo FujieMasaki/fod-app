@@ -10,6 +10,9 @@ class Dot < ApplicationRecord
   SENTENCE_MAX_LENGTH = 200
   SUMMARY_MAX_LENGTH = 2000
   DURATION_RANGE = (1..1800)
+  # 日ごとに集約した行の、件数と最新のDot（`newest_first`と同じ並び）のid
+  DAY_DOT_COUNT = Arel.sql("COUNT(*)")
+  DAY_LATEST_DOT_ID = Arel.sql("(array_agg(dots.id ORDER BY dots.started_at DESC, dots.id DESC))[1]")
 
   belongs_to :user
 
@@ -21,6 +24,14 @@ class Dot < ApplicationRecord
   scope :on_date, ->(date) { where(date:) }
   # 「最新」は`started_at`の降順、同値なら`id`の降順（契約のgetDay）
   scope :newest_first, -> { order(started_at: :desc, id: :desc) }
+  # 条件に合う行の総数を、各行の`total_count`に付けて返す。LIMITより前に数えるので、`first`で1件に
+  # 絞っても絞る前の件数が分かる（件数と最新のDotを1つのqueryで取り、両者を食い違わせない）。
+  scope :with_total_count, -> { select(arel_table[Arel.star], "COUNT(*) OVER () AS total_count") }
+  # 記録のある日を新しい順に、1日1行へまとめる（`pluck_day_summaries`で読む）。
+  scope :by_day, -> { group(:date).order(date: :desc) }
+
+  # `by_day`の行を[date, 件数, 最新のDotのid]の配列で返す。
+  def self.pluck_day_summaries = pluck(:date, DAY_DOT_COUNT, DAY_LATEST_DOT_ID)
 
   validates :generation_id, presence: true
   validates :started_at, presence: true
