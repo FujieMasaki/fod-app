@@ -28,14 +28,19 @@ class ApiRequestGuard
     request = Rack::Request.new(env)
     path = ActionDispatch::Journey::Router::Utils.normalize_path(request.path_info)
     return @app.call(env) unless path == API_PATH || path.start_with?("#{API_PATH}/")
+
+    guard(env, request, path)
+  end
+
+  private
+
+  def guard(env, request, path)
     return invalid_format("body") if body?(request) && !accepted_media_type?(request, path)
 
     @app.call(env)
   rescue ActionController::BadRequest
     invalid_format("request")
   end
-
-  private
 
   def body?(request)
     request.content_length.to_i.positive? || request.get_header("HTTP_TRANSFER_ENCODING").present?
