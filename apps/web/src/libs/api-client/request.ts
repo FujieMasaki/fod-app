@@ -65,6 +65,8 @@ export async function apiRequest<T>(
       body: body === undefined ? undefined : JSON.stringify(body),
       credentials: "same-origin",
       cache: "no-store",
+      // APIはredirectしない。redirectに従うとCSRF tokenのheaderを別のoriginへ持ち越し得るため、失敗にする。
+      redirect: "error",
     });
   } catch {
     throw new ApiError("network");
