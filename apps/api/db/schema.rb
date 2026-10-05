@@ -10,9 +10,27 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_02_000003) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_05_000001) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "dots", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.virtual "date", type: :date, as: "(((started_at AT TIME ZONE 'UTC'::text) AT TIME ZONE 'Asia/Tokyo'::text))::date", stored: true
+    t.integer "duration_seconds", null: false
+    t.uuid "generation_id", null: false
+    t.text "sentence", default: "", null: false
+    t.datetime "started_at", null: false
+    t.text "summary", default: "", null: false
+    t.datetime "trashed_at"
+    t.datetime "updated_at", null: false
+    t.uuid "user_id", null: false
+    t.index ["user_id", "date", "started_at", "id"], name: "index_dots_kept_by_day", where: "(trashed_at IS NULL)"
+    t.index ["user_id", "generation_id"], name: "index_dots_on_user_id_and_generation_id", unique: true
+    t.check_constraint "char_length(sentence) <= 200", name: "dots_sentence_length"
+    t.check_constraint "char_length(summary) <= 2000", name: "dots_summary_length"
+    t.check_constraint "duration_seconds >= 1 AND duration_seconds <= 1800", name: "dots_duration_seconds_range"
+  end
 
   create_table "rate_limit_counters", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.integer "count", default: 0, null: false
@@ -55,5 +73,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_02_000003) do
     t.index ["unlock_token"], name: "index_users_on_unlock_token", unique: true
   end
 
+  add_foreign_key "dots", "users", on_delete: :cascade
   add_foreign_key "user_identities", "users", on_delete: :cascade
 end

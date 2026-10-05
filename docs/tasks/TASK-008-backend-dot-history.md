@@ -7,7 +7,7 @@
 | 対象領域 | Backend |
 | 作業区分 | 実装 |
 | 優先度 | P1 |
-| 状態 | Blocked |
+| 状態 | In progress |
 
 ## 目的と作業範囲
 
@@ -28,7 +28,7 @@ serverをDotの正本とし、利用者ごとに複数Dotを永続保存してDa
 - TASK-005
 - TASK-006
 
-依存関係の上流にある設計判断・API契約が未確定のためBlocked。確定後は依存先の提供状況を確認して着手する。
+依存先はすべてDone（2026-10-05に確認して着手した）。
 
 ## 根拠となる仕様書と見出し
 
@@ -45,4 +45,4 @@ serverをDotの正本とし、利用者ごとに複数Dotを永続保存してDa
 
 ## 関連Implementation Plan
 
-未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+[2026-10-05-task-008-dot-history.md](../implementation-plans/2026-10-05-task-008-dot-history.md)
