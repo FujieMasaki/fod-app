@@ -4,33 +4,50 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const docsDir = path.join(rootDir, "docs");
+
+// 手で書いたmarkdownだけを見る。生成物・依存・作業用のディレクトリは入らない。
+const skipDirectories = new Set([
+  ".git",
+  "node_modules",
+  "worktrees",
+  "vendor",
+  "tmp",
+  "log",
+  "dist",
+  "build",
+  "coverage",
+]);
 
 // 日本語の本文で `**` の強調が壊れる形を機械的に止める。レビューでは見つけにくく、
 // GitHub上の表示を見るまで気づかない（PRのmarkdown差分は既定でrawで表示される）。
 //
-// 一番多い崩れは、句読点の直後に閉じの`**`を置くことである。
-//
 //     **強調。**続き   → `**`がそのまま本文に出る
 //     **強調**。続き   → 正しく<strong>になる
 //     **強調。** 続き  → 正しく<strong>になる（閉じの直後が空白）
+//     は**「強調」**だ → `**`がそのまま本文に出る（開き側も同じ規則で壊れる）
 //
-// CommonMarkのright-flankingは「直前が空白でない、かつ（直前が句読点でない、または
-// 直前が句読点で直後が空白か句読点）」なので、`。**続` は閉じ側として使えない。
-// `**`の数が偶数でも壊れるため、数を数えるだけでは検出できない。
-// そこでblockごとにdelimiterの対応を取り、open/closeに使えるかをflanking規則で判定する
+// CommonMarkのflankingは「閉じ側は直前が空白でない、かつ（直前が句読点でない、または直後が
+// 空白か句読点）」で、開き側はその鏡である。したがって`。**続`は閉じ側に、`は**「`は開き側に
+// 使えない。`**`の数が偶数でも壊れるため、数を数えるだけでは検出できない。
+// blockごとにdelimiterの対応を取り、open/closeに使えるかをflanking規則で判定する
 // （GitHubの`/markdown` APIで実際の描画を確認した上での実装）。
 //
-// `--fix`を渡すと、閉じ側に使えない`**`とその直前の句読点を入れ替えて直す。
-// 入れ替えは長さを変えないので位置がずれず、`*`を除いた本文も変わらない。
+// `--fix`を渡すと、崩れている`**`と隣の句読点を入れ替えて直す。入れ替えは長さを変えないので
+// 位置がずれず、`*`を除いた本文も変わらない。
+//
+// 既知の制限（いずれも現状の文書では実害が無いため、検出漏れとして受け入れている）:
+//   - 2連backtick以上のコードスパン（``code``）は中身を除去しない
+//   - 4空白インデントのコードblockは本文として解析する
+//   - fenceは``` と ~~~ を区別せずトグルする
 
-// CommonMarkの「Unicode punctuation character」に相当。
-const punctuation = /\p{P}/u;
+// CommonMarkの「punctuation character」はASCII punctuationとUnicodeのP*である。
+// `\p{P}`に入らないASCII punctuation（`$ + < = > ^ ` | ~`）を足す。
+const punctuation = /[\p{P}$+<=>^`|~]/u;
 
-// `**`と入れ替えても他の記法を壊さない文字だけを`--fix`の対象にする。
-// `[`・`` ` ``・`*`はリンク・コードスパン・強調の境界なので、入れ替えると構文が変わる。
-// 半角の括弧も除く（`](url)`の一部になり得る）。
-const swappable = /^[、。，．・：；？！（）「」『』〔〕【】〈〉《》〜…―§]$/u;
+// `**`と入れ替えても読み方が変わらない文字だけを`--fix`の対象にする。
+// 対になる括弧・鉤括弧は入れない。片方だけを強調の外へ出すと範囲が割れて読みにくくなるため、
+// 人に返す。リンクとコードスパンの境界（`[` `` ` ``）も、入れ替えると構文が変わるので入れない。
+const swappable = /^[、。，．・：；？！…―〜§]$/u;
 
 function isWhitespace(character) {
   return character === undefined || /\s/u.test(character);
@@ -51,7 +68,7 @@ export function flanking(previousCharacter, nextCharacter) {
   return { canOpen: left, canClose: right };
 }
 
-// コードスパンの中身は数えたくないが、消すと位置がずれて元の行の列が引けなくなる。
+// コードスパンの中身は見たくないが、消すと位置がずれて元の行の列が引けなくなる。
 // 同じ長さのplaceholderへ置き換える（前後の`**`も隣接しない）。
 export function stripInlineCode(line) {
   return line.replace(/`[^`]*`/g, (match) => "x".repeat(match.length));
@@ -76,14 +93,14 @@ function makeBlock() {
   const spans = [];
   return {
     text: "",
-    push(content, lineNumber) {
-      spans.push({ start: this.text.length, lineNumber });
+    push(content, lineNumber, columnOffset = 0) {
+      spans.push({ start: this.text.length, lineNumber, columnOffset });
       this.text += content + "\n";
     },
     locate(index) {
       let found = spans[0];
       for (const span of spans) if (span.start <= index) found = span;
-      return { line: found.lineNumber, column: index - found.start };
+      return { line: found.lineNumber, column: index - found.start + found.columnOffset };
     },
   };
 }
@@ -171,8 +188,21 @@ export function analyzeEmphasis(source, relativePath) {
       flush();
       return;
     }
-    // 表の行と見出しは1行で閉じる必要がある。
-    if (isTableRow(line) || isHeading(line)) {
+    // 表はcellごとに閉じる必要がある（cellをまたぐ強調は成立しない）。見出しは1行で閉じる。
+    if (isTableRow(line)) {
+      flush();
+      let offset = 0;
+      for (const cell of line.split("|")) {
+        if (cell.trim() !== "") {
+          block = makeBlock();
+          block.push(cell, lineNumber, offset);
+          flush();
+        }
+        offset += cell.length + 1;
+      }
+      return;
+    }
+    if (isHeading(line)) {
       flush();
       block = makeBlock();
       block.push(line, lineNumber);
@@ -192,20 +222,44 @@ export function findEmphasisErrors(source, relativePath) {
   return analyzeEmphasis(source, relativePath).errors;
 }
 
-// 句読点と`**`を入れ替える。長さが変わらないので、同じ行の複数箇所でも位置がずれない。
-// `left`は`**`を直前の句読点の前へ、`right`は直後の句読点の後ろへ動かす。
+// 1つのswapが書き換える範囲。`right`は`**`と直後の1文字、`left`は`**`と直前の1文字。
+function swapRange(swap) {
+  return swap.direction === "right" ? [swap.column, swap.column + 2] : [swap.column - 1, swap.column + 1];
+}
+
+// 句読点と`**`を入れ替える。長さが変わらないので、重ならない限り同じ行へ同時に適用できる。
+// 重なるswap（`A**、**C`のように`**`が1文字しか離れていない場合）は適用せず、次のpassへ回す。
 export function applySwaps(source, swaps) {
   if (swaps.length === 0) return source;
   const lines = source.split("\n");
+  const byLine = new Map();
   for (const swap of swaps) {
-    const line = lines[swap.line - 1];
-    const mark = swap.column;
-    lines[swap.line - 1] =
-      swap.direction === "right"
-        ? line.slice(0, mark) + line[mark + 2] + "**" + line.slice(mark + 3)
-        : line.slice(0, mark - 1) + "**" + line[mark - 1] + line.slice(mark + 2);
+    if (!byLine.has(swap.line)) byLine.set(swap.line, []);
+    byLine.get(swap.line).push(swap);
   }
-  return lines.join("\n");
+
+  let applied = 0;
+  for (const [lineNumber, lineSwaps] of byLine) {
+    let line = lines[lineNumber - 1];
+    let previousEnd = -1;
+    for (const swap of [...lineSwaps].sort((a, b) => a.column - b.column)) {
+      const [start, end] = swapRange(swap);
+      if (start <= previousEnd) continue; // 直前のswapと重なるので次のpassで扱う
+      const mark = swap.column;
+      const candidate =
+        swap.direction === "right"
+          ? line.slice(0, mark) + line[mark + 2] + "**" + line.slice(mark + 3)
+          : line.slice(0, mark - 1) + "**" + line[mark - 1] + line.slice(mark + 2);
+      // 動かした`**`が別の`**`と隣接すると`***`以上のrunになる（`A**、**C`）。
+      // その場合は当てずに人へ返す。長さが変わらないので、飛ばしても後続の位置はずれない。
+      if (longAsteriskRuns(candidate) > longAsteriskRuns(line)) continue;
+      line = candidate;
+      previousEnd = end;
+      applied += 1;
+    }
+    lines[lineNumber - 1] = line;
+  }
+  return { text: lines.join("\n"), applied };
 }
 
 async function walk(directory) {
@@ -213,13 +267,32 @@ async function walk(directory) {
   const files = [];
   for (const entry of entries) {
     const entryPath = path.join(directory, entry.name);
-    if (entry.isDirectory()) files.push(...(await walk(entryPath)));
-    else if (entry.isFile() && entry.name.endsWith(".md")) files.push(entryPath);
+    if (entry.isDirectory()) {
+      if (skipDirectories.has(entry.name)) continue;
+      files.push(...(await walk(entryPath)));
+    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      files.push(entryPath);
+    }
   }
   return files;
 }
 
-export async function checkDocsMarkdown(directory = docsDir, { fix = false } = {}) {
+function longAsteriskRuns(text) {
+  return (text.match(/\*{3,}/g) ?? []).length;
+}
+
+// 入れ替え以外を変えていないことの検査。長さと`*`を除いた本文が一致し、
+// `*`を3つ以上並べてしまっていない（新しい崩れを作っていない）ことを求める。
+// `*`を除いた本文の一致だけでは、`*`の並びが崩れても気づけない。
+export function keepsProse(source, fixed) {
+  return (
+    fixed.length === source.length &&
+    fixed.replaceAll("*", "") === source.replaceAll("*", "") &&
+    longAsteriskRuns(fixed) <= longAsteriskRuns(source)
+  );
+}
+
+export async function checkMarkdown(directory = rootDir, { fix = false } = {}) {
   const errors = [];
   let fixedFiles = 0;
   for (const filePath of (await walk(directory)).sort()) {
@@ -228,23 +301,26 @@ export async function checkDocsMarkdown(directory = docsDir, { fix = false } = {
     const analysis = analyzeEmphasis(source, relativePath);
 
     if (fix && analysis.swaps.length > 0) {
-      // 1回の入れ替えで別の崩れが見えることがあるので、swapsが出なくなるまで繰り返す。
+      // 1回の入れ替えで別の崩れが見えること、重なりを次のpassへ回すことがあるため繰り返す。
       let fixed = source;
       let swaps = analysis.swaps;
-      let broken = false;
-      for (let pass = 0; pass < 5 && swaps.length > 0; pass += 1) {
-        fixed = applySwaps(fixed, swaps);
-        // `*`を除いた本文が変わっていないことを確認する。入れ替え以外を変えていない保証。
-        if (fixed.replaceAll("*", "") !== source.replaceAll("*", "")) {
+      let aborted = false;
+      for (let pass = 0; pass < 10 && swaps.length > 0; pass += 1) {
+        const result = applySwaps(fixed, swaps);
+        if (result.applied === 0) break; // これ以上は進まない
+        if (!keepsProse(source, result.text)) {
           errors.push(`${relativePath}: --fix が本文を変えてしまうため中止しました。手で直してください。`);
-          broken = true;
+          aborted = true;
           break;
         }
+        fixed = result.text;
         swaps = analyzeEmphasis(fixed, relativePath).swaps;
       }
-      if (broken) continue;
-      await writeFile(filePath, fixed);
-      fixedFiles += 1;
+      if (aborted) continue;
+      if (fixed !== source) {
+        await writeFile(filePath, fixed);
+        fixedFiles += 1;
+      }
       errors.push(...analyzeEmphasis(fixed, relativePath).errors);
       continue;
     }
@@ -255,7 +331,7 @@ export async function checkDocsMarkdown(directory = docsDir, { fix = false } = {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const fix = process.argv.includes("--fix");
-  const { errors, fixedFiles } = await checkDocsMarkdown(docsDir, { fix });
+  const { errors, fixedFiles } = await checkMarkdown(rootDir, { fix });
   if (fix) console.log(`${fixedFiles}ファイルを直しました。`);
   if (errors.length > 0) {
     console.error("Markdown emphasis violations:\n" + errors.map((error) => `- ${error}`).join("\n"));
