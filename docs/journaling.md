@@ -45,7 +45,9 @@ Zodで検証したDotSessionをSession Provider（memory）へ保存
 表示上のコンセプトで、保存する項目の定義ではない。
 
 4列目はTASK-002で採用した実サービスの方針である（2026-09-28採用、ゴミ箱と編集は2026-09-29に追加）。
-**いずれも未実装**で、1〜3列目の現在の実装は実装タスクまで変わらない。
+**Dotの行のうち、RDSの`dots`を正本にした保存先・本人だけの取得・`sentence`/`summary`の編集・ゴミ箱の外
+だけを返す取得は2026-10-05にTASK-008でRails APIに実装した。**それ以外は未実装で、Webはまだ接続して
+いないため、1〜3列目の現在の実装は実装タスクまで変わらない。
 **保持期間と削除の契機は[`privacy.md`](./privacy.md) §5を正本とする。**この表は操作と受け渡しを
 示すもので、期間が食い違った場合はprivacy.md §5が優先する。判断の経緯と比較は
 [TASK-002 Plan](implementation-plans/2026-09-28-task-002-data-lifecycle.md)にある。
@@ -68,14 +70,17 @@ keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを�
 
 - `VITE_DOT_API_URL`未設定時の`sampleSession`は、画面遷移と表示を確認するための固定mockである。
   録音内容を生成しておらず、保存もしていない。
-- 現在のRails APIにあるのは`GET /up`と認証（TASK-006）だけで、`POST /dot`、Dotの`/api/v1`の
-  endpoint、Dot保存、AI処理は実装されていない。WebはTASK-007で認証に接続し、録音・Dotの画面を
-  ログインしてから開くようにした。Dot生成のmockは認証の後も、そのまま固定のmockを返す。
+- 現在のRails APIには、認証（TASK-006）と、Dotの保存先・Day・日単位の一覧・日の詳細の取得・
+  `sentence`/`summary`の編集（TASK-008）がある。Dotを作る入口（`POST /api/v1/dots`）、AI処理、
+  ゴミ箱・削除の操作は実装されていない。WebはTASK-007で認証に接続し、録音・Dotの画面を
+  ログインしてから開くようにした。Dotの保存・履歴のAPIにはまだ接続しておらず、Dot生成は
+  認証の後も固定のmockを返す。
 - `VITE_DOT_API_URL`設定時の本文なしPOSTは暫定的な接続点であり、音声Blob、duration、利用者、
   正式なRails API契約を表すものではない。
 - 実サービスの正式な契約は[`contracts/openapi.yaml`](../contracts/openapi.yaml)を正本とする
   （2026-10-01にTASK-005で作成。運用は[`contracts/README.md`](../contracts/README.md)）。契約に
-  沿ったendpointと呼び出しは、後続の実装タスクまで存在しない。
+  沿ったendpointはRailsに一部（認証・履歴の取得・編集）だけがあり、Webからの呼び出しは後続の実装
+  タスクまで存在しない。
 - 現行ErrorStateの「音声は保存されています」という文言は実装と一致しない。音声Blobは保存されず、
   再試行時にも音声を再送できない。この差異を解消する変更では、表示文言と実際の保持・再試行仕様を
   同時に更新する。実サービスでは音声が残っている間は再試行できるようになるため、「保存されています」

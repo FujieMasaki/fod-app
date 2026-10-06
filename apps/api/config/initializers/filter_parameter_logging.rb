@@ -8,3 +8,7 @@ Rails.application.config.filter_parameters += %i[
 ]
 # Google callbackのquery（認可codeとOAuthのstate）。部分一致だとerror_codeなどまで隠すので完全一致にする。
 Rails.application.config.filter_parameters += [/\Acode\z/, /\Astate\z/]
+# Dotの本文。発話の内容そのものなので、requestのログに出さない（architecture「ログへ出さない」）。
+Rails.application.config.filter_parameters += %i[sentence summary]
+# objectでないJSONのbody（文字列・配列）をRailsは`_json`に入れる。そのまま本文になり得るので値ごと隠す。
+Rails.application.config.filter_parameters += [/\A_json\z/]
