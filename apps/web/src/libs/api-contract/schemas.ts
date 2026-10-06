@@ -89,6 +89,31 @@ export const dotSchema = z.object({
   summary: z.string().max(2000),
 });
 
+// 履歴（契約のhistory tag）。日付はserverが決めたAsia/Tokyoの暦日で、Webは文字列のまま扱う。
+// 今日の記録の有無で形が分かれる（契約のTodayのoneOf）。記録があれば最新のDotを必ず返す。
+export const todaySchema = z.union([
+  z.object({ date: z.iso.date(), dot_count: z.number().int().min(1), latest_dot: dotSchema }),
+  z.object({ date: z.iso.date(), dot_count: z.literal(0) }),
+]);
+
+const daySummarySchema = z.object({
+  date: z.iso.date(),
+  dot_count: z.number().int().min(1),
+  latest_dot_id: z.uuid(),
+});
+
+export const dayListSchema = z.object({
+  today: z.iso.date(),
+  items: z.array(daySummarySchema),
+  next_cursor: z.string().nullable(),
+});
+
+export const dayDetailSchema = z.object({
+  date: z.iso.date(),
+  dots: z.array(dotSchema),
+  next_cursor: z.string().nullable(),
+});
+
 const retryExpiresAtSchema = z.iso.datetime();
 
 const transcriptSchema = z.discriminatedUnion("status", [
@@ -159,6 +184,10 @@ export const sessionSchema = z.discriminatedUnion("authenticated", [
 export type Problem = z.infer<typeof problemSchema>;
 export type Dot = z.infer<typeof dotSchema>;
 export type Generation = z.infer<typeof generationSchema>;
+export type Today = z.infer<typeof todaySchema>;
+export type DaySummary = z.infer<typeof daySummarySchema>;
+export type DayList = z.infer<typeof dayListSchema>;
+export type DayDetail = z.infer<typeof dayDetailSchema>;
 export type Session = z.infer<typeof sessionSchema>;
 
 // 契約とZodの型がずれたら、ここで型検査が失敗する。
@@ -173,5 +202,9 @@ export const contractTypeChecks = {
   retryExpiredProblem: true satisfies TypeMatches<z.infer<typeof retryExpiredProblemSchema>, Schemas["ProblemRetryExpired"]>,
   dot: true satisfies TypeMatches<Dot, Schemas["Dot"]>,
   generation: true satisfies TypeMatches<Generation, Schemas["Generation"]>,
+  today: true satisfies TypeMatches<Today, Schemas["Today"]>,
+  daySummary: true satisfies TypeMatches<DaySummary, Schemas["DaySummary"]>,
+  dayList: true satisfies TypeMatches<DayList, Schemas["DayList"]>,
+  dayDetail: true satisfies TypeMatches<DayDetail, Schemas["DayDetail"]>,
   session: true satisfies TypeMatches<Session, Schemas["Session"]>,
 } as const;
