@@ -23,20 +23,26 @@ export type ApiError = Error & {
   readonly problem?: Problem;
 };
 
+// createApiErrorで作った値。isApiErrorは名前や形ではなくここで判定し、同じ名前の別のErrorを通さない
+// （classのinstanceofと同じ範囲にする）。
+const createdErrors = new WeakSet<Error>();
+
 export const createApiError = (
   kind: ApiErrorKind,
   options: { status?: number; problem?: Problem } = {},
-): ApiError =>
+): ApiError => {
   // messageにresponseの本文を入れない（ログや画面へ出さないため）。
-  Object.assign(new Error(options.problem ? `api_problem:${options.problem.code}` : `api_${kind}`), {
+  const error = Object.assign(new Error(options.problem ? `api_problem:${options.problem.code}` : `api_${kind}`), {
     name: "ApiError" as const,
     kind,
     status: options.status,
     problem: options.problem,
   });
+  createdErrors.add(error);
+  return error;
+};
 
-export const isApiError = (error: unknown): error is ApiError =>
-  error instanceof Error && error.name === "ApiError" && "kind" in error;
+export const isApiError = (error: unknown): error is ApiError => error instanceof Error && createdErrors.has(error);
 
 export const isProblem = (error: unknown, ...codes: Problem["code"][]): error is ApiError & { problem: Problem } => {
   return isApiError(error) && error.problem !== undefined && codes.includes(error.problem.code);

@@ -131,6 +131,8 @@ describe("isApiError", () => {
     expect(error.message).toBe("api_problem:token_invalid");
     expect(isApiError(new Error("api_network"))).toBe(false);
     expect(isApiError(Object.assign(new Error("x"), { name: "ApiError" }))).toBe(false);
+    // 名前と形を似せても、createApiErrorで作っていなければ通さない
+    expect(isApiError(Object.assign(new Error("api_network"), { name: "ApiError", kind: "network" }))).toBe(false);
     expect(isApiError({ name: "ApiError", kind: "network" })).toBe(false);
   });
 });
