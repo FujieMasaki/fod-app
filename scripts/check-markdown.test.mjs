@@ -221,7 +221,8 @@ test("コードスパン・code blockの中の`<!--`でコメントの状態を�
 const unclosedFixtures = {
   fence: "```sh\ncmd\n\n**崩れている。**続き\n",
   comment: "<!-- 未完\n\n**崩れている。**続き\n",
-  frontmatter: "---\n本文の**強調。**続き\nもっと**崩れ\n",
+  // 2行目がYAMLのkeyなので前付けとして扱われ、閉じの`---`が無い。
+  frontmatter: "---\nname: a\n本文の**強調。**続き\n",
 };
 
 test("行を飛ばす状態は、すべて閉じ忘れを報告する", () => {
@@ -288,6 +289,24 @@ test("tab・blockquoteのcode blockを本文として扱わない", () => {
   assert.deepEqual(findEmphasisErrors(quoted, "a.md"), []);
   // blockquoteの本文は従来どおり検出する。
   assert.equal(findEmphasisErrors("> **崩れている。**続き\n", "a.md").length, 1);
+});
+
+test("1行目の`---`は、続く行がYAMLに見えるときだけ前付けとして扱う", () => {
+  // 水平線として書かれた`---`を前付け扱いすると、2つ目の`---`までが黙って無検査になる。
+  assert.equal(findEmphasisErrors("---\n本文**崩れ。**続き\n---\n後**崩れ。**続き\n", "a.md").length, 2);
+  assert.equal(findEmphasisErrors("---\n\n本文**崩れ。**続き\n", "a.md").length, 1);
+  // 本物の前付けは従来どおり飛ばす。
+  assert.equal(findEmphasisErrors("---\nname: a\ndescription: **説明。**続き\n---\n\n本文\n", "a.md").length, 0);
+});
+
+test("blockquoteの中で開いたfenceは引用が終わったら閉じる", () => {
+  // 引きずらせると引用の外の本文が飛ばされ、あとで出てくる本物のfenceで閉じてしまう。
+  const source = "> ```text\n> code\n\n本文**崩れ。**続き\nもう1行**崩れ。**続き\n\n```sh\ncmd\n```\n";
+  const errors = findEmphasisErrors(source, "a.md");
+  assert.equal(errors.length, 2);
+  for (const error of errors) assert.match(error, /^a\.md:[45]:/, "引用の外の本文を指す");
+  // 引用の中で閉じている場合は従来どおり飛ばす。
+  assert.deepEqual(findEmphasisErrors("> ```text\n> **a。**b\n> ```\n", "a.md"), []);
 });
 
 test("YAML frontmatterはインデントされた`---`では閉じない", () => {

@@ -181,6 +181,8 @@ export const skippingStates = {
     initial: null,
     message: (value) => `${value} で開いたcode blockが閉じていません。そこから後の行を検査していません。`,
   },
+  // コメントは行を飛ばさない（同じ長さのplaceholderへ置き換えて本文として解析する）。
+  // ただし閉じ忘れると以降の本文が全部placeholderになるので、閉じ忘れだけここで報告する。
   comment: {
     initial: false,
     message: () => "HTMLコメント（<!--）が閉じていません。そこから後の行を検査していません。",
@@ -193,6 +195,17 @@ export const skippingStates = {
   },
 };
 
+// 1行目の`---`を前付けの開始とみなすのは、**続く行がYAMLのkeyに見えるときだけ**。
+// 水平線として書かれている場合に前付け扱いすると、2つ目の`---`までが黙って無検査になる。
+function looksLikeFrontmatter(lines) {
+  for (const line of lines.slice(1)) {
+    if (line.trim() === "") continue;
+    if (/^---\s*$/.test(line)) return false; // 中身が無い＝水平線が2つ並んでいる
+    return /^[\w.$-]+\s*:/.test(line);
+  }
+  return false;
+}
+
 // errors（人が読む指摘）と swaps（--fixで入れ替える位置）を返す。
 export function analyzeEmphasis(source, relativePath) {
   const errors = [];
@@ -203,6 +216,8 @@ export function analyzeEmphasis(source, relativePath) {
     Object.entries(skippingStates).map(([name, state]) => [name, { open: state.initial, message: state.message }]),
   );
   let block = null;
+  // fenceをblockquoteの中で開いたか。引用が終わったら閉じるために覚える。
+  let fenceInQuote = false;
 
   const flush = () => {
     if (!block) return;
@@ -263,7 +278,7 @@ export function analyzeEmphasis(source, relativePath) {
 
     // YAML frontmatterは本文ではない。1行目の`---`だけを前付けの開始として扱う
     // （2行目以降の`---`は水平線かsetextの下線）。`--fix`がYAMLのスカラを書き換えないため。
-    if (index === 0 && originalLine.trim() === "---") {
+    if (index === 0 && originalLine.trim() === "---" && looksLikeFrontmatter(lines)) {
       skipping.frontmatter.open = true;
       return "frontmatter";
     }
@@ -294,10 +309,20 @@ export function analyzeEmphasis(source, relativePath) {
     // ````で開いたblockの中の```で閉じてしまい、code blockの中を本文として解析する。
     // インデントは3空白まで（CommonMark）。`^\s*`にすると、4空白のcode blockの中に書いた
     // fence行で状態が反転し、閉じないままEOFへ達して以降の全行が無検査になる。
+    const quoted = /^\s*>/.test(rawLine);
+    // blockquoteの中で開いたfenceは、引用が終わった時点で閉じる（CommonMarkも同じ）。
+    // 引きずらせると、引用の外の本文が飛ばされ、あとで出てくる本物のfenceで閉じてしまう。
+    if (skipping.fence.open !== null && fenceInQuote && !quoted) {
+      skipping.fence.open = null;
+      fenceInQuote = false;
+    }
+
     const fenceStart = /^ {0,3}(```+|~~~+)/.exec(structural);
     if (fenceStart && (skipping.fence.open === null || fenceStart[1].startsWith(skipping.fence.open))) {
       flush();
-      skipping.fence.open = skipping.fence.open === null ? fenceStart[1] : null;
+      const opening = skipping.fence.open === null;
+      skipping.fence.open = opening ? fenceStart[1] : null;
+      fenceInQuote = opening ? quoted : false;
       return "fence";
     }
     if (skipping.fence.open !== null) return "fence";
@@ -361,7 +386,6 @@ export function analyzeEmphasis(source, relativePath) {
     "fence",
     "indentedCode",
     "frontmatter",
-    "comment",
   ]);
 
   lines.forEach((originalLine, index) => {
