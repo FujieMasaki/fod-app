@@ -7,14 +7,15 @@ import typescriptEslint from "typescript-eslint";
 const webFunctionSyntax = [
   {
     // func-styleは`const f = function () {}`（関数式）を通すため、arrow functionに限る。classとobjectの
-    // methodの形（`start() {}`）は関数式として表されるため除く。
+    // method・getter・setterの形（`start() {}`・`get x() {}`）は関数式として表されるため除く。
     selector:
-      "FunctionExpression:not(MethodDefinition > FunctionExpression):not(Property[method=true] > FunctionExpression)",
+      "FunctionExpression:not(MethodDefinition > FunctionExpression):not(Property[method=true] > FunctionExpression):not(Property[kind=/^[gs]et$/] > FunctionExpression)",
     message: "関数はarrow functionで書きます（docs/development/frontend.md §1）。",
   },
   {
     // const + arrow functionの関数も、function宣言のときと同じくcamelCase・PascalCaseにする
-    // （naming-conventionのvariableはUPPER_CASEを許すため。typesによる判定は型情報が要る）
+    // （naming-conventionのvariableはUPPER_CASEを許すため。typesによる判定は型情報が要る）。構文では
+    // 1語の大文字（`ID`）をPascalCaseと区別できないため、`_`を含む大文字の名前（`FETCH_DOT`）を止める。
     selector: "VariableDeclarator[init.type='ArrowFunctionExpression'][id.name=/^[A-Z][A-Z0-9]*_[A-Z0-9_]*$/]",
     message: "関数名はcamelCaseかPascalCaseにします。",
   },
