@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-quer
 
 import { isApiError, isProblem, useAuth } from "@/features/auth";
 import { getDay, getToday, listDays } from "../api";
+import { isCalendarDate } from "../date-format";
 
 /**
  * 履歴のquery。正本はserverで、ここではcacheと取得の状態だけを持つ（frontend.md §2）。
@@ -40,7 +41,8 @@ export const useToday = () => {
 
 /**
  * serverがcursorを解釈できなかったら（`cursor_invalid`）、契約どおり先頭から取り直す。
- * 一覧が変わった後の取り直しでは、保存済みの古いcursorで続きのpageを取り直すため起こり得る。
+ * TanStack Queryの取り直しは2ページ目以降のcursorを新しいpageから計算し直すため、通常は起こらない。
+ * 古い画面のまま続きを読み込んだ・serverのcursorの形式が変わった、といった場合への備え。
  */
 const useRestartOnInvalidCursor = (queryKey: readonly unknown[], error: unknown) => {
   const queryClient = useQueryClient();
@@ -93,7 +95,8 @@ export const useDayDetail = (date: string) => {
     queryFn: ({ pageParam }) => getDay(request, date, pageParam),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
-    enabled: userId !== null,
+    // URL由来の日付は画面でも確かめるが、ここでも実在する暦日でなければ通信しない。
+    enabled: userId !== null && isCalendarDate(date),
     retry: retryTransient,
   });
   useRestartOnInvalidCursor(queryKey, query.error);

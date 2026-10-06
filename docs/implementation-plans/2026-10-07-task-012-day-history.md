@@ -116,7 +116,7 @@ User（Dot tab / 丸 / 録音時刻 / 続きを読み込む）
 ↓
 DayScreen / DayListScreen / DayDetailScreen（features/history/components）
 ↓
-useToday / useDayList / useDayDetail（TanStack Query。正本はserver、cacheはquery key ["history", ...]）
+useToday / useDayList / useDayDetail（TanStack Query。正本はserver、cacheはquery key ["history", <user id>, ...]）
 ↓
 getToday / listDays / getDay（features/history/api.ts）→ useAuth().request → apiRequest → Rails API
 ↓                                       （Zodで検証。失敗はApiErrorのkindとcodeで分ける）
@@ -124,7 +124,7 @@ query cache（認証の終了・利用者の切り替わりでAuth Providerが�
 ↓
 UI（丸・日付テキスト・選択中の枠線とテキスト・各状態の表示）
 
-日の詳細が0件 → useRefreshHistory → ["history","days"]・["history","today"]を取り直す → 一覧から丸が消える
+日の詳細が0件 → useRefreshHistory → ["history",<user id>,"days"]・["history",<user id>,"today"]を取り直す → 一覧から丸が消える
 選択中の日（一覧）→ URLの ?selected（route内の表示状態。個人データの本文は持たない）
 選んだ録音（詳細）→ 画面のstate（Dotのid。unmountで消える）
 ```
@@ -199,8 +199,9 @@ PR 2/2 `feat/task-012-2-history-screens`（base: PR 1のブランチ）— 画�
   利用者のidを含める（`["history", <user id>, ...]`）。Auth Providerがcacheを消すのは切り替わりを描画した後のeffectで、
   表示中のobserverは消されたqueryの結果を持ち続けるため、keyが同じだと別タブでの切り替わりの後に前の利用者のDotが
   見え得る（PR #75のレビューで指摘され、testで再現した）。
-- cursor: 一覧が変わった後の取り直しは保存済みの古いcursorで続きのpageを取り直すため、`400 cursor_invalid`が
-  起こり得る。契約（CursorInvalid）どおり、そのqueryを先頭から取り直す。やり直しても直らない失敗（serverが理由を
+- cursor: TanStack Queryの取り直しは2ページ目以降のcursorを新しいpageから計算し直すため、通常`400 cursor_invalid`は
+  起こらないが、古い画面のまま続きを読み込んだ・serverのcursorの形式が変わった場合に備え、契約（CursorInvalid）どおり
+  そのqueryを先頭から取り直す。やり直しても直らない失敗（serverが理由を
   返したもの・schemaの不一致）は自動でretryしない。
 - 個人データ: Dotの本文をURL・storage・logへ出さない。URLに出すのは日付だけ。
 

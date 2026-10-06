@@ -88,6 +88,38 @@ describe("useToday", () => {
   });
 });
 
+describe("自動のretry", () => {
+  it("通信の途切れは1回だけ送り直し、serverが理由を返した失敗とschemaの不一致は送り直さない", async () => {
+    const requests = mockApi({
+      "GET /api/v1/session": [signedIn],
+      "GET /api/v1/days/today": [problem(500, "internal_error")],
+    });
+    const { result } = renderHook(() => useToday(), { wrapper });
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(requests.filter((r) => r === "GET /api/v1/days/today")).toHaveLength(1);
+
+    vi.unstubAllGlobals();
+    let calls = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (path: string) => {
+        if (path === "/api/v1/session") {
+          return new Response(JSON.stringify(signedIn.body), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        calls += 1;
+        if (calls === 1) throw new TypeError("network");
+        return new Response(JSON.stringify({ date: "2026-10-01", dot_count: 0 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }),
+    );
+    const retried = renderHook(() => useToday(), { wrapper });
+    await waitFor(() => expect(retried.result.current.isSuccess).toBe(true), { timeout: 3000 });
+    expect(calls).toBe(2);
+  });
+});
+
 describe("useDayList", () => {
   it("serverのnext_cursorをそのまま渡して続きをたどり、nullで終わる", async () => {
     const requests = mockApi({
@@ -190,7 +222,7 @@ describe("cursor_invalid", () => {
 describe("useDayDetail", () => {
   it("日付ごとに取得し、前の日の遅れた応答を今の日として返さない", async () => {
     let releaseOld!: (reply: { status: number; body: unknown }) => void;
-    mockApi({
+    const requests = mockApi({
       "GET /api/v1/session": [signedIn],
       "GET /api/v1/days/2026-09-28": [new Promise((resolve) => (releaseOld = resolve))],
       "GET /api/v1/days/2026-09-27": [
@@ -201,6 +233,8 @@ describe("useDayDetail", () => {
       wrapper,
       initialProps: { date: "2026-09-28" },
     });
+    // 前の日の取得が実際に送られ、応答を待っている間に切り替える。
+    await waitFor(() => expect(requests).toContain("GET /api/v1/days/2026-09-28"));
     rerender({ date: "2026-09-27" });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
@@ -235,6 +269,41 @@ describe("useDayDetail", () => {
     // 一覧の画面は閉じているが、戻ったときに古い丸を見せないよう、すぐに取り直す。
     await waitFor(() => expect(count("GET /api/v1/days")).toBe(2));
     await waitFor(() => expect(count("GET /api/v1/days/today")).toBe(2));
+  });
+
+  it("その日の続きをnext_cursorでたどり、cursor_invalidなら先頭から取り直す", async () => {
+    const requests = mockApi({
+      "GET /api/v1/session": [signedIn],
+      "GET /api/v1/days/2026-09-28": [
+        { status: 200, body: { date: "2026-09-28", dots: [dot(DOT_A, "2026-09-28", "2026-09-28T02:00:00Z")], next_cursor: "d1" } },
+        { status: 200, body: { date: "2026-09-28", dots: [dot(DOT_A, "2026-09-28", "2026-09-28T02:00:00Z")], next_cursor: "d2" } },
+      ],
+      "GET /api/v1/days/2026-09-28?cursor=d1": [
+        { status: 200, body: { date: "2026-09-28", dots: [dot(DOT_B, "2026-09-28", "2026-09-28T01:00:00Z")], next_cursor: null } },
+      ],
+      "GET /api/v1/days/2026-09-28?cursor=d2": [problem(400, "cursor_invalid")],
+    });
+    const { result } = renderHook(() => useDayDetail("2026-09-28"), { wrapper });
+    await waitFor(() => expect(result.current.hasNextPage).toBe(true));
+    await act(() => result.current.fetchNextPage());
+    await waitFor(() => expect(result.current.dots.map((d) => d.id)).toEqual([DOT_A, DOT_B]));
+    expect(result.current.hasNextPage).toBe(false);
+
+    // 取り直した後の続きでserverがcursorを拒んだら、先頭から取り直す。
+    await act(() => result.current.refetch());
+    await waitFor(() => expect(result.current.hasNextPage).toBe(true));
+    await act(() => result.current.fetchNextPage());
+    await waitFor(() => expect(requests.filter((r) => r === "GET /api/v1/days/2026-09-28").length).toBe(3));
+    await waitFor(() => expect(result.current.isError).toBe(false));
+  });
+
+  it("実在しない日付では通信しない", async () => {
+    const requests = mockApi({ "GET /api/v1/session": [signedIn] });
+    const { result } = renderHook(() => useDayDetail("2026-02-30"), { wrapper });
+    await waitFor(() => expect(requests).toContain("GET /api/v1/session"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(result.current.fetchStatus).toBe("idle");
+    expect(requests.some((r) => r.includes("/api/v1/days"))).toBe(false);
   });
 
   it("取得に失敗したら0件として扱わない", async () => {
