@@ -62,7 +62,9 @@
 - routeをまたぐ短いジャーナリング途中のUI状態だけをSession Providerに置く。Session Providerは
   サーバーの正本、認証・認可、複数端末の同期の代わりにしない。
 - サーバー由来のデータ、fetch lifecycle、再取得・mutationはTanStack Queryで扱う。query cacheと
-  Session Providerへ同じサーバー正本を無条件に二重保存しない。
+  Session Providerへ同じサーバー正本を無条件に二重保存しない。serverに保存したDot（履歴）はTanStack Queryで
+  扱い、Session Providerへ置かない（2026-10-07にTASK-012で決定。`features/history`）。生成直後のDotの
+  受け渡しは、生成をserverへ接続するTASK-011で決める。
 - `localStorage`は、再読み込み後にも必要で、利用者がブラウザ保存を許容し、schema・最小項目・
   version・削除契機が定義できる値だけに使う。録音Blob、文字起こし、トークン、認証根拠は保存しない。
 - API失敗、schema不正、権限拒否、ネットワーク中断を区別して安全なUIへ変換する。サーバーの
@@ -87,11 +89,6 @@
   提供する。生成・保存を再実行するUIには、利用者に何が再実行されるかを示す。
 - HTTP requestの本文、認証、timeout、response schema、エラー文言を実装前に仕様とAPI契約で確認する。
   現在の`createDot`は体験確認用の特殊な経路であり、将来のRails API契約と同一視しない。
-
-### 保留
-
-- 永続DotをTanStack QueryとSession Providerのどちらでどこまで扱うかは、最初のプロダクトAPIの
-  契約と画面要件が決まった時点で判断する。
 
 ## 3. 録音データ
 

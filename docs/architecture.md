@@ -7,9 +7,10 @@
 
 - 現在稼働しているFrontendは `apps/web/` のVite + React + TypeScript SPAである。
 - TanStack Routerが `apps/web/src/router.tsx` で `/`、`/record`、`/processing`、`/dot`、
-  `/reflection`、`/settings` と、認証の `/login`、`/signup`、`/confirmation`、`/password/forgot`、
-  `/password/reset`、`/unlock` のクライアントルートを管理する。`/record`・`/processing`・`/dot`・
-  `/reflection`・`/settings` は `RequireAuth` で包み、serverで認証を確かめるまで中身を表示しない。
+  `/reflection`、`/settings`、履歴の `/day`・`/dots`・`/dots/$date` と、認証の `/login`、`/signup`、
+  `/confirmation`、`/password/forgot`、`/password/reset`、`/unlock` のクライアントルートを管理する。
+  `/record`・`/processing`・`/dot`・`/reflection`・`/settings`・`/day`・`/dots`・`/dots/$date` は
+  `RequireAuth` で包み、serverで認証を確かめるまで中身を表示しない。
 - `apps/web/src/providers.tsx` がTanStack Query、Auth Provider、Session Providerを提供する。
 - Auth Provider（`features/auth`）は`GET /api/v1/session`をTanStack Queryで取得し、認証状態・
   CSRF token・期限を持つ（2026-10-05にTASK-007で実装）。保護APIは`useAuth().request`から呼び、
@@ -27,8 +28,13 @@
 - `apps/api/` はRuby on RailsのAPI backendである。現在実装済みなのはRails基盤、
   PostgreSQL接続、RSpec、品質・security検査、CIに加え、認証（TASK-006。下記「認証詳細」）と、
   Dotの保存先（`dots`）・Day・日単位の一覧・日の詳細の取得・`sentence`/`summary`の編集のAPI
-  （TASK-008。`app/controllers/api/v1/days_controller.rb`・`dots_controller.rb`）である。Webはまだ
-  これらに接続していない。
+  （TASK-008。`app/controllers/api/v1/days_controller.rb`・`dots_controller.rb`）である。Webは
+  Day・日単位の一覧・日の詳細の取得に接続した（下記`features/history`）。編集のAPIにはまだ接続していない。
+- `features/history`（2026-10-07にTASK-012で実装）が、serverに保存したDotをDay（`/day`）・一覧（`/dots`）・
+  日の詳細（`/dots/$date`）で表示する。取得は`useAuth().request`から行い、TanStack Queryのcache
+  （`["history", ...]`）にだけ置く。Session Providerには置かず、認証の終了・利用者の切り替わりでAuth Providerが
+  消す。一覧と日の詳細はserverの`next_cursor`をたどり、日の詳細が0件なら一覧と今日を取り直す。
+  mockの`/dot`・`/reflection`とは別の画面で、生成直後のDotをDayへ渡す接続はTASK-011で行う。
 - `apps/api/` の公開APIは `/api/v1` namespaceに置く（OmniAuthの開始・callbackだけ`/auth/...`）。
 - repository全体のコマンド、ESLint、Lefthook、命名チェック、CI、開発文書はrootが管理する。
 - Claude Codeの共有設定（`.claude/settings.json`のhook・permission、`.claude/skills/`）と、hookが
