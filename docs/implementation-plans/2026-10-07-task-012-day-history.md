@@ -195,7 +195,13 @@ PR 2/2 `feat/task-012-2-history-screens`（base: PR 1のブランチ）— 画�
 - 続きの取得の失敗で、TanStack Queryは取得済みのpagesを保つ。失敗の表示は`isFetchNextPageError`で、一覧全体の
   失敗（`isError`かつpagesが無い）と分ける。
 - 0件の取り直し: 一覧はunmountされているので、`refetchType: "all"`で非活性のqueryも取り直す。
-- 認証: 取得は`useAuth().request`を通し、利用者の切り替わりで消えるquery cacheにだけ本文を置く。
+- 認証: 取得は`useAuth().request`を通し、利用者の切り替わりで消えるquery cacheにだけ本文を置く。query keyに
+  利用者のidを含める（`["history", <user id>, ...]`）。Auth Providerがcacheを消すのは切り替わりを描画した後のeffectで、
+  表示中のobserverは消されたqueryの結果を持ち続けるため、keyが同じだと別タブでの切り替わりの後に前の利用者のDotが
+  見え得る（PR #75のレビューで指摘され、testで再現した）。
+- cursor: 一覧が変わった後の取り直しは保存済みの古いcursorで続きのpageを取り直すため、`400 cursor_invalid`が
+  起こり得る。契約（CursorInvalid）どおり、そのqueryを先頭から取り直す。やり直しても直らない失敗（serverが理由を
+  返したもの・schemaの不一致）は自動でretryしない。
 - 個人データ: Dotの本文をURL・storage・logへ出さない。URLに出すのは日付だけ。
 
 ## 14. Verification
