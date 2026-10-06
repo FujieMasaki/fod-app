@@ -10,7 +10,7 @@ const LEGACY_STORAGE_KEY = "fod.session.v1";
 const USER_A = "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10";
 const USER_B = "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
 
-function signedInAs(id: string) {
+const signedInAs = (id: string) => {
   return {
     authenticated: true,
     csrf_token: "t2",
@@ -18,10 +18,10 @@ function signedInAs(id: string) {
     account_status: "active",
     user: { id, email: "a@example.com", email_confirmed: true, sign_in_methods: ["password"] },
   };
-}
+};
 
 // Rails APIのSession（契約の形）をfetchの差し替えで模す。`start`で始まり、loginで`afterLogin`になる。
-function mockSessionApi(start: unknown, afterLogin: unknown) {
+const mockSessionApi = (start: unknown, afterLogin: unknown) => {
   let loggedIn = false;
   vi.stubGlobal(
     "fetch",
@@ -30,9 +30,9 @@ function mockSessionApi(start: unknown, afterLogin: unknown) {
       return Response.json(loggedIn ? afterLogin : start);
     }),
   );
-}
+};
 
-function Probe() {
+const Probe = () => {
   const { dotSession, recordedDurationSec, hydrated, setDotSession, setRecordedDuration } = useSession();
   const { status, signIn } = useAuth();
   return (
@@ -52,9 +52,9 @@ function Probe() {
       <button onClick={() => void signIn({ email: "b@example.com", password: "password123" })}>login</button>
     </div>
   );
-}
+};
 
-function renderSession() {
+const renderSession = () => {
   render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <AuthProvider>
@@ -64,7 +64,7 @@ function renderSession() {
       </AuthProvider>
     </QueryClientProvider>,
   );
-}
+};
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -110,12 +110,12 @@ describe("端末のジャーナリング状態", () => {
       }),
     );
     const renders: { user: string | undefined; dot: string | null }[] = [];
-    function Recorder() {
+    const Recorder = () => {
       const { dotSession } = useSession();
       const { user } = useAuth();
       renders.push({ user: user?.id, dot: dotSession?.sentence ?? null });
       return null;
-    }
+    };
     render(
       <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
         <AuthProvider>

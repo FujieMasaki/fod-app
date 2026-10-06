@@ -23,6 +23,13 @@
   移さない。
 - 外部から来るAPIレスポンス、`localStorage`値、URL由来の値は、使用前にZodなど既存のschemaで
   検証する。検証できない値は表示・保存しない。
+- 関数は、Component・Hook・補助関数・Component内のhandlerも含めて`const`＋arrow functionで書き、
+  `function`宣言・関数式を使わない（2026-10-05に決定。ESLintの`func-style`と`no-restricted-syntax`で固定。
+  objectのmethod・getter・setterの形は使ってよい）。関数名はcamelCaseかPascalCaseにする（lintは`_`を含む
+  大文字の名前を止める）。classも使わず、失敗の種類などは
+  `const`の作成関数と型ガードで表す（`libs/api-client/request.ts`の`createApiError`・`isApiError`。testの
+  差し替えで、実装が`new`で作るもの（`AudioContext`など）だけはclassで書いてよい）。overloadが要る関数は、
+  overloadを持つ関数型を`const`に付け、呼び出しの型をtestで固定する（`libs/api-client/request.ts`の`apiRequest`）。
 
 ### 推奨
 
@@ -60,6 +67,14 @@
   version・削除契機が定義できる値だけに使う。録音Blob、文字起こし、トークン、認証根拠は保存しない。
 - API失敗、schema不正、権限拒否、ネットワーク中断を区別して安全なUIへ変換する。サーバーの
   エラー本文、録音内容、秘密情報をそのまま表示・ログ出力しない。
+- Rails APIは同一originで、`features/auth`の`useAuth().request`（状態を変える通信関数は
+  `useAuth().withCsrf`）から呼ぶ。CSRF tokenの付与・`csrf_invalid`の1回の再送・`401`での認証の終了を
+  ここに集めているため、機能ごとに`fetch`でRails APIを呼ばない。
+- 本人の個人データを、Query cacheと、保護する画面の下でunmountされるComponentのstate以外（routeをまたぐ
+  Provider・Contextのstate、`sessionStorage`など）に持つ機能は、`useAuth().subscribeIdentityChange`を購読し、
+  認証の終了・利用者の切り替わりで消す。消すまでの1回の描画で前の利用者の値が出ないよう、値を書いたときの
+  `useAuth().identityEpoch`と一緒に持ち、今の値と違えば見せない（Session Providerの方式）。Query cacheは
+  認証（`["auth", ...]`）以外をAuth Providerが消す。
 - Rails APIのresponseは、[`contracts/openapi.yaml`](../../contracts/openapi.yaml)から生成した型
   （`types/api-contract.d.ts`）と完全一致するZod schemaで検証する。schemaは
   `libs/api-contract/schemas.ts`に置き、使う機能の実装時に追加する。失敗は`code`で判定し、
