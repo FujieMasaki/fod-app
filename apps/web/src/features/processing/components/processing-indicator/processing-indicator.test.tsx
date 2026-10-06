@@ -13,22 +13,22 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 
 // AuthProviderの認証状態の取得（未認証）だけを別に返し、残りをDot生成のmockへ渡す。
-function stubFetch(dotApi: (...args: unknown[]) => unknown) {
+const stubFetch = (dotApi: (...args: unknown[]) => unknown) => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (path: unknown, ...rest: unknown[]) =>
       path === "/api/v1/session" ? Response.json({ authenticated: false, csrf_token: "t" }) : dotApi(path, ...rest),
     ),
   );
-}
+};
 
 // 整理の結果が確定した現在のDot（SessionProviderのmemory）を表示する。
-function DotProbe() {
+const DotProbe = () => {
   const { dotSession } = useSession();
   return <p>{dotSession ? `dot:${dotSession.sentence}` : "no-dot"}</p>;
-}
+};
 
-function renderProcessing() {
+const renderProcessing = () => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -42,7 +42,7 @@ function renderProcessing() {
       </AuthProvider>
     </QueryClientProvider>,
   );
-}
+};
 
 afterEach(() => {
   focusManager.setFocused(undefined);
@@ -139,10 +139,10 @@ describe("整理が終わると今日の一文へ進む", () => {
     vi.stubEnv("VITE_DOT_API_URL", "http://api.test");
     stubFetch(vi.fn(async () => ({ ok: false, json: async () => ({}) })));
     let switchUser: () => void = () => undefined;
-    function SwitchProbe() {
+    const SwitchProbe = () => {
       switchUser = useAuth().prepareExternalSignIn;
       return null;
-    }
+    };
     const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
@@ -174,10 +174,10 @@ describe("整理が終わると今日の一文へ進む", () => {
       ),
     );
     let switchUser: () => void = () => undefined;
-    function SwitchProbe() {
+    const SwitchProbe = () => {
       switchUser = useAuth().prepareExternalSignIn;
       return null;
-    }
+    };
 
     const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
     render(

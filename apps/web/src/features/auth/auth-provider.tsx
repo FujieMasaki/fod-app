@@ -12,7 +12,7 @@ import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-quer
 
 import type { z } from "zod";
 
-import { ApiError, apiRequest, isProblem, type ApiRequestOptions } from "@/libs/api-client/request";
+import { apiRequest, createApiError, isProblem, type ApiRequestOptions } from "@/libs/api-client/request";
 import type { Session } from "@/libs/api-contract/schemas";
 import { createSession, deleteSession, getSession, type Credentials } from "./api";
 
@@ -85,6 +85,11 @@ type AuthContextValue = {
   /** ページ遷移を伴うlogin（Google）の前に呼ぶ。前の利用者の個人データを先に消す */
   prepareExternalSignIn: () => void;
   /**
+   * serverが既存のCookieを無効にしたかもしれない操作（password再設定）の後に呼ぶ。通信を待たずに未認証として
+   * 置き（切り替わりとして個人データを消す）、serverの状態はbackgroundで取り直す。
+   */
+  endSessionAfterCredentialChange: () => void;
+  /**
    * 認証の終了・利用者の切り替わりを購読する。個人データを持つstate（SessionProvider、TASK-014の
    * 端末データ）はここで消す。戻り値で購読をやめる。同じ切り替わりで複数回呼ばれ得る（logoutの開始と
    * 完了など）ため、購読者は何度呼ばれても同じ結果になるようにする。
@@ -110,29 +115,29 @@ const LOGIN_REJECTIONS = [
 ] as const;
 
 /** 認証済みなら利用者のid、未認証ならnull、まだ分からなければundefined */
-function identityOf(session: Session | undefined): string | null | undefined {
+const identityOf = (session: Session | undefined): string | null | undefined => {
   if (!session) return undefined;
   return session.authenticated ? session.user.id : null;
-}
+};
 
-function deriveStatus(session: Session | undefined, isError: boolean): AuthStatus {
+const deriveStatus = (session: Session | undefined, isError: boolean): AuthStatus => {
   if (!session) return isError ? "unknown" : "checking";
   if (!session.authenticated) return "anonymous";
   // 取り直しに失敗したら、前に得た認証済みのまま保護する画面を見せ続けない（確かめられない状態にする）。
   // 未認証のcacheは、失敗しても安全側なのでそのまま使う。
   if (isError) return "unknown";
   return session.account_status === "deletion_in_progress" ? "deletion_in_progress" : "authenticated";
-}
+};
 
 // 認証状態のquery以外（前の利用者のresponse）を取り消して消す。
-function clearPrivateQueries(queryClient: QueryClient) {
+const clearPrivateQueries = (queryClient: QueryClient) => {
   const predicate = ({ queryKey }: { queryKey: readonly unknown[] }) =>
     JSON.stringify(queryKey) !== JSON.stringify(SESSION_QUERY_KEY);
   void queryClient.cancelQueries({ predicate });
   queryClient.removeQueries({ predicate });
-}
+};
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const queryClient = useQueryClient();
   // login・logoutの送信中は、ほかの通信を始めない。RailsのCookieStoreはどの応答でもCookieを書き直すため
   // （`GET /api/v1/session`も保護APIも）、login・logoutの前に送った通信の応答が後から届くと、Cookieが前の
@@ -240,6 +245,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient, refresh],
   );
 
+  // serverがCookieを無効にしたかもしれない操作の後。取り直しが返らない・offlineで止まっても古い認証済みを
+  // 残さないよう、通信を待たずに未認証として置く（Cookieは利用者ごとに無効になるため、誰の認証済みでも置く）。
+  // そのとき実行中だった取得は操作の前に送られたかもしれず、後から届く結果（誰の認証済みでも）を信じない。
+  // その取得を受け取り終えてから、操作の後に送る取得で確かめる。実行中の取得がなければ、1回の取り直しで足りる。
+  const endSessionAfterCredentialChange = useCallback(() => {
+    const setAnonymous = (csrfToken: string) =>
+      queryClient.setQueryData<Session>(SESSION_QUERY_KEY, { authenticated: false, csrf_token: csrfToken });
+    const fetchingAtChange = queryClient.getQueryState(SESSION_QUERY_KEY)?.fetchStatus === "fetching";
+    const current = queryClient.getQueryData<Session>(SESSION_QUERY_KEY);
+    if (current?.authenticated) setAnonymous(current.csrf_token);
+    void (async () => {
+      await refresh().catch(() => undefined);
+      const after = queryClient.getQueryData<Session>(SESSION_QUERY_KEY);
+      if (fetchingAtChange && after?.authenticated) {
+        setAnonymous(after.csrf_token);
+        await refresh().catch(() => undefined);
+      }
+    })();
+  }, [queryClient, refresh]);
+
   // 期限の時刻に取り直す。端末のsleepなどで遅れても、画面へ戻ったときの取り直しと保護APIの401で補う。
   // 端末の時計がserverより進んでいると期限の前に取り直してしまい、まだ認証済みが返る。そのときは
   // 取り直すたびに（dataUpdatedAtが変わる）、間隔を空けて予約し直す。
@@ -283,7 +308,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ]);
         clearTimeout(timer);
         // 待ちきれなかった通信の応答は、後から届いてCookieを戻し得る。送らずに失敗にする（利用者が再試行する）。
-        if (!settled) throw new ApiError("network");
+        if (!settled) throw createApiError("network");
         return operation();
       })();
       exclusiveRef.current = run;
@@ -441,6 +466,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signOut,
       prepareExternalSignIn: notifyIdentityChange,
+      endSessionAfterCredentialChange,
       subscribeIdentityChange,
     }),
     [
@@ -457,15 +483,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signOut,
       notifyIdentityChange,
+      endSessionAfterCredentialChange,
       subscribeIdentityChange,
     ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-}
+};
 
-export function useAuth(): AuthContextValue {
+export const useAuth = (): AuthContextValue => {
   const context = useContext(AuthContext);
   if (!context) throw new Error("useAuth は AuthProvider の内側で使用してください。");
   return context;
-}
+};

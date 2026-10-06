@@ -5,10 +5,14 @@ import { EmptyState } from "@/components/empty-state/empty-state";
 import { ScreenLayout } from "@/components/screen-layout/screen-layout";
 import {
   AccountScreen,
+  ConfirmationScreen,
+  PasswordForgotScreen,
+  PasswordResetScreen,
   RequireAuth,
   SignInPrompt,
   SignInScreen,
   SignUpScreen,
+  UnlockScreen,
   parseAuthError,
   safeRedirect,
 } from "@/features/auth";
@@ -20,15 +24,15 @@ import { useSession } from "@/features/session";
 import { TodaysDotView } from "@/features/todays-dot";
 import { Providers } from "@/providers";
 
-function RootComponent() {
+const RootComponent = () => {
   return (
     <Providers>
       <AppShell />
     </Providers>
   );
-}
+};
 
-function HomePage() {
+const HomePage = () => {
   return (
     <ScreenLayout activeTab="home">
       <div className="flex h-full flex-col">
@@ -39,10 +43,10 @@ function HomePage() {
       </div>
     </ScreenLayout>
   );
-}
+};
 
 // 録音前にserverで認証を確かめる（journaling.md §4「録音前認証と期限切れ」）。
-function RecordPage() {
+const RecordPage = () => {
   return (
     <ScreenLayout>
       <RequireAuth startsOnEnter>
@@ -50,9 +54,9 @@ function RecordPage() {
       </RequireAuth>
     </ScreenLayout>
   );
-}
+};
 
-function ProcessingPage() {
+const ProcessingPage = () => {
   return (
     <ScreenLayout>
       <RequireAuth startsOnEnter>
@@ -60,9 +64,9 @@ function ProcessingPage() {
       </RequireAuth>
     </ScreenLayout>
   );
-}
+};
 
-function DotPage() {
+const DotPage = () => {
   const navigate = useNavigate();
   const { dotSession, hydrated } = useSession();
 
@@ -77,9 +81,9 @@ function DotPage() {
       </RequireAuth>
     </ScreenLayout>
   );
-}
+};
 
-function ReflectionPage() {
+const ReflectionPage = () => {
   const navigate = useNavigate();
   const { dotSession, hydrated } = useSession();
 
@@ -97,9 +101,9 @@ function ReflectionPage() {
       </RequireAuth>
     </ScreenLayout>
   );
-}
+};
 
-function SettingsPage() {
+const SettingsPage = () => {
   return (
     <ScreenLayout activeTab="settings">
       <RequireAuth>
@@ -107,24 +111,57 @@ function SettingsPage() {
       </RequireAuth>
     </ScreenLayout>
   );
-}
+};
 
-function LoginPage() {
+const LoginPage = () => {
   const search = loginRoute.useSearch();
   return (
     <ScreenLayout>
       <SignInScreen redirect={safeRedirect(search.redirect)} authError={parseAuthError(search.auth_error)} />
     </ScreenLayout>
   );
-}
+};
 
-function SignUpPage() {
+const SignUpPage = () => {
   return (
     <ScreenLayout>
       <SignUpScreen />
     </ScreenLayout>
   );
-}
+};
+
+// メールのリンクの画面。パスはRailsのメール（apps/api/app/mailers/user_mailer.rb）と揃える。
+const ConfirmationPage = () => {
+  return (
+    <ScreenLayout>
+      <ConfirmationScreen />
+    </ScreenLayout>
+  );
+};
+
+const PasswordForgotPage = () => {
+  return (
+    <ScreenLayout>
+      <PasswordForgotScreen />
+    </ScreenLayout>
+  );
+};
+
+const PasswordResetPage = () => {
+  return (
+    <ScreenLayout>
+      <PasswordResetScreen />
+    </ScreenLayout>
+  );
+};
+
+const UnlockPage = () => {
+  return (
+    <ScreenLayout>
+      <UnlockScreen />
+    </ScreenLayout>
+  );
+};
 
 const rootRoute = createRootRoute({ component: RootComponent });
 const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage });
@@ -144,6 +181,18 @@ const loginRoute = createRoute({
   }),
 });
 const signUpRoute = createRoute({ getParentRoute: () => rootRoute, path: "/signup", component: SignUpPage });
+const confirmationRoute = createRoute({ getParentRoute: () => rootRoute, path: "/confirmation", component: ConfirmationPage });
+const passwordForgotRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/password/forgot",
+  component: PasswordForgotPage,
+});
+const passwordResetRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/password/reset",
+  component: PasswordResetPage,
+});
+const unlockRoute = createRoute({ getParentRoute: () => rootRoute, path: "/unlock", component: UnlockPage });
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -154,6 +203,10 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
   loginRoute,
   signUpRoute,
+  confirmationRoute,
+  passwordForgotRoute,
+  passwordResetRoute,
+  unlockRoute,
 ]);
 
 export const router = createRouter({ routeTree });

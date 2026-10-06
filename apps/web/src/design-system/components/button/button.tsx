@@ -9,14 +9,14 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 /** 「行動を促すボタン」ではなく、静かな入口。文言は行動命令にしない。 */
-export function Button({
+export const Button = ({
   variant = "primary",
   fullWidth = false,
   className,
   type = "button",
   children,
   ...rest
-}: ButtonProps) {
+}: ButtonProps) => {
   return (
     <button
       type={type}
@@ -28,4 +28,4 @@ export function Button({
       {children}
     </button>
   );
-}
+};

@@ -11,6 +11,6 @@ const REDIRECT_PATHS = ["/dot", "/reflection", "/settings"] as const;
 
 export type RedirectPath = (typeof REDIRECT_PATHS)[number] | "/";
 
-export function safeRedirect(value: unknown): RedirectPath {
+export const safeRedirect = (value: unknown): RedirectPath => {
   return REDIRECT_PATHS.find((path) => path === value) ?? "/";
-}
+};

@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中（2026-10-05）。
+完了（2026-10-06）。実装・自動検証と、人間による実browserでの操作確認が済んだ（§16）。
 
 ## 2. Goal
 
@@ -158,11 +158,20 @@ TASK-006で実装したRailsの認証（Devise + OmniAuth Google + CookieStore�
 - 保護する画面は`RequireAuth`で包む。`checking`は待ち、`unknown`は再試行、`anonymous`は
   `/login?redirect=<今のpath>`へ置き換え遷移、`deletion_in_progress`は案内を出す。
   `redirect`は保護する画面のpathの一覧に一致するものだけを使い、合わなければ`/`にする（open redirect対策）。
-- `/`（Home）は公開のまま。マイクを押すと`/record`のguardでログインへ進み、成功すると`/record`へ戻る。
-  Homeには未認証のときだけ「ログインすると話し始められます」とログインへのリンクを示す。
+- `/`（Home）は公開のまま。マイクを押すと`/record`のguardでログインへ進む。成功するとHomeへ戻り、録音は
+  利用者がもう一度押して始める（実装で変更。下の`startsOnEnter`を参照）。Homeには未認証のときだけ
+  「ログインすると話し始められます」とログインへのリンクを示す。
+- 開いたときに副作用を始める画面（`/record`はマイクと録音、`/processing`は生成）は`RequireAuth startsOnEnter`で
+  包む（実装で追加。PR 2/3のレビューで、利用者の操作なしに録音・生成が始まる経路が続けて見つかったため）。
+  - 入るときにRailsで確かめ直し、その応答で認証済みと分かるまで中身をmountしない。直接開いたときは最初の
+    取得を待つ。10秒で中身を出せなければHomeへ戻す。
+  - 判断はcontextではなく、Sessionのqueryの今の状態で行う（contextは描画の通知が届くまで前の値のことがある）。
+  - 中身を出した後に未認証になればログインへ、取得の失敗・退会中ならHomeへ移り、状態が戻っても出し直さない。
+  - 2つの画面は`redirect`の許可一覧に入れない。ログインの後に戻ると、利用者の操作なしに録音・生成が始まるため。
 - ログイン画面: メール＋password、Google、新規登録・password再設定への導線。自分専用端末向けで7日保たれ、
-  共有端末では使用後にlogoutすること（product §4「認証体験」）を示す。`auth_error`・終了の理由（`reason`）を
-  enumで検証して文言に変える。`email_unconfirmed`なら確認メールの再送へ案内する。
+  共有端末では使用後にlogoutすること（product §4「認証体験」）を示す。`auth_error`をenumで検証して文言に変える。
+  終了の理由はURLの`reason`ではなく`AuthProvider`のmemoryで渡し、ログイン画面が1回だけ案内して消す（実装で変更。
+  URLに残すと、再読み込みや共有で古い案内が出るため）。`email_unconfirmed`なら確認メールの再送へ案内する。
 - 新規登録・確認メールの再送・password再設定の依頼は、登録の有無にかかわらず同じ文言で受付を示す。
 - メールのリンクの画面（確認・再設定・ロック解除）は、fragmentのtokenを読んだら`history.replaceState`で
   URLから消し、ボタンの操作でserverへ送る（メールのscannerがリンクを開いただけで確認・解除されないように）。
@@ -270,8 +279,11 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 | `apps/web/src/features/auth/index.ts` | 変更 | 画面のexport |
 | `apps/web/src/router.tsx` | 変更 | route追加・guard |
 | `apps/web/src/components/bottom-navigation/bottom-navigation.tsx` | 変更 | 「設定」を有効に |
+| `apps/web/src/libs/audio/recorder.ts`・`recorder.test.ts` | 変更・新規 | 許可を待っている間に止めた・離れたら、許可の後に録音を始めずstreamを止める（レビューで追加） |
+| `apps/web/src/features/recording/hooks/use-recorder.ts`・`components/recording-stage/recording-stage.tsx`・`recording-stage.test.tsx` | 変更 | StrictModeの再実行でも、片付けた録音の後に始め直す（Codexの指摘で追加） |
 
-レビュー対象 18。
+レビュー対象 23（計画は18）。レビューで録音の後始末を足したため20を超えた。人間の判断（選択肢A）で、原因を
+作ったPRで直すことにした（PR #66の本文の「判断が必要な点」）。
 
 ### PR 3/3: メールのリンクの画面と文書（`feat/task-007-3-account-recovery`、base PR 2）
 
@@ -287,9 +299,15 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 | `apps/web/src/features/auth/index.ts` | 変更 | export |
 | `apps/web/src/router.tsx` | 変更 | route追加 |
 | `docs/architecture.md`・`docs/journaling.md`・`docs/product.md`・`docs/development/frontend.md`・`docs/design-system.md` | 変更 | §6の現行文書 |
+| `docs/privacy.md`・`docs/tasks/TASK-014-frontend-private-data.md` | 変更 | `fod.session.v1`の起動時の削除を実装済みとする |
+| `apps/web/src/features/auth/auth-provider.tsx` | 変更 | `endSessionAfterCredentialChange`（再設定の後に古い認証済みを残さない。レビューで追加） |
 | 本Plan・`docs/tasks/TASK-007-frontend-identity.md` | 変更 | Completion Record・完了条件 |
 
-レビュー対象 約16。
+レビュー対象 19。
+
+レビュー観点の追記（`docs/code-review/frontend/README.md`・`security.md`）は、PR 2/3の判断（選択肢A）に合わせて、
+別の関連PR（#71、`docs/task-007-extra-review-viewpoints`）にする。観点の文が`fod.session.v1`をやめた実装を
+前提にするため、統合ブランチからではなく、このPRのブランチの上に積み、このPRの後にマージする（Codexの指摘）。
 
 ## 11. Libraries / APIs
 
@@ -383,11 +401,38 @@ TanStack Queryに持つだけ。localStorageの値・URLの値は認証の根拠
 - **Googleから戻った直後**: ページの読み込み直しで前の利用者と比べられないため、遷移の前に切り替わりを通知して
   消しておく。
 - **open redirect**: `redirect`は許可した保護する画面のpathだけ。`return_to`もRailsが検証する（二重）。
-- **tokenの漏えい**: fragmentはserverへ送られないが、URLに残るとbrowserの履歴・共有で漏れ得るため、読んだら
-  消す。tokenを画面・ログに出さない。
+- **tokenの漏えい**: fragmentはserverへ送られないが、URLに残るとタブの履歴・共有で漏れ得るため、読んだら
+  アドレスバーとタブの履歴のentryから消す。browserの閲覧履歴には最初に開いたURLが残り得るが、tokenは1回だけ
+  使え、期限がある。tokenを画面・ログに出さない。同じ画面を開いたまま、hashだけ別のtokenに変えた場合は
+  読み直さない（まれな操作のため、後続で必要になれば対応する）。
 - **Tailwindの影響**: preflightを読み込まないので既存画面のresetは変わらない。themeの既定値を消すので、
   token外の色・余白のclassは生成されない。
 - **互換性**: 契約は変えない。Webが新しく読むのは既存の`Session`だけ。
+- **入力欄の文字数**: パスワードの欄は`maxLength`で制限しない。HTMLはUTF-16の単位で数え、Railsは文字の単位で
+  数えるため、補助文字を含む有効なパスワードを切り詰める（Codexの指摘）。メールアドレスの254は残す。
+
+- **login中のpassword再設定**: serverは再設定で既存のCookieを無効にする。Webは再設定が済んだかもしれないときに
+  `useAuth().endSessionAfterCredentialChange()`を呼ぶ。通信を待たずにSessionのcacheを未認証として置き（利用者の
+  切り替わりとして個人データを消す）、取り直しはbackgroundで行う。呼んだ時点で実行中だった取得は再設定の前に
+  送られたかもしれないため、その結果が誰の認証済みでも信じず、受け取り終えた後に送る取得で確かめる。行われ
+  なかったと分かる失敗では呼ばない（個人データを消さない）。応答を失ったとき・送り直して`token_invalid`になった
+  ときは、送り直すとtokenが使用済みになるため、先にログインを試すよう案内する。tokenの画面で古いタブを示すときは、
+  tokenをURLから消してあるため、再読み込みではなくメールのリンクを開き直すよう案内する。将来、アカウント画面で
+  passwordを変える操作（TASK-001 Plan §54）を足すときも、同じ入口を使う。
+
+後続のタスクへの申し送り（PR 2/3のレビューで見つかり、範囲外として直さなかったもの）:
+
+- **unknownでのlogin**: 状態を確かめられない（`unknown`）ままでもログイン画面からloginできる。Railsがloginで
+  `reset_session`するため、前のCookieと混ざらない。
+- **録音画面のmountでの開始（TASK-010）**: `/record`を直接開く・再読み込みすると、確かめ直しの後にマイクが
+  自動で始まる。録音の開始を利用者の操作に結び付けるのは、TASK-010の「録音の説明」の段階で行う。Homeへ戻した
+  ときに理由を示さないことも、TASK-010で扱う。開発時のStrictModeでは、録音の開始が2回走り、マイクの許可を
+  2回求め得る（1回目は片付ける）。
+- **退会中のlogout（TASK-014）**: 退会の手続き中は、guardが案内だけを出し、logoutの導線がない。
+- **GoogleのformのCSRF token**: 別タブでの再loginなどでtokenが古いまま送ると、Railsの`403`のJSONが画面に出る。
+  通常の操作では起きにくいため、Googleの設定を入れるTASK-015で確かめる。
+- **`/processing`の一時的な失敗**: `startsOnEnter`は確かめ直しの失敗をHomeへ戻すため、通信が一時的に
+  失敗しただけでも整理をやり直せない。TASK-011で、生成を始める操作と結果の受け取りを分けるときに見直す。
 
 ## 14. Verification
 
@@ -450,6 +495,43 @@ PR 1/3のCodexの最終チェックが5回続けてLGTMにならず、`pr-review
 **決定（2026-10-05、人間）: 選択肢A。**5回目の修正をサブエージェントでレビューし、Codexの最終チェックを
 新しい段階として再開した。
 
+## 判断が必要な点（2026-10-05、PR 2/3の機械のレビューで停止）
+
+PR 2/3（#66）では、次の3回、止まる条件に当たった。経緯の表はPR #66の本文にある（このPRは20ファイルを
+超えたため、本文に記録した）。
+
+1. サブエージェントのレビューが3回LGTMにならない。指摘はすべて、利用者の操作なしに録音・生成が始まる経路。
+   決定: 選択肢A（もう1段階続ける）。
+2. Codexの指摘（StrictModeで録音が始まらない）を直すと、レビュー対象が20を超える。決定: 選択肢A（PR 2/3で直し、
+   レビュー観点の追記を独立したPRへ分ける）。
+3. Codexの最終チェックが5回LGTMにならない。1〜4回目は`startsOnEnter`の経路、5回目は入力欄とschema不一致。
+   決定: 選択肢A（新しい段階として続ける）。その1回目でLGTM（`5e1e212`）。
+
+## 判断が必要な点（2026-10-05、PR 3/3のCodexの最終チェックで停止）
+
+PR 3/3（#67）のCodexの最終チェックが5回続けてLGTMにならず、`pr-review-cycle`の止まる条件に当たった。
+指摘はすべて直してpush済み（`d60eadb`）。
+
+| 回 | 指摘（Medium） | 対応 |
+| --- | --- | --- |
+| 1 | login中に再設定しても、Sessionを取り直さず認証済みが残る | 成功後に取り直す |
+| 2 | 再設定の前に始まった取得を共有し、認証済みが残る | 実行中の取得を終わらせてから取り直す |
+| 3 | 再設定の応答だけを失うと、取り直さない | 済んだかもしれない失敗（通信・`token_invalid`）でも取り直す |
+| 4 | 再設定の直後にofflineになると、取り直しが止まり認証済みが残る | 通信を待たずに未認証として置く |
+| 5 | 未認証として置く前の取り直しが返らないと、完了の案内・入力の消去が止まる | その場で未認証として置き、取り直しはbackgroundで行う |
+
+5回とも、「login中にパスワードを再設定したとき、serverが無効にしたCookieの認証状態をWebに残さない」の経路で、
+回ごとに別の時機（通信の重なり・応答の喪失・offline・取り直しの停止）が見つかった。
+
+- 選択肢A（推奨）: 5回目の修正を入れた状態で、Codexの最終チェックをもう1段階（最大5回）続ける。
+- 選択肢B: 再設定の画面をlogin中には使わせない（login中ならlogoutを先に求める、またはアカウント画面からの
+  変更をTASK-001 Plan §54の重要操作として別に設ける）。範囲と体験の判断が要る。
+
+**決定（2026-10-05、人間）: 修正を仕上げ、セルフレビューとサブエージェントのレビューを経てからCodexへ戻す
+（選択肢Aの進め方）。**セルフレビューで、行われなかったと分かる失敗（`validation_failed`・`token_expired`・
+`rate_limited`・`csrf_invalid`・送らなかった`identity_changed`）以外はすべて「済んだかもしれない」と扱うよう
+広げ（serverの500を含む）、応答を失ったときは送り直す前にログインを試すよう案内を足した（§13）。
+
 ## 15. Definition of Done
 
 - TASK-007の完了条件と必要な検証を満たし、検証できなかったものを理由とともに記録している。
@@ -458,4 +540,54 @@ PR 1/3のCodexの最終チェックが5回続けてLGTMにならず、`pr-review
 
 ## 16. Completion Record
 
-未記入。
+- 状態: 完了（2026-10-06）。実装・自動検証（2026-10-05）の後、人間がレビューガイドの31項目（実browserでの操作を含む）を確認し、Doneとした。
+- 実装差異:
+  - guard・ログイン・アカウントのtestは同じfetchの差し替えを使うため、1ファイル（`auth-screens.test.tsx`）にまとめた。
+  - Tailwindの行間は`--text-*--line-height`ではなく`--leading-*`で割り当てた。repositoryのCSS custom propertyの
+    命名検査（`scripts/check-naming.mjs`）が`--`を含む名前を拒否するため。
+  - 終了の理由に`session_lost`（別タブでのlogout・serverの`unauthenticated`）を足した。「ログアウトしました」と
+    出すのは、このタブでlogoutしたときだけにするため。
+  - このタブでlogoutした後は、guardがログインへ移すときに`redirect`を付けない（次に使う人を前の画面へ戻さないため）。
+  - 既存の`processing-indicator.test.tsx`は、`SessionProvider`が`AuthProvider`を要るようになったため包み、
+    認証状態の取得だけを別に返すようにした。
+  - 録音・整理の画面のguard（`startsOnEnter`）と、ログインの後にHomeへ戻すこと、終了の理由をmemoryで渡すことを
+    足した（§7-4）。
+  - 録音の後始末（許可を待っている間の停止・StrictModeの再実行）をPR 2/3で直した（§10）。
+  - レビュー観点の追記は、このPRの上に積んだ関連PR（#71）にした（§10）。
+
+### 検証結果
+
+| command | 結果 |
+| --- | --- |
+| `pnpm check`（ESLint・命名・契約のlint・生成した型の最新確認） | 通過 |
+| `pnpm type-check` | 通過（Zodの`Session`と契約の型の一致を含む） |
+| `pnpm test` | scripts 173件・web 342件、すべて通過 |
+| `pnpm --filter @focus-on-dot/web build` | 通過。生成したCSSにpreflightがなく、使ったutilityが`--fod-*` tokenを参照することを確認 |
+
+proxy越しの確認（Rails 3107・Vite 5207を起動し、`curl`でWebと同じrequestの形を送った）:
+
+- `GET /api/v1/session`でCSRF tokenを受け取り、登録`202`、未確認のlogin`403 email_unconfirmed`、CSRF tokenなし・
+  別Originの`403 csrf_invalid`。responseは`Cache-Control: no-store`、Cookieは`HttpOnly; SameSite=Lax`（開発のため
+  Secureなし）。
+- 確認`204`、同じtokenの再使用`422 token_invalid`、login`200`（Sessionの形が契約どおり）、`GET`で
+  `authenticated: true`、logout`204`、その後の`GET`で`authenticated: false`。
+- Googleの開始（form POST）が`302`でGoogleへ。`redirect_uri`がproxyのorigin（`localhost:5207`）になる。
+- tokenのURLからの消去は、消去の処理を外すとtestが失敗することを一度確かめた。
+
+完了条件ごとの結果:
+
+| 完了条件 | 結果 | 証跡 |
+| --- | --- | --- |
+| 認証の開始・終了と失効を扱い、状態と次の操作が分かる | 確認（2026-10-06、人間が実browserで操作） | `auth-provider.test.tsx`（期限・別タブ・logout）、`auth-screens.test.tsx`、`token-screens.test.tsx` |
+| 未認証の保護対象、API呼び出し中の失効を契約どおり扱う | 確認 | `auth-provider.test.tsx`（`session_expired`・`unauthenticated`・`csrf_invalid`の1回の再送）、`auth-screens.test.tsx`（guard） |
+| 採用方式で資格情報を受け渡し、localStorageを根拠にしない | 確認 | proxy越しの確認、`request.test.ts`（`same-origin`・`X-CSRF-Token`）。認証状態はQuery cacheだけに持つ |
+| 終了・切り替わりを個人データのstateへ伝える境界 | 確認 | `subscribeIdentityChange`、`session-context.test.tsx` |
+| 関連現行文書の更新 | 確認 | architecture・journaling・product・privacy・frontend.md・design-system・TASK-014 |
+
+### 未実施の確認と理由
+
+- 実browserでの操作（登録 → 確認メールのリンク → ログイン → 録音 → logout、別タブのlogout、再読込、見た目）は、
+  2026-10-06に人間がレビューガイドで確認した（PR #65〜#67・#71・#73の「確認すること」）。
+- 実Googleでのlogin、実メールの受信。OAuth clientとメール配送の設定（外部サービス）が必要なため（TASK-015）。
+- 保護API（Dot）がまだ無いため、実serverの`401 session_expired`はmockの応答で確かめた。
+- 関連: メインのPR #61。

@@ -22,12 +22,12 @@ const expiryFormat = new Intl.DateTimeFormat("ja-JP", {
  * login中の利用者・ログインが保たれる期限・logout。RequireAuthの内側で使う。
  * 期限は案内用で、実際の判断はserverが行う（TASK-001 Plan §51）。
  */
-export function AccountScreen() {
+export const AccountScreen = () => {
   const { user, expiresAt, signOut } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
-  async function handleSignOut() {
+  const handleSignOut = async () => {
     setSigningOut(true);
     setError(null);
     try {
@@ -36,7 +36,7 @@ export function AccountScreen() {
       setError(caught);
       setSigningOut(false);
     }
-  }
+  };
 
   if (!user) return null;
 
@@ -79,4 +79,4 @@ export function AccountScreen() {
       </div>
     </AuthScreen>
   );
-}
+};

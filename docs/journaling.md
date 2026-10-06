@@ -10,23 +10,25 @@
 ```text
 Homeで「タップして話す」
 ↓
+/record（入るときにRailsで確かめ直す。未認証なら /login へ。ログイン後はHomeへ戻り、録音は利用者の操作で始める）
+↓
 /record で録音開始
 ↓
 停止（録音時間をSession Providerへ保存）
 ↓
 /processing で createDot を実行
 ↓
-Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
+Zodで検証したDotSessionをSession Provider（memory）へ保存
 ↓
 /dot と /reflection で現在の1件を表示
 ```
 
 | 段階 | 成功時の現行挙動 | 失敗・中断・再試行の現行挙動 |
 | --- | --- | --- |
-| 録音開始 | Homeの操作後に録音画面がmountし、MediaDevices / MediaRecorderを試行する。利用可能ならマイク入力と波形を使う。 | 権限拒否・非対応時は`silent` modeへfallbackし、画面は継続する。明示的な拒否案内はない。unmount時は録音資源を解放する。 |
+| 録音開始 | Homeの操作後に録音画面がmountし、MediaDevices / MediaRecorderを試行する。利用可能ならマイク入力と波形を使う。 | 権限拒否・非対応時は`silent` modeへfallbackし、画面は継続する。明示的な拒否案内はない。unmount時は録音資源を解放する。許可を待っている間に止めた・画面を離れた場合は、許可の後に録音を始めずstreamを止める。 |
 | 録音停止 | 停止時のdurationをSession Providerへ渡し、`/processing`へ遷移する。 | 二重停止はUIで抑止する。停止後に録音へ戻る導線、破棄確認、durationの再編集はない。 |
 | Dot生成 | `VITE_DOT_API_URL`が未設定なら約2.5秒後にローカルmockを返す。設定時は`${VITE_DOT_API_URL}/dot`へ本文なしのPOSTを行う。responseはZodで検証する。 | HTTP失敗またはschema不正ならErrorStateと再試行を表示する。再試行は同じ処理を再実行し、冪等性keyはない。 |
-| 保存と表示 | `DotSession`と録音時間を`fod.session.v1`へ保存・復元し、`/dot`と`/reflection`で表示する。 | localStorageの不正値は無視する。`reset`関数はあるが、現行UIに削除・リセット操作はない。 |
+| 保存と表示 | `DotSession`と録音時間をSession Providerのmemoryにだけ持ち、`/dot`と`/reflection`で表示する。再読み込みすると消える。 | 起動時に旧`fod.session.v1`を消す（TASK-007）。認証の終了・利用者の切り替わりで消える。`reset`関数はあるが、現行UIに削除・リセット操作はない。 |
 
 ## 2. データと正本
 
@@ -52,22 +54,23 @@ Zodで検証したDotSessionをSession ProviderとlocalStorageへ保存
 | --- | --- | --- | --- |
 | マイクstream / AudioContext | 録音中のbrowser memory | stop / dispose時にtrackを停止しAudioContextを閉じる。外部送信・永続化しない。 | 変えない。録音中のmemoryだけに置く。権限説明・対応ブラウザ・中断UXはTASK-010 |
 | 録音Blob | `MediaRecorder`内部で一時生成され得る | `stop`はBlobを生成し得るが、`useRecorder`はdurationだけを上位へ返す。Blobは後続へ渡さず、保存・送信しない。 | 同一originのRails経由で送る。**長期保存しない**が、処理が終わるまでS3東京へ一時的に預かる（非公開・暗号化・versioningを有効にしない）。**DotがRDSへ保存されるまで完了したら**即削除（文字起こしや生成が通った時点ではない）。失敗した場合は受理から24時間を再試行の期限とし、期限が来たらアプリが削除する（lifecycleは保険で、それ自体は24時間を保証しない）。Dot削除は対象の処理のもの、退会は本人の全部を削除。端末のstorageへは書かない。最長30分・32MB |
-| 録音時間 | Session Providerと`fod.session.v1` | `reset`またはbrowser storageの削除で消える。UIの削除操作は未実装。 | Dotと同じrequestで送り、RDSの`dots`を正本にする。保持・削除もDotと同じ |
-| Dot（id、date、started_at、duration、sentence、summary） | Session Providerと`fod.session.v1`に現在の1件（現行のDotSessionは`date`のみで`started_at`はなく、`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。`sentence`と`summary`は本人が編集でき、編集前の値は残さない。1件ごとの削除はゴミ箱（受理から7日で削除処理を始める）、即時の完全削除も備える。**`reflection`と`closing`は生成も保存もしない**。録音1回ごとに1件を保存し、`started_at`（録音開始操作をserverが受理した時刻・UTC）をserverが決め、`date`はそこから算出したAsia/Tokyoの暦日とする。`started_at`は`date`・`duration`と同じく本人に編集させず、保持・削除はDot本体と同じ（[dot-history §2](./dot-history.md)で2026-09-29採用） |
+| 録音時間 | Session Provider（memory） | 再読み込み・`reset`・認証の終了・利用者の切り替わりで消える。UIの削除操作は未実装。 | Dotと同じrequestで送り、RDSの`dots`を正本にする。保持・削除もDotと同じ |
+| Dot（id、date、started_at、duration、sentence、summary） | Session Provider（memory）に現在の1件（現行のDotSessionは`date`のみで`started_at`はなく、`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。`sentence`と`summary`は本人が編集でき、編集前の値は残さない。1件ごとの削除はゴミ箱（受理から7日で削除処理を始める）、即時の完全削除も備える。**`reflection`と`closing`は生成も保存もしない**。録音1回ごとに1件を保存し、`started_at`（録音開始操作をserverが受理した時刻・UTC）をserverが決め、`date`はそこから算出したAsia/Tokyoの暦日とする。`started_at`は`date`・`duration`と同じく本人に編集させず、保持・削除はDot本体と同じ（[dot-history §2](./dot-history.md)で2026-09-29採用） |
 | 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。ただし**Amazon Transcribeが結果をS3へ書き出すため、自前のbucketへ出して端末が受け取るまで置く**（2026-09-29にTASK-003で追加）。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す。server側の保持・削除は[privacy.md §5](./privacy.md)を正本とする |
 | 話した内容の要約（`summary`） | 存在しない | — | 文字起こしから生成し、Dotと同じ行に保存する。Dotを削除すれば一緒に消える。要約にも実名は残り得るため、Dot本文と同じ保護・削除・説明の対象にする |
 | API response | `createDot`の一時値をZod検証後にDotSessionへ | 未検証値は保存しない。 | Dotと文字起こしを返す。音声のURLは返さない。正式な契約は[`contracts/openapi.yaml`](../contracts/openapi.yaml)（2026-10-01にTASK-005で作成、未実装） |
 
 `localStorage`はbrowser上で利用者が読み書きできるため、認証・認可やserver側の正本には使わない。
-実サービス化では既存の`fod.session.v1`の読み取りをやめ、起動時に削除する。localStorageへ新しい永続
+既存の`fod.session.v1`は読み取りをやめ、起動時に削除する（2026-10-05にTASK-007で実装）。localStorageへ新しい永続
 keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを閉じると消える）に限る。
 
 ## 3. モックと実サービスの区別
 
 - `VITE_DOT_API_URL`未設定時の`sampleSession`は、画面遷移と表示を確認するための固定mockである。
   録音内容を生成しておらず、保存もしていない。
-- 現在のRails APIには`GET /up`だけがあり、`POST /dot`、`/api/v1`のプロダクトendpoint、認証、
-  Dot保存、AI処理は実装されていない。
+- 現在のRails APIにあるのは`GET /up`と認証（TASK-006）だけで、`POST /dot`、Dotの`/api/v1`の
+  endpoint、Dot保存、AI処理は実装されていない。WebはTASK-007で認証に接続し、録音・Dotの画面を
+  ログインしてから開くようにした。Dot生成のmockは認証の後も、そのまま固定のmockを返す。
 - `VITE_DOT_API_URL`設定時の本文なしPOSTは暫定的な接続点であり、音声Blob、duration、利用者、
   正式なRails API契約を表すものではない。
 - 実サービスの正式な契約は[`contracts/openapi.yaml`](../contracts/openapi.yaml)を正本とする
@@ -169,7 +172,7 @@ promptの最終文面と委託先の確認は残っている。この設計採�
   録音前の案内もこの実態に合わせる（TASK-010）。
 - 文字起こしが空（無音・極端に短い）の場合は生成へ進まず、録り直しを案内する。
 
-### 録音前認証と期限切れ（2026-09-25採用、未実装）
+### 録音前認証と期限切れ（2026-09-25採用。Webのguardは2026-10-05にTASK-007で実装）
 
 録音開始操作と/record直アクセスのどちらでも、マイクを開始する前にRailsでログイン・メール確認・
 期限を確認する。未認証ならログインへ案内し、成功後に録音の説明へ戻る。
@@ -182,7 +185,13 @@ promptの最終文面と委託先の確認は残っている。この設計採�
 
 確認メール24時間・reset6時間と再送制限、期限切れ/衝突時の導線、重要操作の再認証は
 [TASK-001 Plan §50–54・§56](implementation-plans/2026-09-21-task-001-identity-design.md)を参照する。
-現行mockの挙動は実装まで変わらない。
+
+TASK-007で実装したのは、録音前（`/record`直アクセスを含む）のserverでの確認、未認証・期限切れ・
+別タブのlogoutでログインへ移ること、認証の終了・利用者の切り替わりで録音時間と現在のDotを消すことまで。
+送信時の再確認、録音画面に留まったままの再ログインとmemory内の音声の再送はTASK-010/011で実装する
+（現在の録音は音声を後続へ渡さないため、ログインへ移っても失う音声はない）。ログインの後は、現在はHomeへ
+戻す（上の「成功後に録音の説明へ戻る」はTASK-010で実装する。録音画面へ戻すと、利用者の操作なしにマイクが
+始まるため）。
 
 ## 5. 未決定事項
 

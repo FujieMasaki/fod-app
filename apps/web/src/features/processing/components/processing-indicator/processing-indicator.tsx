@@ -14,7 +14,7 @@ import styles from "./processing-indicator.module.css";
  * ナビゲーションは mutate の per-call コールバックではなく mutation の状態で駆動する。
  * （StrictMode の二重マウント下でも確実に発火させるため）
  */
-export function ProcessingIndicator() {
+export const ProcessingIndicator = () => {
   const navigate = useNavigate();
   const { setDotSession } = useSession();
   const { identityEpoch } = useAuth();
@@ -66,4 +66,4 @@ export function ProcessingIndicator() {
       <Spinner size={28} label="今日のDotを整理しています" />
     </div>
   );
-}
+};

@@ -28,7 +28,7 @@ type SignInScreenProps = {
  * メールアドレス＋password、またはGoogleでログインする。
  * 自分専用端末向けで7日保たれ、共有端末では使用後にlogoutすることを示す（product.md §4「認証体験」）。
  */
-export function SignInScreen({ redirect, authError }: SignInScreenProps) {
+export const SignInScreen = ({ redirect, authError }: SignInScreenProps) => {
   const { status, endReason, acknowledgeEndReason, refresh, signIn, withCsrf } = useAuth();
   // 終了の理由は開いたときに1回だけ案内し、案内したら消す（古い案内が残り続けず、後の戻り先の判断も誤らないように）。
   // 開いている間に新しく理由が入った（状態を確かめ直したら未認証だった、など）ときも、取り込んでから消す。
@@ -50,7 +50,7 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
     return <Navigate to={redirect} replace />;
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
@@ -64,9 +64,9 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
     } finally {
       setSubmitting(false);
     }
-  }
+  };
 
-  async function handleResend() {
+  const handleResend = async () => {
     setSubmitting(true);
     try {
       await withCsrf((csrfToken) => resendConfirmation(csrfToken, submittedEmail));
@@ -77,7 +77,7 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
     } finally {
       setSubmitting(false);
     }
-  }
+  };
 
   const fields = fieldErrors(error);
   const unconfirmed = isProblem(error, "email_unconfirmed");
@@ -150,7 +150,8 @@ export function SignInScreen({ redirect, authError }: SignInScreenProps) {
 
       <div className="flex flex-col items-start gap-2">
         <TextLink to="/signup">はじめての方は新規登録</TextLink>
+        <TextLink to="/password/forgot">パスワードを忘れた場合</TextLink>
       </div>
     </AuthScreen>
   );
-}
+};

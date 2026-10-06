@@ -3,6 +3,30 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import globals from "globals";
 import typescriptEslint from "typescript-eslint";
 
+// Webの書き方（docs/development/frontend.md §1）。
+const webFunctionSyntax = [
+  {
+    // func-styleは`const f = function () {}`（関数式）を通すため、arrow functionに限る。classとobjectの
+    // method・getter・setterの形（`start() {}`・`get x() {}`）は関数式として表されるため除く。
+    selector:
+      "FunctionExpression:not(MethodDefinition > FunctionExpression):not(Property[method=true] > FunctionExpression):not(Property[kind=/^[gs]et$/] > FunctionExpression)",
+    message: "関数はarrow functionで書きます（docs/development/frontend.md §1）。",
+  },
+  {
+    // const + arrow functionの関数も、function宣言のときと同じくcamelCase・PascalCaseにする
+    // （naming-conventionのvariableはUPPER_CASEを許すため。typesによる判定は型情報が要る）。構文では
+    // 1語の大文字（`ID`）をPascalCaseと区別できないため、`_`を含む大文字の名前（`FETCH_DOT`）を止める。
+    selector: "VariableDeclarator[init.type='ArrowFunctionExpression'][id.name=/^[A-Z][A-Z0-9]*_[A-Z0-9_]*$/]",
+    message: "関数名はcamelCaseかPascalCaseにします。",
+  },
+];
+const webClassSyntax = [
+  {
+    selector: "ClassDeclaration, ClassExpression",
+    message: "classは使わず、constの作成関数と型ガードで書きます（docs/development/frontend.md §1）。",
+  },
+];
+
 const eslintConfig = defineConfig([
   js.configs.recommended,
   ...typescriptEslint.configs.recommended,
@@ -48,6 +72,24 @@ const eslintConfig = defineConfig([
           leadingUnderscore: "allow",
         },
       ],
+    },
+  },
+  {
+    // Webの関数は、Component・hook・補助関数も含めて const + arrow functionで書く（2026-10-05に決定、
+    // docs/development/frontend.md）。混在させないためlintで固定する。
+    files: ["apps/web/**/*.{ts,tsx}"],
+    rules: {
+      "func-style": ["error", "expression"],
+      "no-restricted-syntax": ["error", ...webFunctionSyntax],
+    },
+  },
+  {
+    // Webの実装ではclassも使わない。testの差し替え（AudioContextなど、実装が`new`で作るもの）は、
+    // constructorが要るため除く。flat configではruleの指定が置き換わるため、関数の指定も含める。
+    files: ["apps/web/**/*.{ts,tsx}"],
+    ignores: ["apps/web/**/*.test.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": ["error", ...webFunctionSyntax, ...webClassSyntax],
     },
   },
   {
