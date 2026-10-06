@@ -1,23 +1,55 @@
 import { useCallback, useEffect } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useAuth } from "@/features/auth";
+import { isApiError, isProblem, useAuth } from "@/features/auth";
 import { getDay, getToday, listDays } from "../api";
 
 /**
  * 履歴のquery。正本はserverで、ここではcacheと取得の状態だけを持つ（frontend.md §2）。
  * 本文はquery cacheにだけ置き、認証の終了・利用者の切り替わりでAuth Providerが消す。
+ *
+ * query keyには利用者のidを含める。Auth Providerがcacheを消すのは切り替わりを描画した後のeffectで、
+ * 表示中の画面のobserverは消されたqueryの結果を持ち続けるため、keyが同じだと切り替わった後も前の利用者の
+ * Dotが見え得る。keyが変われば、切り替わりの描画で前の利用者の結果を使わない。
  */
 
-const HISTORY_QUERY_KEY = ["history"] as const;
-const TODAY_QUERY_KEY = [...HISTORY_QUERY_KEY, "today"] as const;
-const DAYS_QUERY_KEY = [...HISTORY_QUERY_KEY, "days"] as const;
-const dayQueryKey = (date: string) => [...HISTORY_QUERY_KEY, "day", date] as const;
+const historyKey = (userId: string | null) => ["history", userId] as const;
+const todayKey = (userId: string | null) => [...historyKey(userId), "today"] as const;
+const daysKey = (userId: string | null) => [...historyKey(userId), "days"] as const;
+const dayKey = (userId: string | null, date: string) => [...historyKey(userId), "day", date] as const;
+
+// 通信の途中で切れた・proxyの失敗のような一時的なものだけ1回やり直す。serverが理由を返した失敗
+// （cursor_invalid・validation_failedなど）と、契約と合わない応答は、やり直しても直らない。
+const retryTransient = (failureCount: number, error: unknown): boolean => {
+  return failureCount < 1 && isApiError(error) && (error.kind === "network" || error.kind === "http");
+};
+
+const useUserId = (): string | null => useAuth().user?.id ?? null;
 
 /** Day: 今日の最新のDot。今日の記録が無いことは`dot_count: 0`で返り、取得失敗とは別 */
 export const useToday = () => {
   const { request } = useAuth();
-  return useQuery({ queryKey: TODAY_QUERY_KEY, queryFn: () => getToday(request) });
+  const userId = useUserId();
+  return useQuery({
+    queryKey: todayKey(userId),
+    queryFn: () => getToday(request),
+    enabled: userId !== null,
+    retry: retryTransient,
+  });
+};
+
+/**
+ * serverがcursorを解釈できなかったら（`cursor_invalid`）、契約どおり先頭から取り直す。
+ * 一覧が変わった後の取り直しでは、保存済みの古いcursorで続きのpageを取り直すため起こり得る。
+ */
+const useRestartOnInvalidCursor = (queryKey: readonly unknown[], error: unknown) => {
+  const queryClient = useQueryClient();
+  const serializedKey = JSON.stringify(queryKey);
+  useEffect(() => {
+    if (isProblem(error, "cursor_invalid")) {
+      void queryClient.resetQueries({ queryKey: JSON.parse(serializedKey) as unknown[], exact: true });
+    }
+  }, [error, queryClient, serializedKey]);
 };
 
 /**
@@ -26,12 +58,17 @@ export const useToday = () => {
  */
 export const useDayList = () => {
   const { request } = useAuth();
+  const userId = useUserId();
+  const queryKey = daysKey(userId);
   const query = useInfiniteQuery({
-    queryKey: DAYS_QUERY_KEY,
+    queryKey,
     queryFn: ({ pageParam }) => listDays(request, pageParam),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    enabled: userId !== null,
+    retry: retryTransient,
   });
+  useRestartOnInvalidCursor(queryKey, query.error);
   const pages = query.data?.pages;
   return {
     ...query,
@@ -48,13 +85,18 @@ export const useDayList = () => {
  */
 export const useDayDetail = (date: string) => {
   const { request } = useAuth();
+  const userId = useUserId();
   const refreshHistory = useRefreshHistory();
+  const queryKey = dayKey(userId, date);
   const query = useInfiniteQuery({
-    queryKey: dayQueryKey(date),
+    queryKey,
     queryFn: ({ pageParam }) => getDay(request, date, pageParam),
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
+    enabled: userId !== null,
+    retry: retryTransient,
   });
+  useRestartOnInvalidCursor(queryKey, query.error);
   const dots = query.data?.pages.flatMap((page) => page.dots) ?? [];
   const empty = query.isSuccess && dots.length === 0 && !query.hasNextPage;
 
@@ -72,10 +114,11 @@ export const useDayDetail = (date: string) => {
  */
 export const useRefreshHistory = () => {
   const queryClient = useQueryClient();
+  const userId = useUserId();
   return useCallback(async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: DAYS_QUERY_KEY, refetchType: "all" }),
-      queryClient.invalidateQueries({ queryKey: TODAY_QUERY_KEY, refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: daysKey(userId), refetchType: "all" }),
+      queryClient.invalidateQueries({ queryKey: todayKey(userId), refetchType: "all" }),
     ]);
-  }, [queryClient]);
+  }, [queryClient, userId]);
 };

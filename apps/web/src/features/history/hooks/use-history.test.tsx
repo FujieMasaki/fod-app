@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-import { AuthProvider, isApiError } from "@/features/auth";
+import { AuthProvider, isApiError, useAuth } from "@/features/auth";
 import { useDayDetail, useDayList, useToday } from "./use-history";
 
 // Rails APIの応答（契約の形）をfetchの差し替えで模す。`METHOD path`ごとの応答の列（最後は使い続ける）。
@@ -133,6 +133,57 @@ describe("useDayList", () => {
     await act(() => result.current.fetchNextPage());
     await waitFor(() => expect(result.current.isFetchNextPageError).toBe(true));
     expect(result.current.days.map((day) => day.date)).toEqual(["2026-10-01"]);
+  });
+});
+
+describe("利用者の切り替わり", () => {
+  it("表示中の一覧で利用者が別の人に切り替わっても、前の利用者の日を一度も返さない", async () => {
+    const otherUser = { ...signedIn, body: { ...signedIn.body, user: { ...signedIn.body.user, id: "5d3c1b2a-9e8f-4a7b-8c6d-0e1f2a3b4c5d" } } };
+    mockApi({
+      // 別のタブでAがlogoutしBがloginした後、このタブが認証状態を取り直す。
+      "GET /api/v1/session": [signedIn, otherUser],
+      "GET /api/v1/days": [
+        { status: 200, body: { today: "2026-10-01", items: [{ date: "2026-09-28", dot_count: 1, latest_dot_id: DOT_A }], next_cursor: null } },
+        { status: 200, body: { today: "2026-10-01", items: [{ date: "2026-09-27", dot_count: 1, latest_dot_id: DOT_B }], next_cursor: null } },
+      ],
+    });
+    const leaked: string[] = [];
+    const { result } = renderHook(
+      () => {
+        const auth = useAuth();
+        const list = useDayList();
+        if (auth.user?.id === otherUser.body.user.id && list.days.some((day) => day.date === "2026-09-28")) {
+          leaked.push("前の利用者の日を返した");
+        }
+        return { auth, list };
+      },
+      { wrapper },
+    );
+    await waitFor(() => expect(result.current.list.days.map((day) => day.date)).toEqual(["2026-09-28"]));
+
+    await act(() => result.current.auth.refresh());
+    await waitFor(() => expect(result.current.list.days.map((day) => day.date)).toEqual(["2026-09-27"]));
+    expect(leaked).toEqual([]);
+  });
+});
+
+describe("cursor_invalid", () => {
+  it("serverがcursorを解釈できなければ、先頭から取り直す（契約のCursorInvalid）", async () => {
+    const requests = mockApi({
+      "GET /api/v1/session": [signedIn],
+      "GET /api/v1/days": [
+        { status: 200, body: { today: "2026-10-01", items: [{ date: "2026-10-01", dot_count: 1, latest_dot_id: DOT_A }], next_cursor: "old" } },
+        { status: 200, body: { today: "2026-10-01", items: [{ date: "2026-09-30", dot_count: 1, latest_dot_id: DOT_B }], next_cursor: null } },
+      ],
+      "GET /api/v1/days?cursor=old": [problem(400, "cursor_invalid")],
+    });
+    const { result } = renderHook(() => useDayList(), { wrapper });
+    await waitFor(() => expect(result.current.hasNextPage).toBe(true));
+
+    await act(() => result.current.fetchNextPage());
+    await waitFor(() => expect(result.current.days.map((day) => day.date)).toEqual(["2026-09-30"]));
+    expect(result.current.isError).toBe(false);
+    expect(requests.filter((request) => request === "GET /api/v1/days?cursor=old")).toHaveLength(1);
   });
 });
 
