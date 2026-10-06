@@ -299,6 +299,27 @@ test("1行目の`---`は、続く行がYAMLに見えるときだけ前付けと�
   assert.equal(findEmphasisErrors("---\nname: a\ndescription: **説明。**続き\n---\n\n本文\n", "a.md").length, 0);
 });
 
+test("閉じfenceの条件をCommonMarkより緩くしない", () => {
+  // 緩いと、code blockの中のfence行で閉じてしまい、`--fix`が中身を書き換える。
+  // しかも行単位の指摘が消えるので、書き換えた位置が報告から落ちる。
+  const insideCodeBlock = [
+    "```text\n> ```\n**壊れ。**続き\n```\n", // 引用の内外が食い違う行
+    "```\ncode\n```js\n**壊れ。**続き\n```\n", // 閉じにinfo stringは付けられない
+    "~~~\n~~~yaml\n**壊れ。**続き\n~~~\n",
+  ];
+  for (const source of insideCodeBlock) {
+    assert.deepEqual(findEmphasisErrors(source, "a.md"), [], source);
+    assert.equal(applySwaps(source, analyzeEmphasis(source, "a.md").swaps).applied, 0, source);
+  }
+  // 閉じ行にfence以降の文字があると閉じないので、未閉として報告する。
+  const trailing = "```\ncode\n``` ここで閉じたつもり\n**壊れ。**続き\n";
+  assert.equal(findEmphasisErrors(trailing, "a.md").length, 1);
+  assert.match(findEmphasisErrors(trailing, "a.md")[0], /閉じていません/);
+  assert.equal(applySwaps(trailing, analyzeEmphasis(trailing, "a.md").swaps).applied, 0);
+  // 閉じの後ろが空白だけなら閉じる。
+  assert.equal(findEmphasisErrors("```sh\ncmd\n```   \n\n**崩れ。**続き\n", "a.md").length, 1);
+});
+
 test("blockquoteの中で開いたfenceは引用が終わったら閉じる", () => {
   // 引きずらせると引用の外の本文が飛ばされ、あとで出てくる本物のfenceで閉じてしまう。
   const source = "> ```text\n> code\n\n本文**崩れ。**続き\nもう1行**崩れ。**続き\n\n```sh\ncmd\n```\n";

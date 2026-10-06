@@ -317,13 +317,27 @@ export function analyzeEmphasis(source, relativePath) {
       fenceInQuote = false;
     }
 
-    const fenceStart = /^ {0,3}(```+|~~~+)/.exec(structural);
-    if (fenceStart && (skipping.fence.open === null || fenceStart[1].startsWith(skipping.fence.open))) {
-      flush();
-      const opening = skipping.fence.open === null;
-      skipping.fence.open = opening ? fenceStart[1] : null;
-      fenceInQuote = opening ? quoted : false;
-      return "fence";
+    const fenceStart = /^ {0,3}(```+|~~~+)(.*)$/.exec(structural);
+    if (fenceStart) {
+      if (skipping.fence.open === null) {
+        // 開きfenceにはinfo string（```sh 等）を付けられる。
+        flush();
+        skipping.fence.open = fenceStart[1];
+        fenceInQuote = quoted;
+        return "fence";
+      }
+      // **閉じfenceの条件をCommonMarkより緩くしない。** 同じ記号で同じ長さ以上、
+      // **後ろは空白だけ**（閉じにinfo stringは付けられない）、**引用の内外が開いたときと同じ**。
+      // 緩いと、code blockの中のfence行で閉じてしまい、中身を本文として解析して`--fix`が
+      // 書き換える（しかも行単位の指摘が消えるので、書き換えた位置が報告から落ちる）。
+      const closes =
+        fenceStart[1].startsWith(skipping.fence.open) && fenceStart[2].trim() === "" && quoted === fenceInQuote;
+      if (closes) {
+        flush();
+        skipping.fence.open = null;
+        fenceInQuote = false;
+        return "fence";
+      }
     }
     if (skipping.fence.open !== null) return "fence";
 
