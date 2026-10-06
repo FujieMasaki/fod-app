@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中（2026-10-05）。実装と自動検証は完了し、実browserでの操作確認が残る（§16）。
+完了（2026-10-06）。実装・自動検証と、人間による実browserでの操作確認が済んだ（§16）。
 
 ## 2. Goal
 
@@ -540,7 +540,7 @@ PR 3/3（#67）のCodexの最終チェックが5回続けてLGTMにならず、`
 
 ## 16. Completion Record
 
-- 状態: 実装・自動検証まで完了（2026-10-05）。実browserでの操作確認が人間の確認として残るため、タスクはIn progressのまま。
+- 状態: 完了（2026-10-06）。実装・自動検証（2026-10-05）の後、人間がレビューガイドの31項目（実browserでの操作を含む）を確認し、Doneとした。
 - 実装差異:
   - guard・ログイン・アカウントのtestは同じfetchの差し替えを使うため、1ファイル（`auth-screens.test.tsx`）にまとめた。
   - Tailwindの行間は`--text-*--line-height`ではなく`--leading-*`で割り当てた。repositoryのCSS custom propertyの
@@ -578,7 +578,7 @@ proxy越しの確認（Rails 3107・Vite 5207を起動し、`curl`でWebと同�
 
 | 完了条件 | 結果 | 証跡 |
 | --- | --- | --- |
-| 認証の開始・終了と失効を扱い、状態と次の操作が分かる | 実装・component testまで。**実browserの操作確認は未実施** | `auth-provider.test.tsx`（期限・別タブ・logout）、`auth-screens.test.tsx`、`token-screens.test.tsx` |
+| 認証の開始・終了と失効を扱い、状態と次の操作が分かる | 確認（2026-10-06、人間が実browserで操作） | `auth-provider.test.tsx`（期限・別タブ・logout）、`auth-screens.test.tsx`、`token-screens.test.tsx` |
 | 未認証の保護対象、API呼び出し中の失効を契約どおり扱う | 確認 | `auth-provider.test.tsx`（`session_expired`・`unauthenticated`・`csrf_invalid`の1回の再送）、`auth-screens.test.tsx`（guard） |
 | 採用方式で資格情報を受け渡し、localStorageを根拠にしない | 確認 | proxy越しの確認、`request.test.ts`（`same-origin`・`X-CSRF-Token`）。認証状態はQuery cacheだけに持つ |
 | 終了・切り替わりを個人データのstateへ伝える境界 | 確認 | `subscribeIdentityChange`、`session-context.test.tsx` |
@@ -586,8 +586,8 @@ proxy越しの確認（Rails 3107・Vite 5207を起動し、`curl`でWebと同�
 
 ### 未実施の確認と理由
 
-- 実browserでの、登録 → 確認メールのリンク → ログイン → 録音 → logout、期限切れ、別タブのlogout、再読込、見た目。
-  このセッションではbrowserを操作できないため、PRの「確認すること」に入れる。
+- 実browserでの操作（登録 → 確認メールのリンク → ログイン → 録音 → logout、別タブのlogout、再読込、見た目）は、
+  2026-10-06に人間がレビューガイドで確認した（PR #65〜#67・#71・#73の「確認すること」）。
 - 実Googleでのlogin、実メールの受信。OAuth clientとメール配送の設定（外部サービス）が必要なため（TASK-015）。
 - 保護API（Dot）がまだ無いため、実serverの`401 session_expired`はmockの応答で確かめた。
 - 関連: メインのPR #61。
