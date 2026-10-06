@@ -15,7 +15,7 @@ type RippleProps = {
  * 録音・待機の波紋。2 本を半周期(2.5s)ずらして自然な広がりをつくる。
  * prefers-reduced-motion では波紋を止める（フェード基調のみ残す）。
  */
-export function Ripple({ size, count = 2 }: RippleProps) {
+export const Ripple = ({ size, count = 2 }: RippleProps) => {
   const reduce = useReducedMotion();
   if (reduce) return null;
 
@@ -44,4 +44,4 @@ export function Ripple({ size, count = 2 }: RippleProps) {
       ))}
     </div>
   );
-}
+};

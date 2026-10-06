@@ -26,7 +26,7 @@ const TABS: TabDef[] = [
   { key: "settings", label: "設定", href: "/settings", Icon: SettingsIcon, enabled: true },
 ];
 
-export function BottomNavigation({ active }: { active: TabKey }) {
+export const BottomNavigation = ({ active }: { active: TabKey }) => {
   return (
     <nav className={styles.root} aria-label="メインナビゲーション">
       {TABS.map(({ key, label, href, Icon, enabled }) => {
@@ -63,4 +63,4 @@ export function BottomNavigation({ active }: { active: TabKey }) {
       })}
     </nav>
   );
-}
+};

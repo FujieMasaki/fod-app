@@ -9,7 +9,7 @@ import styles from "./spinner.module.css";
  * 処理中のローディング。進捗は示さない。
  * reduced-motion では回転を止め、静かなフェード（明滅）に置き換える。
  */
-export function Spinner({ size = 28, label }: { size?: number; label?: string }) {
+export const Spinner = ({ size = 28, label }: { size?: number; label?: string }) => {
   const reduce = useReducedMotion();
   const style = { "--spinner-size": `${size}px` } as CSSProperties;
 
@@ -27,4 +27,4 @@ export function Spinner({ size = 28, label }: { size?: number; label?: string })
       }
     />
   );
-}
+};

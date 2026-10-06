@@ -15,14 +15,14 @@ const INVALID_MESSAGE =
  * ロック解除メールのリンク（`/unlock#token=`）。解除してもloginはしないので、ログインへ案内する
  * （契約のunlockAccount。期限切れは返さない）。
  */
-export function UnlockScreen() {
+export const UnlockScreen = () => {
   const token = useFragmentToken();
   const { withCsrf } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [unlocked, setUnlocked] = useState(false);
 
-  async function handleUnlock() {
+  const handleUnlock = async () => {
     if (!token) return;
     setSubmitting(true);
     setError(null);
@@ -34,7 +34,7 @@ export function UnlockScreen() {
     } finally {
       setSubmitting(false);
     }
-  }
+  };
 
   if (unlocked) {
     return (
@@ -66,4 +66,4 @@ export function UnlockScreen() {
       </Button>
     </AuthScreen>
   );
-}
+};

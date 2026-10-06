@@ -16,11 +16,11 @@ vi.mock("@tanstack/react-router", () => ({
 // Rails APIの応答（契約の形）をfetchの差し替えで模す。`METHOD path`ごとに1つの応答。
 type Reply = { status: number; body?: unknown };
 
-function problem(status: number, code: string) {
+const problem = (status: number, code: string) => {
   return { status, body: { type: `urn:focus-on-dot:problem:${code}`, title: "x", status, code } };
-}
+};
 
-function mockApi(routes: Record<string, Reply>) {
+const mockApi = (routes: Record<string, Reply>) => {
   const requests: { key: string; body?: string }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -36,23 +36,23 @@ function mockApi(routes: Record<string, Reply>) {
     }),
   );
   return requests;
-}
+};
 
-function renderScreen(ui: ReactNode) {
+const renderScreen = (ui: ReactNode) => {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <AuthProvider>{ui}</AuthProvider>
     </QueryClientProvider>,
   );
-}
+};
 
-function openLink(path: string, token?: string) {
+const openLink = (path: string, token?: string) => {
   window.history.replaceState(null, "", token === undefined ? path : `${path}#token=${encodeURIComponent(token)}`);
-}
+};
 
-function sentBody(requests: { key: string; body?: string }[], key: string) {
+const sentBody = (requests: { key: string; body?: string }[], key: string) => {
   return JSON.parse(requests.find((r) => r.key === key)!.body!);
-}
+};
 
 beforeEach(() => {
   openLink("/");
@@ -239,9 +239,9 @@ describe("PasswordResetScreen", () => {
         throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
       }),
     );
-    function StatusProbe() {
+    const StatusProbe = () => {
       return <p>{`status:${useAuth().status}`}</p>;
-    }
+    };
     openLink("/password/reset", "reset-token");
     renderScreen(
       <>
@@ -296,9 +296,9 @@ describe("PasswordResetScreen", () => {
         throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
       }),
     );
-    function StatusProbe() {
+    const StatusProbe = () => {
       return <p>{`status:${useAuth().status}`}</p>;
-    }
+    };
     openLink("/password/reset", "reset-token");
     renderScreen(
       <>
@@ -353,9 +353,9 @@ describe("PasswordResetScreen", () => {
         throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
       }),
     );
-    function StatusProbe() {
+    const StatusProbe = () => {
       return <p>{`status:${useAuth().status}`}</p>;
-    }
+    };
     openLink("/password/reset", "reset-token");
     renderScreen(
       <>
@@ -400,9 +400,9 @@ describe("PasswordResetScreen", () => {
         throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
       }),
     );
-    function StatusProbe() {
+    const StatusProbe = () => {
       return <p>{`status:${useAuth().status}`}</p>;
-    }
+    };
     openLink("/password/reset", "reset-token");
     renderScreen(
       <>
@@ -446,9 +446,9 @@ describe("PasswordResetScreen", () => {
         throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
       }),
     );
-    function StatusProbe() {
+    const StatusProbe = () => {
       return <p>{`status:${useAuth().status}`}</p>;
-    }
+    };
     openLink("/password/reset", "reset-token");
     renderScreen(
       <>
@@ -505,10 +505,10 @@ describe("PasswordResetScreen", () => {
         throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
       }),
     );
-    function StatusProbe() {
+    const StatusProbe = () => {
       const { status, identityEpoch } = useAuth();
       return <p>{`status:${status} epoch:${identityEpoch}`}</p>;
-    }
+    };
     openLink("/password/reset", "reset-token");
     renderScreen(
       <>
@@ -565,9 +565,9 @@ describe("PasswordResetScreen", () => {
         throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
       }),
     );
-    function StatusProbe() {
+    const StatusProbe = () => {
       return <p>{`status:${useAuth().status}`}</p>;
-    }
+    };
     openLink("/password/reset", "reset-token");
     renderScreen(
       <>
@@ -637,9 +637,9 @@ describe("PasswordResetScreen", () => {
         throw new Error(`unexpected request: ${init?.method ?? "GET"} ${path}`);
       }),
     );
-    function StatusProbe() {
+    const StatusProbe = () => {
       return <p>{`status:${useAuth().status}`}</p>;
-    }
+    };
     openLink("/password/reset", "reset-token");
     renderScreen(
       <>

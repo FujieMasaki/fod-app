@@ -10,14 +10,14 @@ import { AuthScreen, FormMessage, ReloadNotice, TextField, TextLink } from "./au
  * password再設定のメールを頼む。登録の有無・Google専用かどうかにかかわらず同じ受付を示す
  * （契約のrequestPasswordReset）。
  */
-export function PasswordForgotScreen() {
+export const PasswordForgotScreen = () => {
   const { withCsrf } = useAuth();
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [accepted, setAccepted] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
@@ -29,7 +29,7 @@ export function PasswordForgotScreen() {
     } finally {
       setSubmitting(false);
     }
-  }
+  };
 
   if (accepted) {
     return (
@@ -69,4 +69,4 @@ export function PasswordForgotScreen() {
       <TextLink to="/login">ログインへ戻る</TextLink>
     </AuthScreen>
   );
-}
+};

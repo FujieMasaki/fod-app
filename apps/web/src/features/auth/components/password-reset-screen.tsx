@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/design-system";
-import { ApiError, isProblem } from "@/libs/api-client/request";
+import { isApiError, isProblem } from "@/libs/api-client/request";
 import { resetPassword } from "../api";
 import { useAuth } from "../auth-provider";
 import { errorMessage, fieldErrors, needsReload } from "../messages";
@@ -19,24 +19,24 @@ const TOKEN_MESSAGES = {
 const NOT_APPLIED_CODES = ["validation_failed", "token_expired", "rate_limited", "csrf_invalid"] as const;
 
 // 再設定が済んだか分からない失敗（応答を失った・serverのerror・失敗の応答の形が契約と合わない）。
-function outcomeUnknown(error: unknown): boolean {
+const outcomeUnknown = (error: unknown): boolean => {
   return (
-    error instanceof ApiError &&
+    isApiError(error) &&
     (error.kind === "network" || error.kind === "http" || error.kind === "schema" || isProblem(error, "internal_error"))
   );
-}
+};
 
-function mayHaveReset(error: unknown): boolean {
+const mayHaveReset = (error: unknown): boolean => {
   // 利用者が切り替わっていて送らなかった（withCsrfの`identity_changed`）
-  if (error instanceof Error && !(error instanceof ApiError) && error.message === "identity_changed") return false;
+  if (error instanceof Error && !isApiError(error) && error.message === "identity_changed") return false;
   return !isProblem(error, ...NOT_APPLIED_CODES);
-}
+};
 
 /**
  * 再設定メールのリンク（`/password/reset#token=`）。成功してもloginはしないので、ログインへ案内する
  * （契約のresetPassword）。
  */
-export function PasswordResetScreen() {
+export const PasswordResetScreen = () => {
   const token = useFragmentToken();
   const { withCsrf, endSessionAfterCredentialChange } = useAuth();
   const [password, setPassword] = useState("");
@@ -44,7 +44,7 @@ export function PasswordResetScreen() {
   const [error, setError] = useState<unknown>(null);
   const [done, setDone] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!token) return;
     setSubmitting(true);
@@ -62,7 +62,7 @@ export function PasswordResetScreen() {
       setSubmitting(false);
       setPassword("");
     }
-  }
+  };
 
   if (done) {
     return (
@@ -125,4 +125,4 @@ export function PasswordResetScreen() {
       </form>
     </AuthScreen>
   );
-}
+};

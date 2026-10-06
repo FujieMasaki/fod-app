@@ -22,14 +22,14 @@ const schemasByName: Record<string, z.ZodType> = {
 type Ref = { $ref: string };
 type MediaType = { schema?: Ref; examples?: Record<string, Ref> };
 
-function resolve<T>(ref: Ref | T): T {
+const resolve = <T>(ref: Ref | T): T => {
   if (typeof ref !== "object" || ref === null || !("$ref" in ref)) return ref as T;
   const path = (ref as Ref).$ref.replace(/^#\//, "").split("/");
   return path.reduce((node, key) => node[key], contract) as T;
-}
+};
 
 // 各operationのresponseについて、Zod schemaがある型の例を集める。
-function collectResponseExamples() {
+const collectResponseExamples = () => {
   const cases: { label: string; schemaName: string; value: unknown }[] = [];
   for (const [path, operations] of Object.entries<Record<string, { responses?: Record<string, unknown> }>>(
     contract.paths,
@@ -52,7 +52,7 @@ function collectResponseExamples() {
     }
   }
   return cases;
-}
+};
 
 const cases = collectResponseExamples();
 

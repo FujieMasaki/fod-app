@@ -54,11 +54,11 @@ const signedIn = {
 };
 const anonymous = { status: 200, body: { authenticated: false, csrf_token: "t1" } };
 
-function problem(status: number, code: string, extra: Record<string, unknown> = {}) {
+const problem = (status: number, code: string, extra: Record<string, unknown> = {}) => {
   return { status, body: { type: `urn:focus-on-dot:problem:${code}`, title: "x", detail: "serverの詳細", status, code, ...extra } };
-}
+};
 
-function mockApi(routes: Record<string, Reply[]>) {
+const mockApi = (routes: Record<string, Reply[]>) => {
   const requests: { key: string; body?: string }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -75,21 +75,21 @@ function mockApi(routes: Record<string, Reply[]>) {
     }),
   );
   return requests;
-}
+};
 
-function renderWithAuth(ui: ReactNode) {
+const renderWithAuth = (ui: ReactNode) => {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
       <AuthProvider>{ui}</AuthProvider>
     </QueryClientProvider>,
   );
-}
+};
 
-function fillSignIn(password = "password123") {
+const fillSignIn = (password = "password123") => {
   fireEvent.change(screen.getByLabelText("メールアドレス"), { target: { value: "user@example.com" } });
   fireEvent.change(screen.getByLabelText("パスワード"), { target: { value: password } });
   fireEvent.click(screen.getByRole("button", { name: "ログイン" }));
-}
+};
 
 afterEach(() => {
   focusManager.setFocused(undefined);
@@ -284,7 +284,7 @@ describe("logoutの後の案内と戻り先", () => {
       "GET /api/v1/session": [signedIn, anonymous],
       "DELETE /api/v1/session": [{ status: 204 }],
     });
-    function Harness() {
+    const Harness = () => {
       const { signOut } = useAuth();
       const [openCount, setOpenCount] = useState(0);
       return (
@@ -294,7 +294,7 @@ describe("logoutの後の案内と戻り先", () => {
           {openCount > 0 && <SignInScreen key={openCount} redirect="/" />}
         </div>
       );
-    }
+    };
     renderWithAuth(<Harness />);
     await waitFor(() => expect(screen.getByRole("button", { name: "logout" })).toBeInTheDocument());
 
@@ -310,11 +310,11 @@ describe("logoutの後の案内と戻り先", () => {
 });
 
 describe("SignUpScreen", () => {
-  function fillSignUp(password = "password1234") {
+  const fillSignUp = (password = "password1234") => {
     fireEvent.change(screen.getByLabelText("メールアドレス"), { target: { value: "new@example.com" } });
     fireEvent.change(screen.getByLabelText("パスワード"), { target: { value: password } });
     fireEvent.click(screen.getByRole("button", { name: "登録する" }));
-  }
+  };
 
   it("登録済みかどうかにかかわらず同じ受付を示す", async () => {
     const requests = mockApi({ "GET /api/v1/session": [anonymous], "POST /api/v1/registration": [{ status: 202 }] });
@@ -382,9 +382,9 @@ describe("SignInPrompt", () => {
 
   it("login中は出さない", async () => {
     mockApi({ "GET /api/v1/session": [signedIn] });
-    function StatusProbe() {
+    const StatusProbe = () => {
       return <p>{`status:${useAuth().status}`}</p>;
-    }
+    };
     renderWithAuth(
       <>
         <StatusProbe />
@@ -438,11 +438,11 @@ describe("Googleでのlogin", () => {
   it("formを送る前に、前の利用者の個人データを消すよう通知する", async () => {
     mockApi({ "GET /api/v1/session": [anonymous] });
     const onIdentityChange = vi.fn();
-    function Subscriber() {
+    const Subscriber = () => {
       const { subscribeIdentityChange } = useAuth();
       useState(() => subscribeIdentityChange(onIdentityChange));
       return null;
-    }
+    };
     const { container } = renderWithAuth(
       <>
         <Subscriber />
@@ -485,7 +485,7 @@ describe("SignInScreen（開いている間の変化）", () => {
       "GET /api/v1/session": [signedIn, anonymous],
       "DELETE /api/v1/session": [{ status: 204 }],
     });
-    function Harness() {
+    const Harness = () => {
       const { signOut } = useAuth();
       return (
         <div>
@@ -493,7 +493,7 @@ describe("SignInScreen（開いている間の変化）", () => {
           <SignInScreen redirect="/" />
         </div>
       );
-    }
+    };
     renderWithAuth(<Harness />);
     await screen.findByText("navigate:/");
 
@@ -513,14 +513,14 @@ describe("SignInScreen（開いている間の変化）", () => {
 describe("副作用を始める画面のguard（startsOnEnter）", () => {
   // mountされた回数を数える（一瞬だけのmountでもマイクの開始が走るため、表示の有無ではなく回数で確かめる）
   const mounted = { count: 0 };
-  function CountingScreen() {
+  const CountingScreen = () => {
     useState(() => {
       mounted.count += 1;
     });
     return <p>録音画面</p>;
-  }
+  };
 
-  function Toggle({ children }: { children: ReactNode }) {
+  const Toggle = ({ children }: { children: ReactNode }) => {
     const [open, setOpen] = useState(false);
     return (
       <div>
@@ -528,7 +528,7 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
         {open && children}
       </div>
     );
-  }
+  };
 
   it("cacheでは認証済みでも、確かめ直して未認証なら中身を一度もmountせずログインへ移る", async () => {
     locationMock.pathname = "/record";
@@ -565,12 +565,12 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
       }),
     );
     let mounts = 0;
-    function Recording() {
+    const Recording = () => {
       useState(() => {
         mounts += 1;
       });
       return <p>録音画面</p>;
-    }
+    };
     renderWithAuth(
       <Toggle>
         <RequireAuth startsOnEnter>
@@ -913,11 +913,11 @@ describe("メールでのlogin中のGoogle", () => {
       }),
     );
     const onIdentityChange = vi.fn();
-    function Subscriber() {
+    const Subscriber = () => {
       const { subscribeIdentityChange } = useAuth();
       useState(() => subscribeIdentityChange(onIdentityChange));
       return null;
-    }
+    };
     const { container } = renderWithAuth(
       <>
         <Subscriber />

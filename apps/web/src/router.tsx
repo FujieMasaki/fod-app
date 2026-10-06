@@ -24,15 +24,15 @@ import { useSession } from "@/features/session";
 import { TodaysDotView } from "@/features/todays-dot";
 import { Providers } from "@/providers";
 
-function RootComponent() {
+const RootComponent = () => {
   return (
     <Providers>
       <AppShell />
     </Providers>
   );
-}
+};
 
-function HomePage() {
+const HomePage = () => {
   return (
     <ScreenLayout activeTab="home">
       <div className="flex h-full flex-col">
@@ -43,10 +43,10 @@ function HomePage() {
       </div>
     </ScreenLayout>
   );
-}
+};
 
 // 録音前にserverで認証を確かめる（journaling.md §4「録音前認証と期限切れ」）。
-function RecordPage() {
+const RecordPage = () => {
   return (
     <ScreenLayout>
       <RequireAuth startsOnEnter>
@@ -54,9 +54,9 @@ function RecordPage() {
       </RequireAuth>
     </ScreenLayout>
   );
-}
+};
 
-function ProcessingPage() {
+const ProcessingPage = () => {
   return (
     <ScreenLayout>
       <RequireAuth startsOnEnter>
@@ -64,9 +64,9 @@ function ProcessingPage() {
       </RequireAuth>
     </ScreenLayout>
   );
-}
+};
 
-function DotPage() {
+const DotPage = () => {
   const navigate = useNavigate();
   const { dotSession, hydrated } = useSession();
 
@@ -81,9 +81,9 @@ function DotPage() {
       </RequireAuth>
     </ScreenLayout>
   );
-}
+};
 
-function ReflectionPage() {
+const ReflectionPage = () => {
   const navigate = useNavigate();
   const { dotSession, hydrated } = useSession();
 
@@ -101,9 +101,9 @@ function ReflectionPage() {
       </RequireAuth>
     </ScreenLayout>
   );
-}
+};
 
-function SettingsPage() {
+const SettingsPage = () => {
   return (
     <ScreenLayout activeTab="settings">
       <RequireAuth>
@@ -111,57 +111,57 @@ function SettingsPage() {
       </RequireAuth>
     </ScreenLayout>
   );
-}
+};
 
-function LoginPage() {
+const LoginPage = () => {
   const search = loginRoute.useSearch();
   return (
     <ScreenLayout>
       <SignInScreen redirect={safeRedirect(search.redirect)} authError={parseAuthError(search.auth_error)} />
     </ScreenLayout>
   );
-}
+};
 
-function SignUpPage() {
+const SignUpPage = () => {
   return (
     <ScreenLayout>
       <SignUpScreen />
     </ScreenLayout>
   );
-}
+};
 
 // メールのリンクの画面。パスはRailsのメール（apps/api/app/mailers/user_mailer.rb）と揃える。
-function ConfirmationPage() {
+const ConfirmationPage = () => {
   return (
     <ScreenLayout>
       <ConfirmationScreen />
     </ScreenLayout>
   );
-}
+};
 
-function PasswordForgotPage() {
+const PasswordForgotPage = () => {
   return (
     <ScreenLayout>
       <PasswordForgotScreen />
     </ScreenLayout>
   );
-}
+};
 
-function PasswordResetPage() {
+const PasswordResetPage = () => {
   return (
     <ScreenLayout>
       <PasswordResetScreen />
     </ScreenLayout>
   );
-}
+};
 
-function UnlockPage() {
+const UnlockPage = () => {
   return (
     <ScreenLayout>
       <UnlockScreen />
     </ScreenLayout>
   );
-}
+};
 
 const rootRoute = createRootRoute({ component: RootComponent });
 const indexRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: HomePage });
