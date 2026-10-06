@@ -12,6 +12,7 @@ import {
   flanking,
   keepsProse,
   maskHtmlComments,
+  skippingStates,
   stripInlineCode,
 } from "./check-markdown.mjs";
 
@@ -215,19 +216,30 @@ test("コードスパン・code blockの中の`<!--`でコメントの状態を�
   assert.equal(findEmphasisErrors("```text\n<!-- 例\n```\n\n**崩れている。**続き\n", "a.md").length, 1);
 });
 
-test("行を飛ばす状態が開いたまま終わったら、3つすべて報告する", () => {
-  // 1つでも漏らすと、そのファイルが丸ごと検査されないままCIが緑になる。
-  assert.deepEqual(findEmphasisErrors("```sh\ncmd\n\n**崩れている。**続き\n", "a.md"), [
-    "a.md: ``` で開いたcode blockが閉じていません。そこから後の行を検査していません。",
-  ]);
-  assert.deepEqual(findEmphasisErrors("<!-- 未完\n\n**崩れている。**続き\n", "a.md"), [
-    "a.md: HTMLコメント（<!--）が閉じていません。そこから後の行を検査していません。",
-  ]);
-  assert.equal(findEmphasisErrors("---\n本文の**強調。**続き\nもっと**崩れ\n", "a.md").length, 1);
-  assert.match(
-    findEmphasisErrors("---\n本文の**強調。**続き\n", "a.md")[0],
-    /YAML frontmatter（1行目の---）が閉じていません/,
+// 行を飛ばす状態を「開いたまま閉じない」形にする入力。`skippingStates`のすべての状態を覆う
+// （覆っていなければ下のtestが落ちるので、状態を足したらここにも足すことになる）。
+const unclosedFixtures = {
+  fence: "```sh\ncmd\n\n**崩れている。**続き\n",
+  comment: "<!-- 未完\n\n**崩れている。**続き\n",
+  frontmatter: "---\n本文の**強調。**続き\nもっと**崩れ\n",
+};
+
+test("行を飛ばす状態は、すべて閉じ忘れを報告する", () => {
+  // 1つでも報告を漏らすと、そのファイルが丸ごと検査されないままCIが緑になる。
+  // fence・HTMLコメント・frontmatterの3つで順番にその穴を作ったので、網羅を機械で確かめる。
+  assert.deepEqual(
+    Object.keys(unclosedFixtures).sort(),
+    Object.keys(skippingStates).sort(),
+    "行を飛ばす状態を足したら、閉じ忘れのfixtureも足す",
   );
+
+  for (const [name, source] of Object.entries(unclosedFixtures)) {
+    const errors = findEmphasisErrors(source, "a.md");
+    assert.equal(errors.length, 1, `${name}: 閉じ忘れを1件だけ報告する（実際: ${JSON.stringify(errors)}）`);
+    assert.match(errors[0], /^a\.md: /, name);
+    assert.match(errors[0], /検査していません/, `${name}: 無検査になったことが分かる文言で報告する`);
+  }
+
   // 1行目の`---`を水平線として書いた場合も、黙らずに報告する。
   assert.equal(findEmphasisErrors("---\n\n本文の**強調。**続き\n", "a.md").length, 1);
 });

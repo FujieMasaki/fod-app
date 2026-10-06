@@ -168,18 +168,41 @@ function makeBlock() {
   };
 }
 
+// **行を飛ばす状態の定義。** 開いたまま終わると、そこから後の行がすべて無検査になるので、
+// `analyzeEmphasis`はこの表を回してEOFで開いているものを報告する。
+//
+// **新しい除外を足すときは必ずここへ足す。** fence・HTMLコメント・frontmatterの3つで順番に
+// 「報告を書き忘れてファイルが丸ごと素通りする」穴を作ったため、個別のifをやめて表にした。
+// `check-markdown.test.mjs`が、この表のすべての状態について閉じ忘れが報告されることを検査する
+// （fixtureを足さずに状態を足すとtestが落ちる）。
+export const skippingStates = {
+  // ``` と ~~~ を区別しないと、片方の中にもう片方が出た時点で状態が反転する。
+  fence: {
+    initial: null,
+    message: (value) => `${value} で開いたcode blockが閉じていません。そこから後の行を検査していません。`,
+  },
+  comment: {
+    initial: false,
+    message: () => "HTMLコメント（<!--）が閉じていません。そこから後の行を検査していません。",
+  },
+  frontmatter: {
+    initial: false,
+    message: () =>
+      "YAML frontmatter（1行目の---）が閉じていません。" +
+      "ファイル全体を検査していません。前付けでなければ1行目に`---`を置かないでください。",
+  },
+};
+
 // errors（人が読む指摘）と swaps（--fixで入れ替える位置）を返す。
 export function analyzeEmphasis(source, relativePath) {
   const errors = [];
   const swaps = [];
   const lines = source.split("\n");
 
-  // 開いたfenceの記号を覚える。``` と ~~~ を区別しないと、片方の中にもう片方が出た時点で
-  // 状態が反転し、code blockの中を本文として解析してしまう。
-  let fence = null;
+  const skipping = Object.fromEntries(
+    Object.entries(skippingStates).map(([name, state]) => [name, { open: state.initial, message: state.message }]),
+  );
   let block = null;
-  let inFrontmatter = false;
-  let inComment = false;
 
   const flush = () => {
     if (!block) return;
@@ -238,18 +261,22 @@ export function analyzeEmphasis(source, relativePath) {
     // YAML frontmatterは本文ではない。1行目の`---`だけを前付けの開始として扱う
     // （2行目以降の`---`は水平線かsetextの下線）。`--fix`がYAMLのスカラを書き換えないため。
     if (index === 0 && originalLine.trim() === "---") {
-      inFrontmatter = true;
+      skipping.frontmatter.open = true;
       return;
     }
-    if (inFrontmatter) {
-      if (originalLine.trim() === "---") inFrontmatter = false;
+    if (skipping.frontmatter.open) {
+      if (originalLine.trim() === "---") skipping.frontmatter.open = false;
       return;
     }
 
     const rawLine = originalLine;
 
     // 水平線（`***`だけの行）は強調ではないので先に外す。
-    if (fence === null && /^ {0,3}\*[\s*]*$/.test(rawLine) && (rawLine.match(/\*/g) ?? []).length >= 3) {
+    if (
+      skipping.fence.open === null &&
+      /^ {0,3}\*[\s*]*$/.test(rawLine) &&
+      (rawLine.match(/\*/g) ?? []).length >= 3
+    ) {
       flush();
       return;
     }
@@ -259,12 +286,12 @@ export function analyzeEmphasis(source, relativePath) {
     // インデントは3空白まで（CommonMark）。`^\s*`にすると、4空白のcode blockの中に書いた
     // fence行で状態が反転し、閉じないままEOFへ達して以降の全行が無検査になる。
     const fenceStart = /^ {0,3}(```+|~~~+)/.exec(rawLine);
-    if (fenceStart && (fence === null || fenceStart[1].startsWith(fence))) {
+    if (fenceStart && (skipping.fence.open === null || fenceStart[1].startsWith(skipping.fence.open))) {
       flush();
-      fence = fence === null ? fenceStart[1] : null;
+      skipping.fence.open = skipping.fence.open === null ? fenceStart[1] : null;
       return;
     }
-    if (fence !== null) return;
+    if (skipping.fence.open !== null) return;
 
     // 4空白インデントのcode block。空行のあとに始まるものだけが該当する
     // （段落の続きの行は中断できない）。中身を本文として扱うと`--fix`がコマンド例を書き換える。
@@ -273,8 +300,8 @@ export function analyzeEmphasis(source, relativePath) {
     // コードスパンを潰したあとでHTMLコメントを外す。この順にすると、CommonMarkと同じ優先順位
     // （block構造 → コードスパン → raw HTML）になり、コードスパンやcode blockの中の`<!--`で
     // コメントの状態が反転しない。反転すると、そこから後の行が黙って無検査になる。
-    const masked = maskHtmlComments(stripInlineCode(rawLine), inComment);
-    inComment = masked.inComment;
+    const masked = maskHtmlComments(stripInlineCode(rawLine), skipping.comment.open);
+    skipping.comment.open = masked.inComment;
     const line = masked.line;
 
     for (const match of line.matchAll(/\*{3,}/g)) {
@@ -315,24 +342,10 @@ export function analyzeEmphasis(source, relativePath) {
   });
 
   flush();
-  // 行を飛ばす状態（fence・HTMLコメント・frontmatter）が開いたまま終わると、その後の行が
-  // すべて無検査になる。**3つすべてを報告する**。1つでも漏らすと、そのファイルが丸ごと
-  // 検査されないままCIが緑になる。
-  if (fence !== null) {
-    errors.push(
-      `${relativePath}: ${fence} で開いたcode blockが閉じていません。そこから後の行を検査していません。`,
-    );
-  }
-  if (inComment) {
-    errors.push(
-      `${relativePath}: HTMLコメント（<!--）が閉じていません。そこから後の行を検査していません。`,
-    );
-  }
-  if (inFrontmatter) {
-    errors.push(
-      `${relativePath}: YAML frontmatter（1行目の---）が閉じていません。` +
-        "ファイル全体を検査していません。前付けでなければ1行目に`---`を置かないでください。",
-    );
+  // **開いたまま終わった状態を表から機械的に報告する。** 個別のifで書いていたときは、
+  // 状態を足すたびに報告を書き忘れて「そのファイルが丸ごと素通りする」穴を作っていた。
+  for (const state of Object.values(skipping)) {
+    if (state.open) errors.push(`${relativePath}: ${state.message(state.open)}`);
   }
   return { errors, swaps };
 }
