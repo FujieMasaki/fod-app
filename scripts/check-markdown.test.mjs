@@ -244,6 +244,61 @@ test("行を飛ばす状態は、すべて閉じ忘れを報告する", () => {
   assert.equal(findEmphasisErrors("---\n\n本文の**強調。**続き\n", "a.md").length, 1);
 });
 
+test("すべての行が、記録された扱い方のどれかで処理される", () => {
+  // 行を飛ばす経路を足して記録を忘れると、返り値がundefinedになって内部エラーが出る。
+  // これは`skippingStates`の表の外にローカル変数で状態を足した場合も捕まる。
+  const samples = [
+    "---\nname: a\n---\n\n# 見出し\n\n本文の**強調**。\n\n| a | **b** |\n| --- | --- |\n",
+    "```sh\ncmd\n```\n\n    indented\n\n\ttabbed\n\n***\n\n<!-- メモ -->\n\n> 引用の**強調**。\n",
+  ];
+  for (const source of samples) {
+    const errors = findEmphasisErrors(source, "a.md");
+    for (const error of errors) {
+      assert.doesNotMatch(error, /内部エラー/, `扱い方が記録されていない行がある: ${error}`);
+    }
+  }
+});
+
+test("ファイル末尾の崩れは、どんな経路で飛ばされても必ず報告される", () => {
+  // `skippingStates`の表に載っていない形で行を飛ばす状態を足されても落ちるようにする。
+  // 表の網羅検査だけでは「表の外にローカル変数で足した場合」を守れない。
+  const broken = "**崩れている。**続き\n";
+  const prefixes = {
+    ...unclosedFixtures,
+    通常の本文: "文\n\n",
+    閉じたfence: "```sh\ncmd\n```\n\n",
+    閉じたコメント: "<!-- メモ -->\n\n",
+    閉じたfrontmatter: "---\nname: a\n---\n\n",
+    "4空白code block": "文\n\n    cmd\n\n",
+    "tabのcode block": "文\n\n\tcmd\n\n",
+  };
+  for (const [name, prefix] of Object.entries(prefixes)) {
+    const errors = findEmphasisErrors(prefix + broken, "a.md");
+    assert.ok(errors.length >= 1, `${name}: 末尾の崩れが黙って通った`);
+  }
+});
+
+test("tab・blockquoteのcode blockを本文として扱わない", () => {
+  // tabは4空白相当。`^ {4,}`だけを見ていると`--fix`がコマンド例を書き換える。
+  const tabbed = "文\n\n\tcmd --x **a。**b\n\n文\n";
+  assert.deepEqual(findEmphasisErrors(tabbed, "a.md"), []);
+  assert.equal(applySwaps(tabbed, analyzeEmphasis(tabbed, "a.md").swaps).applied, 0);
+  // blockquoteの中のfenceもfenceとして扱う。
+  const quoted = "> ```sh\n> **a。**b\n> ```\n";
+  assert.deepEqual(findEmphasisErrors(quoted, "a.md"), []);
+  // blockquoteの本文は従来どおり検出する。
+  assert.equal(findEmphasisErrors("> **崩れている。**続き\n", "a.md").length, 1);
+});
+
+test("YAML frontmatterはインデントされた`---`では閉じない", () => {
+  // block scalarの中の`---`で閉じると、`--fix`がYAMLへ届く。
+  const source = "---\na: |\n  ---\nb: c\n---\n\n**崩れている。**続き\n";
+  const { errors, swaps } = analyzeEmphasis(source, "a.md");
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /^a\.md:7:/, "YAMLの行ではなく本文の行を指す");
+  assert.deepEqual(swaps, [{ line: 7, column: 8, direction: "left" }]);
+});
+
 test("maskHtmlCommentsは長さとマーカーを保つ", () => {
   const line = "前 <!-- **メモ。**続き --> 後";
   const masked = maskHtmlComments(line);

@@ -255,47 +255,56 @@ export function analyzeEmphasis(source, relativePath) {
     block = null;
   };
 
-  lines.forEach((originalLine, index) => {
+  // **行ごとの処理は必ず「どう扱ったか」を返す。** 返し忘れ（bare return）はundefinedになり、
+  // 下の検査が内部エラーとして落とす。**行を飛ばす経路を足して記録を忘れる失敗**を、
+  // `skippingStates`への登録だけでなく、この型でも止める。
+  const handleLine = (originalLine, index) => {
     const lineNumber = index + 1;
 
     // YAML frontmatterは本文ではない。1行目の`---`だけを前付けの開始として扱う
     // （2行目以降の`---`は水平線かsetextの下線）。`--fix`がYAMLのスカラを書き換えないため。
     if (index === 0 && originalLine.trim() === "---") {
       skipping.frontmatter.open = true;
-      return;
+      return "frontmatter";
     }
     if (skipping.frontmatter.open) {
-      if (originalLine.trim() === "---") skipping.frontmatter.open = false;
-      return;
+      // 閉じは行頭の`---`だけ。`trim()`にすると、YAMLのblock scalarの中の
+      // インデントされた`---`で前付けが閉じ、`--fix`がYAMLへ届く。
+      if (/^---\s*$/.test(originalLine)) skipping.frontmatter.open = false;
+      return "frontmatter";
     }
 
     const rawLine = originalLine;
+    // block構造の判定にはblockquoteの`>`を外し、先頭のtabを空白へ開いた形を使う。
+    // **tabは4空白相当なので、tabで始まる行はcode blockである**（`^ {4,}`だけを見ていると
+    // 本文として解析し、`--fix`がコマンド例を書き換える）。位置は`rawLine`のままで数える。
+    const structural = rawLine.replace(/^(?:\s*>)+ ?/, "").replace(/^\t+/, (tabs) => "    ".repeat(tabs.length));
 
-    // 水平線（`***`だけの行）は強調ではないので先に外す。
+    // 水平線（`*`だけの行）は強調ではないので先に外す。
     if (
       skipping.fence.open === null &&
-      /^ {0,3}\*[\s*]*$/.test(rawLine) &&
-      (rawLine.match(/\*/g) ?? []).length >= 3
+      /^ {0,3}\*[\s*]*$/.test(structural) &&
+      (structural.match(/\*/g) ?? []).length >= 3
     ) {
       flush();
-      return;
+      return "thematicBreak";
     }
 
     // 閉じfenceは開きと同じ記号で、同じ長さ以上である必要がある。長さを捨てると
     // ````で開いたblockの中の```で閉じてしまい、code blockの中を本文として解析する。
     // インデントは3空白まで（CommonMark）。`^\s*`にすると、4空白のcode blockの中に書いた
     // fence行で状態が反転し、閉じないままEOFへ達して以降の全行が無検査になる。
-    const fenceStart = /^ {0,3}(```+|~~~+)/.exec(rawLine);
+    const fenceStart = /^ {0,3}(```+|~~~+)/.exec(structural);
     if (fenceStart && (skipping.fence.open === null || fenceStart[1].startsWith(skipping.fence.open))) {
       flush();
       skipping.fence.open = skipping.fence.open === null ? fenceStart[1] : null;
-      return;
+      return "fence";
     }
-    if (skipping.fence.open !== null) return;
+    if (skipping.fence.open !== null) return "fence";
 
-    // 4空白インデントのcode block。空行のあとに始まるものだけが該当する
+    // 4空白インデント（tab 1個も4空白相当）のcode block。空行のあとに始まるものだけが該当する
     // （段落の続きの行は中断できない）。中身を本文として扱うと`--fix`がコマンド例を書き換える。
-    if (block === null && /^ {4,}\S/.test(rawLine)) return;
+    if (block === null && /^ {4,}\S/.test(structural)) return "indentedCode";
 
     // コードスパンを潰したあとでHTMLコメントを外す。この順にすると、CommonMarkと同じ優先順位
     // （block構造 → コードスパン → raw HTML）になり、コードスパンやcode blockの中の`<!--`で
@@ -313,7 +322,7 @@ export function analyzeEmphasis(source, relativePath) {
 
     if (line.trim() === "") {
       flush();
-      return;
+      return "blankLine";
     }
     // 表はcellごとに閉じる必要がある（cellをまたぐ強調は成立しない）。見出しは1行で閉じる。
     if (isTableRow(line)) {
@@ -327,18 +336,42 @@ export function analyzeEmphasis(source, relativePath) {
         }
         offset += cell.length + 1;
       }
-      return;
+      return "tableRow";
     }
     if (isHeading(line)) {
       flush();
       block = makeBlock();
       block.push(line, lineNumber);
       flush();
-      return;
+      return "heading";
     }
     if (isListItemStart(line)) flush();
     if (!block) block = makeBlock();
     block.push(line, lineNumber);
+    return "analyzed";
+  };
+
+  // 行の扱い方の一覧。**ここに無い値（returnの書き忘れによるundefinedを含む）はエラーにする。**
+  const lineOutcomes = new Set([
+    "analyzed",
+    "blankLine",
+    "heading",
+    "tableRow",
+    "thematicBreak",
+    "fence",
+    "indentedCode",
+    "frontmatter",
+    "comment",
+  ]);
+
+  lines.forEach((originalLine, index) => {
+    const outcome = handleLine(originalLine, index);
+    if (!lineOutcomes.has(outcome)) {
+      errors.push(
+        `${relativePath}:${index + 1}: 内部エラー。この行の扱い方（${String(outcome)}）が記録されていません。` +
+          "行を飛ばす経路を足したなら、扱い方を返して`lineOutcomes`へ登録してください。",
+      );
+    }
   });
 
   flush();
