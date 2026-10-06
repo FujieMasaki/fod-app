@@ -10,6 +10,9 @@ import type { Dot } from "@/libs/api-contract/schemas";
  * 失敗の種類から文言を決める（frontend.md §2）。
  */
 
+/** 画面内の文字のリンク（一覧・Day・詳細の間の移動） */
+export const LINK_CLASS = "text-small leading-small text-brand underline underline-offset-4";
+
 export const HistoryLoading = ({ label }: { label: string }) => {
   return (
     <div className="flex justify-center py-8">

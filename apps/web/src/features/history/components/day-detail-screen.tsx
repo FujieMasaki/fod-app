@@ -4,9 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { Button, Text } from "@/design-system";
 import { formatFullDate, isCalendarDate, timeLabels } from "../date-format";
 import { useDayDetail } from "../hooks/use-history";
-import { DotContent, HistoryError, HistoryLoading, isInvalidDate } from "./history-status";
-
-const LINK_CLASS = "text-small leading-small text-brand underline underline-offset-4";
+import { DotContent, HistoryError, HistoryLoading, LINK_CLASS, isInvalidDate } from "./history-status";
 
 /**
  * 日の詳細: 日付をキーに、その時点でゴミ箱の外にある同日のDotを振り返る（dot-history §2「詳細」）。
@@ -68,7 +66,7 @@ const DayDetail = ({ date }: { date: string }) => {
         <div className="flex flex-col gap-3" role="status">
           <p className="text-body leading-body text-ink">この日に振り返れるDotはありません。</p>
           <p className="text-small leading-small text-ink-secondary">
-            ゴミ箱へ移したか、削除した可能性があります。一覧を新しくしました。
+            ゴミ箱へ移したか、削除した可能性があります。
           </p>
           <Link to="/dots" className={LINK_CLASS}>
             過去のDotの一覧へ

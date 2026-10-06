@@ -3,9 +3,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { Button, Dot, Text } from "@/design-system";
 import { dayOfMonth, formatFullDate, timeLabels } from "../date-format";
 import { useToday } from "../hooks/use-history";
-import { DotContent, HistoryError, HistoryLoading } from "./history-status";
-
-const LINK_CLASS = "text-small leading-small text-brand underline underline-offset-4";
+import { DotContent, HistoryError, HistoryLoading, LINK_CLASS } from "./history-status";
 
 /**
  * Day: 今日（serverが決めたAsia/Tokyoの暦日）のDotのうち最新の1件を大きく表示する。
