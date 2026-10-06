@@ -25,7 +25,9 @@
   検証する。検証できない値は表示・保存しない。
 - 関数は、Component・Hook・補助関数・Component内のhandlerも含めて`const`＋arrow functionで書き、
   `function`宣言・関数式を使わない（2026-10-05に決定。ESLintの`func-style`と`no-restricted-syntax`で固定。
-  classとobjectのmethodの形は使ってよい）。関数名はcamelCaseかPascalCaseにする。overloadが要る関数は、
+  objectのmethodの形は使ってよい）。関数名はcamelCaseかPascalCaseにする。classも使わず、失敗の種類などは
+  `const`の作成関数と型ガードで表す（`libs/api-client/request.ts`の`createApiError`・`isApiError`。testの
+  差し替えで、実装が`new`で作るもの（`AudioContext`など）だけはclassで書いてよい）。overloadが要る関数は、
   overloadを持つ関数型を`const`に付け、呼び出しの型をtestで固定する（`libs/api-client/request.ts`の`apiRequest`）。
 
 ### 推奨

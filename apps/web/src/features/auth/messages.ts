@@ -1,4 +1,4 @@
-import { ApiError } from "@/libs/api-client/request";
+import { isApiError } from "@/libs/api-client/request";
 import type { Problem } from "@/libs/api-contract/schemas";
 import type { EndReason } from "./auth-provider";
 
@@ -13,7 +13,7 @@ const GENERIC_MESSAGE = "うまくいきませんでした。時間をおいて�
 
 /** 画面ごとに文言を変えたいcode（tokenの期限切れなど）は、呼び出し側が`overrides`で渡す */
 export const errorMessage = (error: unknown, overrides: Partial<Record<Problem["code"], string>> = {}): string => {
-  if (!(error instanceof ApiError)) return GENERIC_MESSAGE;
+  if (!isApiError(error)) return GENERIC_MESSAGE;
   if (error.kind === "network") return "通信できませんでした。接続を確かめて、もう一度お試しください。";
   if (error.kind === "schema") return RELOAD_MESSAGE;
   const problem = error.problem;
@@ -44,7 +44,7 @@ export const errorMessage = (error: unknown, overrides: Partial<Record<Problem["
 
 /** 再読み込みで直る失敗か（古いタブ・CSRF tokenの不一致） */
 export const needsReload = (error: unknown): boolean => {
-  return error instanceof ApiError && (error.kind === "schema" || error.problem?.code === "csrf_invalid");
+  return isApiError(error) && (error.kind === "schema" || error.problem?.code === "csrf_invalid");
 };
 
 const FIELD_MESSAGES: Record<string, string> = {
@@ -56,7 +56,7 @@ const FIELD_MESSAGES: Record<string, string> = {
 
 /** `validation_failed`の項目ごとの文言。passwordの`out_of_range`は8文字未満のとき（契約のNewCredentials） */
 export const fieldErrors = (error: unknown): Record<string, string> => {
-  if (!(error instanceof ApiError) || error.problem?.code !== "validation_failed") return {};
+  if (!isApiError(error) || error.problem?.code !== "validation_failed") return {};
   const result: Record<string, string> = {};
   for (const { field, code } of error.problem.errors) {
     result[field] =

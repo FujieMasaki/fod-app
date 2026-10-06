@@ -12,7 +12,7 @@ import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-quer
 
 import type { z } from "zod";
 
-import { ApiError, apiRequest, isProblem, type ApiRequestOptions } from "@/libs/api-client/request";
+import { apiRequest, createApiError, isProblem, type ApiRequestOptions } from "@/libs/api-client/request";
 import type { Session } from "@/libs/api-contract/schemas";
 import { createSession, deleteSession, getSession, type Credentials } from "./api";
 
@@ -308,7 +308,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         ]);
         clearTimeout(timer);
         // 待ちきれなかった通信の応答は、後から届いてCookieを戻し得る。送らずに失敗にする（利用者が再試行する）。
-        if (!settled) throw new ApiError("network");
+        if (!settled) throw createApiError("network");
         return operation();
       })();
       exclusiveRef.current = run;

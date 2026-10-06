@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 
 import { Button } from "@/design-system";
-import { ApiError, isProblem } from "@/libs/api-client/request";
+import { isApiError, isProblem } from "@/libs/api-client/request";
 import { resetPassword } from "../api";
 import { useAuth } from "../auth-provider";
 import { errorMessage, fieldErrors, needsReload } from "../messages";
@@ -21,14 +21,14 @@ const NOT_APPLIED_CODES = ["validation_failed", "token_expired", "rate_limited",
 // 再設定が済んだか分からない失敗（応答を失った・serverのerror・失敗の応答の形が契約と合わない）。
 const outcomeUnknown = (error: unknown): boolean => {
   return (
-    error instanceof ApiError &&
+    isApiError(error) &&
     (error.kind === "network" || error.kind === "http" || error.kind === "schema" || isProblem(error, "internal_error"))
   );
 };
 
 const mayHaveReset = (error: unknown): boolean => {
   // 利用者が切り替わっていて送らなかった（withCsrfの`identity_changed`）
-  if (error instanceof Error && !(error instanceof ApiError) && error.message === "identity_changed") return false;
+  if (error instanceof Error && !isApiError(error) && error.message === "identity_changed") return false;
   return !isProblem(error, ...NOT_APPLIED_CODES);
 };
 

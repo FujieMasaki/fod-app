@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, render, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, focusManager, onlineManager } from "@tanstack/react-query";
 
-import { ApiError, isProblem } from "@/libs/api-client/request";
+import { isApiError, isProblem, type ApiError } from "@/libs/api-client/request";
 import { AuthProvider, useAuth } from "./auth-provider";
 
 // Rails APIの応答（契約の形）をfetchの差し替えで模す。実serverには接続しない。
@@ -618,7 +618,7 @@ describe("logout", () => {
     const signingOut = auth().signOut().catch((e: unknown) => e);
     await act(() => vi.advanceTimersByTimeAsync(10_500));
 
-    expect(await signingOut).toBeInstanceOf(ApiError);
+    expect(isApiError(await signingOut)).toBe(true);
     expect(calls.some((c) => c.key === "DELETE /api/v1/session")).toBe(false);
   });
 
@@ -643,7 +643,7 @@ describe("logout", () => {
     const signingOut = auth().signOut().catch((e: unknown) => e);
     await act(() => vi.advanceTimersByTimeAsync(10_500));
 
-    expect(await signingOut).toBeInstanceOf(ApiError);
+    expect(isApiError(await signingOut)).toBe(true);
     expect(order).not.toContain("DELETE /api/v1/session");
     expect(auth().status).toBe("authenticated");
     expect(auth().endReason).toBeNull();

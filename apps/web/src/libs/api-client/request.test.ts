@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { z } from "zod";
 
-import { ApiError, apiRequest, isProblem } from "./request";
+import { apiRequest, createApiError, isApiError, isProblem, type ApiError } from "./request";
 
 // fetchを差し替え、Rails APIの応答（契約の形）を模す。実serverには接続しない。
 const mockFetch = (response: Response | Error) => {
@@ -61,7 +61,7 @@ describe("apiRequest", () => {
     mockFetch(Response.json({ value: "1" }));
 
     const error = await apiRequest("/x", { schema: z.object({ value: z.number() }) }).catch((e: unknown) => e);
-    expect(error).toBeInstanceOf(ApiError);
+    expect(isApiError(error)).toBe(true);
     expect((error as ApiError).kind).toBe("schema");
   });
 
@@ -116,6 +116,22 @@ describe("apiRequest", () => {
     const error = await apiRequest("/x").catch((e: unknown) => e);
     expect((error as ApiError).kind).toBe("network");
     expect((error as ApiError).message).toBe("api_network");
+  });
+});
+
+describe("isApiError", () => {
+  it("createApiErrorで作った失敗だけを通し、ほかのErrorは通さない", () => {
+    const error = createApiError("problem", {
+      status: 422,
+      problem: { type: "x", title: "x", status: 422, code: "token_invalid" },
+    });
+    expect(isApiError(error)).toBe(true);
+    expect(error).toBeInstanceOf(Error);
+    // messageにresponseの本文（title・detail）を入れない
+    expect(error.message).toBe("api_problem:token_invalid");
+    expect(isApiError(new Error("api_network"))).toBe(false);
+    expect(isApiError(Object.assign(new Error("x"), { name: "ApiError" }))).toBe(false);
+    expect(isApiError({ name: "ApiError", kind: "network" })).toBe(false);
   });
 });
 

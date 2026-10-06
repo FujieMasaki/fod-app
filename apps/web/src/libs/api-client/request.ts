@@ -16,23 +16,30 @@ import { problemSchema, type Problem } from "@/libs/api-contract/schemas";
  */
 export type ApiErrorKind = "problem" | "network" | "schema" | "http";
 
-export class ApiError extends Error {
+export type ApiError = Error & {
+  readonly name: "ApiError";
   readonly kind: ApiErrorKind;
   readonly status?: number;
   readonly problem?: Problem;
+};
 
-  constructor(kind: ApiErrorKind, options: { status?: number; problem?: Problem } = {}) {
-    // messageにresponseの本文を入れない（ログや画面へ出さないため）。
-    super(options.problem ? `api_problem:${options.problem.code}` : `api_${kind}`);
-    this.name = "ApiError";
-    this.kind = kind;
-    this.status = options.status;
-    this.problem = options.problem;
-  }
-}
+export const createApiError = (
+  kind: ApiErrorKind,
+  options: { status?: number; problem?: Problem } = {},
+): ApiError =>
+  // messageにresponseの本文を入れない（ログや画面へ出さないため）。
+  Object.assign(new Error(options.problem ? `api_problem:${options.problem.code}` : `api_${kind}`), {
+    name: "ApiError" as const,
+    kind,
+    status: options.status,
+    problem: options.problem,
+  });
+
+export const isApiError = (error: unknown): error is ApiError =>
+  error instanceof Error && error.name === "ApiError" && "kind" in error;
 
 export const isProblem = (error: unknown, ...codes: Problem["code"][]): error is ApiError & { problem: Problem } => {
-  return error instanceof ApiError && error.problem !== undefined && codes.includes(error.problem.code);
+  return isApiError(error) && error.problem !== undefined && codes.includes(error.problem.code);
 };
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
@@ -72,7 +79,7 @@ export const apiRequest: ApiRequest = async <T>(
       redirect: "error",
     });
   } catch {
-    throw new ApiError("network");
+    throw createApiError("network");
   }
 
   if (!response.ok) throw await toError(response);
@@ -80,7 +87,7 @@ export const apiRequest: ApiRequest = async <T>(
   if (!schema) return;
   const json = await readJson(response);
   const parsed = schema.safeParse(json);
-  if (!parsed.success) throw new ApiError("schema", { status: response.status });
+  if (!parsed.success) throw createApiError("schema", { status: response.status });
   return parsed.data;
 };
 
@@ -101,11 +108,11 @@ const sameOriginUrl = (path: string): string => {
 const toError = async (response: Response): Promise<ApiError> => {
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/problem+json")) {
-    return new ApiError("http", { status: response.status });
+    return createApiError("http", { status: response.status });
   }
   const parsed = problemSchema.safeParse(await readJson(response));
-  if (!parsed.success) return new ApiError("schema", { status: response.status });
-  return new ApiError("problem", { status: response.status, problem: parsed.data });
+  if (!parsed.success) return createApiError("schema", { status: response.status });
+  return createApiError("problem", { status: response.status, problem: parsed.data });
 };
 
 const readJson = async (response: Response): Promise<unknown> => {
