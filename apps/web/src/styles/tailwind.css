@@ -1,0 +1,79 @@
+/*
+ * 新しいUIのTailwind CSS v4（docs/design-system.md「StylingとDesign Token」）。
+ * - 既存画面のCSS Modulesとresetを変えないよう、preflightは読み込まずthemeとutilitiesだけを使う。
+ * - Tailwindの既定のthemeは消し、既存の--fod-* tokenだけを割り当てる。token外の名前付きの色・余白・文字の
+ *   classは生成されない。ただし任意値（`p-[13px]`など）は生成されるため、使わないことはレビューで確かめる。
+ *   新しい値が要るときは、先にtokens.cssへtokenを足してからここへ割り当てる。
+ * - フォントはbodyの指定（globals.css）をそのまま使う。--font-*を定義するとglobals.cssの
+ *   --font-sansを上書きしてしまうため、ここでは定義しない。
+ */
+@import "tailwindcss/theme.css" layer(theme);
+/*
+ * utilitiesはlayerに入れない。globals.cssのreset（`*`のmargin・padding、`a`の色・下線など）はlayerに入って
+ * いないため、utilitiesをlayerに入れるとcascade layersの規則で常にresetが勝ち、余白や下線が効かない。
+ * layerに入れなければ詳細度で比べられ、classのutilities（0,1,0）が`*`・`a`のresetに勝つ。
+ */
+@import "tailwindcss/utilities.css";
+
+@theme {
+  --*: initial;
+
+  --color-brand: var(--fod-brand-500);
+  --color-brand-strong: var(--fod-brand-900);
+  --color-base: var(--fod-bg-base);
+  --color-raised: var(--fod-bg-raised);
+  --color-surface: var(--fod-surface-card);
+  --color-ink: var(--fod-text-primary);
+  --color-ink-secondary: var(--fod-text-secondary);
+  --color-ink-tertiary: var(--fod-text-tertiary);
+  --color-line: var(--fod-border-default);
+  --color-line-hairline: var(--fod-border-hairline);
+  --color-danger: var(--fod-danger);
+  --color-success: var(--fod-success);
+
+  --spacing-0: var(--fod-space-0);
+  --spacing-1: var(--fod-space-1);
+  --spacing-2: var(--fod-space-2);
+  --spacing-3: var(--fod-space-3);
+  --spacing-4: var(--fod-space-4);
+  --spacing-5: var(--fod-space-5);
+  --spacing-6: var(--fod-space-6);
+  --spacing-7: var(--fod-space-7);
+  --spacing-8: var(--fod-space-8);
+  --spacing-9: var(--fod-space-9);
+  --spacing-10: var(--fod-space-10);
+  --spacing-screen: var(--fod-screen-padding);
+
+  --radius-sm: var(--fod-radius-sm);
+  --radius-md: var(--fod-radius-md);
+  --radius-lg: var(--fod-radius-lg);
+  --radius-full: var(--fod-radius-full);
+
+  --text-title: var(--fod-type-title-size);
+  --text-body: var(--fod-type-body-size);
+  --text-small: var(--fod-type-small-size);
+  --text-caption: var(--fod-type-caption-size);
+
+  /* 行間はtext-*に組み込まず（--text-*--line-heightは命名規則の検査に合わない）、leading-*で指定する */
+  --leading-title: var(--fod-type-title-lh);
+  --leading-body: var(--fod-type-body-lh);
+  --leading-small: var(--fod-type-small-lh);
+  --leading-caption: var(--fod-type-caption-lh);
+
+  --font-weight-light: var(--fod-weight-light);
+  --font-weight-regular: var(--fod-weight-regular);
+  --font-weight-medium: var(--fod-weight-medium);
+
+  --tracking-normal: var(--fod-tracking-normal);
+  --tracking-wide: var(--fod-tracking-wide);
+}
+
+/*
+ * 入力欄に本文の書体を継承させる（preflightを読まないため、inputはbrowserの既定の書体になる）。
+ * 大きさ・行間はtext-*・leading-*で指定するため、`font`のshorthandではなく書体・太さ・字間だけを継承する。
+ */
+@utility font-inherit {
+  font-family: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+}

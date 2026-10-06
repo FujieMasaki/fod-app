@@ -12,7 +12,7 @@ export type RecorderHandle = {
   dispose: () => void;
 };
 
-export function createRecorder(): RecorderHandle {
+export const createRecorder = (): RecorderHandle => {
   let stream: MediaStream | null = null;
   let audioCtx: AudioContext | null = null;
   let analyser: AnalyserNode | null = null;
@@ -22,10 +22,15 @@ export function createRecorder(): RecorderHandle {
   let startedAt = 0;
   let mode: RecorderMode = "silent";
   let running = false;
+  // 片付けた後か。マイクの許可を待っている間に画面を離れると、許可の後にstreamが開いたまま残るため確かめる。
+  let disposed = false;
+  // 許可を待っている間に止められたか（停止を押した・画面を離れた）。許可の後に録音を始めないために確かめる。
+  let cancelled = false;
 
-  async function start(): Promise<RecorderMode> {
+  const start = async (): Promise<RecorderMode> => {
     startedAt = Date.now();
     running = true;
+    cancelled = false;
     chunks = [];
 
     const md = typeof navigator !== "undefined" ? navigator.mediaDevices : undefined;
@@ -35,7 +40,13 @@ export function createRecorder(): RecorderHandle {
     }
 
     try {
-      stream = await md.getUserMedia({ audio: true });
+      const granted = await md.getUserMedia({ audio: true });
+      if (disposed || cancelled) {
+        granted.getTracks().forEach((track) => track.stop());
+        mode = "silent";
+        return mode;
+      }
+      stream = granted;
       const Ctx =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -60,9 +71,9 @@ export function createRecorder(): RecorderHandle {
       mode = "silent";
     }
     return mode;
-  }
+  };
 
-  function getAmplitude(): number {
+  const getAmplitude = (): number => {
     if (!running) return 0;
     if (analyser && timeData) {
       analyser.getByteTimeDomainData(timeData);
@@ -78,10 +89,11 @@ export function createRecorder(): RecorderHandle {
     const t = (Date.now() - startedAt) / 1000;
     const base = 0.32 + Math.sin(t * 2.1) * 0.14 + Math.sin(t * 5.3) * 0.08;
     return Math.min(1, Math.max(0.12, base));
-  }
+  };
 
-  function stop(): Promise<{ blob: Blob | null; durationSec: number }> {
+  const stop = (): Promise<{ blob: Blob | null; durationSec: number }> => {
     running = false;
+    cancelled = true;
     const durationSec = Math.round((Date.now() - startedAt) / 1000);
 
     return new Promise((resolve) => {
@@ -97,23 +109,24 @@ export function createRecorder(): RecorderHandle {
         resolve({ blob: null, durationSec });
       }
     });
-  }
+  };
 
-  function cleanupAudio() {
+  const cleanupAudio = () => {
     stream?.getTracks().forEach((track) => track.stop());
     stream = null;
     if (audioCtx && audioCtx.state !== "closed") void audioCtx.close();
     audioCtx = null;
     analyser = null;
     timeData = null;
-  }
+  };
 
-  function dispose() {
+  const dispose = () => {
+    disposed = true;
     running = false;
     if (recorder && recorder.state !== "inactive") recorder.stop();
     recorder = null;
     cleanupAudio();
-  }
+  };
 
   return { start, stop, getAmplitude, dispose };
-}
+};

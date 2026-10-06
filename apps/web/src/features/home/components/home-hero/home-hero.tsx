@@ -7,7 +7,7 @@ import styles from "./home-hero.module.css";
 const TAP_LABEL = "タップして話す";
 
 /** 入口。「ここなら安心して話せそう」。呼吸するマイクへ自然に視線が向かう。 */
-export function HomeHero() {
+export const HomeHero = () => {
   const navigate = useNavigate();
   // 挨拶は時刻依存。クライアントの時刻で確定し、hydration 差分は抑制する。
   const greeting = generateGreeting();
@@ -27,4 +27,4 @@ export function HomeHero() {
       </div>
     </div>
   );
-}
+};

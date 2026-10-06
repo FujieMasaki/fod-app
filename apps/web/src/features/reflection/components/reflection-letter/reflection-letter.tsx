@@ -6,7 +6,7 @@ import type { DotSession } from "@/features/session";
 import styles from "./reflection-letter.module.css";
 
 /** 「今日という一日を、少し理解する」ための手紙。答えは教えず、静かに伴走する。 */
-export function ReflectionLetter({ session }: { session: DotSession }) {
+export const ReflectionLetter = ({ session }: { session: DotSession }) => {
   const reduce = useReducedMotion();
   const [lead, ...restClosing] = session.closing.split("。").filter(Boolean);
 
@@ -40,4 +40,4 @@ export function ReflectionLetter({ session }: { session: DotSession }) {
       </div>
     </div>
   );
-}
+};

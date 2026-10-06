@@ -14,14 +14,14 @@ type SentenceCardProps = {
 };
 
 /** 句読点で行に分け、行ごとに立ち上がる（riseIn）。山場の「間」をつくる。 */
-function toLines(sentence: string): string[] {
+const toLines = (sentence: string): string[] => {
   return sentence
     .split(/(?<=[、。])/)
     .map((s) => s.trim())
     .filter(Boolean);
-}
+};
 
-export function SentenceCard({ sentence, onOpenMessage }: SentenceCardProps) {
+export const SentenceCard = ({ sentence, onOpenMessage }: SentenceCardProps) => {
   const reduce = useReducedMotion();
   const lines = toLines(sentence);
 
@@ -73,4 +73,4 @@ export function SentenceCard({ sentence, onOpenMessage }: SentenceCardProps) {
       </div>
     </Card>
   );
-}
+};

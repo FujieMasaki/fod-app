@@ -15,13 +15,13 @@ type DotProps = {
 };
 
 /** Dot／円形の primitive。呼吸するように静かに存在する。 */
-export function Dot({
+export const Dot = ({
   size,
   variant = "solid",
   breathe = false,
   className,
   children,
-}: DotProps) {
+}: DotProps) => {
   const reduce = useReducedMotion();
   const animate =
     breathe && !reduce ? { scale: [1, motionToken.breathe.scaleTo, 1] } : undefined;
@@ -40,4 +40,4 @@ export function Dot({
       {children}
     </motion.div>
   );
-}
+};

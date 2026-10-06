@@ -1,8 +1,9 @@
 import { useState, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { AuthProvider } from "@/features/auth";
 import { SessionProvider } from "@/features/session";
 
-export function Providers({ children }: { children: ReactNode }) {
+export const Providers = ({ children }: { children: ReactNode }) => {
   const [queryClient] = useState(
     () =>
       new QueryClient({
@@ -14,7 +15,10 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <SessionProvider>{children}</SessionProvider>
+      {/* SessionProviderは認証の切り替わりを購読するため、AuthProviderの内側に置く */}
+      <AuthProvider>
+        <SessionProvider>{children}</SessionProvider>
+      </AuthProvider>
     </QueryClientProvider>
   );
-}
+};

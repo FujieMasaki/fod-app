@@ -8,7 +8,7 @@ import styles from "./todays-dot-view.module.css";
  * 体験の山場。分析ではなく、まず今日を象徴する「一文」を静かに届ける。
  * その後、「今日のDotを整理しました。」という自然なメッセージを添える。
  */
-export function TodaysDotView({ session }: { session: DotSession }) {
+export const TodaysDotView = ({ session }: { session: DotSession }) => {
   const navigate = useNavigate();
   const reduce = useReducedMotion();
   const openReflection = () => navigate({ to: "/reflection" });
@@ -43,4 +43,4 @@ export function TodaysDotView({ session }: { session: DotSession }) {
       </div>
     </div>
   );
-}
+};

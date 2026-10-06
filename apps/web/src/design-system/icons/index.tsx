@@ -6,7 +6,7 @@ import type { SVGProps } from "react";
  */
 type IconProps = SVGProps<SVGSVGElement> & { size?: number | string };
 
-function base({ size = "1em", ...props }: IconProps): SVGProps<SVGSVGElement> {
+const base = ({ size = "1em", ...props }: IconProps): SVGProps<SVGSVGElement> => {
   return {
     width: size,
     height: size,
@@ -20,9 +20,9 @@ function base({ size = "1em", ...props }: IconProps): SVGProps<SVGSVGElement> {
     focusable: false,
     ...props,
   };
-}
+};
 
-export function MicrophoneIcon(props: IconProps) {
+export const MicrophoneIcon = (props: IconProps) => {
   return (
     <svg {...base(props)}>
       <rect x="9" y="3" width="6" height="11" rx="3" />
@@ -30,59 +30,59 @@ export function MicrophoneIcon(props: IconProps) {
       <path d="M12 17v3" />
     </svg>
   );
-}
+};
 
-export function StopIcon(props: IconProps) {
+export const StopIcon = (props: IconProps) => {
   return (
     <svg {...base(props)}>
       <rect x="7.5" y="7.5" width="9" height="9" rx="2" fill="currentColor" stroke="none" />
     </svg>
   );
-}
+};
 
-export function ChevronLeftIcon(props: IconProps) {
+export const ChevronLeftIcon = (props: IconProps) => {
   return (
     <svg {...base(props)}>
       <path d="M15 5l-7 7 7 7" />
     </svg>
   );
-}
+};
 
-export function ChevronRightIcon(props: IconProps) {
+export const ChevronRightIcon = (props: IconProps) => {
   return (
     <svg {...base(props)}>
       <path d="M9 5l7 7-7 7" />
     </svg>
   );
-}
+};
 
-export function HomeIcon(props: IconProps) {
+export const HomeIcon = (props: IconProps) => {
   return (
     <svg {...base(props)}>
       <path d="M4 11l8-6 8 6" />
       <path d="M6 10v9h12v-9" />
     </svg>
   );
-}
+};
 
-export function JournalIcon(props: IconProps) {
+export const JournalIcon = (props: IconProps) => {
   return (
     <svg {...base(props)}>
       <path d="M6 4h9l3 3v13H6z" />
       <path d="M9 9h6M9 13h6M9 17h4" />
     </svg>
   );
-}
+};
 
-export function DotIcon(props: IconProps) {
+export const DotIcon = (props: IconProps) => {
   return (
     <svg {...base(props)}>
       <path d="M12 4c3 4 5 6.5 5 9a5 5 0 0 1-10 0c0-2.5 2-5 5-9z" />
     </svg>
   );
-}
+};
 
-export function SettingsIcon(props: IconProps) {
+export const SettingsIcon = (props: IconProps) => {
   return (
     <svg {...base(props)}>
       <path d="M5 7h9M17 7h2" />
@@ -93,4 +93,4 @@ export function SettingsIcon(props: IconProps) {
       <circle cx="17" cy="17" r="2" />
     </svg>
   );
-}
+};

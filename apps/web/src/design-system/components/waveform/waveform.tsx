@@ -17,7 +17,7 @@ const MIN_SCALE = 0.12;
  * マイク入力の振幅にバー高さを追随させる（rAF で更新）。無音時は静止に近い。
  * reduced-motion では追随を止め、静かな一定表示にする。
  */
-export function Waveform({ getAmplitude, barCount = 28, active = true }: WaveformProps) {
+export const Waveform = ({ getAmplitude, barCount = 28, active = true }: WaveformProps) => {
   const reduce = useReducedMotion();
   const barsRef = useRef<Array<HTMLSpanElement | null>>([]);
 
@@ -70,4 +70,4 @@ export function Waveform({ getAmplitude, barCount = 28, active = true }: Wavefor
       ))}
     </div>
   );
-}
+};

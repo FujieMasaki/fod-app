@@ -8,83 +8,69 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useAuth } from "@/features/auth";
 import type { Seconds } from "@/types";
-import { dotSessionSchema, type DotSession } from "./schema";
+import type { DotSession } from "./schema";
 import type { SessionContextValue } from "./types";
 
-const STORAGE_KEY = "fod.session.v1";
+// 以前に録音時間と現在のDotを保存していたkey。利用者を区別しないため、前の利用者の値を別の利用者の
+// 画面へ復元してしまう。読み取りをやめ、起動時に消す（journaling.md §2。TASK-007 Plan §13）。
+const LEGACY_STORAGE_KEY = "fod.session.v1";
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-type Persisted = {
-  recordedDurationSec: Seconds | null;
-  dotSession: DotSession | null;
+const removeLegacyStorage = () => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    // storageを使えない環境では、消すものもない。
+  }
 };
 
-function loadPersisted(): Persisted {
-  if (typeof window === "undefined") {
-    return { recordedDurationSec: null, dotSession: null };
-  }
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { recordedDurationSec: null, dotSession: null };
-    const parsed = JSON.parse(raw) as Partial<Persisted>;
-    const dotSession = parsed.dotSession
-      ? dotSessionSchema.parse(parsed.dotSession)
-      : null;
-    return {
-      recordedDurationSec: parsed.recordedDurationSec ?? null,
-      dotSession,
-    };
-  } catch {
-    return { recordedDurationSec: null, dotSession: null };
-  }
-}
-
-export function SessionProvider({ children }: { children: React.ReactNode }) {
-  const [recordedDurationSec, setRecordedDurationSec] = useState<Seconds | null>(
-    null,
-  );
-  const [dotSession, setDotSessionState] = useState<DotSession | null>(null);
+/**
+ * routeをまたぐ短いジャーナリング途中の状態（録音時間と現在のDot）をmemoryにだけ持つ。
+ * browserのstorageへは書かない（frontend.md §2。正本はserver）。
+ */
+export const SessionProvider = ({ children }: { children: React.ReactNode }) => {
+  const { identityEpoch, subscribeIdentityChange } = useAuth();
+  // 値は、書いたときの利用者の世代番号と一緒に持つ。番号が今と違えば前の利用者の値なので見せない
+  // （切り替わりの描画では、消す通知より先に新しい利用者が描画されるため。TASK-007 Plan §7-3）。
+  const [recorded, setRecorded] = useState<{ epoch: number; value: Seconds } | null>(null);
+  const [dot, setDot] = useState<{ epoch: number; value: DotSession } | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
-  // localStorage からハイドレート（永続化は Phase 1 仕様に準拠）。
-  // マウント時に外部ストア(localStorage)と同期する正当な用途のため、当該ルールを局所的に無効化する。
+  // 起動時に古い保存値を消す。復元はしない。
   useEffect(() => {
-    const persisted = loadPersisted();
-    setRecordedDurationSec(persisted.recordedDurationSec);
-    setDotSessionState(persisted.dotSession);
+    removeLegacyStorage();
     setHydrated(true);
-  }, []);
-
-  const persist = useCallback((next: Persisted) => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   }, []);
 
   const setRecordedDuration = useCallback(
     (sec: Seconds) => {
-      setRecordedDurationSec(sec);
-      persist({ recordedDurationSec: sec, dotSession });
+      setRecorded({ epoch: identityEpoch, value: sec });
     },
-    [dotSession, persist],
+    [identityEpoch],
   );
 
   const setDotSession = useCallback(
     (session: DotSession) => {
-      setDotSessionState(session);
-      persist({ recordedDurationSec, dotSession: session });
+      setDot({ epoch: identityEpoch, value: session });
     },
-    [recordedDurationSec, persist],
+    [identityEpoch],
   );
 
   const reset = useCallback(() => {
-    setRecordedDurationSec(null);
-    setDotSessionState(null);
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(STORAGE_KEY);
-    }
+    setRecorded(null);
+    setDot(null);
+    removeLegacyStorage();
   }, []);
+
+  // 認証の終了・利用者の切り替わりで、前の利用者の録音時間とDotを消す（TASK-007 Plan §7-3）。
+  useEffect(() => subscribeIdentityChange(reset), [subscribeIdentityChange, reset]);
+
+  const recordedDurationSec = recorded && recorded.epoch === identityEpoch ? recorded.value : null;
+  const dotSession = dot && dot.epoch === identityEpoch ? dot.value : null;
 
   const value = useMemo<SessionContextValue>(
     () => ({
@@ -101,12 +87,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   return (
     <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
   );
-}
+};
 
-export function useSession(): SessionContextValue {
+export const useSession = (): SessionContextValue => {
   const ctx = useContext(SessionContext);
   if (!ctx) {
     throw new Error("useSession は SessionProvider の内側で使用してください。");
   }
   return ctx;
-}
+};
