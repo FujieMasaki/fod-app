@@ -19,20 +19,20 @@ const LEGACY_STORAGE_KEY = "fod.session.v1";
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
-function removeLegacyStorage() {
+const removeLegacyStorage = () => {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {
     // storageを使えない環境では、消すものもない。
   }
-}
+};
 
 /**
  * routeをまたぐ短いジャーナリング途中の状態（録音時間と現在のDot）をmemoryにだけ持つ。
  * browserのstorageへは書かない（frontend.md §2。正本はserver）。
  */
-export function SessionProvider({ children }: { children: React.ReactNode }) {
+export const SessionProvider = ({ children }: { children: React.ReactNode }) => {
   const { identityEpoch, subscribeIdentityChange } = useAuth();
   // 値は、書いたときの利用者の世代番号と一緒に持つ。番号が今と違えば前の利用者の値なので見せない
   // （切り替わりの描画では、消す通知より先に新しい利用者が描画されるため。TASK-007 Plan §7-3）。
@@ -87,12 +87,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   return (
     <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
   );
-}
+};
 
-export function useSession(): SessionContextValue {
+export const useSession = (): SessionContextValue => {
   const ctx = useContext(SessionContext);
   if (!ctx) {
     throw new Error("useSession は SessionProvider の内側で使用してください。");
   }
   return ctx;
-}
+};

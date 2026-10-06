@@ -17,14 +17,14 @@ const TOKEN_MESSAGES = {
  * 確認メールのリンク（`/confirmation#token=`）。確認してもloginはしないので、ログインへ案内する
  * （契約のconfirmEmail）。リンクが使えなければ、確認メールの再送を出す。
  */
-export function ConfirmationScreen() {
+export const ConfirmationScreen = () => {
   const token = useFragmentToken();
   const { withCsrf } = useAuth();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [confirmed, setConfirmed] = useState(false);
 
-  async function handleConfirm() {
+  const handleConfirm = async () => {
     if (!token) return;
     setSubmitting(true);
     setError(null);
@@ -36,7 +36,7 @@ export function ConfirmationScreen() {
     } finally {
       setSubmitting(false);
     }
-  }
+  };
 
   if (confirmed) {
     return (
@@ -76,17 +76,17 @@ export function ConfirmationScreen() {
       </Button>
     </AuthScreen>
   );
-}
+};
 
 /** 登録の有無にかかわらず同じ受付を示す（契約のresendConfirmation） */
-function ResendConfirmationForm() {
+const ResendConfirmationForm = () => {
   const { withCsrf } = useAuth();
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [accepted, setAccepted] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
@@ -98,7 +98,7 @@ function ResendConfirmationForm() {
     } finally {
       setSubmitting(false);
     }
-  }
+  };
 
   if (accepted) {
     return (
@@ -131,4 +131,4 @@ function ResendConfirmationForm() {
       </Button>
     </form>
   );
-}
+};

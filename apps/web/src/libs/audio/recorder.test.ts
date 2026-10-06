@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRecorder } from "./recorder";
 
 // マイクの許可（getUserMedia）を差し替える。実際のマイクは使わない。
-function stubMicrophone() {
+const stubMicrophone = () => {
   const stopTrack = vi.fn();
   let grant: (stream: MediaStream) => void = () => undefined;
   const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream;
@@ -42,7 +42,7 @@ function stubMicrophone() {
   vi.stubGlobal("AudioContext", FakeAudioContext);
   vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
   return { stopTrack, grantPermission: () => grant(stream) };
-}
+};
 
 afterEach(() => {
   vi.unstubAllGlobals();

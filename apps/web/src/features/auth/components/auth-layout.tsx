@@ -9,7 +9,7 @@ import { RELOAD_MESSAGE } from "../messages";
  * 余白と文字で階層を作り、カード・影・装飾アイコンを足さない（design-system.md）。
  */
 
-export function AuthScreen({ title, lead, children }: { title: string; lead?: ReactNode; children: ReactNode }) {
+export const AuthScreen = ({ title, lead, children }: { title: string; lead?: ReactNode; children: ReactNode }) => {
   return (
     <div className="flex flex-col gap-6 py-6">
       <div className="flex flex-col gap-2">
@@ -25,7 +25,7 @@ export function AuthScreen({ title, lead, children }: { title: string; lead?: Re
       {children}
     </div>
   );
-}
+};
 
 type TextFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id"> & {
   label: string;
@@ -33,7 +33,7 @@ type TextFieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id"> & {
   hint?: string;
 };
 
-export function TextField({ label, error, hint, ...input }: TextFieldProps) {
+export const TextField = ({ label, error, hint, ...input }: TextFieldProps) => {
   const id = useId();
   const describedBy = [hint && `${id}-hint`, error && `${id}-error`].filter(Boolean).join(" ") || undefined;
   return (
@@ -61,10 +61,10 @@ export function TextField({ label, error, hint, ...input }: TextFieldProps) {
       )}
     </div>
   );
-}
+};
 
 /** 操作の結果。失敗はrole="alert"、それ以外はrole="status"で読み上げる */
-export function FormMessage({ tone, children }: { tone: "error" | "info"; children: ReactNode }) {
+export const FormMessage = ({ tone, children }: { tone: "error" | "info"; children: ReactNode }) => {
   return (
     <p
       role={tone === "error" ? "alert" : "status"}
@@ -73,10 +73,10 @@ export function FormMessage({ tone, children }: { tone: "error" | "info"; childr
       {children}
     </p>
   );
-}
+};
 
 /** 古いタブの可能性があるときの案内。壊れた表示を続けず、再読み込みへ誘導する（frontend.md §2） */
-export function ReloadNotice() {
+export const ReloadNotice = () => {
   return (
     <div className="flex flex-col gap-3" role="alert">
       <p className="text-small leading-small text-danger">{RELOAD_MESSAGE}</p>
@@ -85,8 +85,8 @@ export function ReloadNotice() {
       </Button>
     </div>
   );
-}
+};
 
-export function TextLink(props: LinkProps & { children: ReactNode }) {
+export const TextLink = (props: LinkProps & { children: ReactNode }) => {
   return <Link {...props} className="text-small leading-small text-brand underline underline-offset-4" />;
-}
+};

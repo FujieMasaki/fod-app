@@ -2,7 +2,7 @@ import { useAuth } from "../auth-provider";
 import { TextLink } from "./auth-layout";
 
 /** Homeで、未認証のときだけ次の操作（ログイン）を示す。録音はログインしてから始める（journaling.md §4） */
-export function SignInPrompt() {
+export const SignInPrompt = () => {
   const { status } = useAuth();
   if (status !== "anonymous") return null;
 
@@ -15,4 +15,4 @@ export function SignInPrompt() {
       </TextLink>
     </div>
   );
-}
+};

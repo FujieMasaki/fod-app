@@ -1,7 +1,7 @@
 import styles from "./status-bar.module.css";
 
 /** 端末ステータスバーの再現（Phase 1 は固定表示 9:41）。 */
-export function StatusBar() {
+export const StatusBar = () => {
   return (
     <div className={styles.root} aria-hidden>
       <span>9:41</span>
@@ -23,4 +23,4 @@ export function StatusBar() {
       </span>
     </div>
   );
-}
+};

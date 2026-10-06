@@ -13,7 +13,7 @@ export type UseRecorder = {
 };
 
 /** 録音の開始・停止・経過時間・声量を管理する Feature Hook。 */
-export function useRecorder(): UseRecorder {
+export const useRecorder = (): UseRecorder => {
   const recorderRef = useRef<RecorderHandle | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -64,4 +64,4 @@ export function useRecorder(): UseRecorder {
   }, [clearTimer]);
 
   return { isRecording, elapsedSec, mode, getAmplitude, start, stop };
-}
+};

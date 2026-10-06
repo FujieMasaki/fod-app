@@ -16,24 +16,37 @@ import { problemSchema, type Problem } from "@/libs/api-contract/schemas";
  */
 export type ApiErrorKind = "problem" | "network" | "schema" | "http";
 
-export class ApiError extends Error {
+export type ApiError = Error & {
+  readonly name: "ApiError";
   readonly kind: ApiErrorKind;
   readonly status?: number;
   readonly problem?: Problem;
+};
 
-  constructor(kind: ApiErrorKind, options: { status?: number; problem?: Problem } = {}) {
-    // messageにresponseの本文を入れない（ログや画面へ出さないため）。
-    super(options.problem ? `api_problem:${options.problem.code}` : `api_${kind}`);
-    this.name = "ApiError";
-    this.kind = kind;
-    this.status = options.status;
-    this.problem = options.problem;
-  }
-}
+// createApiErrorで作った値。isApiErrorは名前や形ではなくここで判定し、同じ名前の別のErrorを通さない
+// （classのinstanceofと同じ範囲にする）。
+const createdErrors = new WeakSet<Error>();
 
-export function isProblem(error: unknown, ...codes: Problem["code"][]): error is ApiError & { problem: Problem } {
-  return error instanceof ApiError && error.problem !== undefined && codes.includes(error.problem.code);
-}
+export const createApiError = (
+  kind: ApiErrorKind,
+  options: { status?: number; problem?: Problem } = {},
+): ApiError => {
+  // messageにresponseの本文を入れない（ログや画面へ出さないため）。
+  const error = Object.assign(new Error(options.problem ? `api_problem:${options.problem.code}` : `api_${kind}`), {
+    name: "ApiError" as const,
+    kind,
+    status: options.status,
+    problem: options.problem,
+  });
+  createdErrors.add(error);
+  return error;
+};
+
+export const isApiError = (error: unknown): error is ApiError => error instanceof Error && createdErrors.has(error);
+
+export const isProblem = (error: unknown, ...codes: Problem["code"][]): error is ApiError & { problem: Problem } => {
+  return isApiError(error) && error.problem !== undefined && codes.includes(error.problem.code);
+};
 
 type Method = "GET" | "POST" | "PATCH" | "DELETE";
 
@@ -45,12 +58,15 @@ export type ApiRequestOptions = {
 };
 
 // schemaを渡したときだけ本文を返す（渡し忘れて`undefined`を別の型として受け取らないように）。
-export function apiRequest<T>(path: string, options: ApiRequestOptions & { schema: z.ZodType<T> }): Promise<T>;
-export function apiRequest(path: string, options?: ApiRequestOptions & { schema?: undefined }): Promise<void>;
-export async function apiRequest<T>(
+type ApiRequest = {
+  <T>(path: string, options: ApiRequestOptions & { schema: z.ZodType<T> }): Promise<T>;
+  (path: string, options?: ApiRequestOptions & { schema?: undefined }): Promise<void>;
+};
+
+export const apiRequest: ApiRequest = async <T>(
   path: string,
   options: ApiRequestOptions & { schema?: z.ZodType<T> } = {},
-): Promise<T | void> {
+): Promise<T | void> => {
   const url = sameOriginUrl(path);
   const { method = "GET", body, csrfToken, schema } = options;
   const headers: Record<string, string> = { Accept: "application/json" };
@@ -69,7 +85,7 @@ export async function apiRequest<T>(
       redirect: "error",
     });
   } catch {
-    throw new ApiError("network");
+    throw createApiError("network");
   }
 
   if (!response.ok) throw await toError(response);
@@ -77,9 +93,9 @@ export async function apiRequest<T>(
   if (!schema) return;
   const json = await readJson(response);
   const parsed = schema.safeParse(json);
-  if (!parsed.success) throw new ApiError("schema", { status: response.status });
+  if (!parsed.success) throw createApiError("schema", { status: response.status });
   return parsed.data;
-}
+};
 
 /**
  * 同一originのpathだけを送る（CSRF tokenを外部へ送らないため）。文字列の先頭だけで判定すると、
@@ -87,29 +103,29 @@ export async function apiRequest<T>(
  * originを比べる。さらに、解決したpathnameが`//`で始まるものも拒否する（`/.//host`のように`.`・`..`を
  * 挟んだ形はoriginが同じまま、pathnameが`//host`になり、fetchが別のhostとして解決し直すため）。
  */
-function sameOriginUrl(path: string): string {
+const sameOriginUrl = (path: string): string => {
   const url = new URL(path, window.location.origin);
   if (!path.startsWith("/") || url.origin !== window.location.origin || url.pathname.startsWith("//")) {
     throw new TypeError("apiRequest: same-origin path only");
   }
   return `${url.pathname}${url.search}`;
-}
+};
 
-async function toError(response: Response): Promise<ApiError> {
+const toError = async (response: Response): Promise<ApiError> => {
   const contentType = response.headers.get("Content-Type") ?? "";
   if (!contentType.includes("application/problem+json")) {
-    return new ApiError("http", { status: response.status });
+    return createApiError("http", { status: response.status });
   }
   const parsed = problemSchema.safeParse(await readJson(response));
-  if (!parsed.success) return new ApiError("schema", { status: response.status });
-  return new ApiError("problem", { status: response.status, problem: parsed.data });
-}
+  if (!parsed.success) return createApiError("schema", { status: response.status });
+  return createApiError("problem", { status: response.status, problem: parsed.data });
+};
 
-async function readJson(response: Response): Promise<unknown> {
+const readJson = async (response: Response): Promise<unknown> => {
   try {
     return await response.json();
   } catch {
     // 本文を読めないことも、契約と合わない応答として扱う。
     return undefined;
   }
-}
+};

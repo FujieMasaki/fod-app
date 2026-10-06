@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { ApiError } from "@/libs/api-client/request";
+import { createApiError } from "@/libs/api-client/request";
 import type { Problem } from "@/libs/api-contract/schemas";
 import { authErrorMessage, errorMessage, fieldErrors, needsReload, parseAuthError } from "./messages";
 import { safeRedirect } from "./redirect";
 
-function problemError(problem: Problem) {
-  return new ApiError("problem", { status: problem.status, problem });
-}
+const problemError = (problem: Problem) => {
+  return createApiError("problem", { status: problem.status, problem });
+};
 
 const base = { type: "x", title: "serverの文言", detail: "serverの詳細" };
 
@@ -29,9 +29,9 @@ describe("errorMessage", () => {
   });
 
   it("古いタブの可能性があれば再読み込みを案内する", () => {
-    expect(needsReload(new ApiError("schema"))).toBe(true);
+    expect(needsReload(createApiError("schema"))).toBe(true);
     expect(needsReload(problemError({ ...base, status: 403, code: "csrf_invalid" }))).toBe(true);
-    expect(needsReload(new ApiError("network"))).toBe(false);
+    expect(needsReload(createApiError("network"))).toBe(false);
   });
 });
 

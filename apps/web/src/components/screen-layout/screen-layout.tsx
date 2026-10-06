@@ -14,7 +14,7 @@ type ScreenLayoutProps = {
 };
 
 /** StatusBar（固定）＋ヘッダー＋コンテンツ＋TabBar を組み立てる骨格。 */
-export function ScreenLayout({ children, header, activeTab, center = false }: ScreenLayoutProps) {
+export const ScreenLayout = ({ children, header, activeTab, center = false }: ScreenLayoutProps) => {
   return (
     <div className={styles.screen}>
       <StatusBar />
@@ -25,4 +25,4 @@ export function ScreenLayout({ children, header, activeTab, center = false }: Sc
       {activeTab && <BottomNavigation active={activeTab} />}
     </div>
   );
-}
+};
