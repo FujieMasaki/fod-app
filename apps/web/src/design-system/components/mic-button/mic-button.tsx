@@ -16,7 +16,7 @@ type MicButtonProps = {
  * 「行動を促すボタン」ではなく、安心して話し始められる入口。
  * 呼吸(breathe)しながら、待機の波紋(ripple)をまとう。
  */
-export function MicButton({ onStart, label = "タップして話す", size = 112 }: MicButtonProps) {
+export const MicButton = ({ onStart, label = "タップして話す", size = 112 }: MicButtonProps) => {
   const reduce = useReducedMotion();
 
   return (
@@ -39,4 +39,4 @@ export function MicButton({ onStart, label = "タップして話す", size = 112
       </motion.button>
     </div>
   );
-}
+};

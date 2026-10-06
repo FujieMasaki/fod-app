@@ -18,15 +18,15 @@ type TabDef = {
   enabled: boolean;
 };
 
-// Phase 1 のフローは Home / Reflection のみ。Dot・設定は非活性。
+// Phase 1 のフローは Home / Reflection / 設定（アカウント）。Dotは非活性。
 const TABS: TabDef[] = [
   { key: "home", label: "ホーム", href: "/", Icon: HomeIcon, enabled: true },
   { key: "reflection", label: "振り返り", href: "/reflection", Icon: JournalIcon, enabled: true },
   { key: "dot", label: "Dot", Icon: DotIcon, enabled: false },
-  { key: "settings", label: "設定", Icon: SettingsIcon, enabled: false },
+  { key: "settings", label: "設定", href: "/settings", Icon: SettingsIcon, enabled: true },
 ];
 
-export function BottomNavigation({ active }: { active: TabKey }) {
+export const BottomNavigation = ({ active }: { active: TabKey }) => {
   return (
     <nav className={styles.root} aria-label="メインナビゲーション">
       {TABS.map(({ key, label, href, Icon, enabled }) => {
@@ -63,4 +63,4 @@ export function BottomNavigation({ active }: { active: TabKey }) {
       })}
     </nav>
   );
-}
+};

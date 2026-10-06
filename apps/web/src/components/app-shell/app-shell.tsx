@@ -4,7 +4,7 @@ import { motion as motionToken } from "@/design-system";
 import styles from "./app-shell.module.css";
 
 /** 画面をモバイルフレーム内に収め、遷移時は静かにクロスフェードする。 */
-export function AppShell() {
+export const AppShell = () => {
   const location = useLocation();
 
   return (
@@ -20,4 +20,4 @@ export function AppShell() {
       </motion.div>
     </div>
   );
-}
+};

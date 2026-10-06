@@ -30,7 +30,7 @@ type TextProps = {
  * タイポグラフィ primitive。すべての文字表現はこのコンポーネントを通す。
  * variant がフォント種別（明朝/ゴシック）・サイズ・行間・字送りを規定する。
  */
-export function Text({
+export const Text = ({
   variant,
   as,
   tone = "primary",
@@ -38,7 +38,7 @@ export function Text({
   className,
   children,
   ...rest
-}: TextProps) {
+}: TextProps) => {
   const Tag = (as ?? "p") as ElementType;
   const style = {
     "--tone": toneVar[tone],
@@ -54,4 +54,4 @@ export function Text({
       {children}
     </Tag>
   );
-}
+};
