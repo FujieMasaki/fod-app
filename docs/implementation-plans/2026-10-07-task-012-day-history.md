@@ -251,7 +251,9 @@ PR 2/2 `feat/task-012-2-history-screens`（base: PR 1のブランチ）— 画�
     小さい文字のAA（4.5:1）に届かないため、大きな太字（3:1）として満たす。丸の色はDot primitiveと同じまま（人間の判断。
     レビューでの修正）。Dayの大きな丸の数字（21px）も同じ理由で太字にした。画面間の文字のリンクは`text-brand-strong`に、
     「一文はありません。」「これより前のDotはありません。」は`text-ink-secondary`にした（対bgで3.74・3.96から8.38・4.79へ。
-    人間の判断。認証の画面の同じリンク（`auth-layout.tsx`）は別の変更で揃える）。Tailwindのthemeに`--font-weight-bold`（既存の`--fod-weight-bold`）を足し、PR 2/2のファイル数は18。
+    人間の判断。認証の画面の同じリンク（`auth-layout.tsx`）は別の変更で揃える）。
+  - 詳細から一覧へ戻ると一覧は先頭から表示し直され、下の方の「選択中」の丸が画面の外になっていた（D3が満たせない）。
+    選択中の丸を表示した時に`scrollIntoView({ block: "center" })`で画面の中央へ移す（人間の判断。レビューでの修正）。Tailwindのthemeに`--font-weight-bold`（既存の`--fod-weight-bold`）を足し、PR 2/2のファイル数は18。
 - 検証結果:
   - `pnpm lint`（eslint・命名・redocly・`check:api-types`）、`pnpm type-check`、`pnpm test`（scripts 173件・web 386件）、
     `pnpm build`がすべて通った。
