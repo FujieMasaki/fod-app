@@ -59,11 +59,16 @@ const mockApi = (routes: Record<string, Reply[]>) => {
   return requests;
 };
 
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-    <AuthProvider>{children}</AuthProvider>
-  </QueryClientProvider>
-);
+const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+// clientはwrapperの外で作る。`rerender`はwrapperごと描画し直すので、中で作るとclientが差し替わり、cacheが消える。
+const createWrapper = (client = newClient()) => {
+  return ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={client}>
+      <AuthProvider>{children}</AuthProvider>
+    </QueryClientProvider>
+  );
+};
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -72,7 +77,7 @@ afterEach(() => {
 describe("useToday", () => {
   it("今日の記録が無いことを、取得の失敗と分けて返す", async () => {
     mockApi({ "GET /api/v1/session": [signedIn], "GET /api/v1/days/today": [{ status: 200, body: { date: "2026-10-01", dot_count: 0 } }] });
-    const { result } = renderHook(() => useToday(), { wrapper });
+    const { result } = renderHook(() => useToday(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual({ date: "2026-10-01", dot_count: 0 });
   });
@@ -82,7 +87,7 @@ describe("useToday", () => {
       "GET /api/v1/session": [signedIn],
       "GET /api/v1/days/today": [{ status: 200, body: { date: "2026-10-01", dot_count: 1 } }],
     });
-    const { result } = renderHook(() => useToday(), { wrapper });
+    const { result } = renderHook(() => useToday(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(isApiError(result.current.error) && result.current.error.kind).toBe("schema");
   });
@@ -94,7 +99,7 @@ describe("自動のretry", () => {
       "GET /api/v1/session": [signedIn],
       "GET /api/v1/days/today": [problem(500, "internal_error")],
     });
-    const { result } = renderHook(() => useToday(), { wrapper });
+    const { result } = renderHook(() => useToday(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(requests.filter((r) => r === "GET /api/v1/days/today")).toHaveLength(1);
 
@@ -114,7 +119,7 @@ describe("自動のretry", () => {
         });
       }),
     );
-    const retried = renderHook(() => useToday(), { wrapper });
+    const retried = renderHook(() => useToday(), { wrapper: createWrapper() });
     await waitFor(() => expect(retried.result.current.isSuccess).toBe(true), { timeout: 3000 });
     expect(calls).toBe(2);
   });
@@ -137,7 +142,7 @@ describe("useDayList", () => {
         },
       ],
     });
-    const { result } = renderHook(() => useDayList(), { wrapper });
+    const { result } = renderHook(() => useDayList(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.today).toBe("2026-10-01");
     expect(result.current.hasNextPage).toBe(true);
@@ -159,7 +164,7 @@ describe("useDayList", () => {
       ],
       "GET /api/v1/days?cursor=c1": [problem(500, "internal_error")],
     });
-    const { result } = renderHook(() => useDayList(), { wrapper });
+    const { result } = renderHook(() => useDayList(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     await act(() => result.current.fetchNextPage());
@@ -189,7 +194,7 @@ describe("利用者の切り替わり", () => {
         }
         return { auth, list };
       },
-      { wrapper },
+      { wrapper: createWrapper() },
     );
     await waitFor(() => expect(result.current.list.days.map((day) => day.date)).toEqual(["2026-09-28"]));
 
@@ -209,7 +214,7 @@ describe("cursor_invalid", () => {
       ],
       "GET /api/v1/days?cursor=old": [problem(400, "cursor_invalid")],
     });
-    const { result } = renderHook(() => useDayList(), { wrapper });
+    const { result } = renderHook(() => useDayList(), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.hasNextPage).toBe(true));
 
     await act(() => result.current.fetchNextPage());
@@ -229,8 +234,9 @@ describe("useDayDetail", () => {
         { status: 200, body: { date: "2026-09-27", dots: [dot(DOT_B, "2026-09-27", "2026-09-27T01:00:00Z")], next_cursor: null } },
       ],
     });
+    const client = newClient();
     const { result, rerender } = renderHook(({ date }) => useDayDetail(date), {
-      wrapper,
+      wrapper: createWrapper(client),
       initialProps: { date: "2026-09-28" },
     });
     // 前の日の取得が実際に送られ、応答を待っている間に切り替える。
@@ -239,7 +245,12 @@ describe("useDayDetail", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     releaseOld({ status: 200, body: { date: "2026-09-28", dots: [dot(DOT_A, "2026-09-28", "2026-09-28T01:00:00Z")], next_cursor: null } });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    // 前の日の応答は同じclientの、その日のkeyに入る（clientが差し替わって捨てられたのではない）。
+    await waitFor(() =>
+      expect(client.getQueryData(["history", signedIn.body.user.id, "day", "2026-09-28"])).toMatchObject({
+        pages: [{ date: "2026-09-28" }],
+      }),
+    );
     expect(result.current.dots.map((d) => d.id)).toEqual([DOT_B]);
   });
 
@@ -251,12 +262,7 @@ describe("useDayDetail", () => {
       "GET /api/v1/days/today": [{ status: 200, body: { date: "2026-10-01", dot_count: 0 } }],
     });
     // 一覧と今日を一度取得してから閉じ、cacheに古い一覧がある状態を作る（一覧の画面から日を開いた状態）。
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const shared = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={client}>
-        <AuthProvider>{children}</AuthProvider>
-      </QueryClientProvider>
-    );
+    const shared = createWrapper();
     const list = renderHook(() => ({ list: useDayList(), today: useToday() }), { wrapper: shared });
     await waitFor(() => expect(list.result.current.list.isSuccess && list.result.current.today.isSuccess).toBe(true));
     list.unmount();
@@ -283,7 +289,7 @@ describe("useDayDetail", () => {
       ],
       "GET /api/v1/days/2026-09-28?cursor=d2": [problem(400, "cursor_invalid")],
     });
-    const { result } = renderHook(() => useDayDetail("2026-09-28"), { wrapper });
+    const { result } = renderHook(() => useDayDetail("2026-09-28"), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.hasNextPage).toBe(true));
     await act(() => result.current.fetchNextPage());
     await waitFor(() => expect(result.current.dots.map((d) => d.id)).toEqual([DOT_A, DOT_B]));
@@ -299,7 +305,7 @@ describe("useDayDetail", () => {
 
   it("実在しない日付では通信しない", async () => {
     const requests = mockApi({ "GET /api/v1/session": [signedIn] });
-    const { result } = renderHook(() => useDayDetail("2026-02-30"), { wrapper });
+    const { result } = renderHook(() => useDayDetail("2026-02-30"), { wrapper: createWrapper() });
     await waitFor(() => expect(requests).toContain("GET /api/v1/session"));
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(result.current.fetchStatus).toBe("idle");
@@ -308,7 +314,7 @@ describe("useDayDetail", () => {
 
   it("取得に失敗したら0件として扱わない", async () => {
     mockApi({ "GET /api/v1/session": [signedIn], "GET /api/v1/days/2026-09-28": [problem(500, "internal_error")] });
-    const { result } = renderHook(() => useDayDetail("2026-09-28"), { wrapper });
+    const { result } = renderHook(() => useDayDetail("2026-09-28"), { wrapper: createWrapper() });
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(result.current.empty).toBe(false);
     expect(result.current.dots).toEqual([]);
