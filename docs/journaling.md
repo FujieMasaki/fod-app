@@ -46,8 +46,9 @@ Zodで検証したDotSessionをSession Provider（memory）へ保存
 
 4列目はTASK-002で採用した実サービスの方針である（2026-09-28採用、ゴミ箱と編集は2026-09-29に追加）。
 **Dotの行のうち、RDSの`dots`を正本にした保存先・本人だけの取得・`sentence`/`summary`の編集・ゴミ箱の外
-だけを返す取得は2026-10-05にTASK-008でRails APIに実装した**。それ以外は未実装で、Webはまだ接続して
-いないため、1〜3列目の現在の実装は実装タスクまで変わらない。
+だけを返す取得は2026-10-05にTASK-008でRails APIに実装し、Webは2026-10-07にTASK-012で取得（Day・一覧・
+日の詳細）に接続した**。それ以外は未実装で、Dotを作る入口が無いため、1〜3列目の現在の実装は実装タスクまで
+変わらない。
 **保持期間と削除の契機は[`privacy.md`](./privacy.md) §5を正本とする**。この表は操作と受け渡しを
 示すもので、期間が食い違った場合はprivacy.md §5が優先する。判断の経緯と比較は
 [TASK-002 Plan](implementation-plans/2026-09-28-task-002-data-lifecycle.md)にある。
@@ -73,8 +74,9 @@ keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを�
 - 現在のRails APIには、認証（TASK-006）と、Dotの保存先・Day・日単位の一覧・日の詳細の取得・
   `sentence`/`summary`の編集（TASK-008）がある。Dotを作る入口（`POST /api/v1/dots`）、AI処理、
   ゴミ箱・削除の操作は実装されていない。WebはTASK-007で認証に接続し、録音・Dotの画面を
-  ログインしてから開くようにした。Dotの保存・履歴のAPIにはまだ接続しておらず、Dot生成は
-  認証の後も固定のmockを返す。
+  ログインしてから開くようにした。履歴の取得APIにはTASK-012で接続し、`/day`・`/dots`でserverのDotを
+  表示する。Dotを作るAPIには接続しておらず、Dot生成は認証の後も固定のmockを返す（mockの結果は`/dot`・
+  `/reflection`にだけ出て、serverの履歴には入らない）。
 - `VITE_DOT_API_URL`設定時の本文なしPOSTは暫定的な接続点であり、音声Blob、duration、利用者、
   正式なRails API契約を表すものではない。
 - 実サービスの正式な契約は[`contracts/openapi.yaml`](../contracts/openapi.yaml)を正本とする
