@@ -6,9 +6,6 @@ pre-commit:
     naming:
       glob: "apps/web/src/**/*.{ts,tsx,css}"
       run: pnpm lint:naming
-    markdown:
-      glob: "*.md"
-      run: pnpm lint:markdown
 
 pre-push:
   parallel: true

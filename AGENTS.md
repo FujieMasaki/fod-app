@@ -25,7 +25,6 @@ AIは実装の代行者ではなく、設計・実装・レビューを支援す
 | frontend / backendをまたぐ実装 | frontend・backend両方の実装規約、関連機能仕様、architecture |
 | frontendレビュー | [`docs/code-review/frontend/README.md`](docs/code-review/frontend/README.md)、[`security.md`](docs/code-review/frontend/security.md)、関連仕様・frontend実装規約 |
 | backendレビュー | [`docs/code-review/backend/README.md`](docs/code-review/backend/README.md)、[`security.md`](docs/code-review/backend/security.md)、関連仕様・backend実装規約 |
-| 仕様・設計文書のレビュー | [`docs/code-review/documentation.md`](docs/code-review/documentation.md)、関連仕様・該当するImplementation Plan |
 | 横断レビュー | 両方のレビュー入口・security観点・実装規約・関連仕様 |
 
 ## 文書の役割と更新

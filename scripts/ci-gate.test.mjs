@@ -8,7 +8,6 @@ const successful = {
   apiTarget: "true",
   buildResult: "success",
   lintResult: "success",
-  markdownResult: "success",
   typesResult: "success",
   testsResult: "success",
   railsResult: "success",
@@ -40,22 +39,6 @@ test("permits only the unrelated suite to be skipped", () => {
 test("fails when a required check fails or is skipped", () => {
   assert.throws(() => verifyGate({ ...successful, testsResult: "skipped" }), /Required Tests/);
   assert.throws(() => verifyGate({ ...successful, railsResult: "failure" }), /Required Rails/);
-});
-
-test("markdown is required even for a docs-only change that skips both suites", () => {
-  const docsOnly = {
-    ...successful,
-    webTarget: "false",
-    apiTarget: "false",
-    buildResult: "skipped",
-    lintResult: "skipped",
-    typesResult: "skipped",
-    testsResult: "skipped",
-    railsResult: "skipped",
-  };
-  assert.doesNotThrow(() => verifyGate(docsOnly));
-  assert.throws(() => verifyGate({ ...docsOnly, markdownResult: "skipped" }), /Required Markdown/);
-  assert.throws(() => verifyGate({ ...docsOnly, markdownResult: "failure" }), /Required Markdown/);
 });
 
 test("detection failure requires both suites", () => {

@@ -23,8 +23,6 @@ Claude Codeのセルフレビューとサブエージェント（[`code-reviewer
 2. 変更された領域の`security.md`と、同じディレクトリの`README.md`（報告形式の出典）を必ず読む
    （`apps/web/`は[`frontend/`](./frontend/README.md)、`apps/api/`は[`backend/`](./backend/README.md)、
    `contracts/`・両方にまたがる変更・どちらにも当てはまらない変更は両方）。
-   **`docs/`配下の仕様・設計文書の変更では[`documentation.md`](./documentation.md)を読む**
-   （コードと両方にまたがる変更では、コード側の入口と両方）。
 3. 差分と、判断に必要な関連実装・test・仕様を読む。
 4. 次の観点を優先して確認する。
    - security（認証・認可、入力の検証、open redirect、CSRF、秘密情報・個人データの扱い）
