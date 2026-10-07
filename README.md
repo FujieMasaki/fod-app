@@ -100,7 +100,7 @@ User、認証、Dot、音声、AI処理のプロダクトAPIは未実装です�
 | [`docs/dot-history.md`](docs/dot-history.md) | 複数Dotの履歴体験と時間軸の検証候補 |
 | [`docs/architecture.md`](docs/architecture.md) | 現在の構成と継続する設計判断 |
 | [`docs/development/`](docs/development/) | frontend / backend実装時の判断基準、PRの分割と人間のレビューの規約 |
-| [`docs/code-review/`](docs/code-review/) | frontend / backendレビューの確認・報告方法、Codexの最終チェック |
+| [`docs/code-review/`](docs/code-review/) | frontend / backend / 仕様・設計文書のレビューの確認・報告方法、Codexの最終チェック |
 | [`docs/implementation-plans/`](docs/implementation-plans/) | 変更単位の判断と検証履歴 |
 
 AI作業時の必読順と更新ルールは[`AGENTS.md`](AGENTS.md)を参照してください。
@@ -131,8 +131,12 @@ GitHub Actionsでは、Pull Request・`main` へのPush・手動実行時に以�
 | --- | --- | --- |
 | ESLint | `pnpm check` | 静的解析 |
 | TypeScript | `pnpm type-check` | 型チェック |
-| Tests | `pnpm test` | 命名チェッカー自身のtestとVitest |
+| Tests | `pnpm test` | チェッカー自身のtestとVitest |
 | Build | `pnpm build` | Production Build |
+| Docs & scripts | `pnpm lint:markdown` / `pnpm test:scripts` | 強調の崩れと`scripts/`のtest。**変更の種類に関わらず常に実行する**（文書だけの変更では他のジョブが走らないため） |
+
+`CI Gate`が必須チェックの結果をまとめて検証します。`Docs & scripts`は常に必須で、ほかは
+変更した領域（web / api）に応じて必須になります。
 
 Node.js / pnpmのバージョンは `package.json` から取得し、pnpm storeをキャッシュした上で `--frozen-lockfile` を使用して依存関係をインストールしています。
 
@@ -144,7 +148,7 @@ Lefthookを利用してローカルでもチェックを行っています。
 
 ### Before commit
 
-ステージされたJavaScript / TypeScriptファイルに対してESLintを実行し、`apps/web/src` の対象ファイルがある場合は命名チェックも実行します。
+ステージされたJavaScript / TypeScriptファイルに対してESLintを実行し、`apps/web/src` の対象ファイルがある場合は命名チェックも実行します。`.md` をステージした場合は強調の崩れの検査（`pnpm lint:markdown`）も実行します（こちらはステージされたファイルではなく**作業ツリー全体**を見ます）。
 
 ### Before push
 
