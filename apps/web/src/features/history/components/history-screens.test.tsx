@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { MouseEventHandler, ReactNode } from "react";
 
@@ -283,6 +283,34 @@ describe("日の詳細", () => {
     expect(screen.queryByText("思っていたより、ちゃんと休めた一日だった。")).not.toBeInTheDocument();
     expect(within(group).getByRole("button", { name: "08:10（表示中）" })).toHaveAttribute("aria-pressed", "true");
     expect(within(group).getByRole("button", { name: "22:04" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("選んでいた記録が取り直しで無くなったら、別のDotを代わりに出さず、残りの時刻から選び直せる", async () => {
+    mockApi({
+      "GET /api/v1/session": [signedIn],
+      "GET /api/v1/days/2026-09-28": [
+        { status: 200, body: { date: "2026-09-28", dots: [eveningDot, morningDot], next_cursor: null } },
+        { status: 200, body: { date: "2026-09-28", dots: [eveningDot], next_cursor: null } },
+      ],
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <AuthProvider>
+          <DayDetailScreen date="2026-09-28" />
+        </AuthProvider>
+      </QueryClientProvider>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "08:10" }));
+    expect(screen.getByText("少し早く起きられた。")).toBeInTheDocument();
+
+    // 別の端末で朝の記録をゴミ箱へ移した後に取り直す。残りは1件だけになる。
+    await act(() => client.refetchQueries());
+    expect(await screen.findByText("選んでいた記録は見つかりませんでした。上の時刻から選んでください。")).toBeInTheDocument();
+    expect(screen.queryByText("思っていたより、ちゃんと休めた一日だった。")).not.toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole("group", { name: "録音した時刻" })).getByRole("button", { name: "22:04" }));
+    expect(screen.getByText("思っていたより、ちゃんと休めた一日だった。")).toBeInTheDocument();
   });
 
   it("その日のDotが多ければ、続きを読み込んで到達できる", async () => {

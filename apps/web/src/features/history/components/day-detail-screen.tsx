@@ -78,7 +78,8 @@ const DayDetail = ({ date }: { date: string }) => {
 
   const labels = timeLabels(detail.dots);
   const shown = selectedId === null ? detail.dots[0] : detail.dots.find((dot) => dot.id === selectedId);
-  const several = detail.dots.length > 1 || detail.hasNextPage;
+  // 選んでいた録音が取り直しで無くなったら、残りが1件でも時刻を出して選び直せるようにする（D10）。
+  const several = detail.dots.length > 1 || detail.hasNextPage || shown === undefined;
 
   return (
     <div className="flex flex-col gap-6 py-6">
