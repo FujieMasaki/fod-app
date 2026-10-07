@@ -175,7 +175,7 @@ pre-pushの検査は今いるブランチの作業ツリーを検査するため
 ```bash
 git push -u origin feat/task-008-2-dot-api:feat/task-008-2-dot-api
 gh pr create --base feat/task-008-1-dot-model --head feat/task-008-2-dot-api \
-  --title "<日本語のタイトル>（2/3）" --body "<本文>"
+  --title "<日本語のタイトル>（2/3）" --body-file <本文を書いた一時ファイル>
 ```
 
 baseは1つ前のブランチにする。1番目と、互いに依存しないPRは統合ブランチにする。PRが1つだけなら
