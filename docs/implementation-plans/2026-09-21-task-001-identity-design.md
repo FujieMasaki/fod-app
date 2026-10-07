@@ -423,7 +423,7 @@ IdP自身のhosted loginを通すためlocalのRailsにパスワードやpasskey
 
 これは国内保管要件を整理する前の推奨記録。現行MVPには§40のAWS東京 + Cognitoを採用し、以下のRender/Auth0・必須MFA案は適用しない。Auth0は日本テナントを作成可能であり、海外アプリ配信とIdPの保存地域は別々に選べる（§35–36）。
 
-**H1（RenderにReact成果物を同梱したRails + 有料Postgres）+ I1（Auth0 Essentialsを基準に評価）**を第一推奨とする。ログインはメールOTP + passkey登録を優先し、Googleを併設候補、Appleは利用者層に応じて追加する。公開MVPのMFAは§28のTOTP追加案を比較の基準とする。
+**H1（RenderにReact成果物を同梱したRails + 有料Postgres）+ I1（Auth0 Essentialsを基準に評価）** を第一推奨とする。ログインはメールOTP + passkey登録を優先し、Googleを併設候補、Appleは利用者層に応じて追加する。公開MVPのMFAは§28のTOTP追加案を比較の基準とする。
 
 理由は、アプリの公開経路を1つにし、認証のhosted UI・MFA・利用者管理を利用しながら、日記の所有権とsession失効を既存Rails/PostgreSQLで説明できるため。これは公式サービスの優劣を示す実測ではなく、現在のチーム規模と構成への設計評価。
 
@@ -476,7 +476,7 @@ IdP自身のhosted loginを通すためlocalのRailsにパスワードやpasskey
 
 ## 34. 国内必須の範囲を決める3案
 
-この分類とD2推奨は過去の比較。現在は東京を基本配置とするが、国内限定の法的・契約上の約束や厳密なD2例外管理をMVPの採用条件にしない（§40）。D1/D2の採用済み扱いにも、D3を理由とした無制限の国外送信にも変更しない。
+この分類とD2推奨は過去の比較。2026-09-24時点では東京を基本配置としていた（現行は`architecture.md`「データ所在地と費用」が正本）。国内限定の法的・契約上の約束や厳密なD2例外管理をMVPの採用条件にしないことは、当時も現在も変わらない（§40）。D1/D2の採用済み扱いにも、D3を理由とした無制限の国外送信にも変更しない。
 
 | 方針 | 必須にする範囲 | 利点・負担 | 評価 |
 | --- | --- | --- | --- |
@@ -630,7 +630,7 @@ Auth0日本テナント、Render、Lightsailは今回採用しない。App Runne
 - ALB access logはcallback URLのcode等を記録し得るため、初期案では有効化せず、ALB metricsと機密を除外したRailsログを利用する。必要時は認証情報を保存しない経路・記録方法を先に設計する。Rails parameter filterだけでALB側のqueryまで消せると仮定しない。[ALB access logのrequest field](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-access-logs.html)
 - RDS暗号化、自動backup、保持期間の明示、復元試験、秘密情報のサーバー側管理、障害/容量/費用の監視は公開前の確認対象。backup保持・削除記録の再適用はTASK-002、認証・別User拒否はTASK-006/015で検証する。MFAを必須にしない方針をAWS運用管理accountの保護緩和に流用しない。
 
-日記内容、文字起こし、音声、AI入出力をIdP属性・認証メール・通常ログへ含めない。東京を基本配置とする方針は、外部AIやGoogle・メール事業者の処理まで国内であるという保証ではない。TASK-002/003で送信先・目的・保持・削除と利用者への説明を決め、国内限定保証のないことを無制限な送信の許可にしない。
+日記内容、文字起こし、音声、AI入出力をIdP属性・認証メール・通常ログへ含めない。東京を基本配置とする方針（当時。現行は`architecture.md`「データ所在地と費用」が正本）は、外部AIやGoogle・メール事業者の処理まで国内であるという保証ではない。TASK-002/003で送信先・目的・保持・削除と利用者への説明を決め、国内限定保証のないことを無制限な送信の許可にしない。
 
 ## 42. 基盤費の目標と見積もり・費用管理
 
@@ -704,7 +704,7 @@ TASK-001はIn progress、TASK-005/006/007はBlockedを維持する。TASK-002/00
 | 利用者と認可 | 内部User UUIDをDotの所有者にする。Devise/Wardenが確定したcurrent_userのscopeで一覧・詳細・更新・削除。作成時のownerもサーバーが設定 |
 | Google | 検証済みprovider/uidを内部Userへ一意に対応。email一致のみの自動統合は禁止。明示的連携は将来対応 |
 | 対象外 | メールOTP、MFA、passkey、運営者の手動復旧。端末別失効・全端末logout用DB sessionは保留 |
-| 維持 | ALB + ECS Fargate + RDS PostgreSQL東京、初期1タスク・Single-AZ、React同梱・同一origin、東京基本配置、国内限定を約束しない方針、既存予算と費用監視 |
+| 維持 | ALB + ECS Fargate + RDS PostgreSQL東京、初期1タスク・Single-AZ、React同梱・同一origin、所在地方針（当時は東京基本配置。現行は`architecture.md`「データ所在地と費用」が正本）、国内限定を約束しない方針、既存予算と費用監視 |
 
 Cognito用OIDC callback、Cognito token検証、Cognito固有identity対応は現行設計から削除する。Google認証からRailsへ戻る**OmniAuth callbackは引き続き必要**。旧Cognito callbackを流用する決定でも、Googleの認証検証を省略する決定でもない。
 

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export function verifyGate({ changesResult, webTarget, apiTarget, buildResult, lintResult, typesResult, testsResult, railsResult }) {
+export function verifyGate({ changesResult, webTarget, apiTarget, buildResult, lintResult, markdownResult, typesResult, testsResult, railsResult }) {
   if (changesResult !== "success") {
     webTarget = "true";
     apiTarget = "true";
@@ -9,6 +9,11 @@ export function verifyGate({ changesResult, webTarget, apiTarget, buildResult, l
 
   if (!["true", "false"].includes(webTarget) || !["true", "false"].includes(apiTarget)) {
     throw new Error("Invalid CI target output");
+  }
+
+  // Markdown runs for every change, including docs-only ones that skip web and api.
+  if (markdownResult !== "success") {
+    throw new Error(`Required Markdown check ended with: ${markdownResult}`);
   }
 
   if (webTarget === "true") {
@@ -34,6 +39,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     apiTarget: process.env.API_TARGET,
     buildResult: process.env.BUILD_RESULT,
     lintResult: process.env.LINT_RESULT,
+    markdownResult: process.env.MARKDOWN_RESULT,
     typesResult: process.env.TYPES_RESULT,
     testsResult: process.env.TESTS_RESULT,
     railsResult: process.env.RAILS_RESULT,

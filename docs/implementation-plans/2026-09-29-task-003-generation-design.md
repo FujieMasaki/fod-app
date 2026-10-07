@@ -1,20 +1,24 @@
 # TASK-003 AI生成と失敗・再試行の設計判断 Implementation Plan
 
-> **この文書は判断の記録であり、現行の保持・削除条件の正本ではない。**期間・削除の契機・利用者への
+> **この文書は判断の記録であり、現行の保持・削除条件の正本ではない**。期間・削除の契機・利用者への
 > 説明の範囲は[privacy.md §5](../privacy.md)を見る。食い違いがあればprivacy.md §5が優先する。
 > ここには比較した案、採用の理由、確認していないことが入る。
 
 ## 1. Status
 
-完了（2026-09-29に人間が採用を決定）。**採用内容は未実装である。**実装はTASK-009/010/011、
+完了（2026-09-29に人間が採用を決定）。**採用内容は未実装である**。実装はTASK-009/010/011、
 API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
 
-完了条件7（委託先への9項目の確認）は**このタスクでは満たしていない。**選定の条件として9項目を
+**2026-10-03に、人間の判断でデータ所在地の方針を変更した**（`architecture.md`「データ所在地と費用」を
+「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」へ。経緯は§18「2026-10-03の再確認」、判断の記録は§25）。
+**providerの採用は案Aのままだが、続ける理由が変わり、案Cは不採用から保留になった。**
+
+完了条件7（委託先への9項目の確認）は**このタスクでは満たしていない**。選定の条件として9項目を
 記録し、確認先と確認方法を定めた。**一次資料を読んで確認できた項目もある**（§18、§26に項目別で
 記録した）が、**9項目全体の確認、AWSアカウントの設定、日本の個人情報保護法上の評価は完了して
-いない。**確認していない項目を「問題ない」と扱わない。
+いない**。確認していない項目を「問題ない」と扱わない。
 
-**文字起こし結果の置き場（§27）は、レビュー指摘を受けて追加した5件目の判断である。**初稿は
+**文字起こし結果の置き場（§27）は、レビュー指摘を受けて追加した5件目の判断である**。初稿は
 「workerのmemoryのみ」としていたが、Amazon Transcribeのバッチは必ずS3へ書き出すため事実として
 誤りだった。2026-09-29に案A（自前のS3へ置く）を採用し、`privacy.md §5-1`へデータ行を追加した。
 
@@ -80,6 +84,16 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
   §26の確認と実装時の疎通で確定する（TASK-009）。
 - promptの最終文面。方針と必要項目までを決め、文面はTASK-009で実データを見ながら詰める。
 - 生成の品質評価の方法と基準。
+- **越境移転の規律への対応**（2026-10-03に追加。**完了条件7の項目3として元から挙げてあった確認で、
+  未確認のまま残っていたもの**）。東京原則そのものは**2026-10-03に`architecture.md`
+  「データ所在地と費用」を「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」へ変更して決着した**
+  （本Planの範囲外の判断として、正本の側を直す手順で行った。§18「2026-10-03の再確認」）。
+  残るのは、**外国にある第三者への提供（個人情報保護法第28条第1項）への対応**である。**委託であっても
+  この規律の対象になることは一次資料で確認した**（整理と出典は`architecture.md`「データ所在地と費用」を
+  正本とする）。**未確定の内容と、判定によらず重なる義務は`architecture.md`「データ所在地と費用」が正本である**
+  （件数と条件を下流へ書き写すとずれるため、ここには写さない）。**公開前に終える判定は2つあり、
+  どちらも推論経路が国内かどうかでは決まらない。** **国外経路を実際に使う前の確認を必須とし、
+  それまでは国内に収まる経路で運用する**。該当範囲と手当はTASK-017で判断する。
 
 ## 6. References and Documents to Update
 
@@ -97,14 +111,58 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
 - `docs/architecture.md`: 「決定済み」へ生成経路とJob基盤を記録し、該当する「未決定」を整理。
 - `docs/tasks/TASK-003-generation-design.md`: 状態、本Planへのリンク、完了条件の結果。
 
+2026-10-03の所在地方針の変更（§18「2026-10-03の再確認」）では、上記に加えて次も更新した。
+
+- `docs/architecture.md`: 「データ所在地と費用」を正本として変更（「保存は日本国内」の射程とdata retention
+  modeの条件を含む）。2つの経路図の註、Bedrockのモデル選定、「未決定」への越境移転の確認の追加。
+- `docs/privacy.md`: §4のTASK-003の行へ方針の変更と残る確認。§5-1の外部provider行へ正本への参照と、
+  Transcribeのjob記録の保持期間（90日・調整不可）。
+- `docs/product.md`・`docs/journaling.md`: 所在地の記述を新しい方針へ揃えた。product.mdは§5へ
+  「委託先の構成」の保留事項（案Cが保留になったことと再検討条件）と、TASK-017の行への越境移転の
+  追記も行った。
+- `docs/tasks/TASK-001-identity-design.md`: 所在地の要約を正本への参照へ置き換えた。
+- 過去のPlanは、**「現在」を名乗っている箇所だけ**を直した。AGENTS.mdの「過去のPlanのCurrent Stateは
+  当時の記録であり、現在の状態へ書き換えない」に従い、**日付や旧構成（Cognito等）で当時の記録と分かる
+  箇所は触っていない。**
+  - 直した箇所: `2026-09-21-task-001-identity-design.md` §34（「**現在は**東京を基本配置とするが」）と
+    §45の表（見出しが「**現在の**採用内容」）、`2026-09-28-task-004-history-design.md`（「原則東京に
+    置く**現在の**方針」）。いずれも単独で読むと現行方針を名乗るため。
+  - 触っていない箇所: 同Plan §40「公開MVPの採用決定（2026-09-24）」の表は**見出しに日付がある**ため、
+    §41「採用構成の具体化と安全境界」は**本文がCognito構成（§45でDevise + CookieStoreへ変更済み）を前提に
+    している**ため、どちらも当時の記録と読める（§41の見出しには日付が無いので、根拠は本文の側である）。
+    **ただし§41の末尾の段落だけは例外で、2026-10-05に直した。** Cognito構成に依存せず
+    「東京を基本配置とする方針は〜」と所在地方針だけを現在形で述べていたため、§34・§45と同じ形で
+    「（当時。現行は`architecture.md`「データ所在地と費用」が正本）」を添えた。
+    **節ごとに触る/触らないを決めると、節の中の独立した段落を見落とす**という型である。
+    `2026-09-28-task-002-data-lifecycle.md`の当時のarchitectureの引用も、**引用そのものなので触らない。**
+- `docs/tasks/TASK-003-generation-design.md`: 所在地方針の変更、案Cの保留、委託先の構成の再検討条件の
+  担当（`product.md §5`が正本）。
+- `docs/tasks/TASK-009-backend-audio-generation.md`: model id選定の前提。
+- `docs/tasks/TASK-010-frontend-recording.md`: 送信先（国内/国外）を録音前の案内へ反映する条件。
+- `docs/tasks/TASK-015-privacy-security-verification.md`: **実際に呼んでいる推論経路・リージョンが
+  TASK-009の記録と一致し、案内の「国内か国外か」も実態と一致していることを公開前に突き合わせる**
+  検証条件を追加（2026-10-05にレビュー指摘で追加。所在地方針の検証の受け皿）。
+- `docs/tasks/TASK-017-breach-response-design.md`: 越境移転の規律を作業範囲と完了条件へ追加。
+- `docs/tasks/README.md`: TASK-017の要判断事項。
+
+**この1文の全出現箇所は`grep -rn '保存と閲覧は日本国内' --include='*.md'`で引く**
+（件数は増減するので書かない）。要約を下流へ置いたので、**次にこの1文を変えるときは全出現箇所を
+同時に直す**。
+
+このPRのレビューで繰り返し出た指摘への**再発防止の仕組み化**（強調の崩れを検出するlint、CIでの
+常時実行、仕様・設計文書のレビュー入口）は、**設計判断が別なので後続のPRへ切り出した**
+（2026-10-07にレビューのコストが仕組み化の側に偏ったため、人間の判断で分けた）。
+
 ## 7. Proposed Approach（採用した方針）
 
 判断の比較は§18–§21、人間の判断は§25にある。
 
 1. **文字起こしとAI生成の委託先をAWSに統一する。** Amazon Transcribe（`ap-northeast-1`）で
    文字起こしし、Amazon BedrockのClaudeで`sentence`と`summary`を生成する（§18案A）。
-   **Bedrockのモデルは推論が日本国外へ出ない経路で使えるものから選ぶ。**経路はGeo: JP
-   （東京・大阪）か`bedrock-mantle`のIn-Region（東京のみ）で、**model idはTASK-009で確定する**（§18）。
+   **Bedrockのモデルの推論経路は`architecture.md`「データ所在地と費用」に従う**（2026-10-03に
+   同文書を「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」へ変更した。変更前は「国外へ出ない経路で
+   使えるものから選ぶ」だった）。**「国内に収まる経路」の定義は同文書の同節が正本。Globalも選べるが
+   越境移転の規律の確認が済んでからとする。model idはTASK-009で確定する**（§18）。
 2. **非同期で実行する。** Job基盤はSolid Queue（RDSのテーブルを使う）。workerは当面ECSの同一タスク内で
    Pumaと並走させ、詰まったら別タスクへ分ける。**clientはpollingで結果を取得する**（§19案A）。
 3. **処理IDと冪等性keyと録音attemptの識別子を同一にし（server発行）、`dots`の列へ引き継ぐ。**
@@ -114,7 +172,7 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
    TASK-002が残した相互確認事項への回答である。
 4. **AIへ送る前の固有名詞の低減は行わない。** 録音前の案内と、編集・ゴミ箱・即時完全削除・退会で
    対応する（§21案A）。低減したとは表示しない。
-5. **再試行は、文字起こし結果が残っていれば生成からやり直す。**残っていなければ文字起こしから
+5. **再試行は、文字起こし結果が残っていれば生成からやり直す**。残っていなければ文字起こしから
    やり直す（§25-5。初稿は「必ず文字起こしから」としていたが、§27で全文を自前S3へ置くと決めた
    ため根拠が失われた）。どちらでも録り直しにはならない。
 6. **退会と進行中処理は、利用者の行のlockと世代番号で排他する。** 状態の確認と記録の作成を同じ
@@ -124,13 +182,15 @@ API契約はTASK-005、削除と残存の検証はTASK-013/015で行う。
 
 ## 8. Why This Approach
 
-- **完了条件7が一番重い。**9項目（学習利用・保持・リージョン・人のレビュー・サブプロセッサ・
+- **完了条件7が一番重い**。9項目（学習利用・保持・リージョン・人のレビュー・サブプロセッサ・
   委託契約・事故時の通知・鍵・第三者認証）を一次資料で確認する作業は、委託先が1社なら1回で済む。
   AWSへ寄せると、鍵の項目（項目8）は**長期固定のAPIキーをアプリで管理しなくて済む。**
   **ただしECSはSDKへ一時credentialを供給するので、項目8が消えるわけではない**（レビュー指摘で訂正）。
   確認対象が「keyの配布とローテーション」から「roleの最小権限、credential取得経路の保護、
   侵害時のrole無効化とtask停止」へ変わる。
-- **東京原則と両立させやすい。** architectureは「日記内容・音声・AI入力は原則として東京」と
+- **当時の東京原則と両立させやすかった**（2026-10-03時点では、architectureは「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を
+  許容する」へ変わっている。以下は2026-09-29の判断時点の材料である）。architectureは
+  当時「日記内容・音声・AI入力は原則として東京」と
   している。委託先をAWSに寄せると、送信先が1社に収まり、`privacy.md §2原則2`が求める
   「外部AIに渡る最初の地点」を1か所として説明できる。**ただし自動的に東京に収まるわけではない。**
   Transcribeはopt-outを設定するまで利用リージョン外へ保存され得るし、Bedrockはモデルによって
@@ -228,7 +288,7 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 
 ## 11. Libraries / APIs
 
-実装で必要になるものを記録する。**本Planではgemを追加しない。**追加はTASK-009で行う。
+実装で必要になるものを記録する。**本Planではgemを追加しない**。追加はTASK-009で行う。
 
 - **Solid Queue**: Job基盤。RDSのテーブルをqueueに使うため、Redis等の常時稼働するmiddlewareを
   増やさずに済む。Rails 8系の標準の選択肢で、Active Jobのadapterとして差し替えられる。
@@ -236,12 +296,14 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
   S3への一時保管、文字起こし、生成。**IAM roleで認証するため、長期固定のAPIキーをアプリで
   持たない**（一時credentialはSDKへ供給される）。ECS task roleに、対象bucketのprefixと対象モデル
   だけを許す最小権限のpolicyを付ける（§27）。
-- **SDKだけで足りるのは`bedrock-runtime`を使う場合に限る。**`bedrock-mantle`は`InvokeModel`や
+- **SDKだけで足りるのは`bedrock-runtime`を使う場合に限る**。`bedrock-mantle`は`InvokeModel`や
   `Converse`ではなくAnthropic Messages API相当のHTTP endpointで、`aws-sdk-bedrockruntime`の
   呼び出しでは扱えない（[Bedrockのendpoint](https://docs.aws.amazon.com/bedrock/latest/userguide/endpoints.html)）。
   **In-Regionを採るなら、SigV4で署名するHTTP clientの選定と検証が別に要る。**
-  MVPは`bedrock-runtime`のGeo: JPを既定とし、In-Regionへ寄せる判断はTASK-009で行う
-  （2巡目のレビュー指摘14。初稿は「SDKが提供する呼び出しで足りる」と断定していた）。
+  MVPは`bedrock-runtime`で呼べる経路（**Geo: JPまたはGlobal**）から選び、In-Regionへ寄せる判断は
+  TASK-009で行う（2巡目のレビュー指摘14。初稿は「SDKが提供する呼び出しで足りる」と断定していた。
+  2026-10-03に所在地方針を変更したため「Geo: JPを既定」の縛りを外した。**Globalを使うには越境移転の
+  規律の確認が要る**）。
 
 ## 12. Alternatives Considered
 
@@ -255,7 +317,7 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
   「学習に使われない」と文書や画面に書かない。確認の担当と期限を§26に置く。
 - **録音形式と文字起こしの受容形式が合わない。** 現行は`new MediaRecorder(stream)`をmimeType未指定で
   生成するため、Chrome系は`audio/webm;codecs=opus`、Safariは`audio/mp4`になる。**どちらかが
-  受け付けられないとそのbrowserだけ失敗する。**serverが受容形式を列挙して検証し、非対応なら
+  受け付けられないとそのbrowserだけ失敗する**。serverが受容形式を列挙して検証し、非対応なら
   外部へ送らずに録り直しを案内する。実際の対応可否はTASK-009の疎通で確認する。
 - **workerをPumaと同じタスクに置くことの影響。** ECS 1タスク・`RAILS_MAX_THREADS`既定3という構成で、
   30分の音声の文字起こしを待つJobが走る。**deployでタスクが入れ替わると進行中のJobは落ちる。**
@@ -269,7 +331,7 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
   実害は小さいが、
   **「同じ操作の再実行で必ず同じ結果になる」とは言えない**ことを記録しておく。
 - **Job再実行による外部AIの二重消費。** 冪等性keyは二重の**Dot**を防ぐが、
-  **二重の外部AI処理そのものは防がない。**保存で落ちて再試行すれば、文字起こしと生成をもう一度
+  **二重の外部AI処理そのものは防がない**。保存で落ちて再試行すれば、文字起こしと生成をもう一度
   通る。journaling.md §4の受け入れ条件は「二重のDotや外部AI処理が起きない、**または**利用者に
   結果が明確に示される」なので、後者で満たす。費用の上振れは運用で見る。
 - **状態が`processing`のまま止まる経路。** worker停止・例外・deployで、記録が`processing`のまま
@@ -306,16 +368,16 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 
 ### 机上での検証をここで打ち切る（2026-09-29の判断）
 
-**状態機械の整合を文書だけで確認する作業は、ここで終える。**別AIのレビューを5巡受け、指摘は
+**状態機械の整合を文書だけで確認する作業は、ここで終える**。別AIのレビューを5巡受け、指摘は
 10 → 14 → 7 → 5 → 4件と収束したが、**3巡目以降は指摘の多くが「前の巡の修正が作った矛盾」**
 だった。§20の状態表にある状態と遷移、外部資源4種（S3の音声／S3の文字起こし結果／Transcribeのjob／Dot）・
 試行番号の組み合わせは、**文章の読み合わせで閉じたと判定するのに向いていない。**
 
 - **遷移IDを振ったので、テストと1対1で対応づけられる**（§20の状態表）。
-- **TASK-009で状態遷移テストを先に書き、そこで閉じる。**実装の完了条件に入れた。
+- **TASK-009で状態遷移テストを先に書き、そこで閉じる**。実装の完了条件に入れた。
 - 残った曖昧さは、**実装時にテストが落ちる形で現れる**方が確実に潰せる。
-- 人間がこの打ち切りを判断した。**「閉じたことを確認したから終える」のではなく、
-  「閉じたかどうかを机上で判定する方法が限界に達したから、検証の場を移す」**である。
+- 人間がこの打ち切りを判断した。「**閉じたことを確認したから終える」のではなく、
+  「閉じたかどうかを机上で判定する方法が限界に達したから、検証の場を移す**」である。
 
 ### 実装時（後続タスク）
 
@@ -357,12 +419,18 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
   （§14）。閉じたことを確認して終えたのではなく、**判定の場を移した。**
 - 完了条件: 7件中6件をこのタスクで満たした。**完了条件7（委託先への9項目の確認）は満たしていない。**
   選定の条件として9項目・確認先・確認方法を§26に記録したが、**一次資料の確認と委託契約の締結は
-  人間が実施する。**確認が済むまで公開しない。
+  人間が実施する**。確認が済むまで公開しない。
 - 下流への反映: TASK-005（契約への入力）、TASK-009（実装と全遷移のテスト）、TASK-013（削除連鎖に
   文字起こし結果とTranscribeのjobを追加）を同じ変更で更新した。**TASK-010/011/015は今回確認し、
   矛盾する記述は無かった。**
+- **2026-10-03の追記**: providerの比較を一次資料で確認し直し（§18「2026-10-03の再確認」）、その結果
+  **所在地方針を`architecture.md`「データ所在地と費用」で変更した**（発話内容の保存と閲覧は日本国内に限り、推論のための一時的な処理は日本国外を
+  許容する）。**採用は案Aのままだが、続ける理由が所在地から「委託先を増やさないこと・25MBの上限が
+  無いこと・外部裁量に依存しないこと」へ変わり、案Cは不採用から保留になった**。比較表に案D（Google）・
+  案E（Azure）を追加した。反映先は§6のとおり。**実装は未着手のまま。確認が済むまでは国内に収まる
+  経路で運用する。**
 - 関連: TASK-002 Plan（保持・削除の前提）、TASK-005（API契約）、TASK-009/010/011（実装）、
-  TASK-013/015（削除と残存の検証）、TASK-018（深掘り対話。本タスクの対象外）。
+  TASK-013/015（削除と残存の検証）、TASK-017（越境移転の規律）、TASK-018（深掘り対話。本タスクの対象外）。
 
 ---
 
@@ -374,9 +442,9 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 
 - 文字起こし全文。話者分離は使わない（本人1人の独白を前提とする）。
 - 録音日（`date`）と録音時間（`durationSec`）。文面の手掛かりに使う。**`date`は`started_at`から
-  算出したAsia/Tokyoの暦日で（TASK-004）、生成AIが決める値ではない。**`started_at`自体は
+  算出したAsia/Tokyoの暦日で（TASK-004）、生成AIが決める値ではない**。`started_at`自体は
   生成へ渡さない（暦日より細かい時刻を文面の手掛かりにしない）。
-- **過去のDotは渡さない。**MVPでは1件の録音だけを入力にする。過去を渡すと、週次・月次のまとめ
+- **過去のDotは渡さない**。MVPでは1件の録音だけを入力にする。過去を渡すと、週次・月次のまとめ
   （product.md §3の検証候補）へ踏み込み、保持と説明の範囲が変わる。
 
 ### 出力（生成結果として必要な項目）
@@ -384,14 +452,14 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 | 項目 | 内容 | 制約 |
 | --- | --- | --- |
 | `sentence` | 今日の一文。利用者がその日を一言で思い出せる短い文 | 1文。日本語。本人の言葉を言い換えたもので、助言・評価・診断をしない |
-| `summary` | 話した内容の要約。「何を話したか」を後から思い出すためのもの | 数文。**本人が話していないことを足さない。**要約であって解釈ではない |
+| `summary` | 話した内容の要約。「何を話したか」を後から思い出すためのもの | 数文。**本人が話していないことを足さない**。要約であって解釈ではない |
 
-- **`date`・`started_at`・`duration`は生成結果ではない。**録音attemptと録音の事実から決まる値で、
+- **`date`・`started_at`・`duration`は生成結果ではない**。録音attemptと録音の事実から決まる値で、
   AIの出力として受け取らない（TASK-004）。
 - **`reflection`と`closing`は生成しない**（TASK-002 §25-6で廃止）。AIからの語りかけは保存しない
   という判断に合わせ、生成そのものを行わない。
 - 出力はschemaで検証し、検証を通らなければ保存しない（契約はTASK-005）。
-- **文字数の上限を決めて渡す。**上限を超えた出力は失敗として扱い、再試行の対象にする。
+- **文字数の上限を決めて渡す**。上限を超えた出力は失敗として扱い、再試行の対象にする。
 
 ### promptの方針
 
@@ -419,11 +487,13 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 
 | 案 | 内容 | 判断の材料 |
 | --- | --- | --- |
-| **A（採用）: AWSで統一** | Amazon Transcribe（東京）→ Amazon BedrockのClaude | 委託先が1社に集約され、**§26の9項目の確認対象が1つになる。**認証はECS task roleのIAMで行うため**長期固定のAPIキーをアプリで管理しない**（ただしECSはSDKへ一時credentialを供給するので、項目8は消えず内容が変わる）。委託契約（項目6）はAWS DPAがService Termsへ組み込み済みで自動適用される。TranscribeはS3上のobjectを直接入力に取れるため、TASK-002が決めた一時objectの置き場をそのまま使える |
+| **A（採用）: AWSで統一** | Amazon Transcribe（東京）→ Amazon BedrockのClaude | 委託先が1社に集約され、**§26の9項目の確認対象が1つになる**。認証はECS task roleのIAMで行うため**長期固定のAPIキーをアプリで管理しない**（ただしECSはSDKへ一時credentialを供給するので、項目8は消えず内容が変わる）。委託契約（項目6）はAWS DPAがService Termsへ組み込み済みで自動適用される。TranscribeはS3上のobjectを直接入力に取れるため、TASK-002が決めた一時objectの置き場をそのまま使える |
 | 案B: Transcribe（東京）+ Anthropic API（first-party） | 生成だけ別ベンダー | 最新モデルを最速で使えるが、**9項目の確認とDPA締結が2社ぶん**になる。APIキーの管理が増え、生成処理が米国へ出るため所在地の説明が増える（product.mdは国内限定を約束していないので致命的ではない） |
-| 案C: OpenAIに統一 | Whisper + GPT。音声を直接渡せる | 1社で完結し呼び出しも1回にできるが、東京原則から外れ、既存文書が想定していない委託先が増える |
+| 案C: OpenAIに統一（**採否は保留**） | 音声の文字起こし + GPT | 1社で完結し、**既定で入出力をモデル学習に使わない**。文字起こし結果はHTTP responseで返り、**取得用に保存する記述は出典に無い**（Googleの非同期endpointのように結果を取りに行く仕組みが無い。**不正利用監視ログの保持（最大30日）は別**）。**日本は地域内保存のみで、推論（inference）は選んだ地域の外で行われ得る**（具体的な処理地は出典に記載がない）が、2026-10-03に`architecture.md`を「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」へ変更したため、**これ自体は不採用の理由にならなくなった**。残る不利点は3つ。**(a) 委託先が1社増えて9項目の確認とDPA・`privacy.md §5-1`の行の差し替えが発生する**、**(b) 文字起こしの入力が25MBまで**で録音30分・32MBの上限と衝突し得る、**(c) ZDRはOpenAIの事前承認（sales）に依存し、適用しない限り不正利用監視ログを30日保持する**（承認が得られるかは自分たちで決められない外部裁量である。2026-09-30の補足でも挙げていた論点）。同文書が**委託先の変更は別の判断として残す**としたため、**本Planでは採否を決めず保留する**（下記「2026-10-03の再確認」） |
+| 案D: Googleで統一 | Cloud Speech-to-Text + Vertex AIのGemini | **候補から外した**。data loggingはopt-inで既定値は良く（**v1のFAQの記述。v2は未確認**）、**v2は`asia-northeast1`をlocationの候補として持つ**（`ja-JP`の対応は未確認。§18「2026-10-03の再確認」の確認した事実4）ため「東京に無いから」では落とせない。外した主な理由は**基盤として未使用のため委託先が1社増え**、GeminiのTokyo対応・単価・DPAが未調査で確認が案Aの倍になること。加えて**v1では非同期endpointが文字起こしをGoogle側に約5日間保存し、削除を自分たちで制御できない**（案Aは`OutputBucketName`で自前bucketへ出し、ACKで削除処理を始められる。§27）。**ただしこの保持はv1の記述で、東京で使うv2で同じかは未確認**なので、確認作業の量を主因とする（2026-10-03に調査） |
+| 案E: Azureで統一 | Azure AI Speech + Azure OpenAI | **候補から外した**。Azure OpenAIは**顧客データをモデルの再学習に使わない**（一次資料で確認）。外した理由は**基盤として未使用のため委託先が1社増え、§26の9項目の確認が案Aの倍になること**。配備の種類とリージョンの可否（Japan Eastで使えるモデルの範囲）、Azure AI Speechの東京対応、単価、DPAは**未確認**（2026-10-03に調査） |
 
-**採用は案A。**決め手はモデル性能ではなく**完了条件7の重さ**である。
+**採用は案A**。決め手はモデル性能ではなく**完了条件7の重さ**である。
 
 ### 案Aを採るうえで確認した事実（2026-09-29時点、一次資料）
 
@@ -437,16 +507,16 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
    （[AI services opt-out policies](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_ai-opt-out.html)）
 2. **Amazon Transcribeはこのopt-out policyの対象サービス一覧に含まれる。**
    （[List of supported AI services](https://docs.aws.amazon.com/organizations/latest/userguide/orgs_manage_policies_ai-opt-out_all.html#ai-opt-out-all-list)）
-3. **Amazon Bedrockは同じ一覧に含まれない。**Bedrock側の仕組み（既定のゼロデータ保持と、モデルごとの
+3. **Amazon Bedrockは同じ一覧に含まれない**。Bedrock側の仕組み（既定のゼロデータ保持と、モデルごとの
    data retention mode）で別に確認する必要がある。
-4. **opt-outはAWS Organizationsの機能で、組織のmanagement accountで操作する。**設定しない限り
+4. **opt-outはAWS Organizationsの機能で、組織のmanagement accountで操作する**。設定しない限り
    opt-inのままである。**「既定で学習に使われない」ではない。**
 5. **opt-outすると過去分も削除される。**
    > "When you opt out of content use by an AWS AI service, that service deletes all of the
    > associated historical content that was shared with AWS before you set the option."
 6. Bedrockでは、東京から呼ぶモデルに **In-Region（単一リージョンで完結）/ Geo（地理を限定した
    cross-region inference）/ Global（世界中へルーティング）** の区別があり、**endpointによって
-   可否が違う。**`bedrock-runtime`と`bedrock-mantle`で別の対応表になっている。
+   可否が違う**。`bedrock-runtime`と`bedrock-mantle`で別の対応表になっている。
    Claude Haiku 4.5のモデルカードを例にとると、
    - Geo: JPの推論profile `jp.anthropic.claude-haiku-4-5-20251001-v1:0` の宛先は
      **東京と大阪だけ**で、日本国外へは出ない。
@@ -459,14 +529,15 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
    - Globalは世界中へルーティングされるため、**日本国外へ出る。**
    （[Claude Haiku 4.5 model card](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-4-5.html)、
    [Model support by AWS Region](https://docs.aws.amazon.com/bedrock/latest/userguide/models-region-compatibility.html)）
-   **つまり、日本国内に収める経路は公開資料で特定できる。**Geo: JP（東京・大阪）か、
-   `bedrock-mantle`のIn-Region（東京のみ）である。
+   **つまり、日本国内に収める経路は公開資料で特定できる**。Geo: JP（東京・大阪）か、
+   `bedrock-mantle`のIn-Region（東京のみ）である（**2026-09-29時点の調査結果。現行の定義は
+   `architecture.md`「データ所在地と費用」が正本**）。
 7. Transcribeのバッチは **WebMとMP4をコンテナとして対応**し、**S3上のobjectを入力に取る**
    （`Media.MediaFileUri`）。上限は音声8時間・2GBで、本件の30分・32MBは大きく下回る。`ja-JP`は
    バッチ・ストリーミングとも対応する。
    （[Data input and output](https://docs.aws.amazon.com/transcribe/latest/dg/how-input.html)、
    [StartTranscriptionJob](https://docs.aws.amazon.com/transcribe/latest/APIReference/API_StartTranscriptionJob.html)）
-7b. **Transcribeのバッチは、文字起こし結果をS3へ書き出す。**worker のmemoryだけを通る経路は
+7b. **Transcribeのバッチは、文字起こし結果をS3へ書き出す**。worker のmemoryだけを通る経路は
    バッチには存在しない。
    > "If you do not specify `OutputBucketName`, your transcript is placed in a service-managed
    > Amazon S3 bucket and you are provided with a URI to access your transcript."
@@ -478,12 +549,12 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 8. **`ja-JP`はTranscribeのPII Redaction（自動マスク）に対応していない。**
    （[Supported languages](https://docs.aws.amazon.com/transcribe/latest/dg/supported-languages.html)）
    §21案Bを採る場合でもTranscribeの機能では実現できず、別手段が要るという事実である。
-9. **AWS DPAはAWS Service Termsへ組み込まれ、全顧客に自動適用される。**別途の締結を要しない。
+9. **AWS DPAはAWS Service Termsへ組み込まれ、全顧客に自動適用される**。別途の締結を要しない。
    （[AWS Data Processing Addendum](https://docs.aws.amazon.com/whitepapers/latest/navigating-gdpr-compliance/aws-data-processing-addendum-dpa.html)）
 
 **確認できなかったこと（§26へ送る）**
 
-- **どのClaudeモデルを使うかは確定していない。**経路そのものは上記6のとおり公開資料で特定できる。
+- **どのClaudeモデルを使うかは確定していない**。経路そのものは上記6のとおり公開資料で特定できる。
   確定していないのは、Geo: JPと`bedrock-mantle` In-Regionのそれぞれに**どのモデルが対応するか**の
   全量と、品質・費用・EOL・data retention modeを含めた最終選定である。**本Planではmodel idを
   決めず、TASK-009で対応表とモデルカードを直接読んで決める。**
@@ -497,28 +568,51 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 
 ### 案Aを採るための必須条件（実装の前提）
 
-上記の確認から、案Aは**次を満たして初めて成立する。**満たさないまま公開しない。
+上記の確認から、案Aは**次を満たして初めて成立する**。満たさないまま公開しない。
 
 1. **Transcribeについて、AWS OrganizationsのAI services opt-out policyを適用する。**
    これは任意の改善ではなく**必須**である。適用しないと、音声が「サービス改善のために
    利用リージョン外へ保存され得る」状態のまま運用することになり、
    `privacy.md §5-2`の「何を送るか、どこへ渡るか」を利用者へ正しく説明できない。
    適用後、effective policyを照会して実際に効いていることを確認する。
-2. **Bedrockのモデルは、日本国外へ出ない経路で使えるものから選ぶ。**具体的には
-   **Geo: JP（東京・大阪）**か**`bedrock-mantle`のIn-Region（東京のみ）**である。
-   Globalプロファイルしか選べないモデルを使う場合は、`architecture.md`の「日記内容・音声・AI入力は
-   原則として東京」と矛盾するため、方針の側を先に見直す。
-   **モデルの都合で所在地方針を黙って曲げない。**
-3. **選定するモデルの data retention mode を確認し、`none`にできるものを選ぶ。**`none`にできない
-   （保持とAWSによる人的レビューが必須の）モデルを使うなら、それを録音前の案内に書く。
-4. **録音形式（webm/opus・mp4/aac）の疎通を実ファイルで確認する。**対応表はコンテナ形式までしか
+2. **Bedrockのモデルの推論経路は、`architecture.md`「データ所在地と費用」に従う**（2026-10-03に
+   同文書を「**発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する**」へ変更したため、**Globalプロファイルも
+   選べる**）。**「国内に収まる経路」の定義は同節が正本**（写さない）。**選んだ経路が国内か国外かを
+   記録し、国外を選ぶ場合は越境移転の規律の確認を済ませてから使う**（確認が済むまでは国内に収まる
+   経路で運用する。該当範囲と手当はTASK-017）。
+   **モデルの都合で所在地方針を黙って曲げない**（曲げるなら`architecture.md`を先に直す。
+   2026-10-03の変更はその手順で行った）。
+3. **使う構成（経路・モデル・設定）について「どこに保存されるか」「誰がどこから閲覧し得るか」を
+   一次資料で確認し、記録する。確認できないものは使わない**（`architecture.md`「データ所在地と費用」の
+   要求。data retention modeの確認もこの一部である）。確認先は§26の項目2・4、担当はTASK-009。
+
+   **この条件は2026-10-04に、軸の列挙から単一の要求へ畳み直した**。それまでは
+   「国外経路では`none`にできるモデルに限る」「経路が国内でも保持データの所在を確認する」のように
+   軸ごとに条件を足していたが、**レビューを5巡する間に塞いだ軸の隣から次の軸が現れ続けた。**
+
+   | 巡 | 現れた軸 |
+   | --- | --- |
+   | 2 | 国外経路 × 保持ありのモデル（開示だけで満たせてしまう構成だった） |
+   | 3 | Geo: JPの宛先に大阪が含まれる（「保存は東京」だと国内経路でも違反になる） |
+   | 4 | 推論の宛先と保持データの所在は別 |
+   | 5 | 保持データの所在と人によるレビューの実施地は別。Geo: JPの宛先はモデルごとに違う |
+   | 5（未確認として） | prompt cacheの滞留先 |
+
+   **広い約束（保存と閲覧を日本国内に限る）に対して条件を軸ごとに列挙する形は、実物の資料を持たない
+   設計文書の側では網羅できない**。そこで要求を1つにし、網羅の責任を構成を選ぶ側（実物のモデルカードと
+   設定を読むTASK-009）へ渡した。**同じ日に原則の表現も「保存は東京」から「保存と閲覧は日本国内」へ
+   改めた**（Geo: JPの宛先に大阪が含まれ、東京に限ると国内で完結しているのに違反になる構成が生まれる
+   ため。自分たちのRDSとS3は東京のままである）。
+4. **録音形式（webm/opus・mp4/aac）の疎通を実ファイルで確認する**。対応表はコンテナ形式までしか
    保証しておらず、コーデックとMediaRecorderが出すヘッダの扱いは実機で確かめる必要がある。
-5. **文字起こし結果を自前のS3へ出す（§27で採用）。**上記7bのとおり、バッチは必ずS3へ書き出す。
+5. **文字起こし結果を自前のS3へ出す（§27で採用）**。上記7bのとおり、バッチは必ずS3へ書き出す。
    `OutputBucketName`の指定、取得後の削除（objectと`DeleteTranscriptionJob`）、削除失敗時の
    再実行と残存検知を条件に含める。
-6. **`bedrock-runtime`のGeo: JPを既定にする。**`bedrock-mantle`のIn-Regionも日本国内に収まるが、
-   **呼び出し方が違う**（§11）。MVPでは`aws-sdk-bedrockruntime`で呼べるGeo: JPに限り、
-   In-Regionを採る場合はclientの選定をTASK-009の判断に加える。
+6. **`aws-sdk-bedrockruntime`で呼べる経路から選ぶ**（2026-10-03に更新。変更前は「Geo: JPを既定に
+   する。MVPではGeo: JPに限る」だった）。Geo: JPとGlobalはどちらも`bedrock-runtime`で呼べる。
+   `bedrock-mantle`のIn-Regionは**呼び出し方が違う**（§11）ため、採る場合はclientの選定をTASK-009の
+   判断に加える（国内か国外かの別は`architecture.md`「データ所在地と費用」が正本。ここには写さない）。
+   **上記2のとおり、国外経路の使用は越境移転の規律の確認が済んでからとする。**
 
 ### 補足（2026-09-30・人間との対話ログからの追記）: なぜ案Aか・opt-outのタイミング
 
@@ -529,6 +623,9 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
 - 案C（OpenAI統一）は1社に見えるが、日本endpointがStorage Yes / Processing Noのため東京原則
   （`architecture.md`「日記内容・音声・AI入力は原則として東京」）を満たせず、ZDR承認もOpenAI側の
   sales承認という外部裁量に依存する。
+  **← この行の「東京原則を満たせない」は、2026-10-03に所在地方針を変更したため不採用理由として
+  効かなくなった**。Storage Yes / Processing Noという事実自体は正しい（一次資料で再確認済み）。
+  **現在の理由は下記「2026-10-03の再確認」にある。**
 - 案Aは文字起こし（Transcribe）と生成（Bedrock上のClaude）がどちらもAWSの契約範囲内に収まり、
   委託先確認が1社で完結する。決め手はモデル性能の比較ではなく、この完了条件7の重さである。
 
@@ -554,9 +651,129 @@ opt-outを設定すると、それ以前に送った音声の**保存データ�
 「音声を1件でも送る前にopt-outを適用する」ことを必須条件（上記1）としているのは、削除できるかどうか
 ではなく、**適用前に一度も改善目的の使用が起きないようにする**ためである。
 
+### 2026-10-03の再確認: 候補を広げて確認し直した結果
+
+**なぜ再確認したか**。初稿の案Cの不採用理由は「東京原則から外れ、既存文書が想定していない委託先が
+増える」の2行だけだった。一方で案Bの行には「product.mdは国内限定を約束していないので致命的では
+ない」と書いており、**同じ論理を案Cに当てていない**という非一貫があった。さらに`architecture.md`の
+東京原則そのものが「**国内限定を利用者への法的・契約上の約束にはしない**」と明記しており、
+禁止事項ではない。したがって「東京原則から外れる」だけでは不採用理由として弱い。
+
+**確認した事実（2026-10-03、一次資料）**
+
+1. **OpenAIは既定でAPIの入出力をモデル学習に使わない**（2023-03-01以降）。不正利用監視ログの保持は最大
+   30日（"up to 30 days"）。ZDR（Zero Data Retention）の対応endpointに`/v1/audio/transcriptions`を含むが、
+   **OpenAIの事前承認（sales）が必要**である。
+   （[Data controls in the OpenAI platform](https://developers.openai.com/api/docs/guides/your-data)）
+2. **OpenAIのデータレジデンシーは、地域内処理（inference）に対応する地域が限られ、日本は
+   「地域内保存のみ」である**。対応する地域として挙がっているのは米国・欧州（EEA+スイス）と、
+   一部のモデル向けのUAEである。**判断に効くのは「日本が地域内処理に対応しない」ことである。**
+   > "If you select a region that supports regional processing, as specifically identified below, the
+   > services will perform inference for your Customer Content in the selected region as well."
+
+   地域表で日本は地域内保存Yes・地域内処理Noである。つまり**日本を選んでも推論は選んだ地域の外で
+   行われ得る**。同ページは地域内処理に対応しない地域について "OpenAI **may also process and
+   temporarily store Customer Content outside of the Region** to deliver the services" と書いており、
+   **具体的な処理地（米国など）は特定していない**。移転先の国は、体制整備の対象を決めるときに別途
+   確認する。（同上）
+3. **OpenAIの文字起こしの入力上限は25MB。**「Files can be up to 25 MB.」対応形式は
+   `mp3, mp4, mpeg, mpga, m4a, wav, webm`で、**結果はHTTP responseのJSON（`text`）で返る**。
+   時間の上限は記載がない。
+   （[Speech to text](https://developers.openai.com/api/docs/guides/speech-to-text)）
+4. **Google Cloud Speech-to-Textのdata loggingはopt-inで、入っていなければ顧客コンテンツをサービス
+   提供以外に使わない。**
+   > "**If you are not enrolled in the data logging opt-in program,** Google does not use any of your
+   > content for any purpose except to provide you with the Cloud Speech-to-Text API service."
+
+   **ただしv1では、非同期（async）のendpointで結果を取得させるために文字起こしがGoogle側に約5日間
+   保存される。**
+   > "the resulting transcript is stored for a period of approximately 5 days to give you time to
+   > retrieve the transcript."
+
+   同期・streamingはmemory上で処理され保存されない。**v1はEUとUSのendpointしか無いが、v2は
+   `asia-northeast1`をlocationに持つ。**
+   **出典のFAQはv1のドキュメント配下にあり、ページ自身は適用範囲（v2を含むか）を明記していない。
+   したがってこの項の2点（opt-inであること・約5日保持）はいずれもv1の記述として扱い、v2で同じかは
+   未確認とする**。v2のdata usageに相当する資料は確認できていない（v2のパスへアクセスするとv1の内容が
+   返る）。**東京で使うなら構成はv2になるため、採否の判断に使うなら先にv2で確認する。**
+   （[Data usage FAQ](https://docs.cloud.google.com/speech-to-text/docs/v1/data-usage-faq)、
+   [Supported regional endpoints（v1）](https://docs.cloud.google.com/speech-to-text/docs/v1/endpoints)、
+   [Supported languages（v2）](https://docs.cloud.google.com/speech-to-text/v2/docs/speech-to-text-supported-languages)。
+   **v2の`asia-northeast1`は、この言語対応表のリージョン絞り込みの候補として現れることを確認した
+   だけである**。v2の[locations](https://docs.cloud.google.com/speech-to-text/v2/docs/locations)は
+   静的な一覧を持たずLocations APIを使う方式なので、**対応の網羅はこの出典では確認できていない**）
+5. **Azure OpenAIは顧客データをモデルの再学習に使わない。**
+   （[Azure OpenAI frequently asked questions](https://learn.microsoft.com/en-us/azure/foundry-classic/openai/faq)。
+   同ページに書かれているのはこの1点とdata privacyガイドへのリンクだけである）
+   **未確認（同ページでは裏付けられない）**: 「OpenAIへも共有しない」、「Regional配備は選んだリージョン
+   内で処理し、Global配備は複数リージョンに跨る」、「新しいモデルはJapan Eastに無くGlobal配備が必要に
+   なる例がある」の3点は、**検索結果の要約から拾ったもので一次資料で確認していない**（同ページは
+   リージョンの可否について model availability guide を見よとだけ書いている）。
+   **案Eを外す判断は「委託先が1社増える」で足りるため、この3点に依存させない。**
+
+**学習利用の既定値は、比較したサービスのうちAmazon Transcribeだけが例外である**（音声そのものを
+渡す工程がそこなので、一番効く場所で既定値が悪い）。
+
+| 委託先・サービス | 学習利用の既定 |
+| --- | --- |
+| **AWS Transcribe** | **既定で顧客コンテンツをサービス改善に利用し、利用リージョン外へ保存し得る**。opt-out policyの適用が必須 |
+| AWS Bedrock | opt-out policyの**対象外**。既定はゼロデータ保持と説明されるが、**モデルごとのdata retention modeで決まる**（§26項目2。未確認） |
+| OpenAI | 使わない |
+| Google Speech-to-Text | data loggingはopt-in。**非同期endpointは結果を約5日保存する**（学習利用とは別の話）。**どちらもv1のFAQの記述で、v2は未確認** |
+| Azure OpenAI | モデルの再学習に使わない |
+
+したがって、**「案Aを選んだのはプライバシー上有利だから」とは書けない**。正確には「opt-outを適用すれば
+並ぶ」であり、だからこそ上記「案Aを採るための必須条件」1でopt-outの適用を必須としている。
+
+**2026-10-03の再確認の途中では「OpenAIの日本レジデンシーはAPI Platformでin-region処理とZDRを含む」と
+整理していたが、これは誤りだった**。一般的な発表文と地域別の対応表を混同した読み誤りで、一次資料の
+地域表では日本は地域内保存のみである。**2026-09-30に追記された上記の補足（「日本endpointがStorage
+Yes / Processing No」）が正しかった**。`bedrock-runtime`と`bedrock-mantle`の2つの表を混同した誤り
+（上記「確認できなかったこと」）と同じ種類の取り違えである。**発表文ではなく地域別の対応表を読む。**
+
+**案D（Google統一）・案E（Azure統一）を候補から外した理由**。決め手を「委託先を1社に寄せる＋東京」と
+置いた以上、同じ条件を満たし得る候補を並べないままにはできないため、比較表へ行として追加した上で
+外した。外した理由は、**「東京に無いから」ではない**（案DのSTT v2は`asia-northeast1`をlocationの候補として持つ。ただし`ja-JP`の対応は未確認）。**どちらも基盤として
+未使用のため委託先が1社増え、§26の9項目の確認が案Aの倍になる**。AWSは既にALB / ECS / RDS / S3 として
+使用中で、委託先の行が増えない。加えて**案Dはv1では非同期endpointが文字起こしをGoogle側に約5日間
+保存し、削除を自分たちで制御できない**（案Aは`OutputBucketName`で自前bucketへ出し、端末のACKで削除
+処理を始められる。§27）。**ただしこの保持はv1の記述で、東京で使うv2で同じかは確認できていないため、
+外す主因は確認作業の量の側に置く。**
+
+**この再確認の結果、東京原則そのものを見直すことになった**。`architecture.md`が「法的・契約上の約束に
+はしない」と明記しており、`privacy.md §2`の5原則にもリージョンの記述は無かった。**越境の手続きは
+完了条件7の9項目の項目3（「処理・保存のリージョン。越境する場合に必要な手続き」）として挙げてあったが、
+未確認のまま残っていた**（`privacy.md`は個人情報保護委員会のガイドラインを参考文献に挙げている）。
+つまり**所在地の方針そのものを法的要件として確認した記録は無く、東京は自分で置いた既定値だった。**
+一方でBedrockのモデル選択を縛るコストは継続して払っていた。
+
+**2026-10-03に`architecture.md`「データ所在地と費用」を「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」へ
+変更した**。本Planではなく正本の側を直す手順で行った（上記「案Aを採るための必須条件」2に書いた
+「モデルの都合で所在地方針を黙って曲げない」に従った結果である）。
+
+**採用は案Aのままである**。ただし**理由が変わった。**
+
+- 変更前: 案Cは東京原則を満たさないため落ちる。
+- 変更後: **所在地では落ちない**。案Aを続ける理由は、**委託先を増やさないこと**（AWSは既に
+  ALB / ECS / RDS / S3 として使用中で、9項目の確認とDPA・`privacy.md §5-1`の行の差し替えが発生
+  しない）、**25MBの上限が無いこと**（Transcribeは8時間 / 2GB。
+  [Transcribeのendpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)）、**ZDRのような外部裁量に依存しない
+  こと**（案CはOpenAIのsales承認が得られないと監視ログの保持（最大30日）が残る）である。
+- **案Cは不採用ではなく保留**とする。`architecture.md`が**委託先そのものの変更を別の判断として残した**
+  ため、本Planでは採否を決めない。**同じ「国外を許容する」譲歩でも、AWS内に留まる方が安い**という
+  判断までが本Planの範囲である。
+
+**残る未決事項**。国外経路を実際に使うには**越境移転の規律**への対応が要る。**委託であっても「外国に
+ある第三者への提供」には別の規律がかかる**という整理があり、同意の取得または移転先の体制整備と本人へ
+の情報提供が必要になり得る。`privacy.md §1`は要配慮個人情報に当たり得るとも書いている。
+**ただし確認のうち、推論経路が国内かどうかで決まらない部分がある**（公開前に終える判定と、判定に
+よらず重なる義務。件数と内容は`architecture.md`「データ所在地と費用」が正本で、ここには写さない）。
+**確認が済むまでは国内に収まる経路で運用する**（範囲の定義は`architecture.md`「データ所在地と費用」）。該当範囲と手当はTASK-017で判断する（§5）。
+**方針を変えたことと、確認が済んだことは別である。**
+
 ## 19. 判断2: 実行方式と結果の受け渡し（比較。採用は§25-2）
 
-**同期か非同期かは選べない。**TASK-002 §25-8が録音の上限を30分にした時点で、ALBのidle timeout
+**同期か非同期かは選べない**。TASK-002 §25-8が録音の上限を30分にした時点で、ALBのidle timeout
 （既定60秒）の内側で文字起こしと生成を終える前提が成り立たなくなっている。したがって比較するのは
 **非同期をどう実現するか**である。
 
@@ -570,7 +787,7 @@ opt-outを設定すると、それ以前に送った音声の**保存データ�
 
 ### workerの置き場
 
-- **採用: 当面はECSの同一タスク内でPumaと並走させる。**タスク数を増やさない。
+- **採用: 当面はECSの同一タスク内でPumaと並走させる**。タスク数を増やさない。
 - 欠点は、長いJobがPumaと同じCPU・memoryを使うこと、**deployでタスクが入れ替わると進行中のJobが
   落ちる**こと。落ちた分は下記の状態別のstale判定で回収する（期限は回収の手段ではない）。
 - 実測してPumaが詰まる、またはdeployのたびに落ちる件数が無視できないなら、workerを別タスクへ分ける。
@@ -584,24 +801,24 @@ opt-outを設定すると、それ以前に送った音声の**保存データ�
 | 案B: SSE | 待ち時間の表示が滑らか | ALBのidle timeoutと、1タスクで接続数を抱える問題。切れた後の再開を別に作ることになり、結局pollingが要る |
 | 案C: ActionCable（WebSocket） | 双方向 | MVPに双方向の要件がない。Redisのadapterを使うなら案Bと同じ費用の話に戻る |
 
-- **pollingの間隔と打ち切りはTASK-005/011で決める。**打ち切ってもJobは止まらず、結果は残る。
+- **pollingの間隔と打ち切りはTASK-005/011で決める**。打ち切ってもJobは止まらず、結果は残る。
 
 ### 止まったJobの検知（stale判定）
 
-**24時間は再試行の終了期限であって、障害の検知期限ではない。**初稿は「`processing`が24時間を
+**24時間は再試行の終了期限であって、障害の検知期限ではない**。初稿は「`processing`が24時間を
 過ぎたら`failed`」としか書いておらず、deployでJobが落ちるたびに最大24時間「処理中」に見える
 設計になっていた（レビュー指摘で修正）。次を実装の条件にする。
 
-**ただし「最終進捗時刻からN分」だけで再実行してはいけない。**Transcribeの完了を待っている間は、
+**ただし「最終進捗時刻からN分」だけで再実行してはいけない**。Transcribeの完了を待っている間は、
 正常でも分単位で更新が止まる。それをstaleと見なすと、**生きているjobに対して同じ音声で別のjobを
 開始する**（2巡目のレビュー指摘5）。Solid Queueのheartbeatはworkerプロセス単位で、
 個々のJobが止まったかは判定しない。**状態ごとに別の方法で判定する。**
 
 | 状態 | 判定の方法 |
 | --- | --- |
-| **HTTPのuploaderが消えた（`uploading`）** | **Jobがまだ存在しないので、Solid Queueは何も知らない。**watchdogが一定時間更新のない`uploading`を拾い、`HeadObject`で実体を見て決める（下記） |
+| **HTTPのuploaderが消えた（`uploading`）** | **Jobがまだ存在しないので、Solid Queueは何も知らない**。watchdogが一定時間更新のない`uploading`を拾い、`HeadObject`で実体を見て決める（下記） |
 | workerプロセスが消えた | Solid Queueがプロセスの消失として回収する。その結果をアプリ側で拾う |
-| Transcribeの完了待ち | **`GetTranscriptionJob`でAWS側の状態を見る。**待っている限りstaleではない |
+| Transcribeの完了待ち | **`GetTranscriptionJob`でAWS側の状態を見る**。待っている限りstaleではない |
 | Job個体が止まった | 試行回数とlease tokenで排他し、二重実行を防いだうえで再実行する |
 
 **`uploading`の回収を誰がやるかが抜けていた**（3巡目のレビュー指摘2）。record-firstにしたことで、
@@ -613,7 +830,7 @@ pollingは永遠に`uploading`を返し、退会は「進行中の処理があ�
 - watchdogが、最終進捗時刻から一定時間更新のない`uploading`を検知し、`HeadObject`で判定する。
   - **objectが無い** → `upload_failed`へ。
   - **objectが完成していて、まだenqueueしていない** → `accepted`へ進めてenqueueする。
-  - **世代が合わない、または利用者が退会中** → objectを削除して**`cancel_requested`へ**（そこから`cleanup_pending`へ進む）。状態表を飛ばして直接`cleanup_pending`にしない。
+  - **世代が合わない、または利用者が退会中** → objectを削除して **`cancel_requested`へ**（そこから`cleanup_pending`へ進む）。状態表を飛ばして直接`cleanup_pending`にしない。
 - **再uploadを許すのは、旧leaseを失効させて新しい実行権を取った要求だけ。**「既存の記録が
   あればbodyを受け取らない」は、**生きているuploadと放置されたuploadを区別してから**適用する。
   区別せずに再uploadを許すと、元のrequestと再requestが同じkeyへ並行して書く。
@@ -646,7 +863,7 @@ TASK-003と相互確認する**として未確定のまま残している。こ�
 | 案B: 成功した記録も別テーブルに一定期間残す | 削除済みDotへの再送を区別できる。結果照会をDotに依存せず行える | **記録自体が個人データ**（誰がいつ録音したかが分かる）で、`privacy.md §5-1`に新しい保持期間の行が増える。退会時に消す対象も増える。得られるのは稀なケースの区別だけ |
 | 案C: 冪等性を持たず、二重のDotは利用者が削除する | 実装が軽い | 外部AIの消費が二重になる。journaling.md §4の受け入れ条件を、より弱い方（利用者に結果を示す）でしか満たせない |
 
-**採用は案A。**案Aの弱点（削除済みDotへの再送を区別できない）は§13に記録した。
+**採用は案A**。案Aの弱点（削除済みDotへの再送を区別できない）は§13に記録した。
 
 #### 一回性の起点をTASK-004の録音attemptへ寄せる（2026-09-29に統合）
 
@@ -655,13 +872,13 @@ TASK-003と相互確認する**として未確定のまま残している。こ�
 [dot-history.md §2](../dot-history.md)）を採用したため、**一回性の起点をそちらへ寄せる。**
 
 - **clientが発行するUUIDをやめ、録音attemptの識別子を処理IDにする。**
-- これで**§20の「命名」で足したprovider IDの層を廃止した。**provider IDを導入した理由は
+- これで、**§20の「命名」で足したprovider IDの層を廃止した**。provider IDを導入した理由は
   「client発行の処理IDは利用者単位でしか一意でないため、AWSのjob名やS3のkeyに使うと利用者間で
   衝突する」というものだった（2巡目のレビュー指摘13）。**録音attemptはserver発行なので、
-  AWSアカウント内で一意にできる。**層を1つ減らせる。
+  AWSアカウント内で一意にできる**。層を1つ減らせる。
   - ただし**録音attemptの識別子がAWSアカウント内で一意であることを、TASK-005の契約で満たす**
     必要がある。満たせない形（利用者ごとの連番など）になるなら、server発行の別IDを1つ足してAWSの名前をそこから導く（廃止したprovider IDの層を戻すことに相当する）。
-- **未送信の録音attemptをserverに保存する必要はない。**TASK-004 §18-3が
+- **未送信の録音attemptをserverに保存する必要はない**。TASK-004 §18-3が
   「一回性は署名の検証だけでは保証できない。初回のuploadで、attemptの識別子を処理の記録へ
   **原子的に関連付ける**ことで担保する」としているとおり、**署名済みの値を端末のmemoryに置く方式でも、
   処理の記録側のunique制約で一回性が成立する。**
@@ -674,21 +891,21 @@ TASK-003と相互確認する**として未確定のまま残している。こ�
 | TASK-004 §18-3の不変条件 | 本Planでの扱い |
 | --- | --- |
 | attemptはcurrent_userに紐づき、**1つのattemptは1件のDot生成にしか使えない** | 処理の記録の`(user_id, 処理ID)`のunique制約で担保する。初回uploadで利用者の行をlockして記録を作るのと同じtransactionで行う |
-| 同じattemptの再送は**同じ処理を返すか明示的な競合を返す**（どちらかはTASK-003/005で決める） | **「同じ処理を返す」を採用する。**既存の記録があればbodyを受け取らず、既存の状態を返す（§20の冪等性と同じ規則） |
+| 同じattemptの再送は**同じ処理を返すか明示的な競合を返す**（どちらかはTASK-003/005で決める） | **「同じ処理を返す」を採用する**。既存の記録があればbodyを受け取らず、既存の状態を返す（§20の冪等性と同じ規則） |
 | **upload受理後の24時間再試行はattemptの再利用ではなく処理の記録を使う** | 一致する。受理後の再試行・cleanupはすべて処理の記録で認可する（§20の入口の手続き）。**attemptを使用済みにしたことが正規の再試行を拒否する理由にならない** |
 | 再試行やJob再実行でも**元のattempt由来の`started_at`を維持する** | `started_at`は受理時に記録と`dots`へ書き、再試行・Job再実行で書き換えない（定義は[dot-history.md §2](../dot-history.md)） |
 | 録音をやり直したら新しいattemptを発行し、古いattemptを流用できない | 本Planの範囲外（TASK-010がFrontendで扱う）。server側は使用済みのattemptを受け付けないことで担保する |
 
-**識別子の寿命と、attemptが使える期間は別である。**録音attemptは受理の時点で使用済みになり、
+**識別子の寿命と、attemptが使える期間は別である**。録音attemptは受理の時点で使用済みになり、
 2回目のuploadには使えない（TASK-004 §18-3の「1つのattemptは1件のDot生成にしか使えない」）。
 一方、**その識別子は処理IDとして`dots`に残り続け、pollingとACKのURLに出る。**
 
-- **「attemptが使用済み／期限切れだからpollingも拒否する」としない。**受理後の照会・再試行・
+- **「attemptが使用済み／期限切れだからpollingも拒否する」としない**。受理後の照会・再試行・
   cleanupはすべて処理の記録と`dots`で認可する（§20の入口の手続き）。
 - 別Userへ入り直した後に前のUserのattemptを使えないこと（TASK-004）は、
   本Planの認可（`current_user`へscopeする）で満たす。
 
-**録音attemptの期限と、本Planの期限の関係。**時計の起点が違うので直接は競合しない。
+**録音attemptの期限と、本Planの期限の関係**。時計の起点が違うので直接は競合しない。
 
 - **録音attemptの期限は受理より前**の区間に効く（`dot-history.md §2`が「最長30分の録音と、
   停止から送信までの時間・失敗後の再試行の猶予を含めて設定する」としている）。
@@ -705,7 +922,7 @@ TASK-002が必須とした項目に、このタスクの決定で必要になる
 | 項目 | 目的 |
 | --- | --- |
 | **処理ID（＝冪等性key＝録音attemptの識別子）** | **serverが録音開始操作に対して発行する**（TASK-004）。結果の照会と重複の判定を**同じ識別子**で行う。**成功時に`dots`の行へ引き継ぐ**ので、記録を消した後もこのIDでDotを引ける。server発行なのでAWSアカウント内で一意にでき、**S3のkeyとTranscribeのjob名もここから導く**（下記「命名」） |
-| **`started_at`** | **定義は[dot-history.md §2](../dot-history.md)を見る**（TASK-004が決めた基準時刻。本Planでは写さない）。本Planが決めるのは扱いだけで、**受理時に記録へ書き、再試行・Job再実行で書き換えない。**`dots`へも同じ値を書く |
+| **`started_at`** | **定義は[dot-history.md §2](../dot-history.md)を見る**（TASK-004が決めた基準時刻。本Planでは写さない）。本Planが決めるのは扱いだけで、**受理時に記録へ書き、再試行・Job再実行で書き換えない**。`dots`へも同じ値を書く |
 | 所有者（user_id） | upload後の再試行・Job実行・削除の認可。**IDを所有権の代わりにしない** |
 | 音声のobject key・文字起こし結果のobject key | cleanupの対象を特定する。処理IDから導けるが、**記録にも持つ**（導出規則を変えたときに過去分を回収できなくなるため） |
 | Transcribeのjob名 | 同上。非終端jobの照会（`GetTranscriptionJob`）と削除に要る |
@@ -715,11 +932,11 @@ TASK-002が必須とした項目に、このタスクの決定で必要になる
 | 利用者の世代番号 | 退会との排他（下記） |
 | 失敗の種類 | 再試行できるかの判定と、画面の文言の出し分け |
 
-**unique制約は`dots`だけでなく処理の記録にも要る。**記録側にも`(user_id, 処理ID)`のunique制約を
+**unique制約は`dots`だけでなく処理の記録にも要る**。記録側にも`(user_id, 処理ID)`のunique制約を
 置く。Dotがまだ無い間に同じ処理IDのPOSTが並行すると、**記録が2件でき、Jobが2本enqueueされ得る**
 （2巡目のレビュー指摘4）。衝突したら新しく作らず、既存の記録の状態を返す。
 
-**処理IDと冪等性keyを別々にしない。**別にすると、成功時に記録を消した時点で処理IDとDotの対応が
+**処理IDと冪等性keyを別々にしない**。別にすると、成功時に記録を消した時点で処理IDとDotの対応が
 消え、pollingが結果を引けなくなる（初稿はこの穴を持っていた。1巡目のレビュー指摘で修正）。
 `dots`のunique制約も`(user_id, 処理ID)`にし、照会は常に`current_user.dots`にscopeする。
 clientが他人のIDを推測しても、所有者が一致しなければ存在しない扱いにする。
@@ -741,19 +958,19 @@ TASK-004が`started_at`の根拠として**録音attempt**（録音開始操作�
 
 **`TranscriptionJobName`はAWSアカウント内で一意でなければならず、衝突すると`ConflictException`に
 なる**（[StartTranscriptionJob](https://docs.aws.amazon.com/transcribe/latest/APIReference/API_StartTranscriptionJob.html)）。
-**初稿は処理IDをclient発行のUUIDにしていた。**DBのunique制約が`(user_id, 処理ID)`だったため、
+**初稿は処理IDをclient発行のUUIDにしていた**。DBのunique制約が`(user_id, 処理ID)`だったため、
 別の利用者が同じ値を送れてしまい、そのままAWSの名前に使うと次が起き得た（2巡目のレビュー指摘13）。
 
 - 他人と同じ値を送るだけでjobの開始を妨害できる。
 - S3のkeyも処理IDだけから作ると、**利用者をまたいで上書き・誤読が起き得る。**
 
 **現在の処理IDはserver発行（TASK-004の録音attempt）なのでこの経路は塞がっているが、
-一意性を前提にした設計であることは変わらない。**AWSの名前はその処理IDから導く。
+一意性を前提にした設計であることは変わらない**。AWSの名前はその処理IDから導く。
 
 - 処理IDは**録音開始操作に対してserverが発行する**（TASK-004の録音attempt。旧案はserver側でUUIDを
   もう1つ発行する案だった）。**AWSアカウント内で一意**であることを満たす必要がある（TASK-005で契約化）。
   **処理IDは処理ごとに1つで、試行番号が変わっても変わらない。**
-- **名前は処理IDと試行番号の2つから導く。**処理IDだけからは導かない
+- **名前は処理IDと試行番号の2つから導く**。処理IDだけからは導かない
   （5巡目のレビュー指摘3。4巡目に試行番号ごとのkeyを足したとき、「1つのIDだけから決定的に導く」
   という元の規則と衝突したまま両方が残っていた）。
 
@@ -769,11 +986,11 @@ TASK-004が`started_at`の根拠として**録音attempt**（録音開始操作�
 - 試行番号を固定したまま同じ名前で照会できるので、**応答喪失時に`GetTranscriptionJob`で
   既存jobへ合流する**という規則（§20のTranscribeのjobの回収）はそのまま成り立つ。
 - **user_id・email・録音日など、推測できる値や個人情報をAWSの名前に入れない。**
-- **`TranscriptionJobName`には文字種と長さの制約がある。**AWSアカウント内で一意であることに加え、
+- **`TranscriptionJobName`には文字種と長さの制約がある**。AWSアカウント内で一意であることに加え、
   `^[0-9a-zA-Z._-]+`、最大200文字である
   （[StartTranscriptionJob](https://docs.aws.amazon.com/transcribe/latest/APIReference/API_StartTranscriptionJob.html)）。
   **制約が掛かるのは処理ID単体ではなく、`<処理ID>-<文字起こし試行番号>`として組み立てた後の
-  job名全体である。**試行番号を付けた後の長さと文字種で判定する。形式はTASK-005の契約で定め、
+  job名全体である**。試行番号を付けた後の長さと文字種で判定する。形式はTASK-005の契約で定め、
   実際の値での確認はTASK-009で行う。
 
 - 置き場は**RDSの表**にする。Solid QueueがRDSを使うため、Jobと記録の整合を同じDBで扱える。
@@ -791,14 +1008,14 @@ TASK-004が`started_at`の根拠として**録音attempt**（録音開始操作�
 | `transcribing` | Transcribeのjobを開始し、終端を待っている | **T8** → `generating`（§24-1・25） ／ **T9** → `failed`（§24-4・12） ／ **T10** → `cancel_requested`（§24-26） |
 | `generating` | 生成中 | **T11** → `succeeded_cleanup_pending`（§24-1） ／ **T12** → `failed`（§24-5・6・8・13） ／ **T13** → `cancel_requested`（§24-14） |
 | `failed` | 失敗。期限内なら再試行できる | **T14** → `transcribing`（音声から。§24-4） ／ **T15** → `generating`（全文から。§24-5・6） ／ **T16** → `cancel_requested`（§24-16・33） |
-| `succeeded_cleanup_pending` | **Dotは保存済み。**cleanupだけが残っている | **T17** → 自分自身（cleanup失敗→新しい実行権で再実行。§24-23・32） ／ **T18** → 削除（cleanup完了。§24-1） ／ **T22** → `cancel_requested`（この状態のままDotの完全削除・退会を受理した。**T17の自己遷移より優先する**） |
+| `succeeded_cleanup_pending` | **Dotは保存済み**。cleanupだけが残っている | **T17** → 自分自身（cleanup失敗→新しい実行権で再実行。§24-23・32） ／ **T18** → 削除（cleanup完了。§24-1） ／ **T22** → `cancel_requested`（この状態のままDotの完全削除・退会を受理した。**T17の自己遷移より優先する**） |
 | `cancel_requested` | 退会・期限到来・明示削除。**これ以降、生成へ進まない** | **T19** → `cleanup_pending`（§24-26・33） |
 | `cleanup_pending` | 外部資源の後片付け中。非終端jobの終端待ちを含む | **T20** → 自分自身（cleanup失敗→新しい実行権で再実行。§24-32） ／ **T21** → 削除（cleanup完了。§24-19） |
 
 **遷移IDはシナリオ側から参照する**（5巡目の任意指摘）。**上表のどの遷移にも、対応するシナリオが
-無い状態を作らない。**遷移を足したら、同じ変更でシナリオも足す。
+無い状態を作らない**。遷移を足したら、同じ変更でシナリオも足す。
 
-**§24には遷移に対応しない行もある。**polling時の判定（9・21・22）、認可（15・28）、冪等性
+**§24には遷移に対応しない行もある**。polling時の判定（9・21・22）、認可（15・28）、冪等性
 （10・11・27・29）、個別の資源のcleanup失敗（17・18・31）、stale判定の方法（7）、
 外部への応答喪失（24）などで、これらは遷移そのものではなく**遷移の前後で守る性質**を見ている。
 対応が無いことを漏れと扱わない。
@@ -807,9 +1024,9 @@ TASK-004が`started_at`の根拠として**録音attempt**（録音開始操作�
 `cleanup_pending`は**状態を保ったまま新しい実行権を取って再実行する**（自己遷移）。
 
 - 再実行はcleanupの認可条件（下記の5契機の表）で入る。leaseで二重実行を防ぐ。
-- **既に消えている資源への再実行は冪等に成功として扱う。**S3のobjectもTranscribeのjobも、
+- **既に消えている資源への再実行は冪等に成功として扱う**。S3のobjectもTranscribeのjobも、
   無ければ「消えている」ので失敗にしない。
-- **`succeeded_cleanup_pending`からDotを作り直さない。**この状態の記録はcleanup専用で、
+- **`succeeded_cleanup_pending`からDotを作り直さない**。この状態の記録はcleanup専用で、
   生成の入力には使わない。
 - 全部消えてから記録を削除する。**途中で落ちてもこの状態に留まるので、必ず再開できる。**
 
@@ -822,16 +1039,16 @@ TASK-004が`started_at`の根拠として**録音attempt**（録音開始操作�
 objectを壊すことはない。取り残される旧keyは「孤児の回収」（prefixの列挙とlifecycle）で拾う。
 **「lease失効だけで古いPUTが無効になる」と仮定しない。**
 
-**すべての遷移は条件付き更新（現在の状態を条件に含めるUPDATE）で行う。**状態を確保してから
+**すべての遷移は条件付き更新（現在の状態を条件に含めるUPDATE）で行う**。状態を確保してから
 S3の読み出しや外部サービスの呼び出しへ進む。読んでから更新するのでは、下の競合を防げない。
 
-**`cancel_requested`と`cleanup_pending`は`transcribing`と別の状態にする。**同じ`transcribing`から
+**`cancel_requested`と`cleanup_pending`は`transcribing`と別の状態にする**。同じ`transcribing`から
 「終端後に生成へ進む」と「終端後に削除する」の両方へ分岐させると、**退会したのにBedrockへ
 全文を送る経路**が残る（3巡目のレビュー指摘3）。
 
 #### 入口の手続き（retry・再upload・cleanupに共通）
 
-**新しい処理を始める側は、すべて同じ手続きを通す。**利用者の操作による再試行も、自動回収による
+**新しい処理を始める側は、すべて同じ手続きを通す**。利用者の操作による再試行も、自動回収による
 再実行も区別しない。**共通なのは手続きであって、認可の条件ではない。**
 
 1. **利用者の行を`FOR UPDATE`でlockする。**
@@ -847,11 +1064,11 @@ S3の読み出しや外部サービスの呼び出しへ進む。読んでから
 | cleanup / **成功の確定**（Dotの保存まで完了） | 記録が`succeeded_cleanup_pending`であること | **音声だけ**（文字起こし結果はACKを待つ） |
 | cleanup / **ACKの受領** | `current_user.dots`と`(user_id, 処理ID)`で認可（§27） | **文字起こし結果とTranscribeのjob** |
 | cleanup / **期限到来** | 受理から24時間を過ぎたこと | **その処理の全部**（音声・文字起こし結果・job・記録） |
-| cleanup / **Dotの完全削除** | 本人の削除要求（`current_user.dots`で認可） | **そのDotを作った処理の分だけ。**同じ利用者の他の録音には触れない |
+| cleanup / **Dotの完全削除** | 本人の削除要求（`current_user.dots`で認可） | **そのDotを作った処理の分だけ**。同じ利用者の他の録音には触れない |
 | cleanup / **退会** | 退会の受理 | **本人の全処理の分** |
 
 **cleanupは1つの条件で括れない**（5巡目のレビュー指摘1）。4巡目に「期限到来・退会・明示削除」と
-書いたが、**正常完了時の音声の削除とACK後の削除もcleanupである。**その2つが表に無いと、
+書いたが、**正常完了時の音声の削除とACK後の削除もcleanupである**。その2つが表に無いと、
 一覧どおりに適用したときに正常系のcleanupを開始できない。**契機ごとに認可条件と消す対象が違う**
 ので、上表のように分ける。
 
@@ -861,32 +1078,32 @@ cleanupの契機はまさに「退会した」「期限が過ぎた」なので�
 
 ### 孤児の回収（5巡目のレビュー指摘2）
 
-**旧leaseを失効させても、開始済みのS3 PUTは止まらない。**cleanupがkeyを消した後に古いPUTが
-完成すると、**消したはずのkeyが再び現れる。**記録を削除済みなら、記録を辿る回収もできない。
+**旧leaseを失効させても、開始済みのS3 PUTは止まらない**。cleanupがkeyを消した後に古いPUTが
+完成すると、**消したはずのkeyが再び現れる**。記録を削除済みなら、記録を辿る回収もできない。
 
-- **記録を削除する前に、進行中の実行権が無いことを確認する。**leaseが失効していること、
+- **記録を削除する前に、進行中の実行権が無いことを確認する**。leaseが失効していること、
   および`HeadObject`で現在の実体を確認することを条件にする。
-- **それでも取りこぼす。**PUTの完了を外から確実に止める手段はないため、
+- **それでも取りこぼす**。PUTの完了を外から確実に止める手段はないため、
   **記録に依存しない回収を別に置く。**
   1. cleanupのたびに`audio/<処理ID>/`と`transcripts/<処理ID>/`を**prefixごと列挙して
-     消す。**現在有効なkeyだけを消す形にしない。
+     消す**。現在有効なkeyだけを消す形にしない。
   2. **prefixにS3のlifecycleを掛ける**（TASK-002 Plan §18案A2と同じ位置づけで、**保険であって
      削除時刻の根拠にしない**）。記録が消えた後に現れたobjectは、これが最後の受け皿になる。
   3. 残存を検知できるようにする。検知の方法はTASK-013/015。
-- **「必ず消える」とは書かない。**lifecycleの日数指定は「削除対象になるまで」で、その後の削除も
+- **「必ず消える」とは書かない**。lifecycleの日数指定は「削除対象になるまで」で、その後の削除も
   遅延し得る。`privacy.md §5-2`の約束できる／できないの分け方をそのまま使う。
-- PUTの実行と終了の実際の挙動は**TASK-009で確認する。**確認するまで「lease失効で止まる」と
+- PUTの実行と終了の実際の挙動は**TASK-009で確認する**。確認するまで「lease失効で止まる」と
   仮定しない。
 
-- **retryとcleanupは同じ記録を奪い合う。**`failed`から`transcribing`/`generating`へ進める更新と、
+- **retryとcleanupは同じ記録を奪い合う**。`failed`から`transcribing`/`generating`へ進める更新と、
   `failed`から`cancel_requested`へ進める更新を**どちらも条件付きにして、片方だけを成功させる**
   （3巡目のレビュー指摘5）。上表のとおり条件が重ならないので、両方が勝つことはない。
-- **退会の受理後にretryを受け付けない。**retryの入口が利用者の行をlockして`active`を見るので、
+- **退会の受理後にretryを受け付けない**。retryの入口が利用者の行をlockして`active`を見るので、
   自動回収も含めてここで止まる。TASK-002の「退会の受理以降は新規の保存・再試行・結果の確定を
   止める」を満たす。**cleanupは止めない。**
-- **保証できる境界を明示する。**退会より前に始まったBedrockのrequestは止められない。
-  約束できるのは**「退会の受理後に新しいBedrockのrequestを開始しない」**ことと、
-  **「退会後に結果を確定させない」**ことである。
+- **保証できる境界を明示する**。退会より前に始まったBedrockのrequestは止められない。
+  約束できるのは「**退会の受理後に新しいBedrockのrequestを開始しない**」ことと、
+  「**退会後に結果を確定させない**」ことである。
 
 #### 状態遷移: Dotの保存とcleanupを分ける
 
@@ -896,7 +1113,7 @@ Dotの保存直後にworkerが止まると、Dotと`generating`の記録が同�
 削除済みの音声から再生成しようとする。
 
 - **Dotの保存と、記録を`succeeded_cleanup_pending`にする更新を同じtransactionで行う。**
-- **pollingはDotの存在を先に見る。**`dots`に同じ処理IDがあれば成功として返し、
+- **pollingはDotの存在を先に見る**。`dots`に同じ処理IDがあれば成功として返し、
   残っている記録はcleanup用として扱う。**`succeeded_cleanup_pending`の記録を生成の再試行に使わない。**
 - cleanup（音声・文字起こし結果・Transcribeのjob）が全部終わってから記録を削除する。
   途中で落ちても記録が残るので、**再実行できる。**
@@ -927,9 +1144,9 @@ Jobがどちらの音声を読むか決まらない。
 ### 退会と進行中処理の排他（TASK-002からの必須条件への回答）
 
 TASK-002 Plan §20は「退会の受理以降は新規の保存・再試行・結果の確定を止め、あとから現れた残存を
-回収してから完了とする」を必須条件とし、**方式をTASK-003/005へ渡した。**採用する方式は次のとおり。
+回収してから完了とする」を必須条件とし、**方式をTASK-003/005へ渡した**。採用する方式は次のとおり。
 
-**状態の確認と記録の作成を別々に行うと排他にならない。**次の順で競合する。
+**状態の確認と記録の作成を別々に行うと排他にならない**。次の順で競合する。
 
 1. POSTが利用者の状態を確認する（まだactive）
 2. 退会が`withdrawing`へ変更し、既存のobjectと記録を列挙して削除する
@@ -938,25 +1155,25 @@ TASK-002 Plan §20は「退会の受理以降は新規の保存・再試行・�
 「列挙のあとにもう一度確認する」を何回足しても、最後の確認の直後に同じことが起き得るので排他に
 ならない（初稿はこの形だった。レビュー指摘で修正）。採用する方式は次のとおり。
 
-**順序はrecord-firstに統一する。**S3へ置いてから記録を作ると、upload完了後・記録作成前に退会が
+**順序はrecord-firstに統一する**。S3へ置いてから記録を作ると、upload完了後・記録作成前に退会が
 走ったときに**そのobjectを列挙できない**（2巡目のレビュー指摘1。初稿の§9はこの順だった）。
 
 1. **利用者の行をlockし、`active`の確認と`uploading`の記録の作成を同じtransactionで行う。**
    受理時に`SELECT ... FOR UPDATE`で利用者の行を取り、`active`であることを確認したうえで
-   記録を作り、そのときの世代番号を記録へ写して**commitする。**退会の状態遷移も同じ行のlockを
+   記録を作り、そのときの世代番号を記録へ写して**commitする**。退会の状態遷移も同じ行のlockを
    取るため、**「activeを確認したのに記録が作られない」も「退会後に記録が作られる」も起きない。**
-2. **commitのあとにS3へuploadする。**object keyは記録が持つ（処理IDから導く）。
+2. **commitのあとにS3へuploadする**。object keyは記録が持つ（処理IDから導く）。
    uploadが完成したら記録を`accepted`にし、**そこで初めてJobをenqueueする。**
    完成前にenqueueすると、Jobが存在しないobjectを読む。
-3. **upload完了時に世代番号を再確認する。**ずれていれば、または記録が消えていれば、
+3. **upload完了時に世代番号を再確認する**。ずれていれば、または記録が消えていれば、
    **手元のobject keyでそのobjectを削除し、cleanupが終わったことを記録する。**
    記録が消えている場合に何もしないと、object だけが残る。
-4. **退会は`uploading`の記録を即削除しない。**cancel対象として残し、uploaderが片付けるのを待つ。
+4. **退会は`uploading`の記録を即削除しない**。cancel対象として残し、uploaderが片付けるのを待つ。
    数えて消すだけだと、この記録が指すobjectが後から完成して取り残される。
-5. **Jobの最終書き込みでも、同じ利用者の行を`FOR UPDATE`でlockする。**世代番号の確認とDotの
+5. **Jobの最終書き込みでも、同じ利用者の行を`FOR UPDATE`でlockする**。世代番号の確認とDotの
    insertを同一transactionに入れる。lockを取らずにtransactionへ入れるだけでは、
    **確認した直後・insertの直前に世代が変わる経路**を塞げない。
-6. **退会の完了条件は「その利用者の進行中の処理が0であること」。**DBの行数ではなく、
+6. **退会の完了条件は「その利用者の進行中の処理が0であること」**。DBの行数ではなく、
    **upload・Transcribeのjob・cleanupのいずれも未完了のものが無い状態**を指す。
    非終端のTranscribeのjobが残っている間は完了としない（§25-9）。
 7. 削除の順序はTASK-002のとおり（先にS3、成功してからRDS）。
@@ -965,27 +1182,27 @@ TASK-002 Plan §20は「退会の受理以降は新規の保存・再試行・�
 
 ### Transcribeのjobの回収（2巡目のレビュー指摘2）
 
-**objectを消してもTranscribeのjobは残る。**そしてjobが非終端（`IN_PROGRESS`等）のときの
+**objectを消してもTranscribeのjobは残る**。そしてjobが非終端（`IN_PROGRESS`等）のときの
 `DeleteTranscriptionJob`は`BadRequestException`になり得る
 （[DeleteTranscriptionJob](https://docs.aws.amazon.com/transcribe/latest/APIReference/API_DeleteTranscriptionJob.html)。
 `StartTranscriptionJob`のエラー節にも "if it's in a non-terminal state (such as `IN PROGRESS`)" とある）。
 **削除を要求しただけでは、退会や期限のあとにjobが完了して全文を書き出す経路が残る。**
 
-- **`StartTranscriptionJob`のresponseを失っても、新しいjobを作らない。**job名は処理IDと文字起こし試行番号から
+- **`StartTranscriptionJob`のresponseを失っても、新しいjobを作らない**。job名は処理IDと文字起こし試行番号から
   決まるので、`GetTranscriptionJob`で既存のjobへ合流する。
-- **非終端のjobが残っている間は処理の記録を消さない。**終端になるまでreconcileし、
+- **非終端のjobが残っている間は処理の記録を消さない**。終端になるまでreconcileし、
   終端後にobjectとjobを削除してから記録を消す。
 - 退会の「進行中0」の判定に、この非終端jobを含める。
 
-**終端後にどちらへ進むかは、状態で決める。**同じ`transcribing`から「生成へ進む」と「削除する」の
+**終端後にどちらへ進むかは、状態で決める**。同じ`transcribing`から「生成へ進む」と「削除する」の
 両方へ分岐させない（3巡目のレビュー指摘3）。
 
-- 退会・期限到来・明示削除を受理した時点で、記録を**`cancel_requested`**にする。
+- 退会・期限到来・明示削除を受理した時点で、記録を **`cancel_requested`** にする。
   非終端jobはこの状態のまま終端を待つ。
 - **Transcribeが終端したら、Bedrockへ送る前に入口の共通条件をもう一度通す**
   （利用者の行のlock・`active`・世代・期限・現在の状態）。
   - `transcribing`のままで条件を満たす → `generating`へ進む。
-  - `cancel_requested` → **生成へ進まず`cleanup_pending`へ。**全文をBedrockへ送らない。
+  - `cancel_requested` → **生成へ進まず`cleanup_pending`へ**。全文をBedrockへ送らない。
 - これがないと、**退会を受理したあとに発話内容の全文を新しくBedrockへ送る**経路が残る。
   Dotのinsertは世代確認で防げても、外部への送信自体は防げていなかった。
 
@@ -997,10 +1214,10 @@ TASK-002 Plan §20は「退会の受理以降は新規の保存・再試行・�
 | 案 | 内容 | 判断の材料 |
 | --- | --- | --- |
 | **A（採用）: 低減処理を入れない** | 録音前の案内で言い換えを促し、生成後は編集・ゴミ箱・即時完全削除・退会で対応する | `privacy.md §2原則5`がMVPの手段を「Dot本文の編集、1件ごとの削除、退会」と既に定めており、それと一致する。低減の実効性を謳わずに済む |
-| 案B: 文字起こし後・生成AIへ送る前にPII検出でマスキング | 生成AIへ渡る人名が減る | **効果は限定的だが、ゼロではない。**元音声がTranscribeへ渡ることは防げないが、**Bedrockへ渡すテキスト、Bedrock側の保持・レビューの対象、生成結果へ固有名詞が伝播する範囲は減らせる**（TranscribeとBedrockは同じAWSでも別サービスで、保持の仕組みも別。§18のとおりopt-out policyの対象かどうかすら違う）。その効果より、`privacy.md §2原則4`が戒める誤判定と文脈を壊す置換、実装・検証の費用を重く見て採らない。なお`ja-JP`はTranscribeのContent Redactionに非対応のため、採るなら別手段が要る |
+| 案B: 文字起こし後・生成AIへ送る前にPII検出でマスキング | 生成AIへ渡る人名が減る | **効果は限定的だが、ゼロではない**。元音声がTranscribeへ渡ることは防げないが、**Bedrockへ渡すテキスト、Bedrock側の保持・レビューの対象、生成結果へ固有名詞が伝播する範囲は減らせる**（TranscribeとBedrockは同じAWSでも別サービスで、保持の仕組みも別。§18のとおりopt-out policyの対象かどうかすら違う）。その効果より、`privacy.md §2原則4`が戒める誤判定と文脈を壊す置換、実装・検証の費用を重く見て採らない。なお`ja-JP`はTranscribeのContent Redactionに非対応のため、採るなら別手段が要る |
 | 案C: 端末内文字起こしを採用し、音声を外部へ出さない | 唯一、外部へ渡る境界そのものを無くせる | TASK-002 Plan §18案Cが「成立しないからではなく、対応範囲と検証コストがMVPに見合わないため」不採用と判断したばかりで、**それを覆す新しい材料が今ない** |
 
-**採用は案A。**理由は「効果が無いから」ではなく、**限定的な効果より誤検出・文脈破壊・実装費を
+**採用は案A**。理由は「効果が無いから」ではなく、**限定的な効果より誤検出・文脈破壊・実装費を
 重く見たから**である（初稿は「同じ委託先だから境界を1つも減らせない」を主理由にしていたが、
 法人単位ではなくサービス処理境界で見ると不正確だった。レビュー指摘で修正）。
 再評価する条件は、**§18で委託先を分ける判断へ戻ったとき**（分かれれば効果が大きくなる）、
@@ -1032,7 +1249,7 @@ product.mdの基盤費は月5,000円目標・1万円前後許容で、**音声�
 | S3 一時object | 成功時に削除処理を始める | 月1円未満（TASK-002 §25-9） |
 | **合計** | | **約 $0.23〜$0.28（1ドル150円で約35〜42円）** |
 
-- **費用の7割はTranscribeである。**生成側ではなく文字起こし側が支配的で、**録音の長さにほぼ比例する。**
+- **費用の7割はTranscribeである**。生成側ではなく文字起こし側が支配的で、**録音の長さにほぼ比例する。**
   月1,000件なら約$230〜$280（約3.5〜4.2万円）で、**基盤費より大きくなる。**
 - Claudeの単価はモデルと、Global / Geo のどちらで呼ぶかで変わる。**model idを確定していないため
   （§18）、生成側の金額は幅を持った概算である。**
@@ -1070,23 +1287,23 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
 | --- | --- | --- | --- |
 | 1 | 正常終了 | Dotが保存され、記録が`succeeded_cleanup_pending`になり、cleanupのあとに記録を削除する | なし |
 | 2 | uploadの途中で切れる | **`uploading`の記録は存在し得る**（record-firstのため）。objectは未完成 | **watchdogが拾う**（§19）。`HeadObject`でobjectが無ければ`upload_failed`、完成していればenqueueへ進める。端末のBlobが残っていれば再送できるが、**旧leaseを失効させて新しい実行権を取った要求だけ**に許す |
-| 30 | **`uploading`のまま放置される**（requestやcontainerが落ちる） | Jobをenqueueしていないので、Solid QueueもTranscribeも何も知らない | **§19のwatchdogが唯一の回収手段。**これが無いとpollingが永遠に`uploading`を返し、退会が完了できない（3巡目のレビュー指摘2） |
+| 30 | **`uploading`のまま放置される**（requestやcontainerが落ちる） | Jobをenqueueしていないので、Solid QueueもTranscribeも何も知らない | **§19のwatchdogが唯一の回収手段**。これが無いとpollingが永遠に`uploading`を返し、退会が完了できない（3巡目のレビュー指摘2） |
 | 3 | 受理後、Jobがenqueueされる前に落ちる | 記録は`accepted`のまま。objectは残る | 再試行で同じobjectからやり直す。期限を過ぎたら削除処理へ |
 | 4 | 文字起こしが失敗 | 記録を`failed`（再試行可）にする。**元音声は既に委託先へ渡っている** | 同じobjectから文字起こしをやり直す |
 | 5 | **外部AIへ送る前に切断** | 生成は始まっていない。記録は`failed`。**文字起こし結果は自前S3にある** | **生成からやり直す**（§25-5。Transcribeを再実行しない） |
 | 6 | **外部AIの応答後に切断（応答喪失）** | 生成は消費済みだがDotは無い。記録は`failed` | **生成からやり直す。外部AIの消費は繰り返される**（§13） |
 | 7 | worker停止・deployでJobが落ちる | **状態ごとに判定する**（§19）。Transcribe待ちなら`GetTranscriptionJob`で生きているか見る。worker消失ならSolid Queueの回収結果を拾う | 生きているjobを二重に開始しない。**「24時間を過ぎたらfailed」をstale検知の代わりに使わない** |
 | 8 | 保存（RDS）が失敗 | Dotは無い。objectは残る（TASK-002の「成功」の定義） | 文字起こし結果が残っていれば生成から、無ければ文字起こしからやり直す |
-| 9 | **保存は成功したが応答が届かない** | Dotは存在する。記録は`succeeded_cleanup_pending`か削除済み | **再試行しない。**pollingは**まずdotsを見る**ので、記録が残っていても成功として返す（§9） |
+| 9 | **保存は成功したが応答が届かない** | Dotは存在する。記録は`succeeded_cleanup_pending`か削除済み | **再試行しない**。pollingは**まずdotsを見る**ので、記録が残っていても成功として返す（§9） |
 | 22 | **Dotの保存直後にworkerが止まる** | Dotと記録が同時に存在する。cleanupは未了 | **pollingはDotを優先するので成功として返せる**（記録が残っていても「処理中」にしない）。残った記録は**cleanup専用**で、生成の再試行には使わない（2巡目のレビュー指摘10） |
 | 23 | 音声を削除したあと、記録を削除する前に止まる | 記録が`succeeded_cleanup_pending`で残る | **状態を保ったまま新しい実行権を取って再実行する**（自己遷移）。既に消えているものは冪等に成功として扱う |
-| 32 | **cleanupが繰り返し失敗する** | `succeeded_cleanup_pending`または`cleanup_pending`に留まる | **終端にしない。**cleanupの認可条件（§20の5契機）で何度でも入れる。期限到来・退会・Dotの完全削除による場合は`active`も期限内も要求しない（4巡目のレビュー指摘1）。残存を検知して運用で拾う |
-| 33 | **退会・期限到来でcleanupが入口を通る** | 利用者は`active`でなく、期限も過ぎている | **通る。**cleanupの認可条件はretryと別で（§20の5契機の表）、`active`と期限内を要求しない。ここを共通にすると`cleanup_pending`から抜け出せない |
-| 35 | **`succeeded_cleanup_pending`のままDotの完全削除・退会を受理する** | Dotは既に消える／消えた。記録はcleanup待ち | **T22で`cancel_requested`へ移す（T17の自己遷移より優先）。**進行中のcleanupの実行があっても、最終的にcancel側の後片付けへ収束させる。ACKを待たずに文字起こし結果とjobも削除へ回す。pollingは以後、全文を返さない（§27の「返さない条件」） |
-| 34 | **`upload_failed`から再uploadする** | 古い実行権が失効している | 新しい実行権を発行して**`uploading`へ戻す。**旧leaseで始まったPUTが後から完成し得るため、**keyを試行番号ごとに分け、記録が持つ有効なkey以外を残存として回収する** |
+| 32 | **cleanupが繰り返し失敗する** | `succeeded_cleanup_pending`または`cleanup_pending`に留まる | **終端にしない**。cleanupの認可条件（§20の5契機）で何度でも入れる。期限到来・退会・Dotの完全削除による場合は`active`も期限内も要求しない（4巡目のレビュー指摘1）。残存を検知して運用で拾う |
+| 33 | **退会・期限到来でcleanupが入口を通る** | 利用者は`active`でなく、期限も過ぎている | **通る**。cleanupの認可条件はretryと別で（§20の5契機の表）、`active`と期限内を要求しない。ここを共通にすると`cleanup_pending`から抜け出せない |
+| 35 | **`succeeded_cleanup_pending`のままDotの完全削除・退会を受理する** | Dotは既に消える／消えた。記録はcleanup待ち | **T22で`cancel_requested`へ移す（T17の自己遷移より優先）**。進行中のcleanupの実行があっても、最終的にcancel側の後片付けへ収束させる。ACKを待たずに文字起こし結果とjobも削除へ回す。pollingは以後、全文を返さない（§27の「返さない条件」） |
+| 34 | **`upload_failed`から再uploadする** | 古い実行権が失効している | 新しい実行権を発行して **`uploading`へ戻す**。旧leaseで始まったPUTが後から完成し得るため、**keyを試行番号ごとに分け、記録が持つ有効なkey以外を残存として回収する** |
 | 10 | 同じ冪等性keyで再送 | `dots`のunique制約で衝突する | **2件目のDotを作らず、既存のDotを返す** |
 | 11 | cleanup完了後にDotを完全削除し、同じ処理IDで再送する | `dots`にもcleanup済みの記録にも無いため、**新しい録音として受理される** | これは穴ではない。**cleanupが終わるまで記録が残る**（§20）ので、消し残した音声がある間は記録も残り、unique制約が効く。**旧objectが残ったまま新しいDotが作られる経路は無い**（3巡目のレビュー指摘6で訂正。2巡目の記述は「成功時に記録を即削除する」前提だった） |
-| 31 | **ACKの処理後にresponseが届かない／ACKが重複・並行して届く／fallbackのcleanup後に遅れて届く** | 対象が既に無い場合がある | **所有者を確認したうえで、冪等に成功として扱う。**object・job・記録のいずれが無くても失敗にしない。ACK自体は保存しない（§27） |
+| 31 | **ACKの処理後にresponseが届かない／ACKが重複・並行して届く／fallbackのcleanup後に遅れて届く** | 対象が既に無い場合がある | **所有者を確認したうえで、冪等に成功として扱う**。object・job・記録のいずれが無くても失敗にしない。ACK自体は保存しない（§27） |
 | 12 | 文字起こしが空（無音・極端に短い） | 生成へ進まず失敗として扱う | 録り直しを案内する（§17） |
 | 13 | 生成結果がschema検証に通らない | 生成の失敗として扱い、保存しない | 同じobjectからやり直す |
 | 14 | 退会の直前に始まった処理が、退会の削除処理のあとに完了する | Jobは最終書き込みで**利用者の行を`FOR UPDATE`でlockし**、世代番号の確認とinsertを同一transactionで行う。ずれていれば書き込まない | 再開しない。退会側が残存を回収してから完了を表示する（§20） |
@@ -1094,20 +1311,20 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
 | 16 | 再試行の期限を過ぎてから再試行する | 受け付けない。**objectと記録は削除処理の対象になるが、削除に失敗したり遅延すれば残存し得る**（`privacy.md §5`が保証するのは削除処理の開始条件まで） | 録り直しを案内する |
 | 17 | 成功後のS3削除が失敗する | Dotは保存済み。**音声objectが残る** | 削除済みと表示せず再実行する。残存を検知できるようにする（TASK-013/015） |
 | 18 | 文字起こし結果の削除が失敗する | 発話内容の全文が自前S3に残る | 削除済みと表示せず再実行する。残存を検知できるようにする。**objectとTranscribeのjobの両方が対象**（§27） |
-| 19 | 退会の直前に受理されたuploadが、退会の削除処理のあとにS3への保存を終える | 記録は利用者の行のlockの中で先に作られる（record-first）。**退会は`uploading`の記録を即削除せずcancel対象として残す** | uploaderが世代のずれを見てobjectを削除し、cleanup完了を記録する。**記録が消えていても手元のkeyで消す。**進行中の処理が0になるまで退会を完了としない（§20） |
+| 19 | 退会の直前に受理されたuploadが、退会の削除処理のあとにS3への保存を終える | 記録は利用者の行のlockの中で先に作られる（record-first）。**退会は`uploading`の記録を即削除せずcancel対象として残す** | uploaderが世代のずれを見てobjectを削除し、cleanup完了を記録する。**記録が消えていても手元のkeyで消す**。進行中の処理が0になるまで退会を完了としない（§20） |
 | 20 | 成功したあと、clientがACKを送らないまま期限が過ぎる | Dotは保存済み。**文字起こし結果は削除処理の対象になる** | 全文は取り戻せない。Dotは残るので`sentence`と`summary`は読める |
 | 21 | 期限を過ぎた後にpollingが来る | `dots`に処理IDがある | Dotを返す。**objectが残っていても全文は返さない。**「取得できなかった」ではなく「保持期間を過ぎた」と示す（§27） |
-| 24 | **`StartTranscriptionJob`のresponseを失う** | AWS側ではjobが受理されている可能性がある | **同じ名前で新しいjobを作らない。**job名は`<処理ID>-<文字起こし試行番号>`から決まるので（§20の命名表）、試行番号を変えない限り同じ名前で`GetTranscriptionJob`へ合流できる |
+| 24 | **`StartTranscriptionJob`のresponseを失う** | AWS側ではjobが受理されている可能性がある | **同じ名前で新しいjobを作らない**。job名は`<処理ID>-<文字起こし試行番号>`から決まるので（§20の命名表）、試行番号を変えない限り同じ名前で`GetTranscriptionJob`へ合流できる |
 | 25 | worker停止中にTranscribeが完了する | 自前S3に全文が書き出されている。記録は`transcribing`のまま | reconcileで`GetTranscriptionJob`を見て、完了していれば生成から進む。**Transcribeを再実行しない** |
-| 26 | 期限到来・退会の時点でTranscribeのjobが非終端 | `DeleteTranscriptionJob`が`BadRequestException`になり得る | **削除要求だけで終わらせない。**終端になるまでreconcileし、終端後にobjectとjobを消してから記録を消す。**それまで退会を完了としない**（§20） |
-| 27 | 同じ処理IDで別の音声を送る | 既存の記録がある | **bodyを受け取らず既存の状態を返す。**object keyはserverが処理IDと試行番号から決めるので上書きされない。再uploadは`uploading`／`upload_failed`で完成objectが無い場合だけ（§20） |
-| 28 | 別の利用者が同じ処理IDを送る | **処理IDはserver発行になったので利用者が値を選べない**（2026-09-29にTASK-004の録音attemptへ統合）。他人の処理IDを推測して送っても、記録の所有者と`current_user`が一致せず拒否される | **処理IDがAWSアカウント内で一意であることが前提。**満たせない形なら、server発行の別IDを足してAWSの名前をそこから導く（§20）。client発行のUUIDのままだと`ConflictException`や他人のobjectの上書きが起き得た（2巡目のレビュー指摘13） |
-| 39 | **ACKを送ったあと、cleanupが終わる前にpollingが来る** | 文字起こし結果のobjectはまだ残っている可能性がある | **全文を返さない**（§27の「返さない条件」にACK受領を含める）。**物理削除の完了に依存させない。**端末は`sessionStorage`から読む |
+| 26 | 期限到来・退会の時点でTranscribeのjobが非終端 | `DeleteTranscriptionJob`が`BadRequestException`になり得る | **削除要求だけで終わらせない**。終端になるまでreconcileし、終端後にobjectとjobを消してから記録を消す。**それまで退会を完了としない**（§20） |
+| 27 | 同じ処理IDで別の音声を送る | 既存の記録がある | **bodyを受け取らず既存の状態を返す**。object keyはserverが処理IDと試行番号から決めるので上書きされない。再uploadは`uploading`／`upload_failed`で完成objectが無い場合だけ（§20） |
+| 28 | 別の利用者が同じ処理IDを送る | **処理IDはserver発行になったので利用者が値を選べない**（2026-09-29にTASK-004の録音attemptへ統合）。他人の処理IDを推測して送っても、記録の所有者と`current_user`が一致せず拒否される | **処理IDがAWSアカウント内で一意であることが前提**。満たせない形なら、server発行の別IDを足してAWSの名前をそこから導く（§20）。client発行のUUIDのままだと`ConflictException`や他人のobjectの上書きが起き得た（2巡目のレビュー指摘13） |
+| 39 | **ACKを送ったあと、cleanupが終わる前にpollingが来る** | 文字起こし結果のobjectはまだ残っている可能性がある | **全文を返さない**（§27の「返さない条件」にACK受領を含める）。**物理削除の完了に依存させない**。端末は`sessionStorage`から読む |
 | 40 | **異なる利用者の録音attemptが同じAWSの名前を作る** | S3のkeyや`TranscriptionJobName`が衝突し、`ConflictException`や他人のobjectの上書きが起き得る | **処理IDがAWSアカウント内で一意であることが前提**（§20）。`TranscriptionJobName`の文字種と長さ（`^[0-9a-zA-Z._-]+`、最大200文字）も満たす。満たせない形式なら、server発行の別IDを足してAWSの名前をそこから導く |
 | 36 | **同じ録音attemptで2回uploadする** | 処理の記録の`(user_id, 処理ID)`のunique制約に掛かる | **新しい処理を作らず、既存の状態を返す**（TASK-004 §18-3が許した2案のうち「同じ処理を返す」を採用）。署名済みの値を端末に置く方式でも、この制約で一回性が成立する |
 | 37 | **録音attemptの期限が切れてから再uploadする** | attemptの検証で弾かれる | 受け付けず録り直しを案内する。**受理後の再試行とは別の時計**で、受理後は処理の記録で認可するため期限切れの影響を受けない |
-| 38 | **再試行やJob再実行を経てDotが保存される** | `started_at`は受理時の値のまま | **書き換えない。**再試行で新しい時刻に置き換えると、TASK-004の「話した日から動かない」が崩れる |
-| 29 | 同じ処理IDのPOSTが並行して届く | 処理の記録の`(user_id, 処理ID)`のunique制約で衝突する | **2件目の記録を作らず、Jobも二重にenqueueしない。**既存の記録の状態を返す（2巡目のレビュー指摘4） |
+| 38 | **再試行やJob再実行を経てDotが保存される** | `started_at`は受理時の値のまま | **書き換えない**。再試行で新しい時刻に置き換えると、TASK-004の「話した日から動かない」が崩れる |
+| 29 | 同じ処理IDのPOSTが並行して届く | 処理の記録の`(user_id, 処理ID)`のunique制約で衝突する | **2件目の記録を作らず、Jobも二重にenqueueしない**。既存の記録の状態を返す（2巡目のレビュー指摘4） |
 
 **週次・月次のAI振り返りは混入していない。**§17の入力は1件の録音の文字起こしだけで、過去のDotを
 渡さない。§5の対象外にも明記した。
@@ -1116,31 +1333,35 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
 
 §23の質問に対する回答と、その理由・帰結。
 
-1. **provider = §18案A（委託先をAWSに統一）。**Amazon Transcribe（東京）で文字起こしし、
+1. **provider = §18案A（委託先をAWSに統一）**。Amazon Transcribe（東京）で文字起こしし、
    Amazon BedrockのClaudeで生成する。決め手はモデル性能ではなく**完了条件7の重さ**で、9項目の
    確認が1社分で済み、鍵の項目（項目8）は長期固定キーの管理が不要になる（項目自体は消えない）。
    **ただし採用後の調査で、案Aの成立には§18の6つの必須条件（Transcribeのopt-out適用、
-   日本国外へ出ないモデルの選定、data retention modeの確認、録音形式の疎通、文字起こし結果を
-   自前S3へ出すこと、`bedrock-runtime`のGeo: JPを既定にすること）が要ることが分かった。**
+   モデルの推論経路の選定、使う構成の保存先と閲覧元の確認（data retention modeを含む）、録音形式の疎通、文字起こし結果を
+   自前S3へ出すこと、`aws-sdk-bedrockruntime`で呼べる経路から選ぶこと）が要ることが分かった。**
    判断そのものは変えないが、これらを満たさないまま公開しない。
-2. **実行方式 = §19案A。**Solid Queueで非同期にし、workerは当面ECSの同一タスク内でPumaと並走させ、
+   **2026-10-03に案Aを続ける理由が変わった**。所在地方針を「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を
+   許容する」へ変更したため、案Cは所在地では落ちない。**続ける理由は3つ。委託先を増やさないこと（9項目の
+   確認とDPA・`privacy.md §5-1`の行の差し替えが発生しない）、25MBの上限が無いこと、ZDRのような外部裁量に
+   依存しないことである。案Cは不採用ではなく保留**（§18「2026-10-03の再確認」）。
+2. **実行方式 = §19案A**。Solid Queueで非同期にし、workerは当面ECSの同一タスク内でPumaと並走させ、
    clientはpollingで結果を取得する。同期/非同期はTASK-002の30分上限で既に決まっていた。
-3. **冪等性と処理の記録 = §20案A。**冪等性keyと処理IDと録音attemptの識別子を同一にして`dots`の
+3. **冪等性と処理の記録 = §20案A**。冪等性keyと処理IDと録音attemptの識別子を同一にして`dots`の
    列に置く。**2026-09-29にTASK-004の`started_at`採用へ合わせ、client発行のUUIDから
-   server発行の録音attemptへ変えた。**これによりprovider IDの層を廃止した。
+   server発行の録音attemptへ変えた**。これによりprovider IDの層を廃止した。
    **処理の記録は、音声・文字起こし全文・Transcribeのjobのcleanupが終わった時点で削除する。**
    TASK-002が残した相互確認事項への回答であり、`privacy.md §5-1`の「未確定」を解消する。
-   - **初稿は「成功した時点で削除する」だった。**2巡目で`succeeded_cleanup_pending`を入れ、
+   - **初稿は「成功した時点で削除する」だった**。2巡目で`succeeded_cleanup_pending`を入れ、
      3巡目の指摘1で**判断そのものが変わっていると分かった**ため、削除の契機を書き換えた。
      成功後も記録が残る副作用（誰がいつ録音したかを示す個人データ）を受け入れる代わりに、
      **消し残しを回収できる**状態を選んだ。
-4. **固有名詞の低減 = §21案A（行わない）。**Bedrockへ渡すテキストと生成結果への伝播は減らせる
+4. **固有名詞の低減 = §21案A（行わない）**。Bedrockへ渡すテキストと生成結果への伝播は減らせる
    ので**効果はゼロではない**が、その限定的な効果より誤検出・文脈破壊・実装費を重く見た。
    低減したとは表示しない（初稿の「境界を1つも減らせない」は撤回済み。§21）。
 5. **再試行は、文字起こし結果が残っていれば生成からやり直す。残っていなければ文字起こしから
-   やり直す。**journaling.md §5の「文字起こしまで成功した後の失敗で、録り直さずにテキストから
+   やり直す**。journaling.md §5の「文字起こしまで成功した後の失敗で、録り直さずにテキストから
    再生成できるようにするか」への回答である。どちらでも録り直しにはならない。
-   - **初稿は「必ず文字起こしからやり直す」としていた。**理由は「全文を保存しないので制約から
+   - **初稿は「必ず文字起こしからやり直す」としていた**。理由は「全文を保存しないので制約から
      一意に決まる」だったが、**§27で全文を自前のS3へ置くと決めた時点でこの根拠は失われた**
      （2巡目のレビュー指摘6）。全文が手元にあるのに毎回Transcribeを再実行するのは、
      **費用（§22の支配項目）も失敗点も増やすだけである。**
@@ -1151,33 +1372,52 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
    Q2の回答に「補足：録音上限は〜分」とあったが値が入っていなかった。上限はTASK-002 §25-8で
    30分と確定しており、**変更するならTASK-002の再判断になる**ため、ここでは変えていない。
 7. **音声形式は`audio/webm;codecs=opus`と`audio/mp4`をserverで受容し、文字起こしの対応形式を
-   確認する（既定として採用。質問していない）。**TASK-002 Plan §13がSafariだけ失敗するリスクとして
+   確認する（既定として採用。質問していない）**。TASK-002 Plan §13がSafariだけ失敗するリスクとして
    挙げた項目で、確認はTASK-009の疎通で行う。
-8. **文字起こし結果の置き場 = §27案A（自前のS3へ置く）。**レビュー指摘で「workerのmemoryのみ」が
+8. **文字起こし結果の置き場 = §27案A（自前のS3へ置く）**。レビュー指摘で「workerのmemoryのみ」が
    事実として誤りと分かったため、追加で判断した。音声と同じbucketの別prefixに同じ条件で置く。
-   **clientが受け取ったら削除ACKを送り、serverがその時点で削除処理を始める。**削除の契機は
+   **clientが受け取ったら削除ACKを送り、serverがその時点で削除処理を始める**。削除の契機は
    **ACKの受領・受理から24時間の経過・そのDotの完全削除・退会の4つ**（`privacy.md §5-1`が正本。
    §20の認可表に契機ごとの削除範囲がある）。初稿は「取得の有無をserverが持つと成功した処理の記録を
    残すことになる」として取得後削除を採らなかったが、**この理由は成立していなかった**
    （2巡目のレビュー指摘3。成功後も`dots`に処理IDが残るため記録なしで認可できる）。
    **それでもTASK-002の前提に対しては後退である**ことを§27に記録した。
 
+### 2026-10-03の人間の判断（所在地方針の変更）
+
+**判断の主体は人間である**。providerの比較を一次資料で確認し直した結果（§18「2026-10-03の再確認」）を
+10件の選択式の質問にまとめて提示し、人間が回答した。**所在地方針については「原則を外す。ただし
+まずAWS内でGlobalを許すところまでとし、委託先の変更は別判断にする」を選んだ。**
+
+| 項目 | 判断 |
+| --- | --- |
+| 東京原則の採否 | **外す**。`architecture.md`「データ所在地と費用」を「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」へ変更する |
+| 範囲 | **AWS内に限る**。Bedrockの推論経路の制約を外すだけで、**委託先そのものの変更は別の判断として残す** |
+| 見直しの範囲 | 判断1（provider）だけを再検討する。判断5（文字起こしの置き場）は変えない |
+| 案Cの採否 | 所在地では落ちなくなったため、**不採用ではなく保留**とする（再検討条件は`product.md §5`） |
+| 比較対象 | AWSとOpenAIに絞り、**Google・Azureを候補から外した理由を明記する**（案D・案E） |
+| 「保存は東京」の射程（2026-10-04に追加で判断） | **原則の表現を「保存は日本国内」へ改める**。自分たちのRDS・S3は東京のまま。Geo: JPの宛先に大阪が含まれるため、東京に限ると国内経路でも方針違反になる構成が作れてしまう。保持ありモデルを`bedrock-mantle` In-Regionだけに限る案、retention modeを常に`none`に限る案は採らず、**国内に収まっていればよいこととした** |
+
+**この変更はproviderの都合で方針を曲げたものではない**。必須条件2が「モデルの都合で所在地方針を黙って
+曲げない（曲げるならarchitecture.mdを先に直す）」としているとおり、**正本の側を先に直す手順で行った。**
+なお、**「方針を変えたこと」と「越境移転の規律の確認が済んだこと」は別である**（§5、TASK-017）。
+
 ## 26. 委託先に確認する9項目（完了条件7。**未確認**）
 
 TASK-003の完了条件7が求める9項目について、**確認先と確認方法を定めた。項目別の状態は下表のとおりで、
 一次資料で確認できた項目もあるが、9項目全体の確認・AWSアカウントの設定・日本の個人情報保護法上の
-評価は完了していない。**確認していない項目を「問題ない」と扱わない。確認が済むまで公開しない。
+評価は完了していない**。確認していない項目を「問題ない」と扱わない。確認が済むまで公開しない。
 
 委託先は**Amazon Web Services 1社**（Amazon Transcribe と Amazon Bedrock）。
 
 | # | 確認する項目 | 確認先 | 現状 |
 | --- | --- | --- | --- |
 | 1 | 入力を学習・モデル改善に使わないこと | Transcribe: AWS OrganizationsのAI services opt-out policyを適用し、effective policyを照会。Bedrock: モデルの data retention mode | **要対応。**§18のとおり、Transcribeは**既定ではopt-inのまま**。設定しない限り改善に使われ得る |
-| 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）、Transcribeのjob記録の保持 | 未確認。Bedrockは既定でゼロデータ保持と説明されるが、**モデルにより保持必須のものがある** |
-| 3 | 処理・保存のリージョン。越境する場合の手続き | Bedrockの In-Region / Geo / Global の別。Transcribeのopt-out前の保存先 | 未確認。**Globalを使うと日本国外へ出る。**opt-outしない限りTranscribeも利用リージョン外へ保存され得る |
-| 4 | 人によるレビューの有無と条件 | Bedrockの `aws_review` モードの要否、abuse detectionの条件 | 未確認。**モデルによってはAWSによる人的レビューが必須**になり得る |
+| 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）と**保持データの所在リージョン**、Transcribeのjob記録の保持 | Bedrockは**未確認**。既定でゼロデータ保持と説明されるが、**モデルにより保持必須のものがある**。保持ありを選ぶなら**所在リージョンの確認が必須**（§18必須条件3）。**Transcribeのjob記録は各リージョンで90日保持（調整不可）** で、[endpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)に記載があり**確認済み**。`privacy.md §5-1`は`DeleteTranscriptionJob`で消す設計なので矛盾しない |
+| 3 | 処理・保存のリージョン。越境する場合の手続き | Bedrockの In-Region / Geo / Global の別。Transcribeのopt-out前の保存先 | **方針は2026-10-03に決定済み**（`architecture.md`「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」）。**手続きは未確認。委託であっても「外国にある第三者への提供」には別の規律がかかる整理があり、同意の取得または移転先の体制整備と本人への情報提供が必要になり得る**（TASK-017）。**確認が済むまでは国内に収まる経路で運用する**（範囲の定義は`architecture.md`「データ所在地と費用」）。opt-outしない限りTranscribeも利用リージョン外へ保存され得る |
+| 4 | 人によるレビューの有無と条件、**その実施地とアクセス経路** | Bedrockの `aws_review` モードの要否、abuse detectionの条件、**レビューをどこから行うか**、**prompt cache等の滞留先** | 未確認。**モデルによってはAWSによる人的レビューが必須**になり得る。**`architecture.md`「データ所在地と費用」が求める「誰がどこから閲覧し得るか」の確認はここで行う**（実施地が国外なら、保存が国内でも要求に反する）。cacheの滞留先も同じ理由で含める |
 | 5 | サブプロセッサの開示 | AWSのサブプロセッサ一覧 | 未確認 |
-| 6 | 委託契約（DPA相当）を結べること | AWS DPA（Service Termsへ組み込み済み・自動適用） | **確認済み。**別途の締結を要しない。ただし**日本の個人情報保護法上の委託先としての評価は自分たちで行う** |
+| 6 | 委託契約（DPA相当）を結べること | AWS DPA（Service Termsへ組み込み済み・自動適用） | **確認済み**。別途の締結を要しない。ただし**日本の個人情報保護法上の委託先としての評価は自分たちで行う** |
 | 7 | 事故発生時の通知義務と期限 | AWS DPAの該当条項 | 未確認。TASK-017の漏えい対応と接続する |
 | 8 | 鍵の最小権限・ローテーション・漏えい時の失効 | ECS task roleのIAM policy、credential取得経路 | **一部を設計で解決。長期固定のAPIキーは持たない**が、**ECSはSDKへ一時credentialを供給する**ため項目は残る。確認対象は(a)roleの最小権限（対象bucketと対象モデルだけ）、(b)credential取得経路の保護、(c)侵害時のrole/policy無効化とtask停止の手順。policyの内容はTASK-009 |
 | 9 | 第三者認証の有無 | AWS Artifact（SOC 1/2/3、ISO 27001/27017/27018） | 未確認。**これだけを根拠にしない** |
@@ -1186,13 +1426,17 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 
 | 対象 | 確認すること | 現状 |
 | --- | --- | --- |
-| Transcribeの文字起こし結果 | `OutputBucketName`が実際に効いて自前bucketへ出ること、service-managed bucketへ出ていないこと | **§27で自前bucketへ置くと決めた。**設定が効いていることの確認はTASK-009/015 |
-| Transcribeのjob記録 | 出力objectと別に残るjob自体の記録の保持期間と、`DeleteTranscriptionJob`で消える範囲 | 未確認。**objectを消してもjobが残る**ため、削除の対象に含めたうえで実際に消えることを確認する |
+| Transcribeの文字起こし結果 | `OutputBucketName`が実際に効いて自前bucketへ出ること、service-managed bucketへ出ていないこと | **§27で自前bucketへ置くと決めた**。設定が効いていることの確認はTASK-009/015 |
+| Transcribeのjob記録 | 出力objectと別に残るjob自体の記録の保持期間と、`DeleteTranscriptionJob`で消える範囲 | **保持期間は確認済み**（各リージョンで90日・調整不可。上記の項目2と同じ出典）。**残る未確認は`DeleteTranscriptionJob`で実際に消える範囲。objectを消してもjobが残る**ため、削除の対象に含めたうえで実際に消えることを確認する |
 
 ### 確認の担当と時期
 
-- **担当は人間。**項目1〜5・7・9はAWSアカウントの設定と契約資料の確認で、このタスクの範囲外である。
-- **時期は公開前。**項目1（Transcribeのopt-out）と項目3（リージョン）は、**実際に音声を外部へ送る
+- **担当は人間**。項目1〜5・7・9はAWSアカウントの設定と契約資料の確認で、このタスクの範囲外である。
+- **ただし項目2・4のうち、使う構成（経路・モデル・設定）の保存先と閲覧元の確認はTASK-009が行う**
+  （2026-10-05に追記。`architecture.md`「データ所在地と費用」が担当をTASK-009と定め、
+  TASK-009の完了条件にも入っている）。**契約資料・アカウント設定の側の確認は人間のままである。**
+  同じ項目番号を2つの主体で分担するので、どちらの確認かを記録に書き分ける。
+- **時期は公開前**。項目1（Transcribeのopt-out）と項目3（リージョン）は、**実際に音声を外部へ送る
   変更（TASK-009）の前**に済ませる。設定していない状態で音声を送ると、後から
   opt-outしても「送った時点では改善に使われ得た」という事実は消えない
   （過去分は削除されるが、それは削除であって未送信ではない）。
@@ -1203,7 +1447,7 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 ### 何が問題だったか
 
 初稿の§9は「文字起こしテキストはworkerのmemoryのみ。DBにもS3にも書かない」と書いていたが、
-**これは事実として誤りだった。**Amazon Transcribeのバッチは、文字起こし結果を必ずS3へ書き出す。
+**これは事実として誤りだった**。Amazon Transcribeのバッチは、文字起こし結果を必ずS3へ書き出す。
 
 > "If you do not specify `OutputBucketName`, your transcript is placed in a service-managed
 > Amazon S3 bucket and you are provided with a URI to access your transcript."
@@ -1215,17 +1459,17 @@ S3にも書かない」となっており、**現状の記述は実態と合わ�
 
 あわせて、非同期にしたことで**別の穴**も開いた。TASK-002は「responseで文字起こし全文を端末へ返し、
 `sessionStorage`にタブを閉じるまで置く」と決めているが、生成が別requestのJobで進むため、
-**pollingのresponseを返す時点でworkerのmemoryはもう無い。**全文を返すには、どこかから読み直す
+**pollingのresponseを返す時点でworkerのmemoryはもう無い**。全文を返すには、どこかから読み直す
 必要がある。この2つは同じ判断で決まる。
 
 ### 選択肢
 
 | | 内容 | トレードオフ |
 | --- | --- | --- |
-| **A（採用）** | **`OutputBucketName`に自分たちのS3を指定する。**Jobが読み出し、pollingのresponseで全文を返す | 置き場を自分たちで制御でき、削除・暗号化・bucket設定を音声の一時objectと同じ条件で掛けられる。TASK-002の「全文を端末へ返す」も守れる。**ただし`privacy.md §5-1`に新しいデータ行が1つ増える**（文字起こし全文・S3一時object） |
+| **A（採用）** | **`OutputBucketName`に自分たちのS3を指定する**。Jobが読み出し、pollingのresponseで全文を返す | 置き場を自分たちで制御でき、削除・暗号化・bucket設定を音声の一時objectと同じ条件で掛けられる。TASK-002の「全文を端末へ返す」も守れる。**ただし`privacy.md §5-1`に新しいデータ行が1つ増える**（文字起こし全文・S3一時object） |
 | B | **service-managed bucketのまま**、URIで取得してすぐ`DeleteTranscriptionJob`する | 自前bucketを増やさない。**ただし置き場がAWS管理で、保持と削除の制御が弱い。**「いつ消えるか」を利用者へ説明しにくく、削除失敗の検知もしづらい |
 | C | **Transcribeのstreamingを使う**（バッチをやめる） | 結果がストリームで返るため、S3への書き出しが無く「memoryのみ」を保てる。**ただし単価が$0.006/分→$0.010/分に上がり**（約1.7倍。§22の支配項目なので全体費用が約4割増える）、録音済みファイルを実時間より速く流せるかの検証が要る |
-| D | **全文の端末返却をMVPから外す。**pollingではDotだけを返す | 返す必要が無くなるので置き場の要件が軽くなる。**ただしTASK-002が採用した「`/reflection`で`summary`と文字起こしを表示する」を撤回することになる**（TASK-002の再判断） |
+| D | **全文の端末返却をMVPから外す**。pollingではDotだけを返す | 返す必要が無くなるので置き場の要件が軽くなる。**ただしTASK-002が採用した「`/reflection`で`summary`と文字起こしを表示する」を撤回することになる**（TASK-002の再判断） |
 
 ### 採用（案A。2026-09-29に人間が判断）
 
@@ -1236,13 +1480,13 @@ S3にも書かない」となっており、**現状の記述は実態と合わ�
 
 ### 採用の条件
 
-- **音声の一時objectと同じbucketに、別のprefixで置く。**bucketを増やさない。条件は音声と同じで、
+- **音声の一時objectと同じbucketに、別のprefixで置く**。bucketを増やさない。条件は音声と同じで、
   非公開（public access block）・保存時に暗号化・**versioningを有効にしない**・keyは推測不能な
   UUIDにする。versioningの前提はTASK-002 Plan §18案A2と同じで、有効だと削除がdelete markerを
   付けるだけになる。
-- **`OutputBucketName`（と`OutputKey`）を必ず指定する。**指定を省くとservice-managed bucketへ
+- **`OutputBucketName`（と`OutputKey`）を必ず指定する**。指定を省くとservice-managed bucketへ
   置かれ、保持と削除を自分たちで制御できない。
-- **読み出したあと、Transcribeのjobも削除する（`DeleteTranscriptionJob`）。**objectを消しても
+- **読み出したあと、Transcribeのjobも削除する（`DeleteTranscriptionJob`）**。objectを消しても
   jobの記録が残るため、object・job・処理の記録の3つを削除の対象にする。
 - **clientが受け取ったら即座に消す。期限はその取りこぼしのためのfallbackにする。**
   1. pollingのresponseで全文を返す。
@@ -1255,13 +1499,13 @@ S3にも書かない」となっており、**現状の記述は実態と合わ�
   4. 記録が持つS3 keyとTranscribeのjob名について、**その時点で削除処理を始める**（完了時刻は約束しない。失敗したら§20の自己遷移で再実行する）。
   5. ACKにも通常のCookie認証とCSRFを適用する。
   4. ACKが来ない場合にだけ、**受理から24時間**で削除処理を始める。
-  - **ACK自体を保存する必要はない。**削除を冪等にすれば、ACKの再送も重複も扱える。
+  - **ACK自体を保存する必要はない**。削除を冪等にすれば、ACKの再送も重複も扱える。
   - ACKのAPIの形はTASK-005で決める。**「取得後に消すかどうか」はこのタスクで確定した。**
   - 2026-09-29の初稿では「取得したかどうかをserverが持つには成功した処理の記録を残すことになり、
     §20案Aと衝突する」として取得後削除を採らなかったが、**この理由は成立していなかった**
     （2巡目のレビュー指摘3）。**成功後も`dots`に処理IDが残るため、記録を残さずに認可できる。**
     正常に取得できた場合の全文の露出は、24時間から数秒〜数分に縮む。
-- 削除の順序と失敗時の扱いはTASK-002のとおり。**先にS3、成功してからRDS。**削除に失敗したら
+- 削除の順序と失敗時の扱いはTASK-002のとおり。**先にS3、成功してからRDS**。削除に失敗したら
   削除要求全体を失敗として扱い、削除済みと表示せず再実行し、**残存を検知できるようにする。**
 - Dotの個別削除・退会の削除連鎖に含める。範囲の分け方は音声と同じで、個別削除は**そのDotを作った
   処理のobjectだけ**、退会は**本人の全objectと記録**。
@@ -1281,12 +1525,12 @@ S3にも書かない」となっており、**現状の記述は実態と合わ�
 ### 採用の帰結（正直に書く）
 
 **ACKが届けば全文の露出は数秒〜数分で終わる。届かなかった場合に、受理から24時間で削除処理を
-始める。**それでも、TASK-002が「文字起こし全文は処理中のmemoryだけを通過する」という前提で
+始める**。それでも、TASK-002が「文字起こし全文は処理中のmemoryだけを通過する」という前提で
 保持・削除を決めていたことに対しては、**データを減らす方向に対する後退である。**
 得るものは「録音の直後に、話した内容を端末で読み返せる」という体験（TASK-002 §25-4の目的）である。
 
-- `privacy.md §5-1`へ**新しいデータ行を1つ追加する。**保持しないデータとして扱わない。
-- **削除の完了は約束しない。**24時間は削除処理を始める時刻であって、消え終わる時刻ではない。
+- `privacy.md §5-1`へ**新しいデータ行を1つ追加する**。保持しないデータとして扱わない。
+- **削除の完了は約束しない**。24時間は削除処理を始める時刻であって、消え終わる時刻ではない。
   障害時には残り得る。`privacy.md §5-2`の約束できる／できないの分け方をそのまま使う。
 - **endpointの振る舞いを物理的な削除の結果と切り離す。**「objectが消えたから返せない」ではなく、
   **仕様として返さない条件**を決める。cleanupが終わるまでの間にpollingが来ても、
@@ -1299,10 +1543,10 @@ S3にも書かない」となっており、**現状の記述は実態と合わ�
 | **そのDotの完全削除を受理した** | 利用者が消すと決めたものを、後片付けの途中に返さない |
 | **退会を受理した** | 同上。退会の受理後は結果の確定も取得もしない |
 
-  いずれも**cleanupの完了を待たずに、受理した時点から返さない。**物理削除が終わっていない間に
+  いずれも**cleanupの完了を待たずに、受理した時点から返さない**。物理削除が終わっていない間に
   返してしまうと、「削除した」と操作した利用者へ削除対象の中身を返すことになる。
 - 録音前の案内（TASK-002 Plan §22の7項目）の項目3「音声と文字起こし全文を残さず」は、
-  **文字起こし結果を一時的に預かる事実と合わなくなる。**音声と同じ言い方（処理のあいだ預かり、
+  **文字起こし結果を一時的に預かる事実と合わなくなる**。音声と同じ言い方（処理のあいだ預かり、
   やり直せる期限のあとに削除処理を行う）へ揃える。文言の確定はTASK-010。
-- 24時間はfallbackの値で、**実測根拠はない。**ACKが届く割合と届かない理由を運用で見て、
+- 24時間はfallbackの値で、**実測根拠はない**。ACKが届く割合と届かない理由を運用で見て、
   短くできるなら短くする。
