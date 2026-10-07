@@ -242,6 +242,11 @@ PR 2/2 `feat/task-012-2-history-screens`（base: PR 1のブランチ）— 画�
   - 0件の表示の補足は、取り直しが失敗し得るため「一覧を新しくしました」と言い切らず、ゴミ箱へ移したか削除した
     可能性だけを示す（self-reviewでの修正）。
   - `features/history/index.ts`は画面と`isCalendarDate`だけを公開し、Hookは公開しない（使うのが同じfeatureの画面だけのため）。
+  - ログインの後の戻り先（`features/auth/redirect.ts`）に`/day`・`/dots`を足した。日の詳細（`/dots/<日付>`）は
+    一覧（`/dots`）へ戻し、URLの日付を戻り先へそのまま使わない（日付の検証を認証へ持ち込まないため。レビューでの修正）。
+    PR 2/2のファイル数は17になり、上限内。
+  - 日の詳細で、選んでいた録音が取り直しで無くなり残りが1件になったときも、時刻のボタンを出して選び直せるようにした
+    （D10。レビューでの修正）。
 - 検証結果:
   - `pnpm lint`（eslint・命名・redocly・`check:api-types`）、`pnpm type-check`、`pnpm test`（scripts 173件・web 386件）、
     `pnpm build`がすべて通った。
