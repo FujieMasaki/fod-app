@@ -63,6 +63,7 @@
   --font-weight-light: var(--fod-weight-light);
   --font-weight-regular: var(--fod-weight-regular);
   --font-weight-medium: var(--fod-weight-medium);
+  --font-weight-bold: var(--fod-weight-bold);
 
   --tracking-normal: var(--fod-tracking-normal);
   --tracking-wide: var(--fod-tracking-wide);

@@ -63,6 +63,12 @@ describe("auth_error", () => {
 describe("safeRedirect", () => {
   it("許可した画面だけを戻り先にし、それ以外は/にする", () => {
     expect(safeRedirect("/dot")).toBe("/dot");
+    expect(safeRedirect("/day")).toBe("/day");
+    expect(safeRedirect("/dots")).toBe("/dots");
+    // 日の詳細は一覧へ戻す（URLの日付を戻り先へそのまま使わない）
+    expect(safeRedirect("/dots/2026-09-28")).toBe("/dots");
+    expect(safeRedirect("/dots/2026-09-28/x")).toBe("/");
+    expect(safeRedirect("/dots/2026-09-28\n")).toBe("/");
     // 録音画面は開くとすぐ録音を始めるため、ログインの後に自動で戻さない
     expect(safeRedirect("/record")).toBe("/");
     expect(safeRedirect("/processing")).toBe("/");
