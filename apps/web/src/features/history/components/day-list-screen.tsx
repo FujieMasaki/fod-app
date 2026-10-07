@@ -51,7 +51,8 @@ export const DayListScreen = ({ selected }: { selected?: string }) => {
           <Text variant="small" tone="secondary" as="h2">
             {group.label}
           </Text>
-          <ul className="grid grid-cols-5 gap-x-2 gap-y-4">
+          {/* Tailwindのpreflightを使わないので、箇条書きの点を消す。点を消すとSafariは一覧として読まないため、roleで保つ */}
+          <ul role="list" className="grid list-none grid-cols-5 gap-x-2 gap-y-4">
             {group.items.map((day) => (
               <li key={day.date}>
                 <DayDot
