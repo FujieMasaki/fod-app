@@ -1,0 +1,14 @@
+@reference "@/styles/tailwind.css";
+
+.form {
+  @apply flex flex-col gap-4;
+}
+
+/* 案内と、その案内に対する操作（確かめ直す・送り直す）のまとまり */
+.messageWithAction {
+  @apply flex flex-col gap-2;
+}
+
+.links {
+  @apply flex flex-col items-start gap-2;
+}

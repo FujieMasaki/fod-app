@@ -24,6 +24,7 @@ import { ReflectionLetter } from "@/features/reflection";
 import { useSession } from "@/features/session";
 import { TodaysDotView } from "@/features/todays-dot";
 import { Providers } from "@/providers";
+import styles from "./router.module.css";
 
 const RootComponent = () => {
   return (
@@ -36,8 +37,8 @@ const RootComponent = () => {
 const HomePage = () => {
   return (
     <ScreenLayout activeTab="home">
-      <div className="flex h-full flex-col">
-        <div className="min-h-0 flex-1">
+      <div className={styles.home}>
+        <div className={styles.homeHero}>
           <HomeHero />
         </div>
         <SignInPrompt />

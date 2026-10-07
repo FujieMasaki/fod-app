@@ -4,21 +4,19 @@ import { Button, Spinner, Text } from "@/design-system";
 import { isApiError, isProblem } from "@/features/auth";
 import { formatDuration } from "@/utils/format-duration";
 import type { Dot } from "@/libs/api-contract/schemas";
+import styles from "./history-status.module.css";
 
 /**
  * 履歴の3画面で共通に使う、読み込み中・失敗・Dotの本文の表示。serverの`title`・`detail`は出さず、
  * 失敗の種類から文言を決める（frontend.md §2）。
  */
 
-/**
- * 画面内の文字のリンク（一覧・Day・詳細の間の移動）。`text-brand`はbgに対して約3.7:1で小さい文字のAAに届かないため、
- * 濃いbrand（約8.4:1）にする。
- */
-export const LINK_CLASS = "text-small leading-small text-brand-strong underline underline-offset-4";
+/** 画面内の文字のリンク（一覧・Day・詳細の間の移動）のclass */
+export const LINK_CLASS = styles.link;
 
 export const HistoryLoading = ({ label }: { label: string }) => {
   return (
-    <div className="flex justify-center py-8">
+    <div className={styles.loading}>
       <Spinner label={label} />
     </div>
   );
@@ -52,10 +50,10 @@ type HistoryErrorProps = {
 export const HistoryError = ({ title, error, onRetry, inline = false, children }: HistoryErrorProps) => {
   const reload = needsReload(error);
   return (
-    <div role="alert" className={inline ? "flex flex-col gap-2 py-2" : "flex flex-col gap-3 py-6"}>
-      <p className={inline ? "text-small leading-small text-ink" : "text-body leading-body text-ink"}>{title}</p>
-      <p className="text-small leading-small text-ink-secondary">{errorDescription(error)}</p>
-      <div className="flex flex-col gap-2">
+    <div role="alert" className={inline ? `${styles.error} ${styles.errorInline}` : styles.error}>
+      <p className={inline ? `${styles.errorTitle} ${styles.errorTitleInline}` : styles.errorTitle}>{title}</p>
+      <p className={styles.errorDescription}>{errorDescription(error)}</p>
+      <div className={styles.errorActions}>
         {reload ? (
           <Button variant="secondary" onClick={() => window.location.reload()}>
             再読み込み
@@ -74,8 +72,8 @@ export const HistoryError = ({ title, error, onRetry, inline = false, children }
 /** Dotの本文。`sentence`・`summary`は空文字があり得る（契約）ので、無いことを文字で示すか省く */
 export const DotContent = ({ dot, timeLabel }: { dot: Dot; timeLabel: string }) => {
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-small leading-small text-ink-secondary">
+    <div className={styles.content}>
+      <p className={styles.contentMeta}>
         {timeLabel}に話した記録・話した長さ {formatDuration(dot.duration_seconds)}
       </p>
       {dot.sentence ? (
@@ -83,7 +81,7 @@ export const DotContent = ({ dot, timeLabel }: { dot: Dot; timeLabel: string }) 
           {dot.sentence}
         </Text>
       ) : (
-        <p className="text-body leading-body text-ink-secondary">一文はありません。</p>
+        <p className={styles.contentMissing}>一文はありません。</p>
       )}
       {dot.summary && (
         <Text variant="body" tone="secondary" as="p">

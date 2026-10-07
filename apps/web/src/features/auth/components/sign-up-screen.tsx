@@ -5,6 +5,7 @@ import { createRegistration } from "../api";
 import { useAuth } from "../auth-provider";
 import { errorMessage, fieldErrors, needsReload } from "../messages";
 import { AuthScreen, FormMessage, ReloadNotice, TextField, TextLink } from "./auth-layout";
+import styles from "./sign-up-screen.module.css";
 
 /**
  * メールアドレス＋passwordで登録する。登録済みかどうかにかかわらず同じ受付を示す
@@ -53,7 +54,7 @@ export const SignUpScreen = () => {
 
   return (
     <AuthScreen title="新規登録" lead="登録したメールアドレスに確認のメールを送ります。">
-      <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+      <form className={styles.form} onSubmit={handleSubmit} noValidate>
         <TextField
           label="メールアドレス"
           type="email"

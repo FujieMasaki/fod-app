@@ -1,0 +1,47 @@
+@reference "@/styles/tailwind.css";
+
+/* `text-brand`はbgに対して約3.7:1で小さい文字のAAに届かないため、濃いbrand（約8.4:1）にする */
+.link {
+  @apply text-small leading-small text-brand-strong underline underline-offset-4;
+}
+
+.loading {
+  @apply flex justify-center py-8;
+}
+
+.error {
+  @apply flex flex-col gap-3 py-6;
+}
+
+/* 取得済みの表示を残したまま、その場に小さく出す失敗 */
+.errorInline {
+  @apply gap-2 py-2;
+}
+
+.errorTitle {
+  @apply text-body leading-body text-ink;
+}
+
+.errorTitleInline {
+  @apply text-small leading-small;
+}
+
+.errorDescription {
+  @apply text-small leading-small text-ink-secondary;
+}
+
+.errorActions {
+  @apply flex flex-col gap-2;
+}
+
+.content {
+  @apply flex flex-col gap-4;
+}
+
+.contentMeta {
+  @apply text-small leading-small text-ink-secondary;
+}
+
+.contentMissing {
+  @apply text-body leading-body text-ink-secondary;
+}

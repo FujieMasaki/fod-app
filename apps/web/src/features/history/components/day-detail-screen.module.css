@@ -1,0 +1,34 @@
+@reference "@/styles/tailwind.css";
+
+.root {
+  @apply flex flex-col gap-6 py-6;
+}
+
+.message {
+  @apply flex flex-col gap-3;
+}
+
+.invalidDate {
+  @apply flex flex-col gap-3 py-6;
+}
+
+.text {
+  @apply text-body leading-body text-ink;
+}
+
+.note {
+  @apply text-small leading-small text-ink-secondary;
+}
+
+.header {
+  @apply flex flex-col gap-1;
+}
+
+.times {
+  @apply flex flex-wrap gap-2;
+}
+
+/* 表示中の録音は、aria-pressedに合わせて枠線を濃くする */
+.timeButton {
+  @apply font-inherit rounded-md border border-line px-3 py-2 text-small leading-small text-ink focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-brand aria-pressed:border-ink;
+}

@@ -1,5 +1,6 @@
 /*
  * 新しいUIのTailwind CSS v4（docs/design-system.md「StylingとDesign Token」）。
+ * - 各画面はJSXにutilityを書かず、隣の*.module.cssで`@reference "@/styles/tailwind.css";`してから`@apply`する。
  * - 既存画面のCSS Modulesとresetを変えないよう、preflightは読み込まずthemeとutilitiesだけを使う。
  * - Tailwindの既定のthemeは消し、既存の--fod-* tokenだけを割り当てる。token外の名前付きの色・余白・文字の
  *   classは生成されない。ただし任意値（`p-[13px]`など）は生成されるため、使わないことはレビューで確かめる。
