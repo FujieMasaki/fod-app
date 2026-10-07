@@ -13,6 +13,9 @@ describe("isCalendarDate", () => {
     expect(isCalendarDate("2026-09-28\n")).toBe(false);
     expect(isCalendarDate("2026/09/28")).toBe(false);
     expect(isCalendarDate(undefined)).toBe(false);
+    // 0〜99年も、1900年代へ読み替えずにそのまま判定する（契約のformat: dateと同じ範囲）。
+    expect(isCalendarDate("0050-01-01")).toBe(true);
+    expect(isCalendarDate("0050-02-29")).toBe(false);
   });
 });
 
@@ -70,5 +73,14 @@ describe("timeLabels", () => {
     expect(labels.get("a")).toBe("22:04:50");
     expect(labels.get("b")).toBe("22:04:05");
     expect(labels.get("c")).toBe("21:00");
+  });
+
+  it("秒まで同じ録音には並び順の番号を添え、同じ名前にしない", () => {
+    const labels = timeLabels([
+      { id: "a", started_at: "2026-09-28T13:04:05.900Z" },
+      { id: "b", started_at: "2026-09-28T13:04:05.100Z" },
+    ]);
+    expect(labels.get("a")).toBe("22:04:05（1）");
+    expect(labels.get("b")).toBe("22:04:05（2）");
   });
 });
