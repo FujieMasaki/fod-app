@@ -5,6 +5,7 @@ import { Button, Text } from "@/design-system";
 import { formatFullDate, isCalendarDate, timeLabels } from "../date-format";
 import { useDayDetail } from "../hooks/use-history";
 import { DotContent, HistoryError, HistoryLoading, LINK_CLASS, isInvalidDate } from "./history-status";
+import styles from "./day-detail-screen.module.css";
 
 /**
  * 日の詳細: 日付をキーに、その時点でゴミ箱の外にある同日のDotを振り返る（dot-history §2「詳細」）。
@@ -17,8 +18,8 @@ export const DayDetailScreen = ({ date }: { date: string }) => {
 
 const InvalidDate = () => {
   return (
-    <div className="flex flex-col gap-3 py-6" role="alert">
-      <p className="text-body leading-body text-ink">この日付のDotは開けません。</p>
+    <div className={styles.invalidDate} role="alert">
+      <p className={styles.text}>この日付のDotは開けません。</p>
       <Link to="/dots" className={LINK_CLASS}>
         過去のDotの一覧へ
       </Link>
@@ -39,7 +40,7 @@ const DayDetail = ({ date }: { date: string }) => {
 
   if (detail.isPending) {
     return (
-      <div className="flex flex-col gap-6 py-6">
+      <div className={styles.root}>
         {heading}
         <HistoryLoading label="この日のDotを読み込んでいます" />
       </div>
@@ -48,7 +49,7 @@ const DayDetail = ({ date }: { date: string }) => {
   if (detail.isError && detail.dots.length === 0) {
     if (isInvalidDate(detail.error)) return <InvalidDate />;
     return (
-      <div className="flex flex-col gap-6 py-6">
+      <div className={styles.root}>
         {heading}
         <HistoryError title="この日のDotを読み込めませんでした。" error={detail.error} onRetry={() => void detail.refetch()}>
           <Link to="/dots" className={LINK_CLASS}>
@@ -61,11 +62,11 @@ const DayDetail = ({ date }: { date: string }) => {
   if (detail.empty) {
     // 取得失敗とは分ける（role="status"）。一覧と今日はuseDayDetailが取り直す。
     return (
-      <div className="flex flex-col gap-6 py-6">
+      <div className={styles.root}>
         {heading}
-        <div className="flex flex-col gap-3" role="status">
-          <p className="text-body leading-body text-ink">この日に振り返れるDotはありません。</p>
-          <p className="text-small leading-small text-ink-secondary">
+        <div className={styles.message} role="status">
+          <p className={styles.text}>この日に振り返れるDotはありません。</p>
+          <p className={styles.note}>
             ゴミ箱へ移したか、削除した可能性があります。
           </p>
           <Link to="/dots" className={LINK_CLASS}>
@@ -82,10 +83,10 @@ const DayDetail = ({ date }: { date: string }) => {
   const several = detail.dots.length > 1 || detail.hasNextPage || shown === undefined;
 
   return (
-    <div className="flex flex-col gap-6 py-6">
-      <div className="flex flex-col gap-1">
+    <div className={styles.root}>
+      <div className={styles.header}>
         {heading}
-        {several && <p className="text-small leading-small text-ink-secondary">この日の記録 {detail.dots.length}件{detail.hasNextPage && "（続きあり）"}</p>}
+        {several && <p className={styles.note}>この日の記録 {detail.dots.length}件{detail.hasNextPage && "（続きあり）"}</p>}
       </div>
 
       {detail.isRefetchError && (
@@ -93,7 +94,7 @@ const DayDetail = ({ date }: { date: string }) => {
       )}
 
       {several && (
-        <div role="group" aria-label="録音した時刻" className="flex flex-wrap gap-2">
+        <div role="group" aria-label="録音した時刻" className={styles.times}>
           {detail.dots.map((dot) => {
             const pressed = dot.id === shown?.id;
             return (
@@ -102,10 +103,7 @@ const DayDetail = ({ date }: { date: string }) => {
                 type="button"
                 aria-pressed={pressed}
                 onClick={() => setSelectedId(dot.id)}
-                className={[
-                  "font-inherit rounded-md border px-3 py-2 text-small leading-small text-ink focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-brand",
-                  pressed ? "border-ink" : "border-line",
-                ].join(" ")}
+                className={styles.timeButton}
               >
                 {labels.get(dot.id)}
                 {pressed && "（表示中）"}
@@ -134,7 +132,7 @@ const DayDetail = ({ date }: { date: string }) => {
         <DotContent dot={shown} timeLabel={labels.get(shown.id)!} />
       ) : (
         // 取り直した後に、選んでいた録音が無くなった。別の録音を代わりに表示しない。
-        <p role="status" className="text-body leading-body text-ink">
+        <p role="status" className={styles.text}>
           選んでいた記録は見つかりませんでした。上の時刻から選んでください。
         </p>
       )}

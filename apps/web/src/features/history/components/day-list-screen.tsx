@@ -6,6 +6,7 @@ import type { DaySummary } from "@/libs/api-contract/schemas";
 import { dayOfMonth, formatFullDate, groupByMonth } from "../date-format";
 import { useDayList } from "../hooks/use-history";
 import { HistoryError, HistoryLoading } from "./history-status";
+import styles from "./day-list-screen.module.css";
 
 /**
  * 一覧: 記録のある日を1日=1つの丸として新しい順に並べる（dot-history §2「一覧」「丸の表現」）。
@@ -29,9 +30,9 @@ export const DayListScreen = ({ selected }: { selected?: string }) => {
   }
   if (list.days.length === 0) {
     return (
-      <div className="flex flex-col gap-3 py-6">
-        <p className="text-body leading-body text-ink">まだDotがありません。</p>
-        <p className="text-small leading-small text-ink-secondary">話した日が、ここに丸として並んでいきます。</p>
+      <div className={styles.empty}>
+        <p className={styles.emptyTitle}>まだDotがありません。</p>
+        <p className={styles.note}>話した日が、ここに丸として並んでいきます。</p>
         <Button variant="primary" onClick={() => navigate({ to: "/record" })}>
           話す
         </Button>
@@ -40,19 +41,19 @@ export const DayListScreen = ({ selected }: { selected?: string }) => {
   }
 
   return (
-    <div className="flex flex-col gap-6 py-6">
+    <div className={styles.root}>
       {/* 取り直し（日が0件だった後など）に失敗したら、取得済みの丸を残したまま知らせる */}
       {list.isRefetchError && (
         <HistoryError inline title="最新の一覧を読み込めませんでした。" error={list.error} onRetry={() => void list.refetch()} />
       )}
 
       {groupByMonth(list.days).map((group) => (
-        <section key={group.label} className="flex flex-col gap-3">
+        <section key={group.label} className={styles.month}>
           <Text variant="small" tone="secondary" as="h2">
             {group.label}
           </Text>
-          {/* Tailwindのpreflightを使わないので、箇条書きの点を消す。点を消すとSafariは一覧として読まないため、roleで保つ */}
-          <ul role="list" className="grid list-none grid-cols-5 gap-x-2 gap-y-4">
+          {/* 箇条書きの点を消すとSafariは一覧として読まないため、roleで保つ */}
+          <ul role="list" className={styles.days}>
             {group.items.map((day) => (
               <li key={day.date}>
                 <DayDot
@@ -79,7 +80,7 @@ export const DayListScreen = ({ selected }: { selected?: string }) => {
           {list.isFetchingNextPage ? "読み込んでいます" : "さらに前のDotを読み込む"}
         </Button>
       ) : (
-        <p className="text-small leading-small text-ink-secondary">これより前のDotはありません。</p>
+        <p className={styles.note}>これより前のDotはありません。</p>
       )}
     </div>
   );
@@ -117,22 +118,13 @@ const DayDot = ({ day, isToday, isSelected, onClick }: DayDotProps) => {
       onClick={onClick}
       aria-label={name}
       aria-current={isSelected ? "true" : undefined}
-      className="flex flex-col items-center gap-1 rounded-md py-1 focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-brand"
+      className={styles.dayLink}
     >
-      <span
-        aria-hidden="true"
-        // 白とbrandの比は約4.4:1で、小さい文字のAA（4.5:1）に届かない。大きな太字（WCAGの18.66px以上の太字、3:1）にする。
-        className={[
-          "flex size-8 items-center justify-center rounded-full bg-brand text-title leading-title font-bold text-surface",
-          isSelected && "outline-2 outline-offset-2 outline-ink",
-        ]
-          .filter(Boolean)
-          .join(" ")}
-      >
+      <span aria-hidden="true" className={isSelected ? `${styles.dayCircle} ${styles.dayCircleSelected}` : styles.dayCircle}>
         {dayOfMonth(day.date)}
       </span>
       {notes.map((note) => (
-        <span key={note} aria-hidden="true" className="text-caption leading-caption text-ink-secondary">
+        <span key={note} aria-hidden="true" className={styles.dayNote}>
           {note}
         </span>
       ))}

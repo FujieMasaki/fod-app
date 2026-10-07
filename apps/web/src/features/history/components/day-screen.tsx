@@ -4,6 +4,7 @@ import { Button, Dot, Text } from "@/design-system";
 import { dayOfMonth, formatFullDate, timeLabels } from "../date-format";
 import { useToday } from "../hooks/use-history";
 import { DotContent, HistoryError, HistoryLoading, LINK_CLASS } from "./history-status";
+import styles from "./day-screen.module.css";
 
 /**
  * Day: 今日（serverが決めたAsia/Tokyoの暦日）のDotのうち最新の1件を大きく表示する。
@@ -14,12 +15,12 @@ export const DayScreen = () => {
   const today = useToday();
 
   return (
-    <div className="flex flex-col gap-6 py-6">
-      <div className="flex flex-col gap-1">
+    <div className={styles.root}>
+      <div className={styles.header}>
         <Text variant="title" as="h1">
           今日のDot
         </Text>
-        {today.data && <p className="text-small leading-small text-ink-secondary">{formatFullDate(today.data.date)}</p>}
+        {today.data && <p className={styles.date}>{formatFullDate(today.data.date)}</p>}
       </div>
 
       {today.isPending ? (
@@ -27,20 +28,19 @@ export const DayScreen = () => {
       ) : today.isError ? (
         <HistoryError title="今日のDotを読み込めませんでした。" error={today.error} onRetry={() => void today.refetch()} />
       ) : !("latest_dot" in today.data) ? (
-        <div className="flex flex-col gap-3">
-          <p className="text-body leading-body text-ink">まだ今日のDotはありません。</p>
-          <p className="text-small leading-small text-ink-secondary">今日をひとつ、話すことから始まります。</p>
+        <div className={styles.empty}>
+          <p className={styles.emptyTitle}>まだ今日のDotはありません。</p>
+          <p className={styles.emptyDescription}>今日をひとつ、話すことから始まります。</p>
           <Button variant="primary" onClick={() => navigate({ to: "/record" })}>
             話す
           </Button>
         </div>
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className={styles.today}>
           {/* 今日を大きな丸で示す。丸の大きさ・色に気持ちや評価の意味は持たせない（dot-history §1） */}
-          <div className="flex justify-center" aria-hidden="true">
+          <div className={styles.dotWrapper} aria-hidden="true">
             <Dot size={120}>
-              {/* 白とbrandの比は約4.4:1。一覧の丸と同じく大きな太字にしてAA（3:1）を満たす */}
-              <span className="text-title leading-title font-bold">{dayOfMonth(today.data.date)}</span>
+              <span className={styles.dayOfMonth}>{dayOfMonth(today.data.date)}</span>
             </Dot>
           </div>
           <DotContent
