@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中
+完了（実装と自動の検証まで。PRは未作成）
 
 ## 2. Goal
 
@@ -120,7 +120,11 @@ JSXでは役割の名前（`styles.timeButton`など）だけを読めばよい�
 
 ## 16. Completion Record
 
-- 状態:
-- 実装差異:
-- 検証結果:
-- 関連:
+- 状態: 2026-10-07に実装と自動の検証が完了。画面の見た目の手動確認はPRの「確認すること」で行う。
+- 実装差異: 認証の`ReloadNotice`の文言は、`FormMessage`の失敗と同じ見た目のため、別のclassを作らず
+  `messageError`を使った。ほかはPlanどおり。
+- 検証結果: `pnpm check`・`pnpm type-check`・`pnpm test`（395件）・`pnpm build`が通った。JSXの`className`に文字列の
+  utilityが残っていないことをgrepで確かめた。buildしたCSSに`@property --tw-outline-style`・`--tw-border-style`が
+  出力され、`timeButton`の`[aria-pressed=true]`・`input`の`[aria-invalid=true]`・`:focus-visible`の規則が元の
+  utilityと同じ値で出ていることを確かめた。画面を開いての見た目の比較は未実施。
+- 関連: `docs/design-system.md`「StylingとDesign Token」
