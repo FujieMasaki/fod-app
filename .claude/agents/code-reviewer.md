@@ -30,7 +30,11 @@ tools: Read, Grep, Glob
      同じディレクトリの`security.md`
    - `apps/api/`を含む: [`docs/code-review/backend/README.md`](../../docs/code-review/backend/README.md)と
      同じディレクトリの`security.md`
-   - API契約（`contracts/`）、両方にまたがる変更、どちらにも当てはまらない変更（文書・設定・CI・
+   - **`docs/`配下のどれかを含む**（仕様・設計文書、`docs/tasks/`、`docs/implementation-plans/`、
+     `docs/code-review/`、`docs/development/`）:
+     [`docs/code-review/documentation.md`](../../docs/code-review/documentation.md)と、
+     重大度・報告形式のために[`frontend/README.md`](../../docs/code-review/frontend/README.md) §2・§4
+   - API契約（`contracts/`）、両方にまたがる変更、どちらにも当てはまらない変更（設定・CI・
      `.claude/`等）: frontendとbackendの両方
 3. `AGENTS.md`の「作業前に読む文書」の表に従い、関連する仕様・architecture・実装規約・Planを読む。
 4. 差分だけで判断できない箇所は、呼び出し元・test・型・設定など関連する実装を読む。
