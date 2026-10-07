@@ -37,7 +37,13 @@
 
 ## StylingとDesign Token
 
-- 新規UI・UI変更の標準は **Tailwind CSS v4** とする。CSS Modulesは原則として新規採用しない。
+- 新規UI・UI変更の標準は **Tailwind CSS v4** とし、コンポーネントの隣に置く **CSS Modules**（`*.module.css`）の
+  中で`@apply`して使う。JSXの`className`にはTailwindのutilityを並べず、`styles.timeButton`のような役割の名前の
+  classだけを書く（2026-10-07に決定。JSXで構造と見た目が混ざり読みづらかったため）。
+  - module.cssの先頭に`@reference "@/styles/tailwind.css";`を書く。themeとutilityの定義だけを読み、CSSを二重に出力しない。
+  - classは要素の役割で名付ける（camelCase。`scripts/check-naming.mjs`が確かめる）。見た目の名前（`flexCol`など）にしない。
+  - 状態で見た目が変わるときは、属性にある状態ならTailwindの`aria-*`などのvariantで書き、それ以外は基本のclassに
+    状態のclass（`dayCircleSelected`など）を足す。重ねるclassは、基本のclassより後ろに書く。
 - 色、余白、文字、角丸、影などは **CSS VariablesによるDesign Token** で管理する。
 - 既存の `apps/web/src/design-system/tokens/tokens.css` の `--fod-*` を基準とし、同じ意味のトークンを重複定義しない。
 - Tailwindから既存トークンを参照できるようにし、役割が分かるユーティリティで使用する。任意の色・余白・影を画面内に直接追加しない。
@@ -46,10 +52,11 @@
 
 ### 既存実装との関係
 
-既存の画面はCSS Modulesで実装している。Tailwind CSS v4は、2026-10-05にTASK-007の認証の画面から
-導入した（`apps/web/src/styles/tailwind.css`）。既存画面のresetを変えないようpreflightは読み込まず、
-themeは既定値を消して`--fod-*` tokenだけを割り当てている（token外の色・余白のclassは生成されない）。
-行間は`text-*`に組み込まず`leading-*`で指定する。
+Home・録音などの既存の画面は、`var(--fod-*)`を直接書くCSS Modulesで実装している。Tailwind CSS v4は、
+2026-10-05にTASK-007の認証の画面から導入した（`apps/web/src/styles/tailwind.css`）。既存画面のresetを
+変えないようpreflightは読み込まず、themeは既定値を消して`--fod-*` tokenだけを割り当てている（token外の色・
+余白のclassは生成されず、`@apply`もできない）。行間は`text-*`に組み込まず`leading-*`で指定する。
+認証・履歴の画面は、2026-10-07にJSXのutilityをCSS Modulesの`@apply`へ移した。
 上記は今後の実装方針であり、移行が完了したことを意味しない。
 導入・移行はUI実装の変更範囲に応じて扱い、文書追加だけを理由に全画面を書き換えない。
 既存の影・大きな角丸・マイク用グラデーションのトークンも、新しいUIへの使用許可を意味しない。
