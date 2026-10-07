@@ -37,6 +37,21 @@ bin/rails server
 
 起動確認用のhealth endpointは `GET /up` です。
 
+開発環境のメール（アカウント確認・パスワード再設定など）は、SMTPで [Mailpit](https://mailpit.axllent.org/)
+（`127.0.0.1:1025`）へ送ります。初回だけinstallし、開発中は別のterminalで起動しておきます。
+
+```sh
+brew install mailpit
+mailpit --listen 127.0.0.1:8025 --smtp 127.0.0.1:1025
+```
+
+届いたメールは `http://127.0.0.1:8025` で確認できます。Mailpitは既定では全interfaceで待ち受け、
+受信箱に認証もないため、同じネットワークの他の端末からメールの宛先とtokenが見えてしまいます。
+`brew services start mailpit` のように引数なしで起動せず、上のとおりloopbackだけで待ち受けてください。
+
+Mailpitが起動していないと配送に失敗し、`log/development.log` にjobのエラーが出ます。失敗したメールは
+再送されないので、Mailpitを起動してからもう一度操作し直してください。
+
 ## Verification
 
 ```sh
