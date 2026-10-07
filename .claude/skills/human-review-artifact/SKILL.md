@@ -174,10 +174,12 @@ PRを分けた場合は`TASK-XXX レビューガイド`（タスク外なら`PR 
 
 1. URLのowner/repoが`gh repo view --json nameWithOwner`と一致し、PR番号が整数、コミットが16進のSHA（7〜40文字）で
    あることを確かめる。合わなければ取得せず、人間に確かめる。
-2. コミットが手元になければ`git fetch origin <LGTMのコミット>`で取る。取れなければ
-   `git fetch origin pull/<番号>/head`で取る（ブランチが消えていても取れる）。それでもLGTMのコミットが手元に
-   なければ、その旨を伝えてからPRのHEADを根拠にする（黙ってHEADにすり替えない）。
-3. `gh pr view <番号> --json headRefOid`のHEADがLGTMのコミットと違えば、`git diff <LGTMのコミット> <HEAD>`で
+2. `gh pr view <番号> --json headRefOid`でPRの今の先端のSHAを確かめ、`git fetch origin pull/<番号>/head`でその
+   コミットを取る（ブランチが消えていても取れる）。LGTMのコミットが
+   手元になければ、続けて`git fetch origin <LGTMのコミット>`で取る。それでもLGTMのコミットが手元になければ、
+   その旨を伝えてからPRの先端（`headRefOid`）を根拠にする（黙って先端にすり替えない）。PRの先端も取れなければ、
+   取れない旨を伝えて止まる。
+3. 先端がLGTMのコミットと違えば、`git diff <LGTMのコミット> <headRefOid>`で
    差を確かめ、説明に関わる場合は触れる。
 
 そのうえで、次を説明する。
