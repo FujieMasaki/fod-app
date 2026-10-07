@@ -41,6 +41,8 @@
   中で`@apply`して使う。JSXの`className`にはTailwindのutilityを並べず、`styles.timeButton`のような役割の名前の
   classだけを書く（2026-10-07に決定。JSXで構造と見た目が混ざり読みづらかったため）。
   - module.cssの先頭に`@reference "@/styles/tailwind.css";`を書く。themeとutilityの定義だけを読み、CSSを二重に出力しない。
+  - `@reference`したmodule.cssには`@apply`だけを書き、生のプロパティ・任意値（`p-[13px]`など）を書かない。
+    token外の名前付きのutilityは`@apply`できないが、生の宣言と任意値は仕組みでは止まらないため、レビューで確かめる。
   - classは要素の役割で名付ける（camelCase。`scripts/check-naming.mjs`が確かめる）。見た目の名前（`flexCol`など）にしない。
   - 状態で見た目が変わるときは、属性にある状態ならTailwindの`aria-*`などのvariantで書き、それ以外は基本のclassに
     状態のclass（`dayCircleSelected`など）を足す。状態のclassは、同じmodule.cssの中で基本のclassより後ろに定義する
@@ -57,7 +59,7 @@ Home・録音などの既存の画面は、`var(--fod-*)`を直接書くCSS Modu
 2026-10-05にTASK-007の認証の画面から導入した（`apps/web/src/styles/tailwind.css`）。既存画面のresetを
 変えないようpreflightは読み込まず、themeは既定値を消して`--fod-*` tokenだけを割り当てている（token外の色・
 余白のclassは生成されず、`@apply`もできない）。行間は`text-*`に組み込まず`leading-*`で指定する。
-履歴の画面とHomeは、2026-10-07にJSXのutilityをCSS Modulesの`@apply`へ移した。
+履歴の画面と、Homeの外枠（`router.tsx`の`HomePage`）は、2026-10-07にJSXのutilityをCSS Modulesの`@apply`へ移した。
 `var(--fod-*)`を直接書くCSS Modulesの画面は未移行であり、この節の方針は移行の完了を意味しない。
 導入・移行はUI実装の変更範囲に応じて扱い、文書追加だけを理由に全画面を書き換えない。
 既存の影・大きな角丸・マイク用グラデーションのトークンも、新しいUIへの使用許可を意味しない。
