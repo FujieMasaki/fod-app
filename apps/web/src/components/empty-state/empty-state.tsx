@@ -11,12 +11,12 @@ type EmptyStateProps = {
 /**
  * まだ記録が無いときの静かな受け皿。急かさず、話し始める入口へそっと戻す。
  */
-export function EmptyState({
+export const EmptyState = ({
   title = "まだ今日のDotがありません。",
   description = "今日をひとつ、話すことから始まります。",
   actionLabel = "ホームへ",
   onAction,
-}: EmptyStateProps) {
+}: EmptyStateProps) => {
   return (
     <div className={styles.root}>
       <div className={styles.body}>
@@ -34,4 +34,4 @@ export function EmptyState({
       )}
     </div>
   );
-}
+};

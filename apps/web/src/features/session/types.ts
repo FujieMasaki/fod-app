@@ -11,7 +11,7 @@ export type SessionState = {
 };
 
 export type SessionContextValue = SessionState & {
-  /** localStorage からの復元が完了したか（復元前の誤判定を防ぐ） */
+  /** 起動時の準備（古い保存値の消去）が終わったか。終わる前は空の状態として扱わない */
   hydrated: boolean;
   setRecordedDuration: (sec: Seconds) => void;
   setDotSession: (session: DotSession) => void;

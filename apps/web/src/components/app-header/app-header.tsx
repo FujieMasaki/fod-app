@@ -13,7 +13,7 @@ type AppHeaderProps = {
 };
 
 /** 画面上部の見出し。戻る導線は任意。ビジネスロジックは持たない。 */
-export function AppHeader({ title, variant = "title", showBack = false, onBack }: AppHeaderProps) {
+export const AppHeader = ({ title, variant = "title", showBack = false, onBack }: AppHeaderProps) => {
   const router = useRouter();
   const handleBack = onBack ?? (() => router.history.back());
 
@@ -29,4 +29,4 @@ export function AppHeader({ title, variant = "title", showBack = false, onBack }
       </Text>
     </header>
   );
-}
+};

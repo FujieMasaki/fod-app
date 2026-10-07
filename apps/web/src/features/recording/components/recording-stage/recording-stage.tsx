@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Dot, Ripple, Text, Waveform, StopIcon } from "@/design-system";
+import { useAuth } from "@/features/auth";
 import { useSession } from "@/features/session";
 import { formatDuration } from "@/utils/format-duration";
 import { useRecorder } from "../../hooks/use-recorder";
@@ -9,16 +10,20 @@ import styles from "./recording-stage.module.css";
 const CIRCLE_SIZE = 176;
 
 /** 録音中の主要ブロック。マウントで録音開始、停止で Processing へ委ねる。 */
-export function RecordingStage() {
+export const RecordingStage = () => {
   const navigate = useNavigate();
   const { setRecordedDuration } = useSession();
+  const { identityEpoch } = useAuth();
   const { elapsedSec, isRecording, getAmplitude, start, stop } = useRecorder();
   const [stopping, setStopping] = useState(false);
-  const startedRef = useRef(false);
+  // 録音を始めたときの利用者の世代。止めたときに利用者が切り替わっていたら、前の利用者の録音時間を残さない。
+  const startedEpochRef = useRef(identityEpoch);
+  const currentEpochRef = useRef(identityEpoch);
+  currentEpochRef.current = identityEpoch;
 
+  // 録音はmountで始め、unmountでuseRecorderが片付ける。StrictModeの再実行では、片付けた後に新しく始め直す
+  // （一度だけ始める形にすると、片付けた録音のまま止まる）。
   useEffect(() => {
-    if (startedRef.current) return;
-    startedRef.current = true;
     void start();
   }, [start]);
 
@@ -26,6 +31,10 @@ export function RecordingStage() {
     if (stopping) return;
     setStopping(true);
     const { durationSec } = await stop();
+    if (currentEpochRef.current !== startedEpochRef.current) {
+      navigate({ to: "/", replace: true });
+      return;
+    }
     setRecordedDuration(durationSec || elapsedSec);
     navigate({ to: "/processing" });
   };
@@ -72,4 +81,4 @@ export function RecordingStage() {
       </div>
     </div>
   );
-}
+};

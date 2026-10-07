@@ -37,11 +37,11 @@ Dot生成後に利用者が任意で行える深掘り対話は、この基本�
 
 | 区分 | 内容 |
 | --- | --- |
-| 実装済み | Homeから録音画面へ進み、ブラウザ録音を開始・停止し、Processingを経て、モックまたは設定済みendpointのresponseを「今日のDot」と振り返り画面に表示する。現在のDot 1件と録音時間はbrowserのlocalStorageに保存・復元する。 |
+| 実装済み | ログイン（メール＋パスワード・Google）・新規登録・メール確認・パスワード再設定・ロック解除・logoutの画面があり、録音・Dotの画面はログインしてから開く（2026-10-05にTASK-007でWebを接続）。Homeから録音画面へ進み、ブラウザ録音を開始・停止し、Processingを経て、モックまたは設定済みendpointのresponseを「今日のDot」と振り返り画面に表示する。現在のDot 1件と録音時間はSession Providerのmemoryにだけ持ち、再読み込み・logout・利用者の切り替わりで消える（旧`fod.session.v1`は起動時に削除）。 |
 | MVP対象 | 音声による振り返り、Dotの生成、利用者ごとの安全な保存、今日のDotを見るDay表示、複数Dotの一覧から過去のDotを選ぶ体験。一覧ではDotを丸で表す。**Dot本文の編集と、ゴミ箱を経由する削除**（2026-09-29にTASK-002で追加）。実サービスの送信・保存方法は`journaling.md`、一覧の受け入れ条件は`dot-history.md`で扱う。 |
 | 検証候補 | DayからWeek / Monthへ視点を引く表示とアニメーション、週次・月次のAI振り返り。プロトタイプと利用者テストを経て採用を判断し、現時点のMVP完成条件には含めない。 |
 | 将来候補 | Homeでの最近のDot表示、検索、カテゴリ、期間フィルタ、Dot同士のつながりや長期的な傾向の表現。`design-system.md`に画面原則があっても、MVP確定とは扱わない。 |
-| 設計採用・未実装 | AWS東京のALB + ECS Fargate + RDS PostgreSQL、Rails + Deviseのメール＋パスワード・確認メール・パスワード再設定、OmniAuthのGoogleログイン、Rails CookieStore・HttpOnly Cookie・CSRF・Dot所有者認可（認証のRails側は2026-10-02にTASK-006で実装。Web接続・配信は未実装）。初期はECS 1タスク・RDS Single-AZ・同一origin。音声は同一originのRails経由で送り、処理が終わるまでS3東京へ一時的に預けて長期保存しない、文字起こし全文をRDSへ保存しない、Dotが本文・生成内容として持つのは`sentence`と`summary`だけで管理情報として`date`・`started_at`・`duration`を持つ、Dot個別削除（ゴミ箱を経由し、7日後に削除処理を始める）と即時完全削除と退会を備え、`sentence`・`summary`を編集できる（編集前の値は残さない）。Dot履歴は録音1回=1件の保存、一覧は1日=1つの丸で新しい順、`date`は`started_at`（録音開始操作をserverが受理した時刻）から算出したAsia/Tokyoの暦日（Dotの保存先・履歴の取得・本文の編集のRails側は2026-10-05にTASK-008で実装。Dotを作る入口・Web接続は未実装）。文字起こしはAmazon Transcribe（東京）、生成はAmazon BedrockのClaudeで、非同期に実行しclientはpollingで結果を取る。AIへ送る前の固有名詞の低減は行わない。詳細はarchitectureと`journaling.md`・`dot-history.md`を参照。 |
+| 設計採用・未実装 | AWS東京のALB + ECS Fargate + RDS PostgreSQL、Rails + Deviseのメール＋パスワード・確認メール・パスワード再設定、OmniAuthのGoogleログイン、Rails CookieStore・HttpOnly Cookie・CSRF・Dot所有者認可（認証のRails側は2026-10-02にTASK-006、Web接続は2026-10-05にTASK-007で実装。配信は未実装）。初期はECS 1タスク・RDS Single-AZ・同一origin。音声は同一originのRails経由で送り、処理が終わるまでS3東京へ一時的に預けて長期保存しない、文字起こし全文をRDSへ保存しない、Dotが本文・生成内容として持つのは`sentence`と`summary`だけで管理情報として`date`・`started_at`・`duration`を持つ、Dot個別削除（ゴミ箱を経由し、7日後に削除処理を始める）と即時完全削除と退会を備え、`sentence`・`summary`を編集できる（編集前の値は残さない）。Dot履歴は録音1回=1件の保存、一覧は1日=1つの丸で新しい順、`date`は`started_at`（録音開始操作をserverが受理した時刻）から算出したAsia/Tokyoの暦日（Dotの保存先・履歴の取得・本文の編集のRails側は2026-10-05にTASK-008で実装。Dotを作る入口・Web接続は未実装）。文字起こしはAmazon Transcribe（東京）、生成はAmazon BedrockのClaudeで、非同期に実行しclientはpollingで結果を取る。AIへ送る前の固有名詞の低減は行わない。詳細はarchitectureと`journaling.md`・`dot-history.md`を参照。 |
 | 次段階として体験方針を採用・未実装 | Dot生成後の任意の深掘り対話。対話でDotを自動更新せず、利用者が承認した変更だけを反映する体験方針を[dot-follow-up.md](./dot-follow-up.md)で採用した。会話回数・終了/再開・失敗時の扱い、対話・更新履歴の保持は未定で[TASK-018](./tasks/TASK-018-dot-follow-up-dialogue-design.md)が扱う。現行のMVP完成条件には含めない。 |
 | 未決定 | promptの最終文面、委託先への9項目の確認結果、利用者ごとのタイムゾーン設定、通知・共有。 |
 
@@ -100,7 +100,7 @@ Google/email一致で統合しない。Googleが確認済みとしたメール�
 
 | 保留事項 | 再検討する条件 | 主な選択肢 |
 | --- | --- | --- |
-| 認証の利用開始・終了・失効の細部 | 最初の永続Dot APIをWebから利用する変更 | 期限・録音前ログイン・メール・衝突時案内・再認証は2026-09-25に採用済み。password方針・ログイン試行制限・Google確認情報の扱い・Google再認証は2026-10-02にTASK-006で決定し、Rails側を実装した |
+| 認証の利用開始・終了・失効の細部 | 最初の永続Dot APIをWebから利用する変更 | 期限・録音前ログイン・メール・衝突時案内・再認証は2026-09-25に採用済み。password方針・ログイン試行制限・Google確認情報の扱い・Google再認証は2026-10-02にTASK-006で決定し、Rails側を実装した。Webの接続は2026-10-05にTASK-007で実装した。録音画面での再ログインと音声の再送はTASK-010/011 |
 | 音声の扱い | uploadがECS 1タスクのPumaを占有して他の操作に影響が出た変更、または預かりの24時間を変える必要が出た変更 | 2026-09-28に「同一originのRails経由で送り、処理が終わるまでS3東京へ一時的に預かる。長期保存はしない」を採用済み。presignedでの直接uploadを含む比較と採用理由は[TASK-002 Plan](./implementation-plans/2026-09-28-task-002-data-lifecycle.md) |
 | 深掘り対話の実装詳細 | 基本のDot生成MVPが完成し、TASK-018で会話回数・終了/再開・失敗時の扱い・データ保持を決める変更 | 体験方針は[dot-follow-up.md](./dot-follow-up.md)で採用済み。対話履歴・反映されなかった提案の保存要否と範囲・保持期間、最初のDot・現在のDot・更新履歴のデータモデル（TASK-002の「編集履歴を持たない」方針との整合を含む）、途中離脱・再開の扱いをTASK-018で比較・決定する |
 | 話した内容の要約の使い道 | 週次・月次のまとめや分析を実装する変更 | MVPでは表示と編集のみ。まとめの入力として使うかは、検証候補の採用判断と合わせて決める。本人が編集した内容が混ざる前提で考える |

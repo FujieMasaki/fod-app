@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import type { z } from "zod";
 
-import { dotSchema, generationSchema, problemSchema } from "./schemas";
+import { dotSchema, generationSchema, problemSchema, sessionSchema } from "./schemas";
 
 // 契約の正本。examplesはWebとAPIが同じ意味で解釈することを確かめる共通の具体例。
 const contractPath = fileURLToPath(new URL("../../../../../contracts/openapi.yaml", import.meta.url));
@@ -16,19 +16,20 @@ const schemasByName: Record<string, z.ZodType> = {
   Problem: problemSchema,
   Dot: dotSchema,
   Generation: generationSchema,
+  Session: sessionSchema,
 };
 
 type Ref = { $ref: string };
 type MediaType = { schema?: Ref; examples?: Record<string, Ref> };
 
-function resolve<T>(ref: Ref | T): T {
+const resolve = <T>(ref: Ref | T): T => {
   if (typeof ref !== "object" || ref === null || !("$ref" in ref)) return ref as T;
   const path = (ref as Ref).$ref.replace(/^#\//, "").split("/");
   return path.reduce((node, key) => node[key], contract) as T;
-}
+};
 
 // 各operationのresponseについて、Zod schemaがある型の例を集める。
-function collectResponseExamples() {
+const collectResponseExamples = () => {
   const cases: { label: string; schemaName: string; value: unknown }[] = [];
   for (const [path, operations] of Object.entries<Record<string, { responses?: Record<string, unknown> }>>(
     contract.paths,
@@ -51,7 +52,7 @@ function collectResponseExamples() {
     }
   }
   return cases;
-}
+};
 
 const cases = collectResponseExamples();
 
@@ -105,6 +106,10 @@ describe("Webのschemaが契約外の値を拒否する", () => {
     expect(dotSchema.safeParse({ ...dot, started_at: "2026-09-28T13:04:05.123Z" }).success).toBe(true);
   });
 
+  it("authenticatedごとに必須の項目が欠けたSessionを拒否する", () => {
+    expect(sessionSchema.safeParse({ authenticated: true, csrf_token: "t" }).success).toBe(false);
+    expect(sessionSchema.safeParse({ authenticated: false }).success).toBe(false);
+  });
 });
 
 // 型の一致検査は制約値（maxLengthなど）を比べないため、契約から読んだ値の境界でZodと一致させる。
