@@ -64,15 +64,15 @@ JSXでは役割の名前（`styles.timeButton`など）だけを読めばよい�
 
 ## 10. Files to Change
 
-レビュー対象は合計31ファイルで20を超えるため、統合ブランチ`refactor/style-css-modules`と`main`へのメインのPRを作り、
+レビュー対象は合計31ファイルで20を超えるため、統合ブランチ`refactor/style-css-modules-integration`と`main`へのメインのPRを作り、
 サブのPRを2つに分ける。
 
-1. `refactor/style-css-modules-history`（13ファイル）: 規約と、履歴の画面・Home
+1. `refactor/style-css-modules-1`（13ファイル）: 規約と、履歴の画面・Home
    - 新規: このPlan
    - 変更: `docs/design-system.md`、`apps/web/src/styles/tailwind.css`
    - 変更＋新規`*.module.css`: `features/history/components/`の`history-status`・`day-screen`・`day-list-screen`・
      `day-detail-screen`、`router.tsx`（`router.module.css`）
-2. `refactor/style-css-modules-auth`（19ファイル、1の上に積む）: 認証の画面
+2. `refactor/style-css-modules-2`（19ファイル、1の上に積む）: 認証の画面
    - 変更＋新規`*.module.css`: `features/auth/components/`の`auth-layout`・`sign-in-screen`・`sign-up-screen`・
      `account-screen`・`confirmation-screen`・`password-forgot-screen`・`password-reset-screen`・`require-auth`・
      `sign-in-prompt`
