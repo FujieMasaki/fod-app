@@ -1,0 +1,9 @@
+@reference "@/styles/tailwind.css";
+
+.prompt {
+  @apply flex flex-col items-center gap-1 pb-6 text-center;
+}
+
+.message {
+  @apply text-small leading-small text-ink-secondary;
+}

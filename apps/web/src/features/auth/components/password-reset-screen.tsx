@@ -7,6 +7,7 @@ import { useAuth } from "../auth-provider";
 import { errorMessage, fieldErrors, needsReload } from "../messages";
 import { REOPEN_LINK_MESSAGE, useFragmentToken } from "../use-fragment-token";
 import { AuthScreen, FormMessage, TextField, TextLink } from "./auth-layout";
+import styles from "./password-reset-screen.module.css";
 
 const TOKEN_MESSAGES = {
   token_invalid:
@@ -79,7 +80,7 @@ export const PasswordResetScreen = () => {
         <FormMessage tone="error">
           {token ? errorMessage(error, TOKEN_MESSAGES) : "リンクが正しくありません。メールのリンクを開き直してください。"}
         </FormMessage>
-        <div className="flex flex-col items-start gap-2">
+        <div className={styles.links}>
           {token && <TextLink to="/login">ログインへ</TextLink>}
           <TextLink to="/password/forgot">再設定のメールを送り直す</TextLink>
         </div>
@@ -91,7 +92,7 @@ export const PasswordResetScreen = () => {
 
   return (
     <AuthScreen title="新しいパスワード">
-      <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+      <form className={styles.form} onSubmit={handleSubmit} noValidate>
         <TextField
           label="新しいパスワード"
           type="password"
@@ -106,7 +107,7 @@ export const PasswordResetScreen = () => {
         />
         {outcomeUnknown(error) ? (
           // 応答を失っただけで、再設定は済んでいることがある。送り直すとtokenが使用済みになるため、先にログインを示す。
-          <div className="flex flex-col gap-2">
+          <div className={styles.messageWithAction}>
             <FormMessage tone="error">
               再設定できたか確かめられませんでした。済んでいることがあるため、まず新しいパスワードでログインできるか
               お試しください。ログインできなければ、もう一度再設定してください。

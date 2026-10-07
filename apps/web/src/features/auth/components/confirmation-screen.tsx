@@ -7,6 +7,7 @@ import { useAuth } from "../auth-provider";
 import { errorMessage, fieldErrors, needsReload } from "../messages";
 import { REOPEN_LINK_MESSAGE, useFragmentToken } from "../use-fragment-token";
 import { AuthScreen, FormMessage, ReloadNotice, TextField, TextLink } from "./auth-layout";
+import styles from "./confirmation-screen.module.css";
 
 const TOKEN_MESSAGES = {
   token_invalid: "このリンクは使えません。使用済みか、正しくないリンクです。確認が済んでいれば、そのままログインできます。",
@@ -109,7 +110,7 @@ const ResendConfirmationForm = () => {
   }
 
   return (
-    <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+    <form className={styles.form} onSubmit={handleSubmit} noValidate>
       <TextField
         label="メールアドレス"
         type="email"

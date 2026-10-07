@@ -16,6 +16,7 @@ import {
 import type { RedirectPath } from "../redirect";
 import { AuthScreen, FormMessage, ReloadNotice, TextField, TextLink } from "./auth-layout";
 import { GoogleSignInForm } from "./google-sign-in-form";
+import styles from "./sign-in-screen.module.css";
 
 type SignInScreenProps = {
   /** ログイン後に戻る画面（safeRedirectで検証済み） */
@@ -90,7 +91,7 @@ export const SignInScreen = ({ redirect, authError }: SignInScreenProps) => {
       {shownEndReason && <FormMessage tone="info">{endReasonMessage(shownEndReason)}</FormMessage>}
       {status === "unknown" && (
         // logoutの失敗の後などに状態を確かめられないまま開いた場合。済んでいると思わせない（RequireAuthと同じ案内）。
-        <div className="flex flex-col gap-2">
+        <div className={styles.messageWithAction}>
           <FormMessage tone="error">
             ログインの状態を確かめられませんでした。ログアウトの途中だった場合は、まだログアウトできていない可能性があります。
           </FormMessage>
@@ -101,7 +102,7 @@ export const SignInScreen = ({ redirect, authError }: SignInScreenProps) => {
       )}
       {authError && <FormMessage tone="error">{authErrorMessage(authError)}</FormMessage>}
 
-      <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+      <form className={styles.form} onSubmit={handleSubmit} noValidate>
         <TextField
           label="メールアドレス"
           type="email"
@@ -129,7 +130,7 @@ export const SignInScreen = ({ redirect, authError }: SignInScreenProps) => {
           error !== null && !unconfirmed && <FormMessage tone="error">{errorMessage(error)}</FormMessage>
         )}
         {unconfirmed && (
-          <div className="flex flex-col gap-2">
+          <div className={styles.messageWithAction}>
             <FormMessage tone="error">{errorMessage(error)}</FormMessage>
             <Button variant="ghost" onClick={handleResend} disabled={submitting}>
               確認メールを送り直す
@@ -148,7 +149,7 @@ export const SignInScreen = ({ redirect, authError }: SignInScreenProps) => {
 
       <GoogleSignInForm returnTo={redirect} disabled={submitting} />
 
-      <div className="flex flex-col items-start gap-2">
+      <div className={styles.links}>
         <TextLink to="/signup">はじめての方は新規登録</TextLink>
         <TextLink to="/password/forgot">パスワードを忘れた場合</TextLink>
       </div>

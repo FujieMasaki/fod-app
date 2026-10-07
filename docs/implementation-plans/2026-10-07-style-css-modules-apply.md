@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中
+完了（PR #83・#84。メインのPRは#82）
 
 ## 2. Goal
 
@@ -65,7 +65,7 @@ JSXでは役割の名前（`styles.timeButton`など）だけを読めばよい�
 
 ## 10. Files to Change
 
-レビュー対象は合計31ファイルで20を超えるため、統合ブランチ`refactor/style-css-modules-integration`と`main`へのメインのPRを作り、
+レビュー対象は重複を除いて合計31ファイルで20を超えるため、統合ブランチ`refactor/style-css-modules-integration`と`main`へのメインのPRを作り、
 サブのPRを2つに分ける。
 
 1. `refactor/style-css-modules-1`（13ファイル）: 規約と、履歴の画面・Home
@@ -73,11 +73,11 @@ JSXでは役割の名前（`styles.timeButton`など）だけを読めばよい�
    - 変更: `docs/design-system.md`、`apps/web/src/styles/tailwind.css`
    - 変更＋新規`*.module.css`: `features/history/components/`の`history-status`・`day-screen`・`day-list-screen`・
      `day-detail-screen`、`router.tsx`（`router.module.css`）
-2. `refactor/style-css-modules-2`（19ファイル、1の上に積む）: 認証の画面
+2. `refactor/style-css-modules-2`（20ファイル、1の上に積む）: 認証の画面
    - 変更＋新規`*.module.css`: `features/auth/components/`の`auth-layout`・`sign-in-screen`・`sign-up-screen`・
      `account-screen`・`confirmation-screen`・`password-forgot-screen`・`password-reset-screen`・`require-auth`・
      `sign-in-prompt`
-   - 変更: このPlan（Completion Record）
+   - 変更: このPlan（Completion Record）、`docs/design-system.md`（移行済みの範囲に認証の画面を足す、classを重ねるときの規則の整理）
 
 ## 11. Libraries / APIs
 
@@ -121,7 +121,13 @@ JSXでは役割の名前（`styles.timeButton`など）だけを読めばよい�
 
 ## 16. Completion Record
 
-- 状態:
-- 実装差異:
-- 検証結果:
-- 関連:
+- 状態: 2026-10-07に実装と検証が完了。
+- 実装差異: 認証の`ReloadNotice`の文言は、`FormMessage`の失敗と同じ見た目のため、別のclassを作らず
+  `messageError`を使った。`FormMessage`の`tone`は、どちらの値も同じ量の指定（文字・行間・色）のため、基本のclassを
+  作らず、失敗と案内の2つのclassを切り替える形にした（§7-3の「基本のclassに状態のclassを足す」の例外）。機械のレビューの指摘で、`docs/design-system.md`に、`@reference`したmodule.cssには`@apply`
+  だけを書くこと、状態のclassはmodule.cssの中の定義の順で効くこと、別々のmodule.cssのclassを重ねるときに同じプロパティを指定しない規則を足した。ほかはPlanどおり。
+- 検証結果: `pnpm check`・`pnpm type-check`・`pnpm test`（395件）・`pnpm build`が通った。JSXの`className`に文字列の
+  utilityが残っていないことをgrepで確かめた。buildしたCSSに`@property --tw-outline-style`・`--tw-border-style`が
+  出力され、`timeButton`の`[aria-pressed=true]`・`input`の`[aria-invalid=true]`・`:focus-visible`の規則が元の
+  utilityと同じ値で出ていることを確かめた。ローカルで画面を開き、認証・履歴の画面の見た目に問題がないことを人間が確かめた。
+- 関連: #82（メイン）、#83、#84、`docs/design-system.md`「StylingとDesign Token」
