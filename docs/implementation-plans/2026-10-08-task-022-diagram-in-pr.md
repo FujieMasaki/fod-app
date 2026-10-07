@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中（2026-10-08）。
+実施中（2026-10-08）。GitHubでの描画を人間が確認するまで、タスクはIn progressのままにする。
 
 ## 2. Goal
 
@@ -132,4 +132,18 @@ flowchart TD
 
 ## 16. Completion Record
 
-- 状態: 未記録。
+- 状態: 2026-10-08 実装を終え、GitHubでの描画の確認を人間に残している。
+- 実装差異: タスクは「`diagram` skillを使えない環境（定期実行など）」と書いているが、定期実行で起動したこのセッションでは
+  `~/.claude/skills/diagram/`が読み込まれ、skillが使えた（定期実行もローカルのClaude Codeで動くため）。そのため手順では
+  定期実行を使えない環境の例に挙げず、「使えない環境ではMermaidを直接書く」とだけ書いた。
+- 検証結果:
+  - `pnpm lint:markdown`が通った。
+  - 「9. Data Flow」の図（PR本文にも載せる）を、npxのキャッシュにある`@mermaid-js/mermaid-cli`の`mmdc`でPNGへ描画でき、
+    分岐と矢印が意図どおりであることを画像で確かめた。
+  - 条件を過去のPRに当てはめ、図の有無が分かれることを机上で確かめた。
+    - 載せる: #62（dots table・model。データモデル）、#63（Day・一覧・詳細のAPI。API契約）、#75（履歴の取得のschema・通信・query。
+      データフロー）、このPR（AI・GitHub・人間にまたがるPR作成の処理の順序と分岐）。
+    - 載せない: #59（依存の更新）、#68（完了報告に振り返りメモを促す1文。1つの主体の中で完結する手順の追記）、
+      #81（ガイドの例の追記。文言）、#84（styleのCSS Modulesへの移行。振る舞いを変えない整理）。
+  - 未実施: GitHub上でMermaidが描画されることは、ブラウザで見られないため人間がPR画面で確認する（PRの「確認すること」に入れた）。
+- 関連: [TASK-022](../tasks/TASK-022-diagram-in-pr.md)、[pull-requests.md](../development/pull-requests.md#pr本文の図)
