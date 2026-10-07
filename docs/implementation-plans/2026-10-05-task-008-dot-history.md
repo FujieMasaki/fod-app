@@ -88,12 +88,12 @@ Dotを作る入口（音声の送信と生成）はTASK-009が作り、本タス
     前方一致と`NON_JSON_BODIES`の照合の両方に使う。`//api/...`が`422`になるrequest specを足す。
   - 選択肢: A: 修正案で直し、サブエージェントのレビューを続ける。B: ここで打ち切り、別のタスクで直す。
   - 推奨: A。直し方は決まっており、塞いだと書いた保証を成り立たせるため。
-  - **決定（2026-10-05、人間の判断）: A。**pathを正規化してから比べるようにし、レビューを続けた（§16の実装差異）。
-- **判断待ち（2026-10-05）: PR 2/3のCodexの最終チェックが実行できなかった。**SQLをscopeへ移した修正
+  - **決定（2026-10-05、人間の判断）: A**。pathを正規化してから比べるようにし、レビューを続けた（§16の実装差異）。
+- **判断待ち（2026-10-05）: PR 2/3のCodexの最終チェックが実行できなかった**。SQLをscopeへ移した修正
   （`687aefc`・`6a02563`）の後、サブエージェントのレビューはLGTMになった。Codexは利用上限
   （`You've hit your usage limit`、16:11以降に再試行できると表示）で失敗した。
   - 選択肢: A: 上限が戻ってから再実行する。B: 追加のcreditを買う。C: 今回はCodexを省き、人間のレビューで確かめる。
-  - **決定（2026-10-05、人間の判断）: A。**16:13に再実行し、LGTM（`b337dd6`）。
+  - **決定（2026-10-05、人間の判断）: A**。16:13に再実行し、LGTM（`b337dd6`）。
 
 ## 6. References and Documents to Update
 
@@ -219,12 +219,12 @@ controllerから呼ぶ小さなServiceに置く（集約とcursorの組み立て
   決まり、日付境界（14:59:59.999999 UTCと15:00:00 UTC）の扱いもDBが1か所で決める。PostgreSQL 17で
   `((started_at AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Tokyo')::date`を生成列にできることを確認した。
   `date`の列があるので、同日の集約と日付キーの取得を索引で引ける。
-- **部分索引でゴミ箱の外だけを索引する。**履歴の取得はすべてゴミ箱の外が対象で、`kept`を書き忘れると
+- **部分索引でゴミ箱の外だけを索引する**。履歴の取得はすべてゴミ箱の外が対象で、`kept`を書き忘れると
   索引が効かず遅くなるだけでなく、testでゴミ箱の中が混ざることを確かめる。ゴミ箱の一覧の索引は
   TASK-013で必要になったときに足す。
-- **cursorはkeyset（日付、または`started_at`とid）にする。**offsetは使わない（dot-history §2）。
+- **cursorはkeyset（日付、または`started_at`とid）にする**。offsetは使わない（dot-history §2）。
   途中でDotが増えても減っても、続きをたどったときに欠落・重複が起きない。
-- **Serviceは取得の2つだけ。**一覧の集約とcursorはactionの中で読み切れない。PATCHはmodelの
+- **Serviceは取得の2つだけ**。一覧の集約とcursorはactionの中で読み切れない。PATCHはmodelの
   validationと入力の検査だけで済むため、Serviceを作らない。
 - 既存の`ProblemRendering`・`Authentication`・`JsonParams`・committeeの照合をそのまま使う。
 
@@ -344,7 +344,7 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
   行の全列（`sentence`・`summary`を含む）を入れ、Railsはそれを`ActiveRecord::StatementInvalid`のmessageへ
   入れる。`filter_parameters`は例外のmessageを隠さない。通常の保存はmodelのvalidation（上限・NUL文字）が
   DBより先に止めるため、validationを飛ばす経路（`update_all`・`insert_all`など）でだけ起きる。
-  **TASK-009のJobは`create!`でvalidationを通して保存する。**error trackingを入れるとき（TASK-009）と、
+  **TASK-009のJobは`create!`でvalidationを通して保存する**。error trackingを入れるとき（TASK-009）と、
   RDSのログの設定（`log_min_error_statement`等。TASK-015）で、例外のmessageとDBのserver logに本文が
   残らないことを確かめる。
 - **契約のexampleの紛らわしさ**: `GenerationSucceeded`と`DotEvening`のexampleは、Dotの`id`と処理IDに
@@ -391,19 +391,19 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
 
 ### 実装差異（Planから変えた点と理由）
 
-- **今日の取得もServiceにした（`TodaySummary`）。**件数と最新のDotを別々のqueryで引くと、間にDotが
+- **今日の取得もServiceにした（`TodaySummary`）**。件数と最新のDotを別々のqueryで引くと、間にDotが
   ゴミ箱へ移ったとき「件数はあるのに最新のDotが無い」responseを作り得る。1つのquery（`COUNT(*) OVER ()`）
   で取る処理をcontrollerに置くと読みにくいため、Serviceに分けた。SQLの部分は`Dot`のscope
   （`with_total_count`）に置き、Serviceには「今日」の判定とresponseの形への組み立てだけを残す（§12）。
 - **serializerを4つにした**（`DotSerializer`・`DayListSerializer`・`TodaySerializer`・`DayDetailSerializer`）。
   Zeitwerkは1ファイル1定数のため。PR 2/3のレビュー対象は20ファイル（上限ちょうど）。
 - **`dots`の`user_id`・`generation_id`・`started_at`・`duration_seconds`を`attr_readonly`にし、`date`への
-  代入を拒否した。**生成列は代入しても保存されず、手元の値だけが食い違うため。編集できる項目を
+  代入を拒否した**。生成列は代入しても保存されず、手元の値だけが食い違うため。編集できる項目を
   modelでも`sentence`と`summary`に限る。
-- **PATCHでParamsWrapperを切った（`wrap_parameters false`）。**Railsの既定でJSONの項目が`dot`に包まれ、
+- **PATCHでParamsWrapperを切った（`wrap_parameters false`）**。Railsの既定でJSONの項目が`dot`に包まれ、
   `request_parameters`に足されるため、許可しない項目として数えてしまう。JSONのobjectでないbody
   （配列・文字列）はRailsが`_json`に入れるので、`body`の`invalid_format`にした。
-- **日の詳細のcursorの時刻を、そのcursorの日（Asia/Tokyo）の中に限った。**形式だけを確かめていたため、
+- **日の詳細のcursorの時刻を、そのcursorの日（Asia/Tokyo）の中に限った**。形式だけを確かめていたため、
   作り替えたcursorでPostgreSQLのtimestampの範囲を超える時刻を渡すと`500`になっていた（PR 2/3の
   セルフレビューで発見）。範囲外は`400 cursor_invalid`にし、同じ種類の見落としを拾う観点を
   `docs/code-review/backend/security.md` §2に足した。
@@ -416,14 +416,14 @@ TASK-009のJob → current_user相当の利用者.dots.create!(generation_id:, s
   PR 3/3のCodexの最終チェック、(2)はその修正後のサブエージェントのレビューで発見した。(1)はRailsの
   非公開のmethodを置き換えるため、request specで本文が出ないことを固定した。
 - **`/api/`のbodyを`application/json`だけにし、paramsを解釈できないrequestを`422`にした
-  （`lib/middleware/api_request_guard.rb`。§5の判断待ちを人間がAに決めた）。**formのbodyでも更新でき、
+  （`lib/middleware/api_request_guard.rb`。§5の判断待ちを人間がAに決めた）**。formのbodyでも更新でき、
   不正なUTF-8の値で本文を含む`BadRequest`がerrorのログに出ることを、JSONのparserの修正後の
   サブエージェントのレビューで発見し、再現した。認証のendpoint（TASK-006）も同時に直る。
   `DebugExceptions`の内側に置き、Railsの`BadRequest`がerrorのログへ出る前に捕まえる。
   pathはrouterと同じ規則で正規化してから比べる（生のpathでは`//api/...`で迂回できることを、3回目の
   サブエージェントのレビューで発見し、人間の判断で続けて直した）。paramsを解釈できない場合のfieldは、
   pathの誤りも含むため`request`にした。
-- **objectでないJSONのbodyを入れる`_json`を`filter_parameters`に足した。**文字列・配列として送った本文が、
+- **objectでないJSONのbodyを入れる`_json`を`filter_parameters`に足した**。文字列・配列として送った本文が、
   `422`で拒否しても`Parameters:`のログ（info）に残っていた（PR 3/3のCodexの2回目の最終チェックで発見）。
   あわせて、`ApiRequestGuard`が`BadRequest`を捕まえる範囲を、コメントのとおり`/api/`に限った。
 - `filter_parameters`は完全一致ではなく部分一致（`%i[sentence summary]`）にした。隠しすぎて困る項目が無いため。
