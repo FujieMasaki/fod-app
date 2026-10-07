@@ -107,23 +107,26 @@ PRを分けた場合は`TASK-XXX レビューガイド`（タスク外なら`PR 
      設計の理由は書かない（節2の図の粒度は節2に書いたとおり）。節の冒頭に「地図を見る → コードを読む →
      自分の理解を書く → チャットで答え合わせを依頼する」の流れを書く。
    - 次の6つの小見出しで構成する。
-     1. **変更ファイルの分類**: diffの全ファイルを役割で分け、各ファイルに役割を1行だけ書く。役割は変更に合わせて選ぶ
-        （frontendならAPIとの通信、データ取得・状態管理、UI、Utility、API Schema / 型。backendなら[`backend.md`](../../../docs/development/backend.md) §1の
-        責務に沿ってController、Service、Model、Serializer、Job、migration、API契約（`contracts/openapi.yaml`）。
-        どちらもTest、Documentation）。
+     1. **変更ファイルの分類**: diffの全ファイルを役割で分け、各ファイルに役割を1行だけ書く。役割は変更に合わせて
+        選ぶ。例であって網羅ではない（frontendならAPIとの通信、データ取得・状態管理、UI、Utility、API Schema / 型。
+        backendなら[`backend.md`](../../../docs/development/backend.md) §1の責務のController、Service、Model、
+        Jobと、Serializer、Mailer、concerns（認証・エラーのresponse）、migration、API契約（`contracts/openapi.yaml`、
+        同§3）。どちらもTest、Documentation）。
         分けた場合は、どのPRで変えたかも書く。lockfile・生成物は1行にまとめる。
      2. **優先して読むファイル**: 3〜5個を読む順に並べ、それぞれ「なぜここから読むと理解しやすいか」と
         「次に進むファイル」を1〜2行で書く。
-     3. **大まかなデータフロー**: 主要な流れを、層を1行ずつ縦に並べて`↓`でつないだASCII図で示す（frontendなら
-        画面・Hook・API関数・Server API、backendならRequest・routes・Controller・Service・Model・DB・Serializer・Response。
-        Jobがあれば、Jobへ渡る所で枝を分ける。両方をまたぐ変更では、Server APIの所でbackendの層へつなぐ）。関数の中の処理と、どこで何を判断しているかは書かない。データフローがない変更では、
+     3. **大まかなデータフロー**: 主要な流れを、層を1行ずつ縦に並べて`↓`でつないだASCII図で示す。変更に実在する
+        層だけを置く（frontendなら画面・Hook・API関数・Server API、backendならRequest・routes・Controller・
+        Service（あれば）・Model・DB・Serializer（あれば）・Response。Jobがあれば、Jobへ渡る所で枝を分ける。
+        両方をまたぐ変更では、Server APIの所でbackendの層へつなぐ）。関数の中の処理と、どこで何を判断しているかは書かない。データフローがない変更では、
         その旨と、代わりに処理の入口から出口までのファイルの並びを書く。
      4. **自分で読むための問い**: 主要なファイルごとに、答えではなく問い（何のために存在する？関数単位で、どこから
         呼ばれる？何を呼び、何を返す？データはどこから来てどこへ行く？なぜこの責務をここに置く？利用者の
         体験のどこにつながる？）を2〜5個ずつ。紙に答えを書き出せる形にする。節2の図と小見出し3で答えが分かる
         問い（ファイル単位の呼び出し元など）は避け、図だけでは分からないこと（理由・境界・異常系・関数単位の
         つながり）に寄せる。backendでは、責務の置き場所（なぜControllerではなくServiceか）、transactionの範囲、
-        失敗したときにDBに何が残るか、再実行して安全か、認可をどこで確かめているかのような問いを含める。節5「このPRで決めたこと」は人間が自分で判断した内容なので、そこに理由があっても問いから
+        失敗したときにDBに何が残るか、再実行して安全か、認可をどこで確かめているかのような問いを含める。
+        節5「このPRで決めたこと」は人間が自分で判断した内容なので、そこに理由があっても問いから
         外さなくてよい。
      5. **必要なら深掘りするポイント**: frontendならpagination・Query Key・cache invalidation・error handling・
         timezone・API schema、backendなら認証・認可、transaction、N+1、migrationと既存データ、Jobの再試行・冪等性、
