@@ -6,11 +6,16 @@
  *   マイクを押して始める（マイクは利用者の操作の後にだけ要求する。journaling §4・security.md §2）。
  *   録音の説明の段階（TASK-010）ができたら、そこへ戻す。
  * - `/processing`は録音の直後にだけ意味があるため戻り先にしない。
+ * - 日の詳細（`/dots/<日付>`）は一覧（`/dots`）へ戻す。日付の検証は履歴の画面に任せ、ここではURLの値を
+ *   戻り先へそのまま使わない（TASK-012）。
  */
-const REDIRECT_PATHS = ["/dot", "/reflection", "/settings"] as const;
+const REDIRECT_PATHS = ["/dot", "/day", "/dots", "/reflection", "/settings"] as const;
+
+const DAY_DETAIL_PATH = /^\/dots\/[0-9-]+$/;
 
 export type RedirectPath = (typeof REDIRECT_PATHS)[number] | "/";
 
 export const safeRedirect = (value: unknown): RedirectPath => {
+  if (typeof value === "string" && DAY_DETAIL_PATH.test(value)) return "/dots";
   return REDIRECT_PATHS.find((path) => path === value) ?? "/";
 };
