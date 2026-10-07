@@ -25,6 +25,7 @@ Playwrightのスクリーンショット比較を第一候補とし、Storybook�
 - [ ] フォント・アニメーション・時刻など、実行ごとに変わる要素で不安定にならない（同じコミットで連続3回実行して一致する）。
 - [ ] 基準画像に実在の個人データ・音声由来の内容が含まれていない。
 - [ ] `pr-review-cycle`と`human-review-artifact`に、UI変更時にVRTの差分画像を人間のレビューへ渡す手順を反映している。
+- [ ] 検査・許可・reviewerの定義、またはAIへの指示を変えた場合、そのファイルと検査が緩んでいないことの確認をPRの「確認すること」に挙げている（定義と例は[TASK-021](TASK-021-failure-classification.md)。TASK-021の手順が`pr-review-cycle`に入っていればそれに従う）。
 - [ ] [frontend.md](../development/frontend.md)の「4. テスト」へ、VRTの対象と更新手順を反映し、PlaywrightはVRTのためでありE2E基盤の保留とは別であることを書いている。
 
 ## 依存するタスクID

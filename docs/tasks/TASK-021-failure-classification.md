@@ -23,7 +23,7 @@
 
 検査・許可・reviewerの定義、つまりlint・test・型の設定と閾値、hook、CI、レビュー指針、自動実行の判定、AIへの指示を変えるファイルを変えたPRでは、変えたファイルと、検査が緩んでいないことの確認をPRの「確認すること」に必ず挙げる。これらの変更はworktreeの中ですぐ効き、同じセッションのその後の検査とレビューにも使われるため、最後に止められるのはマージ前の人間のレビューだけである。
 
-主なファイルの例（網羅ではない）: `.claude/settings.json`、`.claude/agents/`、`.claude/skills/`、`scripts/claude-*.mjs`、`scripts/claude-hook.sh`、`scripts/codex-final-check.mjs`、`scripts/ci-gate.mjs`、`scripts/ci-changes.mjs`、`scripts/check-*.mjs`、`scripts/task-status.mjs`、`scripts/task-scheduler.mjs`、`eslint.config.mjs`、`apps/api/.rubocop.yml`、`lefthook.yml`、`package.json`のscripts、`.github/workflows/`、`docs/code-review/`、`AGENTS.md`。
+主なファイルの例（網羅ではない）: `.claude/settings.json`、`.claude/agents/`、`.claude/skills/`、`scripts/claude-*.mjs`、`scripts/claude-hook.sh`、`scripts/codex-final-check.mjs`、`scripts/ci-gate.mjs`、`scripts/ci-changes.mjs`、`scripts/check-*.mjs`、`scripts/task-status.mjs`、`scripts/task-scheduler.mjs`、`scripts/task-scheduler.sh`、`scripts/install-task-scheduler.sh`、`.github/pull_request_template.md`、`eslint.config.mjs`、`apps/api/.rubocop.yml`、`lefthook.yml`、`package.json`のscripts、`.github/workflows/`、`docs/code-review/`、`AGENTS.md`。
 
 `personal-conventions.md`はリポジトリの外（個人の環境）にあり、PRのレビューを経ない。リポジトリの外のファイルについて、AIはPlanに変更の提案を書くだけにし、反映は人間が行う。
 

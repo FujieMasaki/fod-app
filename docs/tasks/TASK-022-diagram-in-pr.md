@@ -21,6 +21,7 @@
 - [ ] `pr-review-cycle`と`run-task`に、条件に当たるPRで図を作ってPR本文に載せる手順が書かれている。
 - [ ] `diagram` skillがない環境での代わり（Mermaidを直接書く）が手順に書かれている。
 - [ ] 図に個人データ・秘密情報・実データの例を載せないことが手順に書かれている。
+- [ ] 検査・許可・reviewerの定義、またはAIへの指示を変えた場合、そのファイルと検査が緩んでいないことの確認をPRの「確認すること」に挙げている（定義と例は[TASK-021](TASK-021-failure-classification.md)。TASK-021の手順が`pr-review-cycle`に入っていればそれに従う）。
 - [ ] GitHub上でMermaidが描画されることを、実際のPRで確認している。
 
 ## 依存するタスクID
