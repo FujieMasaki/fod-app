@@ -11,6 +11,7 @@ import { needsReload } from "../messages";
 import { SESSION_QUERY_KEY, useAuth } from "../auth-provider";
 import { safeRedirect } from "../redirect";
 import { ReloadNotice } from "./auth-layout";
+import styles from "./require-auth.module.css";
 
 /**
  * 本人の録音・Dotを扱う画面のguard。serverで認証を確かめるまで中身を表示しない。
@@ -130,7 +131,7 @@ const EntryVerifiedGuard = ({ children }: { children: ReactNode }) => {
   }
   if (showing) return children;
   return (
-    <div className="flex h-full items-center justify-center">
+    <div className={styles.checking}>
       <Spinner label="ログインの状態を確かめています" />
     </div>
   );
@@ -147,7 +148,7 @@ const SessionGuard = ({ children }: { children: ReactNode }) => {
       return children;
     case "checking":
       return (
-        <div className="flex h-full items-center justify-center">
+        <div className={styles.checking}>
           <Spinner label="ログインの状態を確かめています" />
         </div>
       );
@@ -155,7 +156,7 @@ const SessionGuard = ({ children }: { children: ReactNode }) => {
       // 再試行しても直らないため、再読み込みを案内する（frontend.md「schema不正」）。
       if (needsReload(error)) {
         return (
-          <div className="flex h-full flex-col justify-center">
+          <div className={styles.reload}>
             <ReloadNotice />
           </div>
         );
@@ -172,7 +173,7 @@ const SessionGuard = ({ children }: { children: ReactNode }) => {
     case "deletion_in_progress":
       // 退会の状況画面はTASK-014。それまでは本人の録音・Dotの画面を開かない。
       return (
-        <div className="flex h-full flex-col justify-center gap-2" role="status">
+        <div className={styles.deletion} role="status">
           <Text variant="title" as="h1">
             退会の手続き中です
           </Text>

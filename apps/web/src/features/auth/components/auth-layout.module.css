@@ -1,0 +1,45 @@
+@reference "@/styles/tailwind.css";
+
+.screen {
+  @apply flex flex-col gap-6 py-6;
+}
+
+.heading {
+  @apply flex flex-col gap-2;
+}
+
+.field {
+  @apply flex flex-col gap-1;
+}
+
+.label {
+  @apply text-small leading-small text-ink-secondary;
+}
+
+.input {
+  @apply font-inherit rounded-md border border-line bg-surface px-3 py-2 text-body leading-body text-ink focus-visible:outline-2 focus-visible:outline-brand aria-invalid:border-danger;
+}
+
+.hint {
+  @apply text-caption leading-caption text-ink-tertiary;
+}
+
+.fieldError {
+  @apply text-small leading-small text-danger;
+}
+
+.messageError {
+  @apply text-small leading-small text-danger;
+}
+
+.messageInfo {
+  @apply text-small leading-small text-ink-secondary;
+}
+
+.reloadNotice {
+  @apply flex flex-col gap-3;
+}
+
+.textLink {
+  @apply text-small leading-small text-brand underline underline-offset-4;
+}

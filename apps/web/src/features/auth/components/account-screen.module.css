@@ -1,0 +1,26 @@
+@reference "@/styles/tailwind.css";
+
+.details {
+  @apply flex flex-col gap-4;
+}
+
+.detail {
+  @apply flex flex-col gap-1;
+}
+
+.term {
+  @apply text-small leading-small text-ink-tertiary;
+}
+
+.value {
+  @apply text-body leading-body text-ink;
+}
+
+/* メールアドレスは区切りのない長い文字列になり得るため、どこでも折り返す */
+.email {
+  @apply break-all;
+}
+
+.signOut {
+  @apply flex flex-col gap-3;
+}

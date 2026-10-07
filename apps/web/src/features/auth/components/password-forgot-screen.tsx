@@ -5,6 +5,7 @@ import { requestPasswordReset } from "../api";
 import { useAuth } from "../auth-provider";
 import { errorMessage, fieldErrors, needsReload } from "../messages";
 import { AuthScreen, FormMessage, ReloadNotice, TextField, TextLink } from "./auth-layout";
+import styles from "./password-forgot-screen.module.css";
 
 /**
  * password再設定のメールを頼む。登録の有無・Google専用かどうかにかかわらず同じ受付を示す
@@ -45,7 +46,7 @@ export const PasswordForgotScreen = () => {
 
   return (
     <AuthScreen title="パスワードの再設定" lead="登録したメールアドレスに、再設定のリンクを送ります。">
-      <form className="flex flex-col gap-4" onSubmit={handleSubmit} noValidate>
+      <form className={styles.form} onSubmit={handleSubmit} noValidate>
         <TextField
           label="メールアドレス"
           type="email"

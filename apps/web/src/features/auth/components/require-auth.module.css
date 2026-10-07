@@ -1,0 +1,13 @@
+@reference "@/styles/tailwind.css";
+
+.checking {
+  @apply flex h-full items-center justify-center;
+}
+
+.reload {
+  @apply flex h-full flex-col justify-center;
+}
+
+.deletion {
+  @apply flex h-full flex-col justify-center gap-2;
+}

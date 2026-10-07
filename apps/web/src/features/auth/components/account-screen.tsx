@@ -4,6 +4,7 @@ import { Button, Text } from "@/design-system";
 import { useAuth, type SessionUser } from "../auth-provider";
 import { errorMessage, needsReload } from "../messages";
 import { AuthScreen, FormMessage, ReloadNotice } from "./auth-layout";
+import styles from "./account-screen.module.css";
 
 const METHOD_LABELS: Record<SessionUser["sign_in_methods"][number], string> = {
   password: "メールアドレスとパスワード",
@@ -42,26 +43,26 @@ export const AccountScreen = () => {
 
   return (
     <AuthScreen title="アカウント">
-      <dl className="flex flex-col gap-4">
-        <div className="flex flex-col gap-1">
-          <dt className="text-small leading-small text-ink-tertiary">ログイン中のアカウント</dt>
-          <dd className="text-body leading-body text-ink break-all">{user.email}</dd>
+      <dl className={styles.details}>
+        <div className={styles.detail}>
+          <dt className={styles.term}>ログイン中のアカウント</dt>
+          <dd className={`${styles.value} ${styles.email}`}>{user.email}</dd>
         </div>
-        <div className="flex flex-col gap-1">
-          <dt className="text-small leading-small text-ink-tertiary">ログインの方法</dt>
-          <dd className="text-body leading-body text-ink">
+        <div className={styles.detail}>
+          <dt className={styles.term}>ログインの方法</dt>
+          <dd className={styles.value}>
             {user.sign_in_methods.map((method) => METHOD_LABELS[method]).join("、")}
           </dd>
         </div>
         {expiresAt && (
-          <div className="flex flex-col gap-1">
-            <dt className="text-small leading-small text-ink-tertiary">ログインの期限</dt>
-            <dd className="text-body leading-body text-ink">{expiryFormat.format(new Date(expiresAt))}まで</dd>
+          <div className={styles.detail}>
+            <dt className={styles.term}>ログインの期限</dt>
+            <dd className={styles.value}>{expiryFormat.format(new Date(expiresAt))}まで</dd>
           </div>
         )}
       </dl>
 
-      <div className="flex flex-col gap-3">
+      <div className={styles.signOut}>
         <Text variant="small" tone="secondary">
           共有の端末では、使い終わったらログアウトしてください。ほかの端末のログインは、それぞれの期限まで続きます。
         </Text>
