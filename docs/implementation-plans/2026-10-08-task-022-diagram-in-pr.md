@@ -47,7 +47,7 @@
   [AGENTS.md](../../AGENTS.md)の「Pull Requests」、`diagram` skill（個人の環境）、PR #69
 - 更新: [pull-requests.md](../development/pull-requests.md)（正本）、[AGENTS.md](../../AGENTS.md)（参照の1行）、
   [`pr-review-cycle`](../../.claude/skills/pr-review-cycle/SKILL.md)、[`run-task`](../../.claude/skills/run-task/SKILL.md)、
-  [TASK-022](../tasks/TASK-022-diagram-in-pr.md)
+  [`code-reviewer`](../../.claude/agents/code-reviewer.md)、[TASK-022](../tasks/TASK-022-diagram-in-pr.md)
 
 ## 7. Proposed Approach
 
@@ -77,7 +77,7 @@ flowchart TD
   B -- 当たる --> D{diagram skillが使えるか}
   D -- 使える --> E[diagram skillで図を作る]
   D -- 使えない --> F[Mermaidを直接書く]
-  E --> G[個人データ・秘密情報・実データの例がないか確かめる]
+  E --> G[図に載せないもの（個人データ・秘密情報・実データの例など）がないか確かめる]
   F --> G
   G --> H[「取り組んだこと」に図と1〜2行の説明を載せる]
   H --> I[セルフレビューで図とdiffの一致を確かめる]
