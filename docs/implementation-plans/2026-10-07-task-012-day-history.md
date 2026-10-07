@@ -253,7 +253,9 @@ PR 2/2 `feat/task-012-2-history-screens`（base: PR 1のブランチ）— 画�
     「一文はありません。」「これより前のDotはありません。」は`text-ink-secondary`にした（対bgで3.74・3.96から8.38・4.79へ。
     人間の判断。認証の画面の同じリンク（`auth-layout.tsx`）は別の変更で揃える）。
   - 詳細から一覧へ戻ると一覧は先頭から表示し直され、下の方の「選択中」の丸が画面の外になっていた（D3が満たせない）。
-    選択中の丸を表示した時に`scrollIntoView({ block: "center" })`で画面の中央へ移す（人間の判断。レビューでの修正）。Tailwindのthemeに`--font-weight-bold`（既存の`--fod-weight-bold`）を足し、PR 2/2のファイル数は18。
+    選択中の丸を表示した時に`scrollIntoView({ block: "center" })`で画面の中央へ移す（人間の判断。レビューでの修正）。
+  - 一覧の丸の`ul`に箇条書きの点が出ていた（Tailwindのpreflightを使わず、`globals.css`のresetも`list-style`を消さないため）。
+    `list-none`と`role="list"`（点を消すとSafariが一覧として読まないため）を付けた（人間のレビューでの修正）。Tailwindのthemeに`--font-weight-bold`（既存の`--fod-weight-bold`）を足し、PR 2/2のファイル数は18。
 - 検証結果:
   - `pnpm lint`（eslint・命名・redocly・`check:api-types`）、`pnpm type-check`、`pnpm test`（scripts 173件・web 395件。レビューでの修正を含む）、
     `pnpm build`がすべて通った。
