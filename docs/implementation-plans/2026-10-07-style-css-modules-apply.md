@@ -123,7 +123,8 @@ JSXでは役割の名前（`styles.timeButton`など）だけを読めばよい�
 
 - 状態: 2026-10-07に実装と検証が完了。
 - 実装差異: 認証の`ReloadNotice`の文言は、`FormMessage`の失敗と同じ見た目のため、別のclassを作らず
-  `messageError`を使った。機械のレビューの指摘で、`docs/design-system.md`に、`@reference`したmodule.cssには`@apply`
+  `messageError`を使った。`FormMessage`の`tone`は、どちらの値も同じ量の指定（文字・行間・色）のため、基本のclassを
+  作らず、失敗と案内の2つのclassを切り替える形にした（§7-3の「基本のclassに状態のclassを足す」の例外）。機械のレビューの指摘で、`docs/design-system.md`に、`@reference`したmodule.cssには`@apply`
   だけを書くこと、状態のclassはmodule.cssの中の定義の順で効くこと、別々のmodule.cssのclassを重ねるときに同じプロパティを指定しない規則を足した。ほかはPlanどおり。
 - 検証結果: `pnpm check`・`pnpm type-check`・`pnpm test`（395件）・`pnpm build`が通った。JSXの`className`に文字列の
   utilityが残っていないことをgrepで確かめた。buildしたCSSに`@property --tw-outline-style`・`--tw-border-style`が
