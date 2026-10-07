@@ -1,0 +1,10 @@
+@reference "@/styles/tailwind.css";
+
+.home {
+  @apply flex h-full flex-col;
+}
+
+/* HomeHeroに残りの高さを渡し、ログインの案内を下に置く */
+.homeHero {
+  @apply min-h-0 flex-1;
+}

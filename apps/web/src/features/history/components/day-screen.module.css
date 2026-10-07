@@ -1,0 +1,38 @@
+@reference "@/styles/tailwind.css";
+
+.root {
+  @apply flex flex-col gap-6 py-6;
+}
+
+.header {
+  @apply flex flex-col gap-1;
+}
+
+.date {
+  @apply text-small leading-small text-ink-secondary;
+}
+
+.empty {
+  @apply flex flex-col gap-3;
+}
+
+.emptyTitle {
+  @apply text-body leading-body text-ink;
+}
+
+.emptyDescription {
+  @apply text-small leading-small text-ink-secondary;
+}
+
+.today {
+  @apply flex flex-col gap-6;
+}
+
+.dotWrapper {
+  @apply flex justify-center;
+}
+
+/* 白とbrandの比は約4.4:1。一覧の丸と同じく大きな太字にしてAA（3:1）を満たす */
+.dayOfMonth {
+  @apply text-title leading-title font-bold;
+}

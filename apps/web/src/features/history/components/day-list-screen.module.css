@@ -1,0 +1,44 @@
+@reference "@/styles/tailwind.css";
+
+.root {
+  @apply flex flex-col gap-6 py-6;
+}
+
+.empty {
+  @apply flex flex-col gap-3 py-6;
+}
+
+.emptyTitle {
+  @apply text-body leading-body text-ink;
+}
+
+.note {
+  @apply text-small leading-small text-ink-secondary;
+}
+
+.month {
+  @apply flex flex-col gap-3;
+}
+
+/* Tailwindのpreflightを使わないので、箇条書きの点を消す。点を消すとSafariは一覧として読まないため、JSXのroleで保つ */
+.days {
+  @apply grid list-none grid-cols-5 gap-x-2 gap-y-4;
+}
+
+.dayLink {
+  @apply flex flex-col items-center gap-1 rounded-md py-1 focus-visible:outline-2 focus-visible:outline-dashed focus-visible:outline-brand;
+}
+
+/* 白とbrandの比は約4.4:1で、小さい文字のAA（4.5:1）に届かない。大きな太字（WCAGの18.66px以上の太字、3:1）にする */
+.dayCircle {
+  @apply flex size-8 items-center justify-center rounded-full bg-brand text-title leading-title font-bold text-surface;
+}
+
+/* 選択中は丸の外側の輪郭線で示す（文字の「選択中」と合わせ、色だけに頼らない） */
+.dayCircleSelected {
+  @apply outline-2 outline-offset-2 outline-ink;
+}
+
+.dayNote {
+  @apply text-caption leading-caption text-ink-secondary;
+}
