@@ -192,8 +192,8 @@ pushの前に、各ブランチで`git diff --name-only <base>...<ブランチ>`
   日本語で書く。テンプレートのコメント・プレースホルダーを残さない。
 - [図を載せる条件](../../../docs/development/pull-requests.md#載せる条件)に当たるPRでは、`pr-review-cycle`の1-7のとおり、
   主要な図をMermaidで「取り組んだこと」に載せる。`diagram` skillが使えない環境では、Mermaidを直接書く。
-  個人データ・秘密情報・実データの例は図に載せない（[図に載せないもの](../../../docs/development/pull-requests.md#図に載せないもの)）。
-  PRを分けた場合は、その変更を含むサブのPRに載せる。
+  置き場所と図に載せないものは、同文書の[載せ方](../../../docs/development/pull-requests.md#載せ方)と
+  [図に載せないもの](../../../docs/development/pull-requests.md#図に載せないもの)に従う。
 - 「確認すること」は、人間が確認する操作・画面・仕様上の判断と期待結果のTODOリストにする。そのPRで
   確かめられることだけを書く。
 - PRを分けた場合は、サブのPRの「概要」に、メインのPRへのリンクと何番目かを書く。全部作ったら、メインのPRの
