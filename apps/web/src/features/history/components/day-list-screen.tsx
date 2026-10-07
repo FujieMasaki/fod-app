@@ -78,7 +78,7 @@ export const DayListScreen = ({ selected }: { selected?: string }) => {
           {list.isFetchingNextPage ? "読み込んでいます" : "さらに前のDotを読み込む"}
         </Button>
       ) : (
-        <p className="text-small leading-small text-ink-tertiary">これより前のDotはありません。</p>
+        <p className="text-small leading-small text-ink-secondary">これより前のDotはありません。</p>
       )}
     </div>
   );

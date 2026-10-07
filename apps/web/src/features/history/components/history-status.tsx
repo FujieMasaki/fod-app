@@ -10,8 +10,11 @@ import type { Dot } from "@/libs/api-contract/schemas";
  * 失敗の種類から文言を決める（frontend.md §2）。
  */
 
-/** 画面内の文字のリンク（一覧・Day・詳細の間の移動） */
-export const LINK_CLASS = "text-small leading-small text-brand underline underline-offset-4";
+/**
+ * 画面内の文字のリンク（一覧・Day・詳細の間の移動）。`text-brand`はbgに対して約3.7:1で小さい文字のAAに届かないため、
+ * 濃いbrand（約8.4:1）にする。
+ */
+export const LINK_CLASS = "text-small leading-small text-brand-strong underline underline-offset-4";
 
 export const HistoryLoading = ({ label }: { label: string }) => {
   return (
@@ -80,7 +83,7 @@ export const DotContent = ({ dot, timeLabel }: { dot: Dot; timeLabel: string }) 
           {dot.sentence}
         </Text>
       ) : (
-        <p className="text-body leading-body text-ink-tertiary">一文はありません。</p>
+        <p className="text-body leading-body text-ink-secondary">一文はありません。</p>
       )}
       {dot.summary && (
         <Text variant="body" tone="secondary" as="p">
