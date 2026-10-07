@@ -77,7 +77,7 @@ JSXでは役割の名前（`styles.timeButton`など）だけを読めばよい�
    - 変更＋新規`*.module.css`: `features/auth/components/`の`auth-layout`・`sign-in-screen`・`sign-up-screen`・
      `account-screen`・`confirmation-screen`・`password-forgot-screen`・`password-reset-screen`・`require-auth`・
      `sign-in-prompt`
-   - 変更: このPlan（Completion Record）、`docs/design-system.md`（移行済みの範囲に認証の画面を足す）
+   - 変更: このPlan（Completion Record）、`docs/design-system.md`（移行済みの範囲に認証の画面を足す、classを重ねるときの規則の整理）
 
 ## 11. Libraries / APIs
 
@@ -124,7 +124,7 @@ JSXでは役割の名前（`styles.timeButton`など）だけを読めばよい�
 - 状態: 2026-10-07に実装と検証が完了。
 - 実装差異: 認証の`ReloadNotice`の文言は、`FormMessage`の失敗と同じ見た目のため、別のclassを作らず
   `messageError`を使った。機械のレビューの指摘で、`docs/design-system.md`に、`@reference`したmodule.cssには`@apply`
-  だけを書くこと、状態のclassはmodule.cssの中の定義の順で効くこと、classを重ねない規則の対象を足した。ほかはPlanどおり。
+  だけを書くこと、状態のclassはmodule.cssの中の定義の順で効くこと、別々のmodule.cssのclassを重ねるときに同じプロパティを指定しない規則を足した。ほかはPlanどおり。
 - 検証結果: `pnpm check`・`pnpm type-check`・`pnpm test`（395件）・`pnpm build`が通った。JSXの`className`に文字列の
   utilityが残っていないことをgrepで確かめた。buildしたCSSに`@property --tw-outline-style`・`--tw-border-style`が
   出力され、`timeButton`の`[aria-pressed=true]`・`input`の`[aria-invalid=true]`・`:focus-visible`の規則が元の

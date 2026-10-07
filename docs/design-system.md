@@ -47,8 +47,9 @@
   - 状態で見た目が変わるときは、属性にある状態ならTailwindの`aria-*`などのvariantで書き、それ以外は基本のclassに
     状態のclass（`dayCircleSelected`など）を足す。状態のclassは、同じmodule.cssの中で基本のclassより後ろに定義する
     （効くのはCSSの定義の順で、JSXの`className`の並び順ではない）。
-  - `@reference`した別々のmodule.cssのclassを、1つの要素に重ねない（勝ち負けがimportの順で決まるため）。
-    design-system componentへ`className`を渡す既存の書き方（`<Divider className={styles.divider} />`など）は対象外。
+  - 別々のmodule.cssのclassが1つの要素に重なるときは、同じプロパティを指定しない（勝ち負けがimportの順で決まるため）。
+    design-system componentへ`className`を渡すとき（`<Divider className={styles.divider} />`など）も、component側の
+    cssと同じプロパティを上書きしない。
 - 色、余白、文字、角丸、影などは **CSS VariablesによるDesign Token** で管理する。
 - 既存の `apps/web/src/design-system/tokens/tokens.css` の `--fod-*` を基準とし、同じ意味のトークンを重複定義しない。
 - Tailwindから既存トークンを参照できるようにし、役割が分かるユーティリティで使用する。任意の色・余白・影を画面内に直接追加しない。
