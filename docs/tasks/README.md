@@ -1,6 +1,6 @@
 # 開発タスク
 
-MVPとその後の継続開発に必要な作業を管理する。現在登録しているTASK-001〜TASK-017は、実サービスのMVP完成に必要な未実装・未決定の作業である。仕様の正本は[product.md](../product.md)、[journaling.md](../journaling.md)、[dot-history.md](../dot-history.md)、[privacy.md](../privacy.md)。本索引は仕様や各タスクの詳細・状態を複製しない。
+MVPとその後の継続開発に必要な作業を管理する。TASK-001〜TASK-017は、実サービスのMVP完成に必要な未実装・未決定の作業である。仕様の正本は[product.md](../product.md)、[journaling.md](../journaling.md)、[dot-history.md](../dot-history.md)、[privacy.md](../privacy.md)。本索引は仕様や各タスクの詳細・状態を複製しない。
 
 ## 参照した状態
 
@@ -68,11 +68,11 @@ MVPとその後の継続開発に必要な作業を管理する。現在登録�
 
 2026-09-21の命名移行で、既存16件の接頭辞を`MVP-`から`TASK-`へ変更した。番号とタスク内容は維持している。この一度の移行後は、上記の固定ID・固定パス運用を適用する。
 
-2026-10-07に、AIとの開発ループを改善する開発基盤のタスクとしてTASK-019〜TASK-024を追加した。[mizchi「AIコーディングのループと形式手法」](https://zenn.dev/mizchi/articles/ai-coding-loop-formal)と現状の運用を比べて、取り入れる候補を挙げたものである。MVPのタスクとは独立に進められる。TASK-019〜TASK-023は互いに依存しないため、定期実行で並行して進めてよい。ただし複数のタスクが`pr-review-cycle`のSKILL.mdを変えるため、後からマージするPRでコンフリクトを解消し、先に入った変更と手順が矛盾しないことを確かめる。TASK-024はTASK-003の決定を待つ。追加の経緯は[開発基盤タスクの追加Plan](../implementation-plans/2026-10-07-ai-loop-improvement-tasks.md)に記録した。
+2026-10-07に、AIとの開発ループを改善する開発基盤のタスクとしてTASK-019〜TASK-024を追加した。[mizchi「AIコーディングのループと形式手法」](https://zenn.dev/mizchi/articles/ai-coding-loop-formal)と現状の運用を比べて、取り入れる候補を挙げたものである。MVPのタスクとは独立に進められる。TASK-019〜TASK-023は互いに依存しないため、定期実行で並行して進めてよい。ただし同じファイルを変えるタスクがある（`pr-review-cycle`・`run-task`・`human-review-artifact`のSKILL.mdはTASK-019〜TASK-022、frontend.mdの「4. テスト」・`package.json`・lockfile・CI・lefthookはTASK-019とTASK-020）。コンフリクトの解消は人間が再開したセッションで行い、解消後は先に入った変更と手順が矛盾しないかを含めてレビューをやり直す。定期実行は優先度の欄を見ないため、開発基盤のタスクはMVPのタスクと同じ並列数の枠を使う。TASK-024はTASK-003の決定を待つ。追加の経緯は[開発基盤タスクの追加Plan](../implementation-plans/2026-10-07-ai-loop-improvement-tasks.md)に記録した。
 
 ## 依存関係を踏まえた実施順
 
-現在の17件のうちTASK-001〜TASK-016は、依存条件を満たしながら番号順に進められる。TASK-001は認証の設計判断から始め、TASK-002とTASK-003は両方を検討して保持・生成条件の整合を確認する。TASK-017は依存がなく番号順の位置とは別に、TASK-002 / TASK-003と整合を取りながら公開前までに判断する。新しいタスクを追加した後も、番号だけで判断せず各ファイルの依存先を確認する。
+MVPのタスク（TASK-001〜TASK-017）のうちTASK-001〜TASK-016は、依存条件を満たしながら番号順に進められる。TASK-001は認証の設計判断から始め、TASK-002とTASK-003は両方を検討して保持・生成条件の整合を確認する。TASK-017は依存がなく番号順の位置とは別に、TASK-002 / TASK-003と整合を取りながら公開前までに判断する。新しいタスクを追加した後も、番号だけで判断せず各ファイルの依存先を確認する。
 
 以下は並行して進める場合も含めた着手の目安であり、正確な依存先は各タスクファイルを参照する。
 

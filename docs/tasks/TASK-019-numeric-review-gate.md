@@ -21,13 +21,18 @@
 
 すべてのファイルに一律の閾値を課さず、変更した範囲に効かせる。実行時間が長い指標（Mutation Test）は、pre-push・CI・`pr-review-cycle`のどこで実行するかを実行時間を測ってから決める。既存のCI（`scripts/ci-gate.mjs`）とpre-pushの構成を壊さない。
 
+ツール・閾値・対象範囲などで複数の有力案がある選択は、AIがPlanで選択肢と推奨を整理したうえで人間の判断に回す（`run-task`の止まる条件「複数の有力案がある」に当たる）。
+
+ゲートは測られる側のAIが同じリポジトリで動かせるため、導入後に閾値を下げる・除外を足す変更は、testを弱める変更と同じく人間の判断とする。
+
 ## 確認可能な完了条件
 
 - [ ] 3つの指標それぞれについて、採用するツール、対象範囲（変更したファイルか全体か、Frontend / Backend）、閾値、実行する場所（pre-push / CI / `pr-review-cycle`）を決め、Planに理由とともに記録している。
 - [ ] 採用した指標が、ローカルとCIで同じコマンドで実行でき、閾値を下回ると失敗する。
 - [ ] `pr-review-cycle`のSKILL.mdに、数値の完了条件を満たすまでLGTMにしない手順が書かれている。
 - [ ] 実行時間を計測し、pre-push・CIの所要時間の増分をPlanに記録している。
-- [ ] [frontend.md](../development/frontend.md) / [backend.md](../development/backend.md)の「テスト」節へ、指標と閾値の扱いを反映している。
+- [ ] 閾値の引き下げ・除外の追加は人間が判断することを、`pr-review-cycle`と`run-task`の「絶対に守ること」に、testを弱める変更と同じ扱いで書いている。
+- [ ] [frontend.md](../development/frontend.md)の「4. テスト」と[backend.md](../development/backend.md)の「3. API契約とテスト」へ、指標と閾値の扱いを反映している。
 
 ## 依存するタスクID
 
@@ -37,7 +42,7 @@
 
 - [pr-review-cycle](../../.claude/skills/pr-review-cycle/SKILL.md) — 「手順」
 - [frontend.md](../development/frontend.md) — 「4. テスト」
-- [backend.md](../development/backend.md)
+- [backend.md](../development/backend.md) — 「3. API契約とテスト」
 - 参考: [mizchi「AIコーディングのループと形式手法」](https://zenn.dev/mizchi/articles/ai-coding-loop-formal) — 「/goal と一緒に使う評価指標」
 
 ## 必要な検証
