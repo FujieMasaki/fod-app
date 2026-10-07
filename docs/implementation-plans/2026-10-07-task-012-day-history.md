@@ -249,7 +249,7 @@ PR 2/2 `feat/task-012-2-history-screens`（base: PR 1のブランチ）— 画�
     （D10。レビューでの修正）。
   - 一覧の丸の中の日の数字を、13pxから21pxの太字（`text-title`・`font-bold`）にした。白と`brand-500`の比は約4.42:1で、
     小さい文字のAA（4.5:1）に届かないため、大きな太字（3:1）として満たす。丸の色はDot primitiveと同じまま（人間の判断。
-    レビューでの修正）。Tailwindのthemeに`--font-weight-bold`（既存の`--fod-weight-bold`）を足し、PR 2/2のファイル数は18。
+    レビューでの修正）。Dayの大きな丸の数字（21px）も同じ理由で太字にした。Tailwindのthemeに`--font-weight-bold`（既存の`--fod-weight-bold`）を足し、PR 2/2のファイル数は18。
 - 検証結果:
   - `pnpm lint`（eslint・命名・redocly・`check:api-types`）、`pnpm type-check`、`pnpm test`（scripts 173件・web 386件）、
     `pnpm build`がすべて通った。
