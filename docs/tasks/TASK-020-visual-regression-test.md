@@ -7,7 +7,7 @@
 | 対象領域 | 開発基盤 |
 | 作業区分 | テスト・検証 |
 | 優先度 | 開発基盤 |
-| 状態 | Todo |
+| 状態 | In progress |
 
 ## 目的と作業範囲
 
@@ -46,4 +46,4 @@ Playwrightのスクリーンショット比較を第一候補とし、Storybook�
 
 ## 関連Implementation Plan
 
-未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+- [2026-10-08-task-020-visual-regression.md](../implementation-plans/2026-10-08-task-020-visual-regression.md)
