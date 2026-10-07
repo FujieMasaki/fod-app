@@ -29,10 +29,11 @@ Rails.application.configure do
   # Store uploaded files on the local file system (see config/storage.yml for options).
   config.active_storage.service = :local
 
-  # メールはMailpit（SMTP: localhost:1025、受信箱: http://localhost:8025）へ送る。
+  # メールはMailpit（SMTP: 127.0.0.1:1025、受信箱: http://127.0.0.1:8025）へ送る。
+  # Mailpitはloopbackだけで待ち受けるよう起動するので（README）、IPv4のloopbackを明示する。
   # 起動していないときに黙って捨てないよう、配送の失敗はjobのエラーとしてログへ出す。
   config.action_mailer.delivery_method = :smtp
-  config.action_mailer.smtp_settings = { address: "localhost", port: 1025 }
+  config.action_mailer.smtp_settings = { address: "127.0.0.1", port: 1025 }
   config.action_mailer.raise_delivery_errors = true
 
   # Make template changes take effect immediately.
