@@ -255,7 +255,7 @@ PR 2/2 `feat/task-012-2-history-screens`（base: PR 1のブランチ）— 画�
   - 詳細から一覧へ戻ると一覧は先頭から表示し直され、下の方の「選択中」の丸が画面の外になっていた（D3が満たせない）。
     選択中の丸を表示した時に`scrollIntoView({ block: "center" })`で画面の中央へ移す（人間の判断。レビューでの修正）。Tailwindのthemeに`--font-weight-bold`（既存の`--fod-weight-bold`）を足し、PR 2/2のファイル数は18。
 - 検証結果:
-  - `pnpm lint`（eslint・命名・redocly・`check:api-types`）、`pnpm type-check`、`pnpm test`（scripts 173件・web 386件）、
+  - `pnpm lint`（eslint・命名・redocly・`check:api-types`）、`pnpm type-check`、`pnpm test`（scripts 173件・web 395件。レビューでの修正を含む）、
     `pnpm build`がすべて通った。
   - 追加したtest: 契約のexamples（Today・DayList・DayDetail）と制約値、`date-format`（実在しない暦日、年の切り替わり、
     0:00 JSTの前後、分が重なるときの秒）、Hook（cursorの受け渡し、続きの失敗で取得済みを保つ、前の日の遅れた応答を
