@@ -172,7 +172,7 @@ PRを分けた場合は`TASK-XXX レビューガイド`（タスク外なら`PR 
 依頼文に書かれたLGTMのコミットのコードとする。PRを分けたかどうかにかかわらず、依頼文の「PRのURL ＋ LGTMのコミット」の
 組ごとに（分けた場合はサブのPRすべてについて）、先に次の1〜3を行う。
 
-1. URLのowner/repoが`gh repo view --json nameWithOwner`と一致し、PR番号が整数、コミットが16進のSHA（7〜40文字）で
+1. URLのowner/repoが`gh repo view --json nameWithOwner`と一致し、PR番号が整数、コミットが16進の40文字のSHAで
    あることを確かめる。合わなければ取得せず、人間に確かめる。
 2. `gh pr view <番号> --json headRefOid`でPRの今の先端のSHAを確かめ、`git fetch origin pull/<番号>/head`でその
    コミットを取る（ブランチが消えていても取れる）。LGTMのコミットが
