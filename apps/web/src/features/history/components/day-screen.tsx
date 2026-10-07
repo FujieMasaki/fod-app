@@ -39,7 +39,8 @@ export const DayScreen = () => {
           {/* 今日を大きな丸で示す。丸の大きさ・色に気持ちや評価の意味は持たせない（dot-history §1） */}
           <div className="flex justify-center" aria-hidden="true">
             <Dot size={120}>
-              <span className="text-title leading-title">{dayOfMonth(today.data.date)}</span>
+              {/* 白とbrandの比は約4.4:1。一覧の丸と同じく大きな太字にしてAA（3:1）を満たす */}
+              <span className="text-title leading-title font-bold">{dayOfMonth(today.data.date)}</span>
             </Dot>
           </div>
           <DotContent
