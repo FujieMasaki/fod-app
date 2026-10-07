@@ -195,19 +195,19 @@ endpointの機能実装はBackendタスク（TASK-006 / 008 / 009 / 013）、呼
 
 ## 8. Why This Approach
 
-- **契約を先に人が書く（契約ファースト）。**TASK-005は実装より先に約束を決めるタスクで、後続の
+- **契約を先に人が書く（契約ファースト）**。TASK-005は実装より先に約束を決めるタスクで、後続の
   Backend/Frontendのタスクを並行して進めるため。コードから契約を生成すると、実装が済むまで契約が
   存在せず、TASK-001〜004で人が決めた意味が実装の都合で黙って変わり得る。
-- **検証は「正本1つ・両側が機械的に縛られる」形にした。**契約自体はRedocly lint、Webは生成した型と
+- **検証は「正本1つ・両側が機械的に縛られる」形にした**。契約自体はRedocly lint、Webは生成した型と
   Zodの完全一致を型検査、APIはcommitteeでresponseを照合する。さらに契約のexamplesを両側のtestで
   読み、WebとAPIが同じ具体例を同じ意味で解釈することを確かめる（TASK-005の「必要な検証」）。
-- **生成はWebの型だけに留めた。**endpointは約20で、Zodを手で書く量は小さい。multipart送信・
+- **生成はWebの型だけに留めた**。endpointは約20で、Zodを手で書く量は小さい。multipart送信・
   polling・CSRF・`code`ごとの出し分けは生成しにくく、通信関数まで生成するとfeature単位の配置
   （frontend.md）とも合わない。Rails側の生成は雛形止まりで、中身（認可・状態遷移・排他）は手で書く
   ことになるため採らない。
-- **OpenAPI 3.0.3にした。**committeeが使うopenapi_parserが3.0を対象にしているため（Q1の時点では
+- **OpenAPI 3.0.3にした**。committeeが使うopenapi_parserが3.0を対象にしているため（Q1の時点では
   3.1を想定していた）。nullを許す項目は`nullable`、または項目を省く形で表す。
-- **契約を`docs/`ではなく`contracts/`に置いた。**既存のCI（`scripts/ci-changes.mjs`）は`docs/`の
+- **契約を`docs/`ではなく`contracts/`に置いた**。既存のCI（`scripts/ci-changes.mjs`）は`docs/`の
   変更で検査を走らせない。契約の変更ではWebとAPIの両方の検査が走る必要があるため。
 
 ## 9. Data Flow
