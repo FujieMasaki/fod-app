@@ -85,13 +85,14 @@ flowchart TD
 
 ## 10. Files to Change
 
-1つのPR（レビュー対象6ファイル）。ブランチは`docs/task-022-diagram-in-pr`。
+1つのPR（レビュー対象7ファイル）。ブランチは`docs/task-022-diagram-in-pr`。
 
 - 新規: このPlan
 - 変更: `docs/development/pull-requests.md`（図の規約の正本）
 - 変更: `AGENTS.md`（参照の1行）
 - 変更: `.claude/skills/pr-review-cycle/SKILL.md`（PR作成・セルフレビュー・修正の手順）
 - 変更: `.claude/skills/run-task/SKILL.md`（PR作成の手順）
+- 変更: `.claude/agents/code-reviewer.md`（PR本文の図を受け取り、確かめる）
 - 変更: `docs/tasks/TASK-022-diagram-in-pr.md`（状態・Plan・完了条件）
 
 ## 11. Libraries / APIs
@@ -111,6 +112,8 @@ flowchart TD
   コンフリクトは人間が再開したセッションで解消する。
 - skillの変更はworktreeの中ですぐ効き、このPRのその後のレビュー手順にも使われる。検査を緩める変更は含めない。
 - 条件の判定はAIの判断に残る。機械的には強制しない（PR本文の検査は今はない）。
+- PR本文の図は、セルフレビューと`code-reviewer`が確かめる。Codexの最終チェック（`scripts/codex-final-check.mjs`）は
+  baseからのdiffだけを見るため、図は確かめない。スクリプトの入力を増やすと検査の仕組みの変更になるため、このPRでは広げない。
 
 ## 14. Verification
 
@@ -133,7 +136,9 @@ flowchart TD
 ## 16. Completion Record
 
 - 状態: 2026-10-08 実装を終え、GitHubでの描画の確認を人間に残している。
-- 実装差異: タスクは「`diagram` skillを使えない環境（定期実行など）」と書いているが、定期実行で起動したこのセッションでは
+- 実装差異: サブエージェントのレビューを受けて、独立した段でも図を確かめるよう`code-reviewer`に図を渡す手順を足した。
+  AGENTS.mdは条件を書き写さず参照だけにした。図を含む本文は`--body-file`で渡すと書いた。
+  タスクは「`diagram` skillを使えない環境（定期実行など）」と書いているが、定期実行で起動したこのセッションでは
   `~/.claude/skills/diagram/`が読み込まれ、skillが使えた（定期実行もローカルのClaude Codeで動くため）。そのため手順では
   定期実行を使えない環境の例に挙げず、「使えない環境ではMermaidを直接書く」とだけ書いた。
 - 検証結果:
@@ -145,5 +150,6 @@ flowchart TD
       データフロー）、このPR（AI・GitHub・人間にまたがるPR作成の処理の順序と分岐）。
     - 載せない: #59（依存の更新）、#68（完了報告に振り返りメモを促す1文。1つの主体の中で完結する手順の追記）、
       #81（ガイドの例の追記。文言）、#84（styleのCSS Modulesへの移行。振る舞いを変えない整理）。
+  - PR #86の本文のHTML（`gh api`の`body_html`）で、図が`data-type="mermaid"`の描画用の要素として出力されることを確かめた。
   - 未実施: GitHub上でMermaidが描画されることは、ブラウザで見られないため人間がPR画面で確認する（PRの「確認すること」に入れた）。
 - 関連: [TASK-022](../tasks/TASK-022-diagram-in-pr.md)、[pull-requests.md](../development/pull-requests.md#pr本文の図)
