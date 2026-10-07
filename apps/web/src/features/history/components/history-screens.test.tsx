@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { MouseEventHandler, ReactNode } from "react";
@@ -103,9 +103,17 @@ const renderWithAuth = (ui: ReactNode) => {
   );
 };
 
+// jsdomはscrollIntoViewを持たないため差し替える。呼ばれた要素は`mock.contexts`（this）に残る。
+const scrolled = vi.fn<Element["scrollIntoView"]>();
+
+beforeEach(() => {
+  Element.prototype.scrollIntoView = scrolled;
+});
+
 afterEach(() => {
   vi.unstubAllGlobals();
   navigateMock.mockClear();
+  scrolled.mockClear();
 });
 
 describe("Day", () => {
@@ -197,6 +205,31 @@ describe("一覧", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalledTimes(2));
     expect(navigateMock).toHaveBeenNthCalledWith(1, { to: "/dots", search: { selected: "2026-09-28" }, replace: true });
     expect(navigateMock).toHaveBeenNthCalledWith(2, { to: "/dots/$date", params: { date: "2026-09-28" } });
+  });
+
+  it("詳細から戻ると、開いていた日の丸を画面の中央へ移す。続きを読み込んでも移り直さない", async () => {
+    mockApi({
+      "GET /api/v1/session": [signedIn],
+      "GET /api/v1/days": [{ status: 200, body: firstPage }],
+      "GET /api/v1/days?cursor=c1": [{ status: 200, body: secondPage }],
+    });
+    renderWithAuth(<DayListScreen selected="2026-09-28" />);
+
+    const selected = await screen.findByRole("link", { name: "2026年9月28日のDot、2件、選択中" });
+    await waitFor(() => expect(scrolled).toHaveBeenCalledTimes(1));
+    expect(scrolled.mock.contexts[0]).toBe(selected);
+    expect(scrolled).toHaveBeenCalledWith({ block: "center" });
+
+    fireEvent.click(screen.getByRole("button", { name: "さらに前のDotを読み込む" }));
+    expect(await screen.findByRole("link", { name: "2025年9月28日のDot" })).toBeInTheDocument();
+    expect(scrolled).toHaveBeenCalledTimes(1);
+  });
+
+  it("選んだ日が無ければ、どこへも移さない", async () => {
+    mockApi({ "GET /api/v1/session": [signedIn], "GET /api/v1/days": [{ status: 200, body: firstPage }] });
+    renderWithAuth(<DayListScreen />);
+    expect(await screen.findByRole("link", { name: "2026年9月28日のDot、2件" })).toBeInTheDocument();
+    expect(scrolled).not.toHaveBeenCalled();
   });
 
   it("続きを読み込み、最後まで来たらそれを示す。別の年の同じ月日も別の名前になる", async () => {

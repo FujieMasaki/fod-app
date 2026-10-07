@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import { useEffect, useRef, type MouseEvent } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 
 import { Button, Text } from "@/design-system";
@@ -101,8 +101,16 @@ const DayDot = ({ day, isToday, isSelected, onClick }: DayDotProps) => {
   );
   const name = [`${formatFullDate(day.date)}のDot`, ...notes].join("、");
 
+  // 詳細から戻ると一覧は先頭から表示し直されるので、開いていた日の丸を画面の中央へ移して見えるようにする（D3）。
+  // 表示した時だけ移す（続きを読み込んでも、表示中の丸は作り直されないので移り直さない）。
+  const ref = useRef<HTMLAnchorElement>(null);
+  useEffect(() => {
+    if (isSelected) ref.current?.scrollIntoView({ block: "center" });
+  }, [isSelected]);
+
   return (
     <Link
+      ref={ref}
       to="/dots/$date"
       params={{ date: day.date }}
       onClick={onClick}
