@@ -7,7 +7,7 @@
 | 対象領域 | 開発基盤 |
 | 作業区分 | 実装 |
 | 優先度 | 開発基盤 |
-| 状態 | Todo |
+| 状態 | In progress |
 
 ## 目的と作業範囲
 
@@ -41,4 +41,4 @@
 
 ## 関連Implementation Plan
 
-未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+- [2026-10-08-task-022-diagram-in-pr.md](../implementation-plans/2026-10-08-task-022-diagram-in-pr.md)
