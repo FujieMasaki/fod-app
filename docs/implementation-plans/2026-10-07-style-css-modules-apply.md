@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-完了（実装と自動の検証まで。PRは未作成）
+完了（PR #83・#84。メインのPRは#82）
 
 ## 2. Goal
 
@@ -121,11 +121,12 @@ JSXでは役割の名前（`styles.timeButton`など）だけを読めばよい�
 
 ## 16. Completion Record
 
-- 状態: 2026-10-07に実装と自動の検証が完了。画面の見た目の手動確認はPRの「確認すること」で行う。
+- 状態: 2026-10-07に実装と検証が完了。
 - 実装差異: 認証の`ReloadNotice`の文言は、`FormMessage`の失敗と同じ見た目のため、別のclassを作らず
-  `messageError`を使った。ほかはPlanどおり。
+  `messageError`を使った。機械のレビューの指摘で、`docs/design-system.md`に、`@reference`したmodule.cssには`@apply`
+  だけを書くこと、状態のclassはmodule.cssの中の定義の順で効くこと、classを重ねない規則の対象を足した。ほかはPlanどおり。
 - 検証結果: `pnpm check`・`pnpm type-check`・`pnpm test`（395件）・`pnpm build`が通った。JSXの`className`に文字列の
   utilityが残っていないことをgrepで確かめた。buildしたCSSに`@property --tw-outline-style`・`--tw-border-style`が
   出力され、`timeButton`の`[aria-pressed=true]`・`input`の`[aria-invalid=true]`・`:focus-visible`の規則が元の
-  utilityと同じ値で出ていることを確かめた。画面を開いての見た目の比較は未実施。
-- 関連: `docs/design-system.md`「StylingとDesign Token」
+  utilityと同じ値で出ていることを確かめた。ローカルで画面を開き、認証・履歴の画面の見た目に問題がないことを人間が確かめた。
+- 関連: #82（メイン）、#83、#84、`docs/design-system.md`「StylingとDesign Token」
