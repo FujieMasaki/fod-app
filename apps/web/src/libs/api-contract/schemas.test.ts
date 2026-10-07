@@ -6,7 +6,15 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 import type { z } from "zod";
 
-import { dotSchema, generationSchema, problemSchema, sessionSchema } from "./schemas";
+import {
+  dayDetailSchema,
+  dayListSchema,
+  dotSchema,
+  generationSchema,
+  problemSchema,
+  sessionSchema,
+  todaySchema,
+} from "./schemas";
 
 // 契約の正本。examplesはWebとAPIが同じ意味で解釈することを確かめる共通の具体例。
 const contractPath = fileURLToPath(new URL("../../../../../contracts/openapi.yaml", import.meta.url));
@@ -17,6 +25,9 @@ const schemasByName: Record<string, z.ZodType> = {
   Dot: dotSchema,
   Generation: generationSchema,
   Session: sessionSchema,
+  Today: todaySchema,
+  DayList: dayListSchema,
+  DayDetail: dayDetailSchema,
 };
 
 type Ref = { $ref: string };
@@ -106,6 +117,20 @@ describe("Webのschemaが契約外の値を拒否する", () => {
     expect(dotSchema.safeParse({ ...dot, started_at: "2026-09-28T13:04:05.123Z" }).success).toBe(true);
   });
 
+  it("今日の記録があるのにDotが無いTodayと、記録が無いのに件数が0でないTodayを拒否する", () => {
+    expect(todaySchema.safeParse({ date: "2026-10-01", dot_count: 1 }).success).toBe(false);
+    expect(todaySchema.safeParse({ date: "2026-10-01", dot_count: 2 }).success).toBe(false);
+    expect(todaySchema.safeParse({ date: "2026-10-01", dot_count: 0 }).success).toBe(true);
+  });
+
+  it("件数が0の日と、日付の形が違う日を一覧の要素として拒否する", () => {
+    const item = { date: "2026-09-28", dot_count: 1, latest_dot_id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04" };
+    const list = (items: unknown[]) => ({ today: "2026-10-01", items, next_cursor: null });
+    expect(dayListSchema.safeParse(list([item])).success).toBe(true);
+    expect(dayListSchema.safeParse(list([{ ...item, dot_count: 0 }])).success).toBe(false);
+    expect(dayListSchema.safeParse(list([{ ...item, date: "2026/09/28" }])).success).toBe(false);
+  });
+
   it("authenticatedごとに必須の項目が欠けたSessionを拒否する", () => {
     expect(sessionSchema.safeParse({ authenticated: true, csrf_token: "t" }).success).toBe(false);
     expect(sessionSchema.safeParse({ authenticated: false }).success).toBe(false);
@@ -162,6 +187,28 @@ const limitTargets: { contractSchema: string; schema: z.ZodType; valid: Record<s
     },
   },
   {
+    contractSchema: "DaySummary",
+    schema: dayListSchema.shape.items.element,
+    valid: { date: "2026-09-28", dot_count: 2, latest_dot_id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04" },
+  },
+  {
+    contractSchema: "TodayRecorded",
+    // unionのままでは、件数0の値が記録なしの形として通る（契約のoneOfでも同じ）ため、記録ありの形だけで確かめる。
+    schema: todaySchema.options[0],
+    valid: {
+      date: "2026-09-28",
+      dot_count: 1,
+      latest_dot: {
+        id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04",
+        date: "2026-09-28",
+        started_at: "2026-09-28T13:04:05Z",
+        duration_seconds: 312,
+        sentence: "",
+        summary: "",
+      },
+    },
+  },
+  {
     contractSchema: "GenerationProcessing",
     schema: generationSchema,
     valid: {
@@ -193,12 +240,14 @@ describe("Zod schemaの制約値が契約と一致する", () => {
 
   it("制約を持つ項目を対象のすべてから集めている", () => {
     expect(limitCases.map((c) => c.label).sort()).toEqual([
+      "DaySummary.dot_count",
       "Dot.duration_seconds",
       "Dot.sentence",
       "Dot.summary",
       "GenerationProcessing.poll_after_seconds",
       "ProblemGeneral.status",
       "ProblemRateLimited.retry_after_seconds",
+      "TodayRecorded.dot_count",
     ]);
   });
 

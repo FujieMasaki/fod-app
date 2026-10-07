@@ -7,7 +7,7 @@
 | 対象領域 | Frontend |
 | 作業区分 | 実装 |
 | 優先度 | P1 |
-| 状態 | Blocked |
+| 状態 | In progress |
 
 ## 目的と作業範囲
 
@@ -47,4 +47,4 @@
 
 ## 関連Implementation Plan
 
-未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+- [2026-10-07 TASK-012 今日のDay表示と丸いDot一覧・過去の詳細](../implementation-plans/2026-10-07-task-012-day-history.md)
