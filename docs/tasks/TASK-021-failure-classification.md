@@ -5,7 +5,7 @@
 | ID | TASK-021 |
 | タスク名 | AIの失敗を3分類し、直す場所を決める |
 | 対象領域 | 開発基盤 |
-| 作業区分 | 実装 |
+| 作業区分 | 設計判断 |
 | 優先度 | 開発基盤 |
 | 状態 | Todo |
 
@@ -21,7 +21,9 @@
 
 権限不足のうち、許可を広げる・guardやhookを緩める方向の対処は人間が判断する。AIは止まる条件として扱い、提案をPlanに書くだけにする（自動のループが自分の許可を広げられないようにするため）。止めるべき操作が通る場合に制限を強める方向の対処は、AIが行ってよい。
 
-検査・許可・reviewerの定義（`.claude/settings.json`、`.claude/agents/`、`.claude/skills/`、`scripts/claude-*.mjs`、`scripts/ci-gate.mjs`、`lefthook.yml`、CIの設定）を変えたPRでは、変えたファイルと、検査が緩んでいないことの確認をPRの「確認すること」に必ず挙げる。これらの変更はworktreeの中ですぐ効き、同じセッションのその後の検査とレビューにも使われるため、最後に止められるのはマージ前の人間のレビューだけである。
+検査・許可・reviewerの定義、つまりlint・test・型の設定と閾値、hook、CI、レビュー指針、自動実行の判定、AIへの指示を変えるファイルを変えたPRでは、変えたファイルと、検査が緩んでいないことの確認をPRの「確認すること」に必ず挙げる。これらの変更はworktreeの中ですぐ効き、同じセッションのその後の検査とレビューにも使われるため、最後に止められるのはマージ前の人間のレビューだけである。
+
+主なファイルの例（網羅ではない）: `.claude/settings.json`、`.claude/agents/`、`.claude/skills/`、`scripts/claude-*.mjs`、`scripts/claude-hook.sh`、`scripts/codex-final-check.mjs`、`scripts/ci-gate.mjs`、`scripts/ci-changes.mjs`、`scripts/check-*.mjs`、`scripts/task-status.mjs`、`scripts/task-scheduler.mjs`、`eslint.config.mjs`、`apps/api/.rubocop.yml`、`lefthook.yml`、`package.json`のscripts、`.github/workflows/`、`docs/code-review/`、`AGENTS.md`。
 
 `personal-conventions.md`はリポジトリの外（個人の環境）にあり、PRのレビューを経ない。リポジトリの外のファイルについて、AIはPlanに変更の提案を書くだけにし、反映は人間が行う。
 
@@ -31,7 +33,7 @@
 
 - [ ] `pr-review-cycle`の手順8と「止まる条件」に、3分類と分類ごとの直す場所が書かれている。
 - [ ] 権限を広げる方向の対処は人間の判断を経る（AIは止まって提案だけを書く）手順になっており、制限を強める方向と分けて書かれている。
-- [ ] 検査・許可・reviewerの定義を変えたPRで、変えたファイルを「確認すること」に挙げる手順になっている。
+- [ ] 検査・許可・reviewerの定義を変えたPRで、変えたファイルを「確認すること」に挙げる手順が`pr-review-cycle`に書かれている（TASK-019で先に入っていれば、それに合っているか確かめる）。
 - [ ] リポジトリの外のファイルはAIが変えず、Planに提案を書くだけの手順になっている。
 - [ ] `run-task`で止まった場合と、人間のレビューで指摘が来た場合にも同じ分類を使う手順になっている。
 - [ ] 分類と対処の記録の形式・置き場所が決まり、過去の再発防止の事例を少なくとも3件分類して記録している。

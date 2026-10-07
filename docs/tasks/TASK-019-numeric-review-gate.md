@@ -5,7 +5,7 @@
 | ID | TASK-019 |
 | タスク名 | 機械のレビューループに数値の完了条件を加える |
 | 対象領域 | 開発基盤 |
-| 作業区分 | テスト・検証 |
+| 作業区分 | 設計判断 |
 | 優先度 | 開発基盤 |
 | 状態 | Todo |
 
@@ -17,7 +17,7 @@
 
 - Mutation Test のkill率（Frontendは候補としてStryker。Backendは対象にするか着手時に判断する）
 - 変更したファイルのカバレッジ
-- 循環的複雑度の上限（ESLintの`complexity`、RuboCopの`Metrics/CyclomaticComplexity`）
+- 循環的複雑度の上限（Frontendは未設定なのでESLintの`complexity`を入れるか決める。Backendは`apps/api/.rubocop.yml`で無効にしていないため、RuboCopの`Metrics/CyclomaticComplexity`が既定の上限で有効であり、閾値を見直すかを決める）
 
 すべてのファイルに一律の閾値を課さず、変更した範囲に効かせる。実行時間が長い指標（Mutation Test）は、pre-push・CI・`pr-review-cycle`のどこで実行するかを実行時間を測ってから決める。既存のCI（`scripts/ci-gate.mjs`）とpre-pushの構成を壊さない。
 
@@ -25,7 +25,9 @@
 
 ゲートは測られる側のAIが同じリポジトリで動かせる。AIは導入後に閾値を下げず、除外も足さない。必要になったら、止まる条件として人間に判断を求める。
 
-検査・許可・reviewerの定義（`.claude/settings.json`、`.claude/agents/`、`.claude/skills/`、`scripts/claude-*.mjs`、`scripts/ci-gate.mjs`、`lefthook.yml`、CIの設定）を変えたPRでは、変えたファイルと、検査が緩んでいないことの確認をPRの「確認すること」に必ず挙げる。これらの変更はworktreeの中ですぐ効き、同じセッションのその後の検査とレビューにも使われるため、最後に止められるのはマージ前の人間のレビューだけである。
+検査・許可・reviewerの定義、つまりlint・test・型の設定と閾値、hook、CI、レビュー指針、自動実行の判定、AIへの指示を変えるファイルを変えたPRでは、変えたファイルと、検査が緩んでいないことの確認をPRの「確認すること」に必ず挙げる。これらの変更はworktreeの中ですぐ効き、同じセッションのその後の検査とレビューにも使われるため、最後に止められるのはマージ前の人間のレビューだけである。
+
+主なファイルの例（網羅ではない）: `.claude/settings.json`、`.claude/agents/`、`.claude/skills/`、`scripts/claude-*.mjs`、`scripts/claude-hook.sh`、`scripts/codex-final-check.mjs`、`scripts/ci-gate.mjs`、`scripts/ci-changes.mjs`、`scripts/check-*.mjs`、`scripts/task-status.mjs`、`scripts/task-scheduler.mjs`、`eslint.config.mjs`、`apps/api/.rubocop.yml`、`lefthook.yml`、`package.json`のscripts、`.github/workflows/`、`docs/code-review/`、`AGENTS.md`。
 
 ## 確認可能な完了条件
 
@@ -34,7 +36,7 @@
 - [ ] `pr-review-cycle`のSKILL.mdに、数値の完了条件を満たすまでLGTMにしない手順が書かれている。
 - [ ] 実行時間を計測し、pre-push・CIの所要時間の増分をPlanに記録している。
 - [ ] AIが閾値を下げず除外も足さないこと（必要なら止まって人間に判断を求めること）を、`pr-review-cycle`と`run-task`の「絶対に守ること」に書いている。
-- [ ] 検査・許可・reviewerの定義を変えたPRで、変えたファイルを「確認すること」に挙げる手順を`pr-review-cycle`に書いている。
+- [ ] 検査・許可・reviewerの定義を変えたPRで、変えたファイルを「確認すること」に挙げる手順（TASK-021の成果物）に、このタスクのPRが従っている。TASK-021より先に着手した場合は、その手順をこのタスクで`pr-review-cycle`に入れ、TASK-021で確かめる。
 - [ ] [frontend.md](../development/frontend.md)の「4. テスト」と[backend.md](../development/backend.md)の「3. API契約とテスト」へ、指標と閾値の扱いを反映している。
 
 ## 依存するタスクID
