@@ -112,8 +112,9 @@ const DayDot = ({ day, isToday, isSelected, onClick }: DayDotProps) => {
     >
       <span
         aria-hidden="true"
+        // 白とbrandの比は約4.4:1で、小さい文字のAA（4.5:1）に届かない。大きな太字（WCAGの18.66px以上の太字、3:1）にする。
         className={[
-          "flex size-8 items-center justify-center rounded-full bg-brand text-small leading-small text-surface",
+          "flex size-8 items-center justify-center rounded-full bg-brand text-title leading-title font-bold text-surface",
           isSelected && "outline-2 outline-offset-2 outline-ink",
         ]
           .filter(Boolean)
