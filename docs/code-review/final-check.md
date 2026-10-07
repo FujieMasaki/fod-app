@@ -24,8 +24,8 @@ Claude Codeのセルフレビューとサブエージェント（[`code-reviewer
    （`apps/web/`は[`frontend/`](./frontend/README.md)、`apps/api/`は[`backend/`](./backend/README.md)、
    `contracts/`・両方にまたがる変更・どちらにも当てはまらない変更は両方）。
    **仕様・設計文書・レビュー指針・タスク・Planの変更では[`documentation.md`](./documentation.md)を読む**
-   （`docs/`配下と、`AGENTS.md`・`CLAUDE.md`・`README.md`・`contracts/README.md`等のルートの文書。
-   コードと両方にまたがる変更では、コード側の入口と両方）。
+   （`docs/`配下と、`AGENTS.md`・`CLAUDE.md`・`README.md`・`contracts/README.md`等のルートの文書、
+   `.claude/agents/*.md`・`.claude/skills/*/SKILL.md`。コードと両方にまたがる変更では、コード側の入口と両方）。
 3. 差分と、判断に必要な関連実装・test・仕様を読む。
 4. 次の観点を優先して確認する。
    - security（認証・認可、入力の検証、open redirect、CSRF、秘密情報・個人データの扱い）

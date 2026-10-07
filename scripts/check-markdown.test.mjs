@@ -209,6 +209,26 @@ test("HTMLコメントとYAML frontmatterの中は見ない", () => {
   assert.equal(findEmphasisErrors("本文\n\n---\n\n**崩れている。**続き\n", "a.md").length, 1);
 });
 
+test("コメントが開いている間は、飛ばす経路より先に閉じる機会を与える", () => {
+  // fence行や4空白行で`return`すると、その行の`-->`が消費されずコメントが開いたまま残り、
+  // 以降が黙って無検査になる（後ろに余分な`-->`があるとEOFの報告まで消える）。
+  // 閉じが4空白インデントの行にある。GitHubの`/markdown`で確認すると、HTML blockは`-->`を
+  // 含む行で終わり、その後の`**壊れ。**続き`は段落なので`**`が本文に出る。
+  const closedOnIndented = findEmphasisErrors("<!-- a\n\n    --> \n\n**壊れ。**続き\n\n-->\n", "a.md");
+  assert.equal(closedOnIndented.length, 1, JSON.stringify(closedOnIndented));
+  assert.match(closedOnIndented[0], /^a\.md:5: 句読点の直後の/);
+
+  // 閉じがfence行の中にある。この場合はHTML blockのあとの ``` が開きfenceになり、
+  // 以降はcode blockの中になる（GitHubも`<pre><code>`で描画する）。強調は指摘しないが、
+  // **黙って通さず「fenceが閉じていません」を報告する**。
+  const closedOnFence = findEmphasisErrors("<!-- a\n\n```text\n-->\n```\n\n**壊れ。**続き\n\n-->\n", "a.md");
+  assert.equal(closedOnFence.length, 1, JSON.stringify(closedOnFence));
+  assert.match(closedOnFence[0], /で開いたcode blockが閉じていません/);
+
+  // 行をまたぐ正常なコメントの中は、従来どおり見ない。
+  assert.equal(findEmphasisErrors("文\n\n<!--\n**メモ。**続き\n-->\n\n**崩れ。**続き\n", "a.md").length, 1);
+});
+
 test("コードスパン・code blockの中の`<!--`でコメントの状態を反転させない", () => {
   // 反転すると、そこから後の行が黙って無検査になる。
   assert.equal(findEmphasisErrors("書き方は `<!--` である\n\n**崩れている。**続き\n", "a.md").length, 1);

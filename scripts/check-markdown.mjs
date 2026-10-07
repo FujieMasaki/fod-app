@@ -181,8 +181,9 @@ export const skippingStates = {
     initial: null,
     message: (value) => `${value} で開いたcode blockが閉じていません。そこから後の行を検査していません。`,
   },
-  // コメントは行を飛ばさない（同じ長さのplaceholderへ置き換えて本文として解析する）。
-  // ただし閉じ忘れると以降の本文が全部placeholderになるので、閉じ忘れだけここで報告する。
+  // コメントが開いていない行は飛ばさず、同じ長さのplaceholderへ置き換えて本文として解析する。
+  // 開いている間は、ほかの判定より先にここで閉じる機会を与える（飛ばす経路でreturnすると
+  // その行の`-->`が消費されず、以降が黙って無検査になる）。
   comment: {
     initial: false,
     message: () => "HTMLコメント（<!--）が閉じていません。そこから後の行を検査していません。",
@@ -295,6 +296,19 @@ export function analyzeEmphasis(source, relativePath) {
     // 本文として解析し、`--fix`がコマンド例を書き換える）。位置は`rawLine`のままで数える。
     const structural = rawLine.replace(/^(?:\s*>)+ ?/, "").replace(/^\t+/, (tabs) => "    ".repeat(tabs.length));
 
+    // **HTMLコメントが開いている間は、ほかの判定より先にコメントを閉じる機会を与える。**
+    // fence行や4空白インデント行で`return`してしまうと、その行にある`-->`が消費されず、
+    // コメントが開いたまま残って以降の全行が黙って無検査になる（さらに後ろに余分な`-->`が
+    // あるとEOFの報告まで消える）。CommonMarkでも`<!--`のHTML blockは`-->`を含む行で終わる。
+    // 開いていないときは従来どおり後ろで処理する（コードスパンやcode blockの中の`<!--`で
+    // 状態を反転させないため）。
+    if (skipping.comment.open) {
+      const masked = maskHtmlComments(rawLine, true);
+      skipping.comment.open = masked.inComment;
+      if (block) block.push(masked.line, lineNumber);
+      return "comment";
+    }
+
     // 水平線（`*`だけの行）は強調ではないので先に外す。
     if (
       skipping.fence.open === null &&
@@ -400,6 +414,7 @@ export function analyzeEmphasis(source, relativePath) {
     "fence",
     "indentedCode",
     "frontmatter",
+    "comment",
   ]);
 
   lines.forEach((originalLine, index) => {

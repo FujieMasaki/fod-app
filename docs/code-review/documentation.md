@@ -2,8 +2,9 @@
 
 仕様・設計文書・レビュー指針・タスク・Planの変更をレビューするときの観点を定める。**対象は`docs/`配下
 （`docs/tasks/`・`docs/implementation-plans/`・`docs/code-review/`・`docs/development/`を含む）だけでなく、
-`AGENTS.md`・`CLAUDE.md`・`README.md`・`contracts/README.md`等のルートの文書も含む**（§3が`AGENTS.md`の
-二重化回避を観点に挙げているため、ルートの文書が漏れると狙った型を拾えない）。コードの変更は[`frontend/`](./frontend/README.md)・[`backend/`](./backend/README.md)の
+`AGENTS.md`・`CLAUDE.md`・`README.md`・`contracts/README.md`等のルートの文書と、
+`.claude/agents/*.md`・`.claude/skills/*/SKILL.md`も含む**（§3が`AGENTS.md`の二重化回避を観点に
+挙げており、`.claude/`配下はレビュー指針そのものなので、漏れると狙った型を拾えない）。コードの変更は[`frontend/`](./frontend/README.md)・[`backend/`](./backend/README.md)の
 入口を使う。両方にまたがる変更では、この文書とコード側の入口の両方を使う。
 
 重大度・レビュー出力の形式は[`frontend/README.md`](./frontend/README.md) §2・§4に従い、この文書には
