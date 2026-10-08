@@ -120,9 +120,28 @@
 - 純粋な変換はunit test、HookとComponentの状態遷移はcomponent/integration test、実ブラウザの
   権限・録音・複数画面の一連操作は必要になった時点でE2Eを選ぶ。
 
+### 画面のスナップショット比較（VRT）
+
+- 主要な画面の見た目を基準画像と比べ、意図しない見た目の変化を検出する。対象はホーム（未認証）、
+  ログイン、録音（マイクの許可待ち）、今日のDay（Dotあり・なし）、過去の一覧、日の詳細、設定で、
+  幅は390px・1280pxの2つ（`apps/web/vrt/screens.spec.ts`）。dark modeは導入したときに加える。
+- 実行は`pnpm vrt`、基準画像の更新は`pnpm vrt:update`。どちらも公式のPlaywrightコンテナで実行し
+  （Dockerが要る）、CIの`VRT`ジョブも同じscript（`scripts/vrt.sh`）を使う。macOSとLinuxで文字の
+  描画が違うため、コンテナの外では実行しない。
+- 差分があると失敗し、`apps/web/vrt/report`（CIでは`vrt-report` artifact）に期待・実際・差分の画像が出る。
+  意図した変化なら`pnpm vrt:update`で基準画像（`apps/web/vrt/__screenshots__/`）を更新し、変更と同じ
+  コミットに入れる。意図しない変化なら実装を直す。許容値は1pxの差も失敗にする設定で、揺れたら
+  許容値を緩める前に原因（時刻・animation・fixture）を直す。
+- APIは`apps/web/vrt/fixtures.ts`の架空のデータに差し替え、契約のschemaで検証してから返す。
+  時刻・フォント・外部への通信・マイクは`apps/web/vrt/support.ts`で固定する。基準画像に実在の
+  個人データ・音声由来の内容を入れない。画面が新しいAPIを呼ぶようになったら、fixtureを足す
+  （fixtureのないAPIを呼ぶとVRTが失敗する）。
+- PlaywrightはVRTのためだけに使う。操作の一連の流れを確かめるE2Eは、下の「保留」の判断とは別に扱う。
+
 ### 保留
 
 - E2E基盤は、実サービス接続または重要な回帰がunit / component testで防げないときに導入判断する。
+  VRTのためにPlaywrightを入れたことは、この判断を済ませたことにならない。
 
 ## 5. 実装前チェック
 
