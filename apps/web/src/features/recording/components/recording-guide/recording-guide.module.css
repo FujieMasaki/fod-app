@@ -1,0 +1,30 @@
+@reference "@/styles/tailwind.css";
+
+.root {
+  @apply flex flex-col gap-6 py-6;
+}
+
+.head {
+  @apply flex flex-col gap-3;
+}
+
+/* preflightを読み込まないため、dl・ddの既定の余白を消す */
+.items {
+  @apply m-0 flex flex-col gap-4;
+}
+
+.item {
+  @apply flex flex-col gap-1;
+}
+
+.itemHeading {
+  @apply text-small leading-small text-ink-secondary;
+}
+
+.itemBody {
+  @apply m-0 text-body leading-body text-ink;
+}
+
+.actions {
+  @apply flex flex-col gap-2;
+}

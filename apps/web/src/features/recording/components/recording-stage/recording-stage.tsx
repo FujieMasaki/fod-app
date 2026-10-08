@@ -6,6 +6,7 @@ import { useSession, type RecordedAudio } from "@/features/session";
 import { formatDuration } from "@/utils/format-duration";
 import { useRecorder, type RecorderFailure } from "../../hooks/use-recorder";
 import type { RecordingOutcome } from "../../recorded-audio";
+import { RecordingGuide } from "../recording-guide/recording-guide";
 import { RecordingNotice } from "../recording-notice/recording-notice";
 import styles from "./recording-stage.module.css";
 
@@ -42,12 +43,17 @@ type Ended =
   | { kind: "empty" }
   | { kind: "too_large" };
 
-/** 録音の主要ブロック。マウントで録音を始め、止めたら録音を Processing へ委ねる。 */
+/**
+ * 録音の主要ブロック。最初に録音前の案内を出し、利用者が「録音を始める」を押してからマイクを要求する
+ * （開いただけでは録音を始めない。ログインから戻った直後も同じ）。止めたら録音を Processing へ委ねる。
+ */
 export const RecordingStage = () => {
   const navigate = useNavigate();
   const { setRecordedAudio, clearRecordedAudio } = useSession();
   const { identityEpoch } = useAuth();
   const { phase, elapsedSec, failure, autoStopped, getAmplitude, start, stop } = useRecorder();
+  // 案内を読んで「録音を始める」を押したか
+  const [started, setStarted] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [ended, setEnded] = useState<Ended | null>(null);
   // 録音を始めたときの利用者の世代。止めたときに利用者が切り替わっていたら、前の利用者の録音を残さない。
@@ -59,18 +65,16 @@ export const RecordingStage = () => {
     // 前の録音は使わない（録り直す・新しく始める）。
     clearRecordedAudio();
     startedEpochRef.current = currentEpochRef.current;
+    setStarted(true);
     setEnded(null);
     setStopping(false);
     void start();
   };
 
-  // 録音はmountで始め、unmountでuseRecorderが片付ける。StrictModeの再実行では、片付けた後に新しく始め直す
-  // （一度だけ始める形にすると、片付けた録音のまま止まる）。
-  // 前の録音は、この画面に来た時点で使わない。
+  // 前の録音は、この画面に来た時点で使わない。録音はunmountでuseRecorderが片付ける。
   useEffect(() => {
     clearRecordedAudio();
-    void start();
-  }, [clearRecordedAudio, start]);
+  }, [clearRecordedAudio]);
 
   const proceed = (audio: RecordedAudio) => {
     setRecordedAudio(audio);
@@ -107,6 +111,8 @@ export const RecordingStage = () => {
   }, [autoStopped]);
 
   const goHome = () => navigate({ to: "/" });
+
+  if (!started) return <RecordingGuide onStart={begin} onCancel={goHome} />;
 
   if (failure) {
     const notice = FAILURE_NOTICE[failure];
