@@ -206,7 +206,7 @@ skill: 正本（仕様・audit.md）と実装を読む（変更しない）
 
 ## 10. Files to Change
 
-1つのPR（見積もり12ファイル）。
+1つのPR（見積もり13ファイル）。
 
 - 新規: `.claude/skills/exploratory-audit/SKILL.md`（監査の手順・入出力）
 - 新規: `docs/code-review/audit.md`（観点ごとの確認項目）
@@ -215,6 +215,7 @@ skill: 正本（仕様・audit.md）と実装を読む（変更しない）
 - 変更: `docs/tasks/README.md`（監査から起こしたタスクの扱い）
 - 変更: `AGENTS.md`（監査の入口）
 - 変更: `README.md`（文書一覧と、監査の起動方法）
+- 変更: `docs/code-review/documentation.md`（再発防止。未検証の流れの範囲を区切る観点）
 - 変更: `.claude/settings.json`（denyに開発ログ・`tmp/`・`storage/`のReadを、ルート直下とworktreeの両方の形で足す。R2）
 - 変更: `.claude/skills/human-review-artifact/SKILL.md`（秘匿する候補の修正PRで、ページに再現手順を引用しないポインタ）
 - 変更: `.claude/skills/pr-review-cycle/SKILL.md`（秘匿する候補の修正PRでは、再発防止の追記を後のPRへ回すポインタ）
@@ -341,6 +342,8 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
   （R3の判断の後）秘匿の目印を「差分にslugが`audit-fix`のタスクかPlanがある」に広げ、タスクを起こすPRも含めた。
   レビュアーはタスク本文が抽象的なことを指摘しないとした。skillの禁止事項を§4への参照にし、タスクに写す1文に
   「PRは分けない」を足した。まだ通していない経路の範囲を区切った（上の「範囲の区切り」）。
+- 再発防止（`pr-review-cycle`の手順8）: [`documentation.md`](../code-review/documentation.md) §4に、まだ通していない流れを
+  決める差分では範囲をPlanで区切ってから出す、という観点を足した（レビューが2回止まった原因）。
 - レビューで直したこと（Codex、2回目）: 同じ日に監査を並行で回すとIDの連番が重なりうるため、`audits/.lock`を
   `mkdir`で取り、同時に動く監査を1つにした。
   （Codex2回目の後のサブエージェント1回目）秘匿しない例外の条件を、条件そのもののspecがあるか、別の条件のspecを
