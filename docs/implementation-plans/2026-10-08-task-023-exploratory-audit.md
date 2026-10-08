@@ -121,7 +121,7 @@ AIは次の既定値を採用し、質問しない。
   [code-review](../code-review/)、[タスクの運用ルール](../tasks/README.md#運用ルール)、
   [TASK-021](../tasks/TASK-021-failure-classification.md)（検査・許可・reviewerの定義の扱い）、
   [pr-review-cycle](../../.claude/skills/pr-review-cycle/SKILL.md)、`scripts/task-scheduler.mjs`
-- 更新（判断後）: [AGENTS.md](../../AGENTS.md)（監査の入口を1行）、[docs/tasks/README.md](../tasks/README.md)
+- 更新（判断後。実装で増えた文書は「16. Completion Record」の実装差異を参照）: [AGENTS.md](../../AGENTS.md)（監査の入口を1行）、[docs/tasks/README.md](../tasks/README.md)
   （監査から起こしたタスクの扱い。Q2でBなら定期実行の記述も）、このPlan、タスクファイル
 
 ## 7. Proposed Approach
@@ -165,7 +165,7 @@ skill: 正本（仕様・audit.md）と実装を読む（変更しない）
 
 ## 10. Files to Change
 
-1つのPR（見積もり9ファイル）。
+1つのPR（見積もり10ファイル）。
 
 - 新規: `.claude/skills/exploratory-audit/SKILL.md`（監査の手順・入出力）
 - 新規: `docs/code-review/audit.md`（観点ごとの確認項目）
@@ -174,6 +174,7 @@ skill: 正本（仕様・audit.md）と実装を読む（変更しない）
 - 変更: `docs/tasks/README.md`（監査から起こしたタスクの扱い）
 - 変更: `AGENTS.md`（監査の入口）
 - 変更: `README.md`（文書一覧と、監査の起動方法）
+- 変更: `.claude/skills/pr-review-cycle/SKILL.md`（秘匿する候補の修正PRでは、再発防止の追記を後のPRへ回すポインタ）
 - 変更: `.claude/agents/code-reviewer.md`・`docs/code-review/final-check.md`（秘匿する候補の修正PRで、指摘に再現手順・攻撃の経路を書かない）
 
 Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
@@ -214,7 +215,7 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
 
 - 状態: 2026-10-08 実装済み。監査の結果の採否は人間の判断待ち（タスクはIn progressのまま）。
 - 実装差異:
-  - 変えるファイルに`README.md`（文書一覧と起動方法）と、レビューの指摘で`code-reviewer.md`・`final-check.md`を足した
+  - 変えるファイルに`README.md`（文書一覧と起動方法）と、レビューの指摘で`code-reviewer.md`・`final-check.md`・`pr-review-cycle`を足した
     （reviewerの定義を変えるが、報告に書かない範囲を足す向きで、検査は緩めていない）。
   - `audit.md`は`docs/code-review/`に置いたが、差分のレビューの入口ではないため、
     [`documentation.md`](../code-review/documentation.md) §1の「入口を増やしたら4か所へ接続する」の対象にせず、
@@ -267,6 +268,10 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
   slugを`audit-fix`に固定した。修正のPRで足さずに先送りする再発防止を、報告の`再発防止:`に書き足し、記録のPRで
   指針へ足すとし、その完了条件を足した。秘匿するタスクの書き方を示し、定期実行で修正のPRの公開の時機を選べない
   ことを受け入れる前提に足した。
+  （Codexの後のサブエージェント2回目）監査でGrep toolがgitignore済みのログまで読みうるため、`git grep`を優先し、
+  Grep・Globの範囲を絞るとした（`settings.json`のdenyに`apps/api/log/`・`tmp/`を足すかは許可の変更のため人間に
+  回した）。`AGENTS.md`のバグ対応の「原因」と`pr-review-cycle`の手順8に、§4への参照があるPRは同節に従うという
+  ポインタを足し、reviewerの2ファイルに「原因が抽象的なことを指摘しない」を足した。
   あわせてサブエージェント3回目の🔵（チャットを制限する理由、報告の詳細を消す時機、タスクREADMEの「採用」、
   秘匿しない例外を確信度とtestに結び付ける）を直した。秘匿する候補のタスク名を一般的なものにし、なお残る
   公開（未修正の問題がある事実・時期・IDの観点）を受け入れる前提として`audit.md` §4に書いた。
