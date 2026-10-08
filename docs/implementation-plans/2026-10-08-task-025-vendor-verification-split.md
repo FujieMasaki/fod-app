@@ -37,7 +37,8 @@ TASK-003に残っていた委託先への9項目の確認（完了条件7）を�
   - `docs/tasks/TASK-025-vendor-verification.md`（新規）
   - `docs/tasks/TASK-003-generation-design.md`（完了条件7を移管し、Doneにする）
   - `docs/tasks/TASK-015-privacy-security-verification.md`（依存にTASK-025を追加する）
-  - `docs/tasks/TASK-009-backend-audio-generation.md`・`TASK-017-breach-response-design.md`（9項目の担当の参照を付け替える）
+  - `docs/tasks/TASK-009-backend-audio-generation.md`（9項目の担当の参照と、音声を外部へ送る前の関門の完了条件）
+  - `docs/tasks/TASK-017-breach-response-design.md`（9項目の担当の参照を付け替える）
   - `docs/tasks/README.md`（索引・要判断事項）
   - `docs/product.md` §5、`docs/privacy.md`、`docs/architecture.md`、`docs/journaling.md`（9項目の担当の参照）
   - `docs/implementation-plans/2026-09-29-task-003-generation-design.md` §26（担当がTASK-025へ移ったことの追記）
@@ -48,7 +49,7 @@ TASK-003に残っていた委託先への9項目の確認（完了条件7）を�
 2. TASK-003の完了条件7を、TASK-002の前例と同じ形で「TASK-025へ移管」として閉じ、状態をDoneにする。
 3. 依存を付け替える。
    - TASK-015 → TASK-025を追加する（公開前の横断検証の前に、委託先の確認を済ませる）。TASK-016はTASK-015に依存するので、間接に待つ。
-   - TASK-009には依存を足さない。項目1の設定は、音声を送る前提としてTASK-009の作業範囲に入っており、TASK-025への参照だけを足す。
+   - TASK-009には依存を足さない。代わりに、TASK-025の項目1と項目3（経路が国内に収まること）が済むまで実際の音声を外部へ送らないことを、TASK-009の完了条件と必要な検証に入れる。これまではTASK-003がIn progressだったことが関門として働いていたが、Doneにすると外れるため。
 4. 「完了条件7の9項目」「TASK-003 Plan §26」と書いて9項目の担当を指している現行文書を、TASK-025を指すように直す。記録先はTASK-003 Plan §26のままにする。
 
 ## 8. Why This Approach
@@ -85,7 +86,7 @@ TASK-003に残っていた委託先への9項目の確認（完了条件7）を�
 
 ## 13. Risks / Things to Watch
 
-- TASK-009は、TASK-025の項目1が済む前に自動で着手される。音声を外部へ送る前にopt-outを確認する前提はTASK-009の作業範囲にあり、外部の設定が要る時点で`/run-task`は止まる。
+- TASK-009は、TASK-025の項目1が済む前に自動で着手される。音声を外部へ送る前にopt-outと経路を確認することはTASK-009の完了条件にあり、外部の設定が要る時点で`/run-task`は止まる。
 - 「完了条件7」という呼び方は過去のPlanに残る。現行文書ではTASK-025と書く。
 
 ## 14. Verification
@@ -109,6 +110,10 @@ TASK-003に残っていた委託先への9項目の確認（完了条件7）を�
 ## 16. Completion Record
 
 - 状態: 2026-10-08 完了。
-- 実装差異: なし。
-- 検証結果: §14のとおり実行した。結果はPRの本文に記録する。
+- 実装差異: レビューの指摘で次を足した。TASK-009の完了条件に、TASK-025の項目1と項目3（経路が国内に収まること）が済むまで実際の音声を外部へ送らないことを入れた（TASK-003がIn progressだったことが関門として働いていたのが外れるため）。TASK-025の完了条件に、受け入れの判断と、§26の「追加の確認対象」を入れた。README.mdのMVPのタスクの範囲と実施順にTASK-025を入れた。
+- 検証結果:
+  - `pnpm lint:markdown`: 通った。
+  - `node scripts/task-status.mjs`: TASK-003はDone、TASK-009とTASK-010はrunnable（依存先がすべてDone）、TASK-025は設計判断のため実行不可、TASK-015はTASK-025を含む依存待ち。
+  - `node scripts/task-scheduler.mjs plan --root .`: 着手予定がTASK-009とTASK-010になり、後続を待たせているのはTASK-025（後続2件）だけになった。
+  - 現行文書で「完了条件7」「9項目」を検索した。9項目の担当はTASK-025を指している。残るのは過去のPlan、TASK-005の着手時の記録、今回の経緯の文だけである。
 - 関連: [TASK-025](../tasks/TASK-025-vendor-verification.md)、[TASK-003](../tasks/TASK-003-generation-design.md)
