@@ -145,7 +145,7 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
 - 録音画面の波形だけを`mask`で比べない。threshold 0にした後、CI（amd64）で波形の棒の端だけが手元（Apple
   Siliconのarm64）と728px違った。棒を小数の拡縮（`scaleY`）で描くため、CPUの種類で端の描画が変わる。手元も
   `--platform linux/amd64`で動かす案は、Docker DesktopのRosettaが無効でQEMUになり、Node.jsとChromiumが
-  異常終了したため採らない（Rosettaを有効にしても、CPU命令の違いが残りうる）。ほかの15枚はthreshold 0でもCIと一致した。
+  異常終了したため採らない（Rosettaを有効にしても、CPU命令の違いが残りうる）。ほかの14枚はthreshold 0でもCIと一致した。
 - Docker volumeの名前にCPUの種類を含める。native module（rolldownなど）はCPUごとに違い、別のCPUで入れたvolumeを
   使うとVite dev serverが起動しないため。
 - CIの`VRT`ジョブは`install-node-deps`を使わない。依存はコンテナの中で入れ直すため、手元に入れても使わない。
@@ -158,7 +158,8 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
 - Dependabotがnpmの依存を更新すると、`@playwright/test`や`@fontsource`の更新PRでVRTが落ちうる。その場合は
   上と同じく基準画像を作り直す。
 - threshold 0のため、CPUの種類で描画が変わる要素が増えると、手元では通りCIだけで落ちる。そのときはその要素を`mask`に
-  足すか、原因（小数の拡縮など）を確かめる。
+  足すか、原因（小数の拡縮など）を確かめる。比べる範囲を減らす判断になるため、`pr-review-cycle`では`mask`を足す前に
+  止まって人間に判断を求める。
 - Dependabotのnpmの更新は1つのPRにまとまるため、`@playwright/test`や`@fontsource`の更新を含むPRはVRTで止まりうる。
   そのPRで`pnpm vrt:update`を実行し、差分が描画エンジンや書体の更新だけであることを確かめる。
 - 画面が新しいAPIを呼ぶようになると、fixtureがないためVRTが失敗する。そのときは`fixtures.ts`に架空の応答を足す。
@@ -211,13 +212,27 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
   - `pnpm type-check`・`pnpm build`・新しいファイルへの`eslint`: 通過。`pnpm test:scripts`: 210件通過。
   - CIの`VRT`ジョブ（PR #89）: threshold 0.2では1分9秒で`16 passed`。threshold 0では録音画面の2件だけが
     波形の棒の端で失敗（728px）し、ほかの14件はmacOS（arm64）で作った基準画像とLinux（amd64）のrunnerで一致した。
-    波形を`mask`した後の結果はPRのCIで確かめる。
+    波形を`mask`した後は、コミット`bc98031`のCIで`VRT`が1分10秒で通った（CI Gateも通過）。
 - 関連: [TASK-020](../tasks/TASK-020-visual-regression-test.md)。
 
 ## 未決定事項
 
-なし。Q1〜Q4は2026-10-08に人間がすべてAと判断した。サブエージェントのレビューを受けて追加したQ5も、
-同日に人間がAと判断した（判断の材料として、下に当時のまま残す）。
+Q6（イメージの固定のしかた）が残っている。Q1〜Q4は2026-10-08に人間がすべてAと判断した。サブエージェントのレビューを
+受けて追加したQ5も、同日に人間がAと判断した（判断の材料として、下に当時のまま残す）。
+
+### Q6. Playwrightのイメージの固定のしかた（未決定）
+
+- 決めること: `scripts/vrt.sh`がイメージをタグ（`v1.63.0-noble`）だけで指定している現状のままにするか。
+- 止まるもの: サブエージェントのレビュー（3回目で、この点がMediumとして残った）とCodexの最終チェック。
+- 確認済みの事実: `docker run`は手元にキャッシュ済みのタグを取り直さない。threshold 0のため、MicrosoftのレジストリがMCRで
+  同じタグを作り直すと（作り直すかは未確認）、手元とCIが別のイメージで撮り、コードを変えずにCIだけが落ちうる。同じタグに
+  別の中身が入っても気づけない（CIのjobは`contents: read`で秘密情報を渡さないため、直接の漏洩経路はない）。
+  2026-10-08時点のmulti-archのdigestは`sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27`。
+- A: digestで固定する（`...:v1.63.0-noble@sha256:...`）。GitHub ActionsのSHA固定と揃う。`@playwright/test`を上げるときは
+  digestも更新する（更新し忘れると古いブラウザで動き、Playwrightの起動で失敗して気づける）。
+- B: タグのまま`docker run --pull=always`にする。手元とCIは揃うが、毎回レジストリへ確かめに行き、中身の差し替えには気づけない。
+- C: タグのまま（今の実装）。手間はないが、上の揺れとサプライチェーンの懸念が残る。
+- 推奨: A。必須チェックの揺れを防ぎ、ActionsのSHA固定と同じ方針にそろえられる。
 
 ### Q5. 色の閾値（threshold）
 
