@@ -40,10 +40,11 @@
   - 期限到来: その処理の全部
   - Dotの完全削除: **そのDotを作った処理の分だけ**。同じ利用者の他の録音（生成中・再試行待ち）を巻き込まない
   - 退会: 本人の全処理の分
+- [ ] Transcribeの`DeleteTranscriptionJob`で実際に消える範囲（出力objectと別に残るjobの記録を含む）を実際の構成で確かめ、[TASK-003 Plan](../implementation-plans/2026-09-29-task-003-generation-design.md) §26の「追加の確認対象」へ記録している。
 - [ ] 音声・文字起こし結果・Transcribeのjobのcleanupが冪等で、失敗しても状態を保ったまま再実行できる。**古いPUTが後から完成した場合も、prefixの列挙とlifecycleで回収できる**。PUTの実行と終了の実際の挙動を確認したうえで判断している。
 - [ ] **使う構成（経路・モデル・設定）の保存先と閲覧元を一次資料で確認し、記録している。**[architecture.md](../architecture.md)「データ所在地と費用」の要求（発話内容の保存と閲覧を日本国内に限る）を満たすことを、推論の宛先・data retention modeと保持データの所在・人によるレビューの実施地・cache等の滞留先について確かめている。**確認できない構成を使っていない**。確認結果（経路が国内か国外か、保持と人によるレビューの有無）を**TASK-010へ引き渡し、[privacy.md §5-1](../privacy.md)の外部provider行へも反映している。**
 - [ ] **TASK-017が越境移転の規律の確認を終えるまでは、推論が日本国内に収まる経路だけを使っている**。選んだ経路と、国内に収まる根拠（一次資料）を記録している。TASK-017の結論が出たあとに国外経路へ変える場合は、正本（[architecture.md](../architecture.md)「データ所在地と費用」）の運用条件とTASK-010の案内を同じ変更で更新する。
-- [ ] [TASK-025](TASK-025-vendor-verification.md)から任された確認（項目1・2・4のうち選んだmodel idごとの違い、項目8の(a)のIAM policyの内容）の結果を[TASK-003 Plan](../implementation-plans/2026-09-29-task-003-generation-design.md) §26へ記録している。保持・人によるレビュー・学習やモデル改善への利用のいずれかが伴う構成を使う場合は、使う前に人間の受け入れの判断を得ている。
+- [ ] [TASK-025](TASK-025-vendor-verification.md)から任された確認（項目1・2・4のうち選んだmodel idごとの違い、項目8の(a)のIAM policyの内容）の結果を[TASK-003 Plan](../implementation-plans/2026-09-29-task-003-generation-design.md) §26へ記録している。保持・人によるレビュー・学習やモデル改善への利用のいずれかが伴う構成を使う場合は、使う前に人間の受け入れの判断を得ている（自動実行では、その判断が要る時点で止まる）。
 - [ ] 文字起こしテキストとBedrockのrequest / responseがログ・error trackingに出ない。
 - [ ] 送信・外部AI・生成結果の検証・保存の各失敗を区別して扱い、未保存なのに保存済みと返さない。
 - [ ] 再送・retry・Job再実行の重複防止、または利用者への明確な結果通知を設計どおり実装している。

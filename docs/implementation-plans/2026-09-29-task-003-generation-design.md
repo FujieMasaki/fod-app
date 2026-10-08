@@ -432,6 +432,8 @@ POST /api/v1/dots/generations/:処理ID/transcript_ack  （client が保存し�
   経路で運用する。**
 - 関連: TASK-002 Plan（保持・削除の前提）、TASK-005（API契約）、TASK-009/010/011（実装）、
   TASK-013/015（削除と残存の検証）、TASK-017（越境移転の規律）、TASK-018（深掘り対話。本タスクの対象外）。
+- 2026-10-08: 完了条件7（委託先への9項目の確認）を[TASK-025](../tasks/TASK-025-vendor-verification.md)へ移管し、
+  TASK-003をDoneにした。確認できたから閉じたのではなく、担当を移して閉じた。記録先は引き続き§26である。
 
 ---
 
@@ -1431,7 +1433,7 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 | 対象 | 確認すること | 現状 |
 | --- | --- | --- |
 | Transcribeの文字起こし結果 | `OutputBucketName`が実際に効いて自前bucketへ出ること、service-managed bucketへ出ていないこと | **§27で自前bucketへ置くと決めた**。設定が効いていることの確認はTASK-009/015 |
-| Transcribeのjob記録 | 出力objectと別に残るjob自体の記録の保持期間と、`DeleteTranscriptionJob`で消える範囲 | **保持期間は確認済み**（各リージョンで90日・調整不可。上記の項目2と同じ出典）。**残る未確認は`DeleteTranscriptionJob`で実際に消える範囲。objectを消してもjobが残る**ため、削除の対象に含めたうえで実際に消えることを確認する |
+| Transcribeのjob記録 | 出力objectと別に残るjob自体の記録の保持期間と、`DeleteTranscriptionJob`で消える範囲 | **保持期間は確認済み**（各リージョンで90日・調整不可。上記の項目2と同じ出典）。**残る未確認は`DeleteTranscriptionJob`で実際に消える範囲。objectを消してもjobが残る**ため、削除の対象に含めたうえで実際に消えることを確認する。**実際に消える範囲の確認はTASK-009が行う**（2026-10-08に担当を決めた。jobのcleanupを完了条件に持つため） |
 
 ### 確認の担当と時期
 
