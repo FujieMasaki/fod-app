@@ -20,6 +20,8 @@ type Screen = {
   path: string;
   api: ApiFixtures;
   ready: (page: Page) => Locator;
+  /** 比べない部分。CPUの種類（手元のApple SiliconとCIのamd64）で描画が変わる要素だけに使う */
+  mask?: (page: Page) => Locator[];
 };
 
 const signedIn = { "/api/v1/session": authenticatedSession };
@@ -43,6 +45,8 @@ const screens: Screen[] = [
     path: "/record",
     api: signedIn,
     ready: (page) => page.getByRole("heading", { name: "話しています…" }),
+    // 波形の棒は小数の拡縮（scaleY）で描くため、端の描画がCPUの種類で1px単位に変わる（threshold 0で検出される）。
+    mask: (page) => [page.locator('[role="status"] + [aria-hidden="true"]')],
   },
   {
     name: "day",
@@ -85,7 +89,7 @@ for (const screen of screens) {
     // 基準画像の更新（--update-snapshots）でも、想定外の要求があった画面を基準にしない。
     expect(unexpected, "想定外の要求があった").toEqual([]);
 
-    await expect(page).toHaveScreenshot(`${screen.name}.png`, { fullPage: true });
+    await expect(page).toHaveScreenshot(`${screen.name}.png`, { fullPage: true, mask: screen.mask?.(page) });
     expect(unexpected, "想定外の要求があった").toEqual([]);
   });
 }

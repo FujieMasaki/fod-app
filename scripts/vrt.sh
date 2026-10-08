@@ -26,7 +26,8 @@ fi
 # node_modulesはLinux用に入れ直す必要があるため、手元のものを使わずcheckoutごとのvolumeに置く
 # （worktreeを並べて実行しても混ざらないよう、pathから名前を作る）。install scriptは実行しない
 # （lefthookのpostinstallが、mountした手元の.git/hooksをコンテナの中から書き換えないようにするため）。
-key="$(printf '%s' "$root" | shasum | cut -c1-12)"
+# native moduleはCPUの種類ごとに違うため、名前にCPUの種類も含める。
+key="$(printf '%s' "$root" | shasum | cut -c1-12)-$(uname -m)"
 
 tty_flag=()
 if [[ -t 1 ]]; then tty_flag=(-t); fi

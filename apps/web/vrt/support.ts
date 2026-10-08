@@ -96,7 +96,9 @@ export const preparePage = async (page: Page, api: ApiFixtures): Promise<string[
       await route.abort();
     },
   );
-  await page.route("**/api/**", async (route) => {
+  await page.route(
+    (url) => url.hostname === "127.0.0.1" && url.pathname.startsWith("/api/"),
+    async (route) => {
     const url = new URL(route.request().url());
     const key = `${url.pathname}${url.search}`;
     if (route.request().method() !== "GET" || !(key in api)) {
@@ -105,7 +107,8 @@ export const preparePage = async (page: Page, api: ApiFixtures): Promise<string[
       return;
     }
     await route.fulfill({ contentType: "application/json", body: JSON.stringify(api[key]) });
-  });
+    },
+  );
 
   return unexpected;
 };
