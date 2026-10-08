@@ -553,6 +553,38 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     expect(requests.filter((r) => r.key === "GET /api/v1/session")).toHaveLength(2);
   });
 
+  it("このタブでlogoutした後に録音画面へ入ったら、戻り先を付けずにログインへ移る", async () => {
+    locationMock.pathname = "/record";
+    mounted.count = 0;
+    const requests = mockApi({
+      "GET /api/v1/session": [signedIn, anonymous],
+      "DELETE /api/v1/session": [{ status: 204 }],
+    });
+    const Logout = () => {
+      const { signOut } = useAuth();
+      return <button onClick={() => void signOut()}>logout</button>;
+    };
+    renderWithAuth(
+      <>
+        <Logout />
+        <Toggle>
+          <RequireAuth startsOnEnter>
+            <CountingScreen />
+          </RequireAuth>
+        </Toggle>
+      </>,
+    );
+    await waitFor(() => expect(requests.filter((r) => r.key === "GET /api/v1/session")).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "logout" }));
+    await waitFor(() => expect(requests.some((r) => r.key === "DELETE /api/v1/session")).toBe(true));
+
+    fireEvent.click(screen.getByRole("button", { name: "enter" }));
+
+    expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
+    expect(screen.queryByText(/redirect=/)).not.toBeInTheDocument();
+    expect(mounted.count).toBe(0);
+  });
+
   it("中身を出した後に状態が確かめられなくなったら、戻っても中身を出し直さずHomeへ移る", async () => {
     let getCount = 0;
     vi.stubGlobal(
