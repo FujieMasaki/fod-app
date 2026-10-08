@@ -106,7 +106,8 @@ export const RecordingStage = () => {
     if (finishedRef.current || !mountedRef.current) return;
     finishedRef.current = true;
     if (leaveIfSwitched()) return;
-    if (reason === "interrupted") {
+    // 大きすぎる録音は、中断でも整理へ渡せない理由をそのまま示す。
+    if (reason === "interrupted" && outcome.kind !== "too_large") {
       setEnded({ kind: "interrupted", audio: outcome.kind === "recorded" ? outcome.audio : null });
     } else if (outcome.kind === "recorded") {
       proceed(outcome.audio);
@@ -184,7 +185,9 @@ export const RecordingStage = () => {
     );
   }
 
-  const requesting = phase === "requesting" || phase === "idle";
+  // 止めた後（idleに戻ってから次の画面へ移るまで）は、許可待ちとして見せず、もう止められないようにする。
+  const stopRequested = stopping || autoStopped !== null;
+  const requesting = phase === "requesting" || (phase === "idle" && !stopRequested);
 
   return (
     <div className={styles.root}>
@@ -219,7 +222,7 @@ export const RecordingStage = () => {
           type="button"
           className={styles.stopButton}
           onClick={handleStop}
-          disabled={stopping || phase === "stopping"}
+          disabled={stopRequested || phase === "stopping"}
           aria-label="話し終える"
         >
           <StopIcon />
