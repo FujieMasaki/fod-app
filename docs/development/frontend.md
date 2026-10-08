@@ -130,7 +130,8 @@
   描画が違うため、コンテナの外では実行しない。
 - 差分があると失敗し、`apps/web/vrt/report`（CIでは`vrt-report` artifact）に期待・実際・差分の画像が出る。
   意図した変化なら`pnpm vrt:update`で基準画像（`apps/web/vrt/__screenshots__/`）を更新し、変更と同じ
-  コミットに入れる。意図しない変化なら実装を直す。許容値は1pxの差も、わずかな色の差も失敗にする設定（`maxDiffPixelRatio: 0`・`threshold: 0`）で、揺れたら
+  コミットに入れる。意図しない変化なら実装を直す。許容値は1pxの差も、わずかな色の差も失敗にする設定（`maxDiffPixelRatio: 0`・`threshold: 0`）で、
+  anti-aliasingと判定された輪郭の画素だけはPlaywrightの比較が差に数えない。揺れたら
   許容値を緩める前に原因（時刻・animation・fixture）を直す。
 - APIは`apps/web/vrt/fixtures.ts`の架空のデータに差し替え、契約のschemaで検証してから返す。
   時刻・フォント・外部への通信・マイクは`apps/web/vrt/support.ts`で固定する。基準画像に実在の
@@ -139,6 +140,8 @@
 - 画面を消す・名前を変えるときは、使わなくなった基準画像を`apps/web/vrt/__screenshots__/`から手で消す
   （`pnpm vrt:update`は古い画像を消さない）。比べないのは、CPUの種類（手元のApple SiliconとCIのamd64）で描画が
   変わる要素（録音画面の波形）だけで、specの`mask`で示す。
+- 撮影はreduced-motion（`prefers-reduced-motion: reduce`）の状態で行う。framer-motionの部品は動きを止めた側を
+  描くため、通常の動きの側の静止状態だけを変えた変更は検出しない。
 - 撮影はVite dev serverで行う（本番のbuildだけで起きるCSSの順序の違いは対象外）。手元はmacOSのDocker Desktop
   を前提にする（LinuxのDocker Engineでは、作られたファイルがrootの持ち物になる）。
 - Playwrightのコンテナのイメージは`scripts/vrt.sh`でdigestまで固定する。`@playwright/test`を上げたら、同scriptの
