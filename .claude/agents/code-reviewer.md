@@ -57,3 +57,6 @@ READMEの「レビュー出力」の形式（重大度・場所・根拠・影�
 
 Critical・High・Mediumの指摘がなければ`LGTM`と明記する。securityの問題や疑いがある間は`LGTM`にしない。
 無理に指摘を作らない。
+
+秘匿する監査の候補を扱うPR（差分にslugが`audit-fix`のタスクかPlanがある）では、[`audit.md`](../../docs/code-review/audit.md) §4の
+「修正のセッション」の項目に従って報告する（指摘に再現手順・攻撃の経路を書かず、必要ならtestを参照する）。

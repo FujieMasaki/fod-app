@@ -100,7 +100,7 @@ User、認証、Dot、音声、AI処理のプロダクトAPIは未実装です�
 | [`docs/dot-history.md`](docs/dot-history.md) | 複数Dotの履歴体験と時間軸の検証候補 |
 | [`docs/architecture.md`](docs/architecture.md) | 現在の構成と継続する設計判断 |
 | [`docs/development/`](docs/development/) | frontend / backend実装時の判断基準、PRの分割と人間のレビューの規約 |
-| [`docs/code-review/`](docs/code-review/) | frontend / backend / 仕様・設計文書のレビューの確認・報告方法、Codexの最終チェック |
+| [`docs/code-review/`](docs/code-review/) | frontend / backend / 仕様・設計文書のレビューの確認・報告方法、Codexの最終チェック、探索的な監査の観点 |
 | [`docs/implementation-plans/`](docs/implementation-plans/) | 変更単位の判断と検証履歴 |
 
 AI作業時の必読順と更新ルールは[`AGENTS.md`](AGENTS.md)を参照してください。
@@ -178,6 +178,10 @@ Production BuildはローカルでのPushを遅くしないため、CI側で実�
 `scripts/install-task-scheduler.sh` を実行すると、launchdが毎朝4時に、着手できるタスクをすべて並列で `/run-task` します（既定の上限は3件。変えるときは `FOD_TASK_MAX_PARALLEL=5 scripts/install-task-scheduler.sh` のように登録し直す）。他のセッションが着手済みのタスクは除外し、起動できるタスクがない日は残っているタスクと理由をmacOSの通知で知らせます。結果のレポートは `~/Library/Logs/focus-on-dot/` に出力されます。登録を解除するときは `--uninstall` を付けて実行してください。
 
 起動できるタスクを確認するだけなら、`node scripts/task-scheduler.mjs plan --root .` を実行します。判定には実行したcheckoutの `docs/tasks` を使うので、origin/mainと同じ結果を見たいときはmainに揃えたcheckoutで実行してください。異常終了したセッションの `.claude/worktrees/task-NNN` が残ると、そのタスクは着手済みのまま扱われます。内容を確認してから `git worktree remove` で削除してください（作業のないworktreeは自動で削除されます）。定期実行のセッションが動いている間、そのタスクは `.git/scheduled-sessions/` の記録によって手動の `/run-task` でも実行不可になります。記録はセッションの終了時に消え、worktreeがなくなった記録は無視されます。セッションは4時間で打ち切られます。
+
+### 探索的な監査
+
+差分の外にある既存の問題を探すときは、`/exploratory-audit spec` のように観点（`spec` / `performance` / `privacy` / `security`）を指定して手動で起動します。結果は公開されない `.git/audits/` に報告として書かれ、人間が候補ごとに採否を書いてから、採用したものだけを `docs/tasks` へ起こします。定期実行には入っていません。観点と秘匿の扱いは [`docs/code-review/audit.md`](docs/code-review/audit.md) を参照してください。
 
 ## Status
 
