@@ -1,0 +1,89 @@
+import { expect, test, type Locator, type Page } from "@playwright/test";
+
+import {
+  anonymousSession,
+  authenticatedSession,
+  dayList,
+  pastDayDetail,
+  todayWithDots,
+  todayWithoutDots,
+  todaysDots,
+} from "./fixtures";
+import { preparePage, waitForFonts, type ApiFixtures } from "./support";
+
+/**
+ * 主要な画面の見た目を基準画像と比べる（TASK-020）。幅はplaywright.config.tsのprojects（390px・1280px）。
+ * readyは、データを読み込み終えた状態を示す要素。読み込み中の表示を基準画像にしないために待つ。
+ */
+type Screen = {
+  name: string;
+  path: string;
+  api: ApiFixtures;
+  ready: (page: Page) => Locator;
+};
+
+const signedIn = { "/api/v1/session": authenticatedSession };
+
+const screens: Screen[] = [
+  {
+    name: "home",
+    path: "/",
+    api: { "/api/v1/session": anonymousSession },
+    ready: (page) => page.getByText("話し始めるには、ログインしてください。"),
+  },
+  {
+    name: "login",
+    path: "/login",
+    api: { "/api/v1/session": anonymousSession },
+    ready: (page) => page.getByRole("heading", { name: "ログイン" }),
+  },
+  {
+    // マイクの許可を待っている状態（support.tsのgetUserMediaは応答しない）。経過時間は00:00のまま。
+    name: "record",
+    path: "/record",
+    api: signedIn,
+    ready: (page) => page.getByRole("heading", { name: "話しています…" }),
+  },
+  {
+    name: "day",
+    path: "/day",
+    api: { ...signedIn, "/api/v1/days/today": todayWithDots },
+    ready: (page) => page.getByText(todaysDots[0].sentence),
+  },
+  {
+    name: "day-empty",
+    path: "/day",
+    api: { ...signedIn, "/api/v1/days/today": todayWithoutDots },
+    ready: (page) => page.getByText("まだ今日のDotはありません。"),
+  },
+  {
+    name: "day-list",
+    path: "/dots",
+    api: { ...signedIn, "/api/v1/days": dayList },
+    ready: (page) => page.getByRole("list").getByRole("listitem").nth(dayList.items.length - 1),
+  },
+  {
+    name: "day-detail",
+    path: `/dots/${pastDayDetail.date}`,
+    api: { ...signedIn, [`/api/v1/days/${pastDayDetail.date}`]: pastDayDetail },
+    ready: (page) => page.getByText(pastDayDetail.dots[0].sentence),
+  },
+  {
+    name: "settings",
+    path: "/settings",
+    api: signedIn,
+    ready: (page) => page.getByText("vrt@example.com"),
+  },
+];
+
+for (const screen of screens) {
+  test(screen.name, async ({ page }) => {
+    const unexpected = await preparePage(page, screen.api);
+    await page.goto(screen.path);
+    await expect(screen.ready(page)).toBeVisible();
+    await waitForFonts(page);
+
+    await expect(page).toHaveScreenshot(`${screen.name}.png`, { fullPage: true });
+    expect(unexpected, "fixtureのないAPIを呼んだ").toEqual([]);
+  });
+}
