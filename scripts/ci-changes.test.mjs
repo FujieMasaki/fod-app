@@ -3,7 +3,7 @@ import test from "node:test";
 import { classifyPaths } from "./ci-changes.mjs";
 
 test("web-only changes run only web checks", () => {
-  assert.deepEqual(classifyPaths(["apps/web/src/main.tsx", "package.json", "scripts/check-naming.mjs"]), {
+  assert.deepEqual(classifyPaths(["apps/web/src/main.tsx", "package.json", "scripts/check-naming.mjs", "scripts/vrt.sh"]), {
     web: true,
     api: false,
   });

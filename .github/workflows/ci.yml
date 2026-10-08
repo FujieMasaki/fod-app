@@ -108,6 +108,27 @@ jobs:
       - uses: ./.github/actions/install-node-deps
       - run: pnpm test
 
+  # 画面のスナップショット比較（docs/development/frontend.md「4. テスト」）。ローカルと同じscriptで、
+  # 公式のPlaywrightコンテナの中で比べる（依存もコンテナの中で入れるため、install-node-depsは使わない）。
+  vrt:
+    name: VRT
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.web != 'false') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: scripts/vrt.sh
+      # 差分があれば、期待・実際・差分の画像を含むHTML reportを人間のレビューへ渡せるよう残す。
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: vrt-report
+          path: apps/web/vrt/report
+          retention-days: 14
+
   rails:
     name: Rails
     needs: changes
@@ -157,7 +178,7 @@ jobs:
 
   gate:
     name: CI Gate
-    needs: [changes, build, lint, markdown, types, tests, rails]
+    needs: [changes, build, lint, markdown, types, tests, vrt, rails]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -170,6 +191,7 @@ jobs:
       MARKDOWN_RESULT: ${{ needs.markdown.result }}
       TYPES_RESULT: ${{ needs.types.result }}
       TESTS_RESULT: ${{ needs.tests.result }}
+      VRT_RESULT: ${{ needs.vrt.result }}
       RAILS_RESULT: ${{ needs.rails.result }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -11,6 +11,7 @@ const webPaths = new Set([
   "scripts/check-naming.test.mjs",
   "scripts/check-markdown.mjs",
   "scripts/check-markdown.test.mjs",
+  "scripts/vrt.sh",
 ]);
 
 const documentationPaths = new Set([

@@ -133,6 +133,7 @@ GitHub Actionsでは、Pull Request・`main` へのPush・手動実行時に以�
 | TypeScript | `pnpm type-check` | 型チェック |
 | Tests | `pnpm test` | チェッカー自身のtestとVitest |
 | Build | `pnpm build` | Production Build |
+| VRT | `pnpm vrt` | 主要な画面のスナップショット比較。公式のPlaywrightコンテナで実行するためDockerが要る。基準画像の更新は`pnpm vrt:update`（[frontend.md](docs/development/frontend.md)「4. テスト」） |
 | Docs & scripts | `pnpm lint:markdown` / `pnpm test:scripts` | 強調の崩れと`scripts/`のtest。**変更の種類に関わらず常に実行する**（文書だけの変更では他のジョブが走らないため） |
 
 `CI Gate`が必須チェックの結果をまとめて検証します。`Docs & scripts`は常に必須で、ほかは
