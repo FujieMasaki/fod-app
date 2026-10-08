@@ -16,12 +16,14 @@ vi.mock("@tanstack/react-router", () => ({ useNavigate: () => navigateMock }));
 // - reject: getUserMediaをこの名前のDOMExceptionで失敗させる
 // - supported: MediaRecorderが録れる形式
 // - chunkBytes: 止めたときに渡す音声の大きさ
+// - holdStop: releaseStopを呼ぶまで、止めた後の最後のdataとstopの通知を遅らせる
 const stubMicrophone = ({
   hold = false,
   reject,
   supported = ["audio/webm;codecs=opus"],
   chunkBytes = 16,
-}: { hold?: boolean; reject?: string; supported?: string[]; chunkBytes?: number } = {}) => {
+  holdStop = false,
+}: { hold?: boolean; reject?: string; supported?: string[]; chunkBytes?: number; holdStop?: boolean } = {}) => {
   const counts = { recordingStarts: 0, stoppedTracks: 0, requests: 0, recorderStops: 0 };
   const endedListeners = new Set<() => void>();
   const track = {
@@ -31,6 +33,7 @@ const stubMicrophone = ({
   };
   const stream = { getTracks: () => [track] };
   let grant: () => void = () => undefined;
+  let releaseStop: () => void = () => undefined;
   vi.stubGlobal("navigator", {
     mediaDevices: {
       getUserMedia: () => {
@@ -74,13 +77,18 @@ const stubMicrophone = ({
       stop() {
         this.state = "inactive";
         counts.recorderStops += 1;
-        this.ondataavailable?.({ data: new Blob([new Uint8Array(chunkBytes)]) });
-        this.onstop?.();
+        const finish = () => {
+          this.ondataavailable?.({ data: new Blob([new Uint8Array(chunkBytes)]) });
+          this.onstop?.();
+        };
+        if (holdStop) releaseStop = finish;
+        else finish();
       }
     },
   );
   return Object.assign(counts, {
     grantPermission: () => grant(),
+    releaseStop: () => releaseStop(),
     // マイクが切れる（抜けた・OSが止めた）
     endTrack: () => endedListeners.forEach((listener) => listener()),
   });
@@ -375,6 +383,37 @@ describe("RecordingStage", () => {
     expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true });
     expect(navigateMock).not.toHaveBeenCalledWith({ to: "/processing" });
     expect(screen.getByText("no-audio")).toBeInTheDocument();
+  });
+
+  it("マイクが切れて止めている途中は「話し終える」を押せず、中断の案内を1回だけ出す", async () => {
+    useRecordingClock();
+    const mic = stubMicrophone({ holdStop: true });
+    renderStage();
+    await recordFor(mic, 10);
+
+    act(() => mic.endTrack());
+    const stopButton = screen.getByRole("button", { name: "話し終える" });
+    expect(stopButton).toBeDisabled();
+    fireEvent.click(stopButton);
+    await act(async () => mic.releaseStop());
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("録音が途中で止まりました");
+    expect(navigateMock).not.toHaveBeenCalled();
+    expect(mic.recorderStops).toBe(1);
+  });
+
+  it("止めている途中に画面を離れたら、後から整理へ進まない", async () => {
+    useRecordingClock();
+    const mic = stubMicrophone({ holdStop: true });
+    const { unmount } = renderStage();
+    await recordFor(mic, 10);
+
+    fireEvent.click(screen.getByRole("button", { name: "話し終える" }));
+    unmount();
+    await act(async () => mic.releaseStop());
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
   it("30分に達したら自動で止めて、整理へ進む", async () => {

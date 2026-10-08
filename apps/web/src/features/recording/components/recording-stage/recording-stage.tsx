@@ -60,12 +60,23 @@ export const RecordingStage = () => {
   const startedEpochRef = useRef(identityEpoch);
   const currentEpochRef = useRef(identityEpoch);
   currentEpochRef.current = identityEpoch;
+  // 1回の録音の結果で次を決めたか。利用者の停止と自動停止（中断・上限）が同じ結果を受け取っても、1回だけ進める。
+  const finishedRef = useRef(false);
+  // 画面を離れたか。止めている途中に離れたら、後から整理へ進まない。
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   const begin = () => {
     // 前の録音は使わない（録り直す・新しく始める）。
     clearRecordedAudio();
     startedEpochRef.current = currentEpochRef.current;
     setStarted(true);
+    finishedRef.current = false;
     setEnded(null);
     setStopping(false);
     void start();
@@ -92,6 +103,8 @@ export const RecordingStage = () => {
 
   // 止めた結果で次を決める。
   const finish = (outcome: RecordingOutcome, reason: "user" | "interrupted" | "limit") => {
+    if (finishedRef.current || !mountedRef.current) return;
+    finishedRef.current = true;
     if (leaveIfSwitched()) return;
     if (reason === "interrupted") {
       setEnded({ kind: "interrupted", audio: outcome.kind === "recorded" ? outcome.audio : null });
@@ -159,7 +172,7 @@ export const RecordingStage = () => {
             description:
               ended.kind === "interrupted"
                 ? "マイクが使えなくなったため、録音を止めました。使える音声が残っていないので、録り直してください。"
-                : "1秒以上話してから止めてください。",
+                : "録音が始まる前か、1秒未満で止まりました。もう一度録音してください。",
           };
     return (
       <RecordingNotice title={notice.title} description={notice.description}>
@@ -206,7 +219,7 @@ export const RecordingStage = () => {
           type="button"
           className={styles.stopButton}
           onClick={handleStop}
-          disabled={stopping}
+          disabled={stopping || phase === "stopping"}
           aria-label="話し終える"
         >
           <StopIcon />
