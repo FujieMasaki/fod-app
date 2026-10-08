@@ -10,13 +10,19 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$root"
 
-# イメージのタグは@playwright/testと同じ番号にする（ずれるとブラウザが合わず起動しない）。
+# イメージはdigestで固定する（同じタグが作り直されても、手元とCIで同じ中身を使うため。TASK-020 Plan Q6）。
+# @playwright/testを上げたら、pinned_versionとdigestを
+# `docker buildx imagetools inspect mcr.microsoft.com/playwright:v<版>-noble` のDigest（multi-archのindex）に更新する。
+pinned_version="1.63.0"
+digest="sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27"
+
 version="$(node -p 'require("./apps/web/package.json").devDependencies["@playwright/test"]')"
-if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "apps/web/package.json の @playwright/test は固定のバージョン（例: 1.63.0）にしてください: $version" >&2
+if [[ "$version" != "$pinned_version" ]]; then
+  echo "apps/web/package.json の @playwright/test（$version）と scripts/vrt.sh のイメージ（$pinned_version）が違います。" >&2
+  echo "scripts/vrt.sh の pinned_version と digest を更新してください（ずれるとブラウザが合わず起動しません）。" >&2
   exit 1
 fi
-image="mcr.microsoft.com/playwright:v${version}-noble"
+image="mcr.microsoft.com/playwright:v${pinned_version}-noble@${digest}"
 
 if ! docker info >/dev/null 2>&1; then
   echo "Dockerが起動していません。Docker Desktopなどを起動してから実行してください。" >&2
