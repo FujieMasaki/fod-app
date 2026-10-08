@@ -13,7 +13,7 @@ description: 観点（spec / performance / privacy / security）を指定して�
 
 - コード・`docs/`・設定を変えない。コミット・push・外部への投稿をしない。worktree・ブランチ・DBを作らない。
   書いてよいのは`<git-common-dir>/audits/`だけ（例外は下の「採用した候補をタスクに起こす」）。
-- 秘密情報（`.env*`、`master.key`、`credentials/*.key`）を読まない。DBの中身・ログ・`tmp/`を読まない。
+- 秘密情報（`.env*`、`master.key`、`credentials/*.key`）を読まない。DBの中身・ログ（`apps/api/log/`等）・`tmp/`を読まない。
   DBを使うコマンド（RSpec・`rails console`等）を実行しない。報告にはコードの場所と振る舞いだけを書き、
   個人データ・秘密情報の値を書かない。
 - 秘匿する指摘（`audit.md` §1・§4）は、チャット・`docs/tasks`・Plan・コミット・PR・Issueに場所と再現方法を
@@ -26,10 +26,13 @@ description: 観点（spec / performance / privacy / security）を指定して�
 
 1. 引数から観点（`spec` / `performance` / `privacy` / `security`、複数可）と、任意の対象範囲
    （ディレクトリ）を読む。観点がなければ、4つから選んでもらうよう人間に尋ねて止まる。
-2. `git fetch origin main`の後、`git rev-parse HEAD`・`git rev-parse origin/main`・`git status --short`で
+2. `git rev-parse --abbrev-ref HEAD`が`<type>/task-NNN`の形（`feat` / `fix` / `refactor` / `chore` / `docs` /
+   `test`）なら止まり、mainに揃えたcheckoutで起動し直すよう伝える（タスクのブランチではStop hookがPRの作成と
+   検査を求め、この skill の禁止事項とぶつかるため）。
+3. `git fetch origin main`の後、`git rev-parse HEAD`・`git rev-parse origin/main`・`git status --short`で
    監査の基準を確かめる。HEADが`origin/main`と違う、または未コミットの変更があれば、そのことを報告の冒頭に書く
    （mainに揃えたcheckoutでの実行を勧める）。
-3. `git rev-parse --path-format=absolute --git-common-dir`で報告の置き場所を決め、`audits/`がなければ作る。
+4. `git rev-parse --path-format=absolute --git-common-dir`で報告の置き場所を決め、`audits/`がなければ作る。
 
 ### 2. 読む
 
@@ -39,8 +42,9 @@ description: 観点（spec / performance / privacy / security）を指定して�
 
 ### 3. 探索して確かめる
 
-1. `audit.md` §2の向きで、正本の約束ごとに実装とtestを辿る。読むだけで確かめられないことは、ファイルを
-   書き込まないコマンド（`node -e`、`ruby -e`、`git grep`等）で確かめる。
+1. `audit.md` §2の向きで、正本の約束ごとに実装とtestを辿る。検索は`git grep`などの読み取りだけの
+   コマンドで行う。任意のコードを実行するコマンド（`node -e`・`ruby -e`等）は、ファイル・DB・ネットワークに
+   触れないことを確かめられる場合だけにする（ライブラリの挙動の確認など）。
 2. 候補ごとに、場所の行を実際に読み直してから書く。正本の記述も引用元の節を確かめる。
 3. 観点が複数のときは、観点ごとに報告ファイルを分ける。
 
