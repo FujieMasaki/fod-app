@@ -136,7 +136,9 @@
   時刻・フォント・外部への通信・マイクは`apps/web/vrt/support.ts`で固定する。基準画像に実在の
   個人データ・音声由来の内容を入れない。画面が新しいAPIを呼ぶようになったら、fixtureを足す
   （fixtureのないAPIを呼ぶとVRTが失敗する）。
-- PlaywrightはVRTのためだけに使う。操作の一連の流れを確かめるE2Eは、下の「保留」の判断とは別に扱う。
+- 依存はcheckoutごとのDocker volume（`fod-vrt-`で始まる名前）に入る。worktreeを消した後などに片付けるときは
+  `docker volume ls -q -f name=fod-vrt-`で確かめてから`docker volume rm`する。
+- PlaywrightはVRTのためだけに使う。E2E（操作の一連の流れの検証）を入れるかは、下の「保留」で判断する。
 
 ### 保留
 
