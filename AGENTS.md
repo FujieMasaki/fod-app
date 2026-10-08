@@ -27,6 +27,7 @@ AIは実装の代行者ではなく、設計・実装・レビューを支援す
 | backendレビュー | [`docs/code-review/backend/README.md`](docs/code-review/backend/README.md)、[`security.md`](docs/code-review/backend/security.md)、関連仕様・backend実装規約 |
 | 仕様・設計文書のレビュー | [`docs/code-review/documentation.md`](docs/code-review/documentation.md)、関連仕様・該当するImplementation Plan |
 | 横断レビュー | 両方のレビュー入口・security観点・実装規約・関連仕様 |
+| 探索的な監査（`exploratory-audit` skill） | [`docs/code-review/audit.md`](docs/code-review/audit.md)と、同文書が観点ごとに挙げる正本 |
 
 ## 文書の役割と更新
 
