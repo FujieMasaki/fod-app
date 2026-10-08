@@ -14,6 +14,7 @@ const stubMicrophone = ({
   reject,
 }: { supported?: string[]; hold?: boolean; reject?: string } = {}) => {
   const stopTrack = vi.fn();
+  const closeContext = vi.fn();
   const endedListeners = new Set<() => void>();
   const track = {
     stop: stopTrack,
@@ -46,6 +47,7 @@ const stubMicrophone = ({
     }
     close() {
       this.state = "closed";
+      closeContext();
       return Promise.resolve();
     }
   }
@@ -72,7 +74,7 @@ const stubMicrophone = ({
   }
   vi.stubGlobal("AudioContext", FakeAudioContext);
   vi.stubGlobal("MediaRecorder", FakeMediaRecorder);
-  return { stopTrack, track, recorders, grantPermission: () => grant() };
+  return { stopTrack, closeContext, track, recorders, grantPermission: () => grant() };
 };
 
 afterEach(() => {
@@ -83,7 +85,7 @@ afterEach(() => {
 describe("createRecorder", () => {
   it("開いてから録音を始め、止めると受け付ける形式の音声と録音時間を返して資源を解放する", async () => {
     vi.useFakeTimers({ now: 0 });
-    const { stopTrack, recorders } = stubMicrophone();
+    const { stopTrack, closeContext, recorders } = stubMicrophone();
     const recorder = createRecorder();
 
     expect(await recorder.open()).toBe("ok");
@@ -100,6 +102,7 @@ describe("createRecorder", () => {
     expect(result.blob?.size).toBeGreaterThan(0);
     expect(result.durationSec).toBeCloseTo(12.4);
     expect(stopTrack).toHaveBeenCalled();
+    expect(closeContext).toHaveBeenCalled();
   });
 
   it("webm/opusで録れないブラウザでは、mp4で録る", async () => {
@@ -224,8 +227,8 @@ describe("createRecorder", () => {
     expect((await stopping).blob?.size).toBe(4);
   });
 
-  it("片付けると、録音中のMediaRecorderとstreamを止める", async () => {
-    const { stopTrack, recorders } = stubMicrophone();
+  it("片付けると、録音中のMediaRecorderとstreamを止め、AudioContextを閉じる", async () => {
+    const { stopTrack, closeContext, recorders } = stubMicrophone();
     const recorder = createRecorder();
     await recorder.open();
     recorder.record();
@@ -234,6 +237,7 @@ describe("createRecorder", () => {
 
     expect(recorders[0].state).toBe("inactive");
     expect(stopTrack).toHaveBeenCalled();
+    expect(closeContext).toHaveBeenCalled();
     expect(recorder.getAmplitude()).toBe(0);
   });
 });
