@@ -19,6 +19,11 @@ tools: Read, Grep, Glob
 - 差分を保存したファイルのパス（`git diff origin/<base>...HEAD`の出力）
 - PRの目的（PR本文の概要か、1〜3行の説明）
 - 関連するImplementation Planのパス（あれば）
+- PR本文の図（Mermaidブロック）を保存したファイルのパス（PR本文に図があれば）
+
+図を受け取ったら、diffと食い違っていないか（diffにない制約・経路を足していないか）と、
+[`pull-requests.md`](../../docs/development/pull-requests.md#図に載せないもの)の「図に載せないもの」が
+入っていないかも確かめる。
 
 セルフレビューや他のレビューの結果は受け取らない。渡された場合も参考にせず、自分で判断する。
 
