@@ -38,6 +38,9 @@
   `pr-review-cycle`・`human-review-artifact`への差分画像の受け渡し手順、frontend.mdの「4. テスト」の更新。
 - 対象外: E2E（操作の一連の流れの検証）基盤の導入判断、dark mode（現在ないため。導入したときに加える）、
   Storybook等のComponent単位のカタログ、本番のフォント配信の変更（Q3のB）。
+- `/dot`・`/reflection`は対象にしない。Phase 1のmock（端末内のsession。`router.tsx`の注記どおりserverの
+  Day・一覧・詳細とは別の画面）で、生成の実装（TASK-011）で置き換わる見込みのため。タスクの「現在のDot」は、
+  serverに保存した今日のDotを示す`/day`で対象にした。置き換わった後の画面は、そのタスクで対象に加える。
 - 品質ゲート（Stop hook）とpre-pushにはVRTを入れない。Dockerを前提にできない環境（定期実行など）でも
   既存の検査を回せるようにするため。UI変更時は`pr-review-cycle`の手順でローカルの`pnpm vrt`を求め、
   CIの`VRT`ジョブを必須にして取りこぼさない。
@@ -95,7 +98,7 @@
 ```text
 pnpm vrt（コンテナ内）
 ↓
-Vite dev server（または preview）
+Vite dev server
 ↓
 Playwright（Chromium）→ page.route が /api/v1/* と Google Fonts を固定の応答に差し替え
 ↓
@@ -123,7 +126,9 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
   `minimumReleaseAge`の除外が必要になるため選ばなかった（除外を足さない）。
 - `@fontsource/zen-kaku-gothic-new`・`@fontsource/zen-old-mincho` 5.3.0（OFL-1.1）: 本番と同じ書体のwoff2を、
   VRTの中だけで返す。
-- 公式のPlaywrightコンテナ`mcr.microsoft.com/playwright:v1.63.0-noble`（Node.js 24、Chromium同梱）。
+- 公式のPlaywrightコンテナ`mcr.microsoft.com/playwright:v1.63.0-noble`（Node.js 24、Chromium同梱）。VRTの
+  dev serverとpnpmはコンテナのNode.js 24で動く（`engines`の22.xとは違うが、VRTは見た目の比較だけに使う）。
+  依存は`--ignore-scripts`で入れる（lefthookのpostinstallが、mountした手元の`.git/hooks`を書き換えないように）。
 
 ## 12. Alternatives Considered
 
@@ -188,7 +193,7 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
     `test-results`に`day-expected.png`・`day-actual.png`・`day-diff.png`が出た。戻した後は`16 passed`。
   - 基準画像16枚を目視し、fixtureの架空の文章とテスト用のアドレス（`vrt@example.com`）だけが写っていることを確認した。
   - `pnpm type-check`・`pnpm build`・新しいファイルへの`eslint`: 通過。`pnpm test:scripts`: 210件通過。
-  - CIの`VRT`ジョブ: PRで確認する（未実施）。
+  - CIの`VRT`ジョブ（PR #89）: 1分9秒で`16 passed`。macOSのDocker Desktopで作った基準画像がLinuxのrunnerでも一致した。
 - 関連: [TASK-020](../tasks/TASK-020-visual-regression-test.md)。
 
 ## 未決定事項
