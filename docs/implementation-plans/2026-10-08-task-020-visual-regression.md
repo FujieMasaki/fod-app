@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実装済み（2026-10-08）。Q1〜Q4はすべて推奨のAで人間が判断した（「未決定事項」）。判断の前の保留の記録は
+実装済み（2026-10-08）。Q1〜Q4はすべて推奨のAで人間が判断し、レビューを受けて追加したQ5（色の閾値）も同日にAと判断した（「未決定事項」）。判断の前の保留の記録は
 コミット`0984827`にある。
 
 ## 2. Goal
@@ -142,6 +142,12 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
   撮るたびに表示が変わりうるため。
 - `page.clock.install`・`pauseAt`でtimerまで止める方法は採らない。React Queryの通知がsetTimeoutを使うため、
   止めると読み込み中のまま描画されない。
+- 録音画面の波形だけを`mask`で比べない。threshold 0にした後、CI（amd64）で波形の棒の端だけが手元（Apple
+  Siliconのarm64）と728px違った。棒を小数の拡縮（`scaleY`）で描くため、CPUの種類で端の描画が変わる。手元も
+  `--platform linux/amd64`で動かす案は、Docker DesktopのRosettaが無効でQEMUになり、Node.jsとChromiumが
+  異常終了したため採らない（Rosettaを有効にしても、CPU命令の違いが残りうる）。ほかの15枚はthreshold 0でもCIと一致した。
+- Docker volumeの名前にCPUの種類を含める。native module（rolldownなど）はCPUごとに違い、別のCPUで入れたvolumeを
+  使うとVite dev serverが起動しないため。
 - CIの`VRT`ジョブは`install-node-deps`を使わない。依存はコンテナの中で入れ直すため、手元に入れても使わない。
 
 ## 13. Risks / Things to Watch
@@ -151,6 +157,10 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
   package.jsonから作るので、ずれない。
 - Dependabotがnpmの依存を更新すると、`@playwright/test`や`@fontsource`の更新PRでVRTが落ちうる。その場合は
   上と同じく基準画像を作り直す。
+- threshold 0のため、CPUの種類で描画が変わる要素が増えると、手元では通りCIだけで落ちる。そのときはその要素を`mask`に
+  足すか、原因（小数の拡縮など）を確かめる。
+- Dependabotのnpmの更新は1つのPRにまとまるため、`@playwright/test`や`@fontsource`の更新を含むPRはVRTで止まりうる。
+  そのPRで`pnpm vrt:update`を実行し、差分が描画エンジンや書体の更新だけであることを確かめる。
 - 画面が新しいAPIを呼ぶようになると、fixtureがないためVRTが失敗する。そのときは`fixtures.ts`に架空の応答を足す。
 - 基準画像はバイナリのため、リポジトリが少しずつ大きくなる（現在16枚で約520KB）。画面と幅の数を絞る。
 - `package.json`・lockfile・CI・frontend.md「4. テスト」・`pr-review-cycle`はTASK-019・TASK-021・TASK-022も変える
@@ -187,6 +197,7 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
     録音前の説明の画面はまだない（TASK-010）。説明の画面ができたら対象に加える。
   - 画面は7つで、今日のDayを2つの状態で撮るため、基準画像は8状態×2幅の16枚。
   - `@playwright/test`は1.63.0（11の理由）。
+  - 録音画面の波形はCPUの種類で描画が変わるため`mask`で比べない（12の理由）。
   - 色の閾値は、Q4のAに書いた既定の0.2ではなく0にした（Q5のA。サブエージェントのレビューで、0.2では色の変化を
     検出しないことが分かったため）。
 - 検証結果（2026-10-08、ローカルのmacOS + Docker Engine 20.10.22）:
@@ -198,7 +209,9 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
     `test-results`に`day-expected.png`・`day-actual.png`・`day-diff.png`が出た。戻した後は`16 passed`。
   - 基準画像16枚を目視し、fixtureの架空の文章とテスト用のアドレス（`vrt@example.com`）だけが写っていることを確認した。
   - `pnpm type-check`・`pnpm build`・新しいファイルへの`eslint`: 通過。`pnpm test:scripts`: 210件通過。
-  - CIの`VRT`ジョブ（PR #89）: 1分9秒で`16 passed`。macOSのDocker Desktopで作った基準画像がLinuxのrunnerでも一致した。
+  - CIの`VRT`ジョブ（PR #89）: threshold 0.2では1分9秒で`16 passed`。threshold 0では録音画面の2件だけが
+    波形の棒の端で失敗（728px）し、ほかの14件はmacOS（arm64）で作った基準画像とLinux（amd64）のrunnerで一致した。
+    波形を`mask`した後の結果はPRのCIで確かめる。
 - 関連: [TASK-020](../tasks/TASK-020-visual-regression-test.md)。
 
 ## 未決定事項
