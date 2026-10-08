@@ -64,7 +64,7 @@ MVPとその後の継続開発に必要な作業を管理する。TASK-001〜TAS
 - 各領域の実装規約・UI変更時のdesign-system・レビュー入口とsecurity指針は、着手する作業に応じてAGENTS.mdから読む。
 - 追加の不明点は推測で実装せず、関連する設計判断タスクと仕様の未決定事項へ記録する。完了済み作業を重複登録せず、新たな独立範囲が必要になった場合だけ新IDを追加する。
 - Claude Codeの`/run-task`で自動実行できるのは、作業区分が設計判断・API契約以外で、状態がTodo / In progress、またはBlockedで依存先がすべてDoneのタスクに限る。判定は`node scripts/task-status.mjs TASK-XXX`で行う。設計判断・API契約は人間と対話で進める。自動実行でも上記の状態・Doneの規則は変わらず、人間の確認が必要な完了条件が残る場合はIn progressのままPRを作る。
-- 探索的な監査（`exploratory-audit` skill）の候補は、人間が採否を書いたものだけをタスクに起こす。手順と、securityと個人データの保存・送信・削除に関わる候補の書き方・完了の条件は[audit.md](../code-review/audit.md) §4・§5が定める。
+- 探索的な監査（`exploratory-audit` skill）の候補は、人間が`採否`を「採用」にしたものだけをタスクに起こす。手順と、securityと個人データの保存・送信・削除に関わる候補の書き方・完了の条件は[audit.md](../code-review/audit.md) §4・§5が定める。
 - 毎朝4時に`scripts/task-scheduler.mjs`が上記の条件を満たすタスクを並列で`/run-task`する。ディレクトリ名が`task-NNN`かブランチ名に`task-NNN`を含むworktreeがあるタスク、このrepositoryのブランチからopen PRがあるタスク、mainでIn progressのタスクは着手済みとして除外する。定期実行のセッションが動いている間は、`task-status.mjs`がそのタスクを実行不可と判定し、同じタスクを手動で`/run-task`しても止まる。起動できるタスクがない日は、残っているタスクと理由を通知する。
 
 2026-09-21の命名移行で、既存16件の接頭辞を`MVP-`から`TASK-`へ変更した。番号とタスク内容は維持している。この一度の移行後は、上記の固定ID・固定パス運用を適用する。

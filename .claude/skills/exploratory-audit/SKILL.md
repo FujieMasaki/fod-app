@@ -79,4 +79,5 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 1. `git switch -c docs/task-<3桁の番号>-audit-record origin/main`でブランチを作る（修正したタスクの番号）。
 2. `audit.md` §4の最後の項目に従い、修正したタスクのPlanの`Completion Record`へ記録し、完了条件を確かめて
    タスクの状態を更新する。
-3. コミット・push・PRは`pr-review-cycle`に従う。PRを作った後に、報告ファイルの該当候補の詳細を消す。
+3. コミット・push・PRは`pr-review-cycle`に従う。報告ファイルの該当候補の詳細は、このPRがmainに入った後に
+   消す（人間がマージを伝えたとき。`audit.md` §4の最後の項目）。

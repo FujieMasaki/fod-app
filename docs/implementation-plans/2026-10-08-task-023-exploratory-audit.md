@@ -165,7 +165,7 @@ skill: 正本（仕様・audit.md）と実装を読む（変更しない）
 
 ## 10. Files to Change
 
-1つのPR（見積もり7ファイル）。
+1つのPR（見積もり9ファイル）。
 
 - 新規: `.claude/skills/exploratory-audit/SKILL.md`（監査の手順・入出力）
 - 新規: `docs/code-review/audit.md`（観点ごとの確認項目）
@@ -174,6 +174,7 @@ skill: 正本（仕様・audit.md）と実装を読む（変更しない）
 - 変更: `docs/tasks/README.md`（監査から起こしたタスクの扱い）
 - 変更: `AGENTS.md`（監査の入口）
 - 変更: `README.md`（文書一覧と、監査の起動方法）
+- 変更: `.claude/agents/code-reviewer.md`・`docs/code-review/final-check.md`（秘匿する候補の修正PRで、指摘に再現手順・攻撃の経路を書かない）
 
 Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
 
@@ -213,7 +214,8 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
 
 - 状態: 2026-10-08 実装済み。監査の結果の採否は人間の判断待ち（タスクはIn progressのまま）。
 - 実装差異:
-  - 変えるファイルに`README.md`（文書一覧と起動方法）を足した。
+  - 変えるファイルに`README.md`（文書一覧と起動方法）と、レビューの指摘で`code-reviewer.md`・`final-check.md`を足した
+    （reviewerの定義を変えるが、報告に書かない範囲を足す向きで、検査は緩めていない）。
   - `audit.md`は`docs/code-review/`に置いたが、差分のレビューの入口ではないため、
     [`documentation.md`](../code-review/documentation.md) §1の「入口を増やしたら4か所へ接続する」の対象にせず、
     `code-reviewer`・`final-check.md`には接続していない（`AGENTS.md`の表と`README.md`からは辿れる）。
@@ -252,6 +254,12 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
   任意のコードを実行するコマンドの使い方を絞った。
   （2回目）skillの禁止事項の例外を後半の2節に広げ、それぞれのブランチの作り方と`pr-review-cycle`に従うことを
   書いた。秘匿の条件を「`security.md`のどれかの節に当たる指摘」に広げた（`security`観点の対象は認証・認可の
-  境界のまま）。`spec`の正本に`contracts/README.md`を足し、skillに`argument-hint`を足した。秘匿する候補のタスク名を一般的なものにし、なお残る
+  境界のまま）。`spec`の正本に`contracts/README.md`を足し、skillに`argument-hint`を足した。
+- レビューで直したこと（Codex、1回目）: 秘匿の指示がタスクファイルにしかなく、独立レビュアー・Codexへ確実に
+  伝わらなかった。タスクファイルの1文をPlanの`1. Status`にも写すとし（Planは修正のPRの差分に入る）、
+  `code-reviewer`と`final-check.md`に、秘匿の記載があれば指摘に再現手順・攻撃の経路を書かないことを足した。
+  `audit.md` §4に修正のセッションで書いてよい範囲（ファイル名は可、原因は抽象的に、再現手順はtestだけ）を書いた。
+  あわせてサブエージェント3回目の🔵（チャットを制限する理由、報告の詳細を消す時機、タスクREADMEの「採用」、
+  秘匿しない例外を確信度とtestに結び付ける）を直した。秘匿する候補のタスク名を一般的なものにし、なお残る
   公開（未修正の問題がある事実・時期・IDの観点）を受け入れる前提として`audit.md` §4に書いた。
 - 関連: [TASK-023](../tasks/TASK-023-exploratory-audit-loop.md)
