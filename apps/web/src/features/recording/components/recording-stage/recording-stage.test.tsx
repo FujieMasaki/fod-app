@@ -293,6 +293,18 @@ describe("RecordingStage", () => {
     expect(screen.getByText("no-audio")).toBeInTheDocument();
   });
 
+  it("マイクが切れて止まった録音が大きすぎたら、音声が無いとは言わずに大きすぎることを案内する", async () => {
+    useRecordingClock();
+    const mic = stubMicrophone({ chunkBytes: 32_000_001 });
+    renderStage();
+    await recordFor(mic, 5);
+
+    act(() => mic.endTrack());
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("録音が大きすぎて送れません");
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
   it("録音中にマイクが切れたら止めて、ここまでで整理するか録り直すかを選べる", async () => {
     useRecordingClock();
     const mic = stubMicrophone();

@@ -102,7 +102,8 @@ export const RecordingStage = () => {
     if (finishedRef.current || !mountedRef.current) return;
     finishedRef.current = true;
     if (leaveIfSwitched()) return;
-    if (reason === "interrupted") {
+    // 大きすぎる録音は、中断でも整理へ渡せない理由をそのまま示す。
+    if (reason === "interrupted" && outcome.kind !== "too_large") {
       setEnded({ kind: "interrupted", audio: outcome.kind === "recorded" ? outcome.audio : null });
     } else if (outcome.kind === "recorded") {
       proceed(outcome.audio);
