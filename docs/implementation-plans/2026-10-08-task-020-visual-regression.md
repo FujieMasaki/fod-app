@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実装済み（2026-10-08）。Q1〜Q4はすべて推奨のAで人間が判断し、レビューを受けて追加したQ5（色の閾値）・Q6（イメージをdigestで固定）も同日にAと判断した（「未決定事項」）。判断の前の保留の記録は
+実装済み（2026-10-08）。Q1〜Q4はすべて推奨のAで人間が判断し、レビューを受けて追加したQ5（色の閾値）・Q6（イメージをdigestで固定）・Q8（anti-aliasingの画素の扱い）も同日にAと判断した（「未決定事項」）。判断の前の保留の記録は
 コミット`0984827`にある。
 
 ## 2. Goal
@@ -90,6 +90,8 @@
   契約のschemaで検証するので、契約から外れた見た目を基準にしない。
 - フォントをVRTの中だけ差し替える（Q3のA）: 本番の配信を変えずに、通信の状態で書体が揺れないようにする。
 - 1pxの差も失敗にする（Q4のA）: 静けさ・可読性に効く小さな崩れを検出する。揺れは環境とfixtureの固定で抑える。
+- anti-aliasingの画素を差に数えない比較を受け入れる（Q8のA）: 余白・色・大きさの崩れは輪郭以外の画素も変えるため検出でき、
+  全画素の完全一致にすると手元（arm64）とCI（amd64）で文字の縁が一致しなくなるおそれが大きいため。
 - イメージをdigestで固定する（Q6のA）: 同じタグが作り直されても手元とCIで同じ中身を使い、GitHub ActionsのSHA固定と揃える。
 - 色の閾値を0にする（Q5のA）: 既定の0.2では淡い配色のDesign Tokenの変化を見逃すため。0でも連続3回揺れなかった。
 
@@ -156,15 +158,14 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
 - `@playwright/test`のバージョンを上げるときは、基準画像を`pnpm vrt:update`で作り直し、差分が描画エンジンの
   違いだけであることを確かめる（Chromiumの更新で文字の描画が変わりうる）。`scripts/vrt.sh`の`pinned_version`と`digest`も
   更新する（`@playwright/test`と違えばscriptが止まるので、更新し忘れに気づける）。
-- Dependabotがnpmの依存を更新すると、`@playwright/test`や`@fontsource`の更新PRでVRTが落ちうる。その場合は
-  上と同じく基準画像を作り直す。
 - threshold 0のため、CPUの種類で描画が変わる要素が増えると、手元では通りCIだけで落ちる。そのときはその要素を`mask`に
   足すか、原因（小数の拡縮など）を確かめる。比べる範囲を減らす判断になるため、`pr-review-cycle`では`mask`を足す前に
   止まって人間に判断を求める。
 - Dependabotのnpmの更新は1つのPRにまとまるため、`@playwright/test`や`@fontsource`の更新を含むPRはVRTで止まりうる。
-  そのPRで`pnpm vrt:update`を実行し、差分が描画エンジンや書体の更新だけであることを確かめる。
+  そのPRで`scripts/vrt.sh`の`pinned_version`・`digest`を更新して`pnpm vrt:update`を実行し、差分が描画エンジンや書体の
+  更新だけであることを確かめる（Dockerを使える人間が行う）。
 - 画面が新しいAPIを呼ぶようになると、fixtureがないためVRTが失敗する。そのときは`fixtures.ts`に架空の応答を足す。
-- 基準画像はバイナリのため、リポジトリが少しずつ大きくなる（現在16枚で約520KB）。画面と幅の数を絞る。
+- 基準画像はバイナリのため、リポジトリが少しずつ大きくなる（現在16枚で約485KiB）。画面と幅の数を絞る。
 - `package.json`・lockfile・CI・frontend.md「4. テスト」・`pr-review-cycle`はTASK-019・TASK-021・TASK-022も変える
   （[タスク索引](../tasks/README.md)）。先にマージされた変更とのコンフリクトに注意する。
 - CIのコンテナはrootで動くため、作られた`test-results`・`report`はrootの持ち物になる。GitHubのrunnerは
@@ -200,6 +201,9 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
   - 画面は7つで、今日のDayを2つの状態で撮るため、基準画像は8状態×2幅の16枚。
   - `@playwright/test`は1.63.0（11の理由）。
   - 録音画面の波形はCPUの種類で描画が変わるため`mask`で比べない（12の理由）。
+  - Playwrightの比較はanti-aliasingと判定した輪郭の画素を差に数えない（Q8のA。Codexの最終チェックで、1画素の色を
+    +20変えても一致と判定されることを確かめた）。
+  - 撮影の前に、書体の読み込みに失敗していないことを確かめる（`document.fonts.ready`は失敗しても解決するため）。
   - 色の閾値は、Q4のAに書いた既定の0.2ではなく0にした（Q5のA。サブエージェントのレビューで、0.2では色の変化を
     検出しないことが分かったため）。
 - 検証結果（2026-10-08、ローカルのmacOS + Docker Engine 20.10.22）:
@@ -212,16 +216,16 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
   - 基準画像16枚を目視し、fixtureの架空の文章とテスト用のアドレス（`vrt@example.com`）だけが写っていることを確認した。
   - `pnpm type-check`・`pnpm build`・新しいファイルへの`eslint`: 通過。`pnpm test:scripts`: 210件通過。
   - CIの`VRT`ジョブ（PR #89）: threshold 0.2では1分9秒で`16 passed`。threshold 0では録音画面の2件だけが
-    波形の棒の端で失敗（728px）し、ほかの14件はmacOS（arm64）で作った基準画像とLinux（amd64）のrunnerで一致した。
+    波形の棒の端で失敗（728px）し、ほかの14件はmacOS（Apple Silicon）のDocker Desktop上のarm64のコンテナで作った基準画像と、amd64のrunnerで一致した。
     波形を`mask`した後は、コミット`bc98031`のCIで`VRT`が1分10秒で通った（CI Gateも通過）。
 - 関連: [TASK-020](../tasks/TASK-020-visual-regression-test.md)。
 
 ## 未決定事項
 
-Q8（anti-aliasingの扱い）が残っている。Q1〜Q4は2026-10-08に人間がすべてAと判断した。サブエージェントのレビューを
-受けて追加したQ5・Q6も、同日に人間がAと判断した（判断の材料として、下に当時のまま残す）。
+なし。Q1〜Q4は2026-10-08に人間がすべてAと判断した。レビューを受けて追加したQ5・Q6・Q8も、同日に人間がAと判断した
+（判断の材料として、下に当時のまま残す。Q7はレビューを続けるかの判断で、Aとした）。
 
-### Q8. anti-aliasingと判定された画素の扱い（未決定）
+### Q8. anti-aliasingと判定された画素の扱い
 
 - 決めること: Playwrightの比較がanti-aliasingと判定した画素を差に数えない（`includeAA: false`。設定で変えられない）ことを
   受け入れるか。
