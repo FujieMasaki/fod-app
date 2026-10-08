@@ -91,6 +91,8 @@
   TASK-010の記述。
 - `architecture.md`「実装済み」の録音処理の項と、Session Providerが持つ値・消す値の記述。
 - `code-review/frontend/security.md` §6のSession Providerの記述（録音時間だけでなく音声Blobを持つ）。
+- `code-review/frontend/README.md`の録音の行と§5の履歴（1/2のレビューで見つかった、ブラウザの通知の遅れと
+  採用済みの設定値との食い違いを、次のレビューで確かめるため）。
 - privacy.md §5は変えない（新しい保持先を作らない。Blobはmemoryだけ）。
 
 ## 7. Proposed Approach
@@ -111,7 +113,7 @@
 | 3（言い換え） | 文字起こしの全文も、この端末が受け取るまでお預かりします。受け取った時点、または受け付けから24時間を過ぎたあとに削除処理を始めます。全文はこのタブを閉じるまで、この端末で読めます。残るのは「今日の一文」と「話した内容の要約」です。 |
 | 2・6 遅れと外部 | 障害が起きたときは、削除が遅れることがあります。外部へ渡った内容を、すぐに消せるとは約束できません。 |
 | 4 Dot | Dotはあなただけが見られます。1件ずつ削除でき、退会するとすべてが削除の対象になります。 |
-| 5 他人の情報 | 他の人の実名や住所・連絡先は、必要がなければ言い換えて話せます（例:「同僚のAさん」）。 |
+| 5 他人の情報 | ほかの人の実名や住所・連絡先は、必要がなければ言い換えて話せます（例:「同僚のAさん」）。 |
 | 制限 | 1回の録音は30分までです。 |
 | 7 | 置換を行わないため該当しない（タスクの完了条件3）。 |
 
@@ -285,9 +287,11 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 | `apps/web/src/features/auth/components/auth-screens.test.tsx` | 変更 | 同上 |
 | `docs/journaling.md` | 変更 | 現行挙動 |
 | `docs/architecture.md` | 変更 | 実装済み |
+| `docs/code-review/frontend/security.md` | 変更 | §6のSession Providerが持つ値 |
+| `docs/code-review/frontend/README.md` | 変更 | 1/2のレビューで見つかった問題の再発防止の観点 |
 | Plan・タスクファイル | 変更 | 完了の記録 |
 
-数える: 15。`create-dot.ts`は変えない（mutationの入力の型だけを録音にし、mockは受け取らない）。
+数える: 17。`create-dot.ts`は変えない（mutationの入力の型だけを録音にし、mockは受け取らない）。
 
 ## 11. Libraries / APIs
 
