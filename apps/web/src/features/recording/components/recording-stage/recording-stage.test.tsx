@@ -364,6 +364,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone();
     renderStage();
+    startRecording();
     await recordFor(mic, 10);
     act(() => mic.endTrack());
     await screen.findByText("録音が途中で止まりました");
