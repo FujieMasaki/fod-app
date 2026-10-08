@@ -49,7 +49,7 @@ const renderProcessing = ({ withAudio = true } = {}) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <AuthProvider>
         <SessionProvider>
@@ -66,6 +66,7 @@ const renderProcessing = ({ withAudio = true } = {}) => {
       </AuthProvider>
     </QueryClientProvider>,
   );
+  return { ...view, client };
 };
 
 afterEach(() => {
@@ -93,6 +94,19 @@ describe("整理が終わると今日の一文へ進む", () => {
     expect(screen.getByText("no-audio")).toBeInTheDocument();
     expect(window.localStorage).toHaveLength(0);
     expect(window.sessionStorage).toHaveLength(0);
+  });
+
+  it("整理の画面を離れたら、mutationに渡した録音をcacheに残さない", async () => {
+    vi.stubEnv("VITE_DOT_API_URL", "http://api.test");
+    stubFetch(vi.fn(async () => ({ ok: true, json: async () => sampleSession })));
+
+    const { client, unmount } = renderProcessing();
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/dot", replace: true }));
+    // 画面にいる間は、再試行のために録音を持つ
+    expect(client.getMutationCache().getAll()).toHaveLength(1);
+
+    unmount();
+    await waitFor(() => expect(client.getMutationCache().getAll()).toHaveLength(0));
   });
 
   it("受け渡せる録音が無ければ整理を始めず、録音への導線を出す（直接開いた・再読み込みした）", async () => {

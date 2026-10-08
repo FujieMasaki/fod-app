@@ -28,7 +28,7 @@ Zodで検証したDotSessionをSession Provider（memory）へ保存
 | 録音開始 | 録音画面はまず録音前の案内（§4。文面は[TASK-010 Plan §7-1](implementation-plans/2026-10-09-task-010-recording-consent.md)）を出し、「録音を始める」を押したときにだけマイクを要求する。マイクを開いてから、`audio/webm`（opus）か`audio/mp4`で録音を始め、波形を出す（2026-10-09にTASK-010で変更）。 | 権限拒否・非対応・マイクが無い・使えない場合は録音を始めず、理由と次の操作（もう一度試す・Homeへ戻る）を示す。録音したようには見せない。録音中にマイクが切れたら止め、「ここまでで整理する」か「録り直す」を選べる。unmount時は録音資源を解放し、音声を残さない。許可を待っている間に止めた・画面を離れた場合は、許可の後に録音を始めずstreamを止める。録音attemptの発行はまだ行わない（endpointが未実装。TASK-010の残り）。 |
 | 録音停止 | 停止した録音（音声Blob・形式・録音時間）をSession Providerのmemoryへ渡し、`/processing`へ遷移する。30分に達したら自動で止めて同じく進む。 | 二重停止はUIで抑止する。1秒未満・音声なしの場合と、32,000,000 bytesを超えた場合は進まず、録り直しを案内する。`/processing`を録音なしで開いた（直接開いた・再読み込みした）場合は整理を始めず、録音への導線を出す。durationの再編集はない。 |
 | Dot生成 | `VITE_DOT_API_URL`が未設定なら約2.5秒後にローカルmockを返す。設定時は`${VITE_DOT_API_URL}/dot`へ本文なしのPOSTを行う。responseはZodで検証する。 | HTTP失敗またはschema不正ならErrorStateと再試行を表示する。再試行は同じ処理を再実行し、冪等性keyはない。 |
-| 保存と表示 | `DotSession`と録音時間をSession Providerのmemoryにだけ持ち、`/dot`と`/reflection`で表示する。再読み込みすると消える。 | 起動時に旧`fod.session.v1`を消す（TASK-007）。認証の終了・利用者の切り替わりで消える。`reset`関数はあるが、現行UIに削除・リセット操作はない。 |
+| 保存と表示 | `DotSession`をSession Providerのmemoryにだけ持ち、`/dot`と`/reflection`で表示する。再読み込みすると消える。録音（音声・録音時間）は整理の成功で消え、整理の画面を離れるとmutationのcacheからも消える。 | 起動時に旧`fod.session.v1`を消す（TASK-007）。認証の終了・利用者の切り替わりで消える。`reset`関数はあるが、現行UIに削除・リセット操作はない。 |
 
 ## 2. データと正本
 
@@ -56,7 +56,7 @@ Zodで検証したDotSessionをSession Provider（memory）へ保存
 | データ | 現在の正本・保持場所 | 現在の削除・受け渡し | 実サービスの方針（2026-09-28採用、未実装） |
 | --- | --- | --- | --- |
 | マイクstream / AudioContext | 録音中のbrowser memory | stop / dispose時にtrackを停止しAudioContextを閉じる。外部送信・永続化しない。 | 変えない。録音中のmemoryだけに置く。権限説明・対応ブラウザ・中断UXはTASK-010 |
-| 録音Blob | 停止時に`MediaRecorder`のdataから作り、Session Provider（memory）に置く | `/processing`へ渡すが、mockは使わず、送信・保存しない。次の録音の開始・整理の成功・認証の終了・利用者の切り替わり・再読み込みで消える（2026-10-09にTASK-010で変更）。storageへは書かない。 | 同一originのRails経由で送る。**長期保存しない**が、処理が終わるまでS3東京へ一時的に預かる（非公開・暗号化・versioningを有効にしない）。**DotがRDSへ保存されるまで完了したら**即削除（文字起こしや生成が通った時点ではない）。失敗した場合は受理から24時間を再試行の期限とし、期限が来たらアプリが削除する（lifecycleは保険で、それ自体は24時間を保証しない）。Dot削除は対象の処理のもの、退会は本人の全部を削除。端末のstorageへは書かない。最長30分・32MB |
+| 録音Blob | 停止時に`MediaRecorder`のdataから作り、Session Provider（memory）に置く | `/processing`へ渡すが、mockは使わず、送信・保存しない。次の録音の開始・整理の成功・認証の終了・利用者の切り替わり・再読み込みで消える。整理のmutationへ渡した分は、整理の画面を離れると消える（2026-10-09にTASK-010で変更）。storageへは書かない。 | 同一originのRails経由で送る。**長期保存しない**が、処理が終わるまでS3東京へ一時的に預かる（非公開・暗号化・versioningを有効にしない）。**DotがRDSへ保存されるまで完了したら**即削除（文字起こしや生成が通った時点ではない）。失敗した場合は受理から24時間を再試行の期限とし、期限が来たらアプリが削除する（lifecycleは保険で、それ自体は24時間を保証しない）。Dot削除は対象の処理のもの、退会は本人の全部を削除。端末のstorageへは書かない。最長30分・32MB |
 | 録音時間 | Session Provider（memory。録音Blobと一緒に持つ） | 録音Blobと同じ契機で消える。 | Dotと同じrequestで送り、RDSの`dots`を正本にする。保持・削除もDotと同じ |
 | Dot（id、date、started_at、duration、sentence、summary） | Session Provider（memory）に現在の1件（現行のDotSessionは`date`のみで`started_at`はなく、`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。`sentence`と`summary`は本人が編集でき、編集前の値は残さない。1件ごとの削除はゴミ箱（受理から7日で削除処理を始める）、即時の完全削除も備える。**`reflection`と`closing`は生成も保存もしない**。録音1回ごとに1件を保存し、`started_at`（録音開始操作をserverが受理した時刻・UTC）をserverが決め、`date`はそこから算出したAsia/Tokyoの暦日とする。`started_at`は`date`・`duration`と同じく本人に編集させず、保持・削除はDot本体と同じ（[dot-history §2](./dot-history.md)で2026-09-29採用） |
 | 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。ただし**Amazon Transcribeが結果をS3へ書き出すため、自前のbucketへ出して端末が受け取るまで置く**（2026-09-29にTASK-003で追加）。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す。server側の保持・削除は[privacy.md §5](./privacy.md)を正本とする |
