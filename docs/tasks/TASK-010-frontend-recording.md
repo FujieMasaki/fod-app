@@ -7,7 +7,7 @@
 | 対象領域 | Frontend |
 | 作業区分 | 実装 |
 | 優先度 | P1 |
-| 状態 | Blocked |
+| 状態 | In progress |
 
 ## 目的と作業範囲
 
@@ -51,4 +51,4 @@
 
 ## 関連Implementation Plan
 
-未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+- [2026-10-09 TASK-010 録音前の説明と音声の受け渡し・中断UX](../implementation-plans/2026-10-09-task-010-recording-consent.md)
