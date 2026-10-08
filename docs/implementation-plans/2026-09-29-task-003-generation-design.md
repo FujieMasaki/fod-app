@@ -1422,11 +1422,11 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 | 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）と**保持データの所在リージョン**、Transcribeのjob記録の保持 | Bedrockは**未確認**。既定でゼロデータ保持と説明されるが、**モデルにより保持必須のものがある**。保持ありを選ぶなら**所在リージョンの確認が必須**（§18必須条件3）。**Transcribeのjob記録は各リージョンで90日保持（調整不可）** で、[endpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)に記載があり**確認済み**。`privacy.md §5-1`は`DeleteTranscriptionJob`で消す設計なので矛盾しない |
 | 3 | 処理・保存のリージョン。越境する場合の手続き | Bedrockの In-Region / Geo / Global の別。Transcribeのopt-out前の保存先 | **方針は2026-10-03に決定済み**（`architecture.md`「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」）。**手続きは未確認。委託であっても「外国にある第三者への提供」には別の規律がかかる整理があり、同意の取得または移転先の体制整備と本人への情報提供が必要になり得る**（TASK-017）。**確認が済むまでは国内に収まる経路で運用する**（範囲の定義は`architecture.md`「データ所在地と費用」）。opt-outしない限りTranscribeも利用リージョン外へ保存され得る |
 | 4 | 人によるレビューの有無と条件、**その実施地とアクセス経路** | Bedrockの `aws_review` モードの要否、abuse detectionの条件、**レビューをどこから行うか**、**prompt cache等の滞留先** | 未確認。**モデルによってはAWSによる人的レビューが必須**になり得る。**`architecture.md`「データ所在地と費用」が求める「誰がどこから閲覧し得るか」の確認はここで行う**（実施地が国外なら、保存が国内でも要求に反する）。cacheの滞留先も同じ理由で含める |
-| 5 | サブプロセッサの開示 | AWSのサブプロセッサ一覧 | 未確認 |
+| 5 | サブプロセッサの開示 | AWSのサブプロセッサ一覧 | **公開資料で確認済み**（下記「2026-10-08 公開資料での確認」）。更新通知の購読はアカウントが要る |
 | 6 | 委託契約（DPA相当）を結べること | AWS DPA（Service Termsへ組み込み済み・自動適用） | **確認済み**。別途の締結を要しない。ただし**日本の個人情報保護法上の委託先としての評価は自分たちで行う** |
-| 7 | 事故発生時の通知義務と期限 | AWS DPAの該当条項 | 未確認。TASK-017の漏えい対応と接続する |
+| 7 | 事故発生時の通知義務と期限 | AWS DPAの該当条項 | **公開資料で確認済み**（下記）。**時間で区切った期限は無い**。TASK-017の漏えい対応と接続する |
 | 8 | 鍵の最小権限・ローテーション・漏えい時の失効 | ECS task roleのIAM policy、credential取得経路 | **一部を設計で解決。長期固定のAPIキーは持たない**が、**ECSはSDKへ一時credentialを供給する**ため項目は残る。確認対象は(a)roleの最小権限（対象bucketと対象モデルだけ）、(b)credential取得経路の保護、(c)侵害時のrole/policy無効化とtask停止の手順。policyの内容はTASK-009 |
-| 9 | 第三者認証の有無 | AWS Artifact（SOC 1/2/3、ISO 27001/27017/27018） | 未確認。**これだけを根拠にしない** |
+| 9 | 第三者認証の有無 | AWS Artifact（SOC 1/2/3、ISO 27001/27017/27018） | **対象範囲のページで確認済み**（下記）。レポート本文はAWS Artifactで未確認。**これだけを根拠にしない** |
 
 追加の確認対象（レビュー指摘で判明。9項目の外だが同じ確認の中で扱う）:
 
@@ -1434,6 +1434,49 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 | --- | --- | --- |
 | Transcribeの文字起こし結果 | `OutputBucketName`が実際に効いて自前bucketへ出ること、service-managed bucketへ出ていないこと | **§27で自前bucketへ置くと決めた**。設定が効いていることの確認はTASK-009/015 |
 | Transcribeのjob記録 | 出力objectと別に残るjob自体の記録の保持期間と、`DeleteTranscriptionJob`で消える範囲 | **保持期間は確認済み**（各リージョンで90日・調整不可。上記の項目2と同じ出典）。**残る未確認は`DeleteTranscriptionJob`で実際に消える範囲。objectを消してもjobが残る**ため、削除の対象に含めたうえで実際に消えることを確認する。**実際に消える範囲の確認はTASK-009が行う**（2026-10-08に担当を決めた。jobのcleanupを完了条件に持つため） |
+
+### 2026-10-08 公開資料での確認（アカウントなしで確かめられる範囲）
+
+[TASK-025](../tasks/TASK-025-vendor-verification.md)の一部として、AWSの公開資料の本文を取得して確かめた。
+アカウント・コンソール・AWS Artifactが要る部分は、各項目の「残り」に分けた。引用は原文のまま。
+
+- **項目5 サブプロセッサ**（確認済み）。[Sub-processors](https://aws.amazon.com/compliance/sub-processors/)
+  （Last Updated: July 28, 2026）は "AWS will update this page at least 30 days before engaging a new
+  sub-processor" とし、購読すればメールで通知する。[AWS DPA](https://d1.awsstatic.com/legal/aws-dpa/aws-dpa.pdf)
+  6.1も "At least 30 days before AWS engages a Sub-processor, AWS will update the applicable website" とする。
+  **Amazon Transcribeは「サービス改善」の処理先として載り、処理地に日本以外（Australia・USAなど）を含む**。
+  前置きは "Unless customer opts out of AWS using Customer Data for service improvement" で、opt-outすれば
+  対象外になる位置づけである（項目1のopt-outが要る理由の裏付け）。Amazon Bedrockはサブプロセッサの表に無い。
+  残り: 更新通知の購読。
+- **項目6 委託契約**（確認済み。従来の記録を出典で裏付けた）。[Service Terms](https://aws.amazon.com/service-terms/)
+  （Last Updated: October 1, 2026）1.14.1 "These Service Terms incorporate the AWS Data Processing Addendum (“DPA”)"。
+  DPAとService Termsが食い違うときはService Termsが優先する（DPA 16）。
+- **項目7 事故時の通知**（確認済み）。DPA 9.1 "AWS will (a) notify Customer of a Security Incident without undue
+  delay after becoming aware of the Security Incident"。通知は管理者へ、メールを含むAWSが選ぶ方法で届き、
+  連絡先を正しく保つのは顧客の責任である（9.4）。**時間で区切った期限（72時間など）は無い**。
+  当局・本人への通知が要るかの判断は顧客側にある。日本の報告期限との関係はTASK-017で扱う。
+  残り: アカウントの管理者・セキュリティの連絡先の登録。
+- **項目9 第三者認証**（対象範囲のページで確認済み）。[SOC](https://aws.amazon.com/compliance/services-in-scope/SOC/)・
+  [ISO](https://aws.amazon.com/compliance/iso-certified/)・[ISMAP](https://aws.amazon.com/compliance/services-in-scope/ISMAP/)
+  の対象サービスに、Amazon Transcribeと Amazon Bedrock（Bedrock Marketplaceを除く）が入っている。
+  ISOのページは規格ごとに分かれておらず、27001・27017・27018のどれに入るかは個別に確かめていない。
+  残り: AWS Artifactでのレポート本文（対象期間・例外事項）。
+- **項目2・4 Bedrockの保持と人によるレビュー**（一般的な部分を確認済み）。
+  [abuse detection](https://docs.aws.amazon.com/bedrock/latest/userguide/abuse-detection.html)は
+  "by default, Amazon Bedrock does not store model inputs or outputs" とし、例外のモデルを挙げる。
+  例: "For Anthropic Claude Fable 5 and Claude Fable 5.1, all traffic will be retained for up to 30 days for
+  automated offline abuse detection. Classifier-flagged traffic will be subject to potential human review performed by AWS."
+  保持の方式は[data retention](https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html)のモード
+  （`none`・`default`・`aws_review`）で決まり、リージョンごとに設定する。`none`にすると保持が要るモデルの呼び出しは
+  エラーになり、SCPで`none`以外への変更を禁止できる。cross-region inferenceでは、保持された内容は推論先の
+  リージョンに置かれる。残り: 選んだmodel idの`allowed_modes`（TASK-009）。
+- **項目2・4 Transcribe**（一部確認）。自前のbucketを指定した出力は "remains in that bucket until you remove it"
+  （[how-input](https://docs.aws.amazon.com/transcribe/latest/dg/how-input.html)）。
+  [DeleteTranscriptionJob](https://docs.aws.amazon.com/transcribe/latest/APIReference/API_DeleteTranscriptionJob.html)
+  の説明は "Deletes a transcription job." だけで、何が消えるかは書かれていない（確認はTASK-009）。
+  人によるレビューを明示した記述は見つからなかった。[FAQ](https://aws.amazon.com/transcribe/faqs/)は
+  "Only authorized employees will have access to your content" とし、Service Terms 50.3はopt-outしない限り
+  改善に使い、利用リージョンの外に保存し得るとする。**Transcribeの人によるレビューの有無は未確認として残す。**
 
 ### 確認の担当と時期
 
