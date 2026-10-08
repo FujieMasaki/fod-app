@@ -211,7 +211,7 @@ TASK-007で実装したのは、録音前（`/record`直アクセスを含む）
 
 - promptの最終文面（TASK-009で確定）。`sentence`・`summary`の上限は2026-10-01にTASK-005で
   200文字・2,000文字と決めた（契約の`Dot`）。生成側の上限はTASK-009でこれ以下に揃える
-- 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認結果（公開前に人間が実施）
+- 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認結果（公開前に人間が実施。TASK-025）
 - password再設定後の既存Cookieの実機での動作（request specでは拒否を確認済み。TASK-006）
 - 将来候補である検索・カテゴリ・期間フィルタの仕様と導入段階
 
