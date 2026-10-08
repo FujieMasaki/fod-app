@@ -94,7 +94,7 @@ describe("createRecorder", () => {
     // マイクを開いただけでは録音を始めない（間に録音attemptの発行を挟めるように）
     expect(recorders).toHaveLength(0);
     expect(recorder.record()).toBe(true);
-    expect(recorders[0].options).toEqual({ mimeType: "audio/webm;codecs=opus", audioBitsPerSecond: 64_000 });
+    expect(recorders[0].options).toEqual({ mimeType: "audio/webm;codecs=opus", audioBitsPerSecond: 32_000 });
 
     vi.setSystemTime(12_400);
     const result = await recorder.stop();

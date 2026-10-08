@@ -29,8 +29,9 @@ const STOP_TIMEOUT_MS = 3_000;
 // 録音中に音声を受け取る間隔。stopの通知が上限までに届かなくても、ここまでに受け取った音声で進める。
 const CHUNK_INTERVAL_MS = 1_000;
 
-// 30分でも契約の32MBに十分収まる大きさにする（Safariのmp4は既定のbitrateが高い）。
-const AUDIO_BITS_PER_SECOND = 64_000;
+// 音声だけの用途で足りる32kbpsを明示し、browserの既定に任せない（TASK-002 Plan「送信仕様（採用）」）。
+// 30分でも約7.2MBに収まる。hintに従わないbrowserも見込んで、契約の上限は32MBになっている。
+const AUDIO_BITS_PER_SECOND = 32_000;
 
 export type StopResult = {
   /** 録れた音声。録音を始めていない・何も録れていなければnull */

@@ -129,7 +129,7 @@
   - `denied`: `NotAllowedError`・`SecurityError`。`no_device`: `NotFoundError`・`OverconstrainedError`。
     `unavailable`: それ以外（`NotReadableError`＝他のアプリが使用中、など）。
   - `cancelled`: 許可を待っている間に止めた・片付けた（既存の保護。streamを止めて録音を始めない）。
-- `record()`: `MediaRecorder`を選んだ形式・64kbpsで始め、録音時間の起点を置く。**attemptの発行はこの2つの
+- `record()`: `MediaRecorder`を選んだ形式・32kbpsで始め、録音時間の起点を置く。**attemptの発行はこの2つの
   間に入る**（マイクの権限取得の後、発行が成功した直後に録音を始める。タスク本文の順序）。
 - `stop()`: Blob・録音時間（秒）・形式を返す。資源を解放する。stopの通知は3秒まで待ち、届かなければ録音中に
   1秒ごとに受け取った音声で返す（`start`にtimesliceを渡す）。通知が来ない実装で、録音した音声を丸ごと
@@ -137,8 +137,8 @@
 - マイクのtrackが`ended`になった（抜けた・OSが止めた・権限を取り消した）か、`MediaRecorder`が`error`を出したら、
   `onInterrupt`で知らせる。
 - `silent` modeと合成の波形はやめる。録音していないのに録音しているように見せないため。
-- 64kbpsにするのは、30分でも約15MBに収め、契約の32MBに余裕を持たせるため（Safariの`audio/mp4`は既定の
-  bitrateが高く、30分で上限に近づき得る）。
+- 32kbpsは、TASK-002 Planの「送信仕様（採用）」に従う（音声だけの用途で足り、30分でも約7.2MB）。browserの
+  既定に任せないのは、Safariの`audio/mp4`の既定のbitrateが高く、30分で上限に近づき得るため。
 
 ### 7-3. 録音の結果を区別する（`features/recording`）
 
