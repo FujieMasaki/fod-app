@@ -43,6 +43,8 @@
       "Read(./**/.env*)",
       "Read(./apps/api/config/master.key)",
       "Read(./apps/api/config/credentials/*.key)",
+      "Read(./apps/api/log/**)",
+      "Read(./apps/api/tmp/**)",
       "Bash(gh pr merge *)"
     ]
   },
