@@ -1419,12 +1419,12 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 | # | 確認する項目 | 確認先 | 現状 |
 | --- | --- | --- | --- |
 | 1 | 入力を学習・モデル改善に使わないこと | Transcribe: AWS OrganizationsのAI services opt-out policyを適用し、effective policyを照会。Bedrock: モデルの data retention mode | **要対応。**§18のとおり、Transcribeは**既定ではopt-inのまま**。設定しない限り改善に使われ得る |
-| 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）と**保持データの所在リージョン**、Transcribeのjob記録の保持 | Bedrockは、**既定で保持しないことと、保持が必須のモデルがあることを2026-10-08に公開資料で確認した**。model idごとの値は未確認（TASK-009）。保持ありを選ぶなら**所在リージョンの確認が必須**（§18必須条件3）。**Transcribeのjob記録は各リージョンで90日保持（調整不可）** で、[endpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)に記載があり**確認済み**。`privacy.md §5-1`は`DeleteTranscriptionJob`で消す設計なので矛盾しない。**一般的な部分は2026-10-08に公開資料で確認した**（下記「2026-10-08 公開資料での確認」） |
+| 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）と**保持データの所在リージョン**、Transcribeのjob記録の保持 | Bedrockは、**保持しないことを原則とし、保持が必須のモデルがあることを2026-10-08に公開資料で確認した。ただし未設定のリージョンはモデルの既定に従い、保持しないことを保証するには`none`の明示が要る**（下記）。model idごとの値は未確認（TASK-009）。保持ありを選ぶなら**所在リージョンの確認が必須**（§18必須条件3）。**Transcribeのjob記録は各リージョンで90日保持（調整不可）** で、[endpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)に記載があり**確認済み**。`privacy.md §5-1`は`DeleteTranscriptionJob`で消す設計なので矛盾しない |
 | 3 | 処理・保存のリージョン。越境する場合の手続き | Bedrockの In-Region / Geo / Global の別。Transcribeのopt-out前の保存先 | **方針は2026-10-03に決定済み**（`architecture.md`「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」）。**手続きは未確認。委託であっても「外国にある第三者への提供」には別の規律がかかる整理があり、同意の取得または移転先の体制整備と本人への情報提供が必要になり得る**（TASK-017）。**確認が済むまでは国内に収まる経路で運用する**（範囲の定義は`architecture.md`「データ所在地と費用」）。opt-outしない限りTranscribeも利用リージョン外へ保存され得る |
 | 4 | 人によるレビューの有無と条件、**その実施地とアクセス経路** | Bedrockの `aws_review` モードの要否、abuse detectionの条件、**レビューをどこから行うか**、**prompt cache等の滞留先** | 未確認。**モデルによってはAWSによる人的レビューが必須**になり得る。**`architecture.md`「データ所在地と費用」が求める「誰がどこから閲覧し得るか」の確認はここで行う**（実施地が国外なら、保存が国内でも要求に反する）。cacheの滞留先も同じ理由で含める。**一般的な部分は2026-10-08に公開資料で確認した**（下記「2026-10-08 公開資料での確認」） |
 | 5 | サブプロセッサの開示 | AWSのサブプロセッサ一覧 | **公開資料で確認済み**（下記「2026-10-08 公開資料での確認」）。更新通知の購読の要件は未確認 |
 | 6 | 委託契約（DPA相当）を結べること | AWS DPA（Service Termsへ組み込み済み・自動適用） | **確認済み**。別途の締結を要しない。ただし**日本の個人情報保護法上の委託先としての評価は自分たちで行う** |
-| 7 | 事故発生時の通知義務と期限 | AWS DPAの該当条項 | **公開資料で確認済み**（下記）。**DPA上は時間で区切った期限は無い**。TASK-017の漏えい対応と接続する |
+| 7 | 事故発生時の通知義務と期限 | AWS DPAの該当条項 | **公開資料で確認済み**（下記）。**DPA上は時間で区切った期限は無い**。Supplementary Addendumは未確認。TASK-017の漏えい対応と接続する |
 | 8 | 鍵の最小権限・ローテーション・漏えい時の失効 | ECS task roleのIAM policy、credential取得経路 | **一部を設計で解決。長期固定のAPIキーは持たない**が、**ECSはSDKへ一時credentialを供給する**ため項目は残る。確認対象は(a)roleの最小権限（対象bucketと対象モデルだけ）、(b)credential取得経路の保護、(c)侵害時のrole/policy無効化とtask停止の手順。policyの内容はTASK-009 |
 | 9 | 第三者認証の有無 | AWS Artifact（SOC 1/2/3、ISO 27001/27017/27018） | **対象範囲のページで確認済み**（下記）。レポート本文はAWS Artifactで未確認。**これだけを根拠にしない** |
 
@@ -1449,6 +1449,8 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
   with the AWS Service Terms" で、opt-outすれば
   対象外になる位置づけである（項目1のopt-outが要る理由の裏付け）。Amazon Bedrockは、サービス別の表（2の「特定サービスを支えるAWSエンティティ」と3の「第三者のプロバイダー」）に無い。
   1の「インフラを提供するAWSエンティティ」（東京リージョンはAmazon Data Services Japan G.K.）は全サービスにかかる。
+  サポートを担うエンティティ（国外を含む）は "do not process Customer Data unless the customer agrees to share Customer Data in
+  the course of requesting support" とされ、AWS Supportへの問い合わせで内容を共有すれば、国外の拠点が扱い得る。
   残り: 更新通知の購読（購読フォームはpages.awscloud.comにあり、要件は未確認）。
 - **項目6 委託契約**（確認済み。従来の記録を出典で裏付けた）。[Service Terms](https://aws.amazon.com/service-terms/)
   （Last Updated: October 1, 2026）1.14.1 "These Service Terms incorporate the AWS Data Processing Addendum (“DPA”), when you use AWS Services to
@@ -1458,7 +1460,8 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 - **項目7 事故時の通知**（確認済み）。DPA 9.1 "AWS will (a) notify Customer of a Security Incident without undue
   delay after becoming aware of the Security Incident"。通知は管理者へ、メールを含むAWSが選ぶ方法で届き、
   連絡先を正しく保つのは顧客の責任である（9.4）。**DPA上は、時間で区切った期限（72時間など）は無い**。通知の対象の "Security Incident" は "a breach of AWS’s
-  security" と定義され、未遂のもの（ping・ポートスキャンなど）は除かれる（9.3）。Supplementary Addendum（1.14.2）は見ていない。
+  security" と定義され、未遂のもの（ping・ポートスキャンなど）は除かれる（9.3）。Supplementary Addendum（1.14.2で、DPAと同じ条件で組み込まれる）は見ていない。DPAのPDFに版の日付は見当たらず、
+  2026-10-08に配布元のURLから取得したものを読んだ。
   当局・本人への通知が要るかの判断は顧客側にある（9.5）。日本の報告期限との関係はTASK-017で扱う。
   残り: アカウントの管理者・セキュリティの連絡先の登録。
 - **項目9 第三者認証**（対象範囲のページで確認済み）。[SOC](https://aws.amazon.com/compliance/services-in-scope/SOC/)・
@@ -1480,13 +1483,23 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
   つまり、ZOAの原則に対し、保持が必須のモデルではAWSが人によるレビューを行い得るという例外が同じページにある。
   同じ箇所に、Enterprise Frontier Safeguardsの対象者は "ZDR through December 31, 2026" という例外もある。
   保持の方式は[data retention](https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html)のモード
-  （`none`・`default`・`aws_review`）で決まり、リージョンごとに設定する。`none`にすると保持が要るモデルの呼び出しは
-  エラーになり、SCPで`none`以外への変更を禁止できる。cross-region inferenceでは、保持された内容は推論先の
-  リージョンに置かれる。保持した内容は "stored and processed by AWS and are not shared with third-party model providers"
-  とされるが、**人によるレビューを行う場所・アクセス経路と、prompt cache等の滞留先は、abuse detection・data retention・
-  data protectionのページには書かれておらず未確認**である（prompt cachingのページは読んでいない）。
-  残り: 選んだmodel idの`allowed_modes`（TASK-009）、レビューの実施地・アクセス経路とcacheの滞留先（`architecture.md`
-  「データ所在地と費用」が求める「誰がどこから閲覧し得るか」）。
+  （`none`・`default`・`aws_review`、旧来の`provider_data_share`、未設定を表す`inherit`）で決まり、リージョンごとに設定する。
+  **何も設定しないリージョンは`inherit`で、モデルの既定に従う**（"A Region you have not configured remains at inherit and
+  falls back to each model's default."）。`default`では "AWS may retain the data for safety and abuse-prevention purposes"
+  とされ、保持しないことを保証するには`none`を明示する（"If you require guaranteed zero retention, set data_retention_mode
+  to none"）。`none`にすると保持が要るモデルの呼び出しはエラーになり、SCPで`none`以外への変更を禁止できる。
+  cross-region inferenceでは、保持された内容は推論先のリージョンに置かれる。
+  人によるレビューについて、data retentionのページは "Review is carried out by AWS within the AWS boundary — the model
+  provider does not review your content" とし、`aws_review`では内容がAWSの外へ出ないとする。**レビューするのはAWSで、
+  モデルの提供元へは渡らないことは確認済み**である。レビューの範囲はページで書き方が違い、abuse detectionは
+  "Classifier-flagged traffic" に限るように書き、data retentionはClaude Fable 5について "may be reviewed by AWS on any
+  request" と書く。**"AWS boundary" は国としての場所を示さないため、レビューを行う国・アクセス経路と、prompt cache等の
+  滞留先は未確認**である（abuse detection・data retention・data protectionのページで確かめた。prompt cachingのページは
+  読んでいない）。
+  残り: 選んだmodel idの`allowed_modes`（TASK-009。"The Bedrock control plane does not expose a per-model retention signal"
+  なので、`bedrock-mantle`の`GET /v1/models/{model}`で見る。保持の設定は "there is no console UI for configuring data
+  retention" でAPIから行う）、レビューを行う国・アクセス経路とcacheの滞留先（`architecture.md`「データ所在地と費用」が
+  求める「誰がどこから閲覧し得るか」）。
 - **項目2・4 Transcribe**（一部確認）。自前のbucketを指定した出力は "remains in that bucket until you remove it"
   （[how-input](https://docs.aws.amazon.com/transcribe/latest/dg/how-input.html)）。
   [DeleteTranscriptionJob](https://docs.aws.amazon.com/transcribe/latest/APIReference/API_DeleteTranscriptionJob.html)
@@ -1497,8 +1510,8 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
   保存し得るとする。同じFAQは "If you opt out ... by contacting AWS Support, your content will not be stored in another
   AWS region. You can request deletion of voice inputs associated with your account by contacting AWS Support." と、
   "You can use available Delete APIs to delete data and other artifacts associated with transcription jobs" とも書く。
-  ただし、このopt-outは「AWS Supportへの連絡」という旧来の手段を条件にしており、Organizationsのopt-out policyで同じ扱いに
-  なるかは未確認である。アクセスする場所も未確認である。**Transcribeの人によるレビューの有無は未確認として残す**。
+  このopt-outは「AWS Supportへの連絡」を手段として書いており、同じFAQは別の箇所で "by using an AWS Organizations opt-out
+  policy" という手段も案内している。Organizationsのopt-out policyでも同じ扱いになるかは未確認である。
 
 ### 確認の担当と時期
 
