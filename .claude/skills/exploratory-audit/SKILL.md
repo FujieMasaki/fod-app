@@ -78,7 +78,8 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 1. `git switch -c docs/audit-tasks-<YYYYMMDD> origin/main`でブランチを作る（`task-NNN`を含めない。
    定期実行が着手済みと判定しないように）。
 2. `採否`が「採用」の候補だけを、`audit.md` §5の手順で`docs/tasks`へ起こす（秘匿する候補は§4の形）。
-3. コミット・push・PRは`pr-review-cycle`に従う。報告ファイルへ起こしたタスクのIDを書き足す。
+3. コミット・push・PRは`pr-review-cycle`に従う。報告ファイルへ起こしたタスクのIDを書き足す（書き足す前後で手順1の5と
+   同じロックを取り、外す）。
 
 ## 秘匿していた候補の修正がmainに入った後
 
