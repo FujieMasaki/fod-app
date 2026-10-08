@@ -88,6 +88,14 @@ export const preparePage = async (page: Page, api: ApiFixtures): Promise<string[
       await route.abort();
     }
   });
+  // /auth/はViteのproxyへ流れるため、開いただけで呼ぶ画面がないことを確かめる（Googleのログインの開始など）。
+  await page.route(
+    (url) => url.pathname.startsWith("/auth/"),
+    async (route) => {
+      unexpected.push(`${route.request().method()} ${new URL(route.request().url()).pathname}`);
+      await route.abort();
+    },
+  );
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     const key = `${url.pathname}${url.search}`;

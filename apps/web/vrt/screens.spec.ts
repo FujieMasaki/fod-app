@@ -82,6 +82,8 @@ for (const screen of screens) {
     await page.goto(screen.path);
     await expect(screen.ready(page)).toBeVisible();
     await waitForFonts(page);
+    // 基準画像の更新（--update-snapshots）でも、想定外の要求があった画面を基準にしない。
+    expect(unexpected, "想定外の要求があった").toEqual([]);
 
     await expect(page).toHaveScreenshot(`${screen.name}.png`, { fullPage: true });
     expect(unexpected, "想定外の要求があった").toEqual([]);

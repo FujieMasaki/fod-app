@@ -4,7 +4,7 @@
 #
 #   pnpm vrt                 比べる（差分があれば失敗し、apps/web/vrt/report に期待・実際・差分の画像を出す）
 #   pnpm vrt:update          基準画像（apps/web/vrt/__screenshots__/）を作り直す
-#   pnpm vrt -- --grep day   Playwrightの引数をそのまま渡す
+#   pnpm vrt --grep day      Playwrightの引数をそのまま渡す（`--`を挟むと渡らない）
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -24,7 +24,8 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 # node_modulesはLinux用に入れ直す必要があるため、手元のものを使わずcheckoutごとのvolumeに置く
-# （worktreeを並べて実行しても混ざらないよう、pathから名前を作る）。
+# （worktreeを並べて実行しても混ざらないよう、pathから名前を作る）。install scriptは実行しない
+# （lefthookのpostinstallが、mountした手元の.git/hooksをコンテナの中から書き換えないようにするため）。
 key="$(printf '%s' "$root" | shasum | cut -c1-12)"
 
 tty_flag=()
@@ -34,12 +35,11 @@ docker run --rm --init --ipc=host ${tty_flag[@]+"${tty_flag[@]}"} \
   -e FOD_VRT_CONTAINER=1 \
   -e CI \
   -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
-  -e LEFTHOOK=0 \
   -v "$root:/work" \
   -v "fod-vrt-${key}-root-modules:/work/node_modules" \
   -v "fod-vrt-${key}-web-modules:/work/apps/web/node_modules" \
   -v "fod-vrt-pnpm-store:/pnpm-store" \
   -w /work \
   "$image" \
-  bash -c 'corepack enable && pnpm install --frozen-lockfile --store-dir /pnpm-store --reporter=silent && cd apps/web && pnpm exec playwright test "$@"' \
+  bash -c 'corepack enable && pnpm install --frozen-lockfile --ignore-scripts --store-dir /pnpm-store --reporter=silent && cd apps/web && pnpm exec playwright test "$@"' \
   vrt "$@"
