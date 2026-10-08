@@ -259,7 +259,9 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
       Webに通らない分岐が残る。AIの案: 採用（契約・READMEを実装に合わせる小さな文書タスク）。
       根拠の箇所は統合した側でも読み直して確かめた。秘匿しない判断（`audit.md` §1の例外）の根拠: 実装は
       Wardenが外した利用者を`401`にする。メール未確認の利用者そのもののspecはないが、同じ経路（Wardenの
-      `active_for_authentication?`で外れる）をロック中の利用者で確かめるspec（`apps/api/spec/requests/authentication_spec.rb`）がある。
+      `active_for_authentication?`で外れる）をロック中の利用者で確かめるspec（`apps/api/spec/requests/authentication_spec.rb`）がある。メール未確認の利用者が外れる決め手は`apps/api/config/initializers/devise.rb`の`allow_unconfirmed_access_for = 0.days`で、
+      この設定を変えるとDotを操作できる経路になりうる（メール未確認の利用者そのものの`401`を確かめるspecを足すことを、
+      採用時のタスク化の案に含める）。
     - AUD-20261008-02（🔵、確信度 低）: `/reflection`と`/dot`がserverの今日のDotの有無に関わらず空の状態を
       示す（`apps/web/src/router.tsx`）。`dot-history.md`の「実際のデータ状態と矛盾せず示す」に当たるかは
       mockの画面を対象とみなすか次第で、Webからserverに Dotを作れない現状では利用者が当たらない。
@@ -308,6 +310,9 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
   禁止事項に足した。秘匿する候補の修正PRは分けないとした（間のサブのPRには秘匿の合図が届かないため）。
   `human-review-artifact`に§4へのポインタを足し、秘匿を扱うセッションを共有しないこと、IDの連番を書く直前に
   決めることを書いた。
+  （判断の後のサブエージェント2回目）秘匿の扱いを始める目印を「タスクのslugが`audit-fix`」に揃え（§4を参照する
+  だけのPRが当たらないように）、5か所の書き方を同じにした。レビューの判断の記録にも§4を適用し、修正中に見つけた
+  別の問題は報告に書き足すとした。denyのパターンをworktreeにも効く`./**/apps/api/...`にした。
   あわせてサブエージェント3回目の🔵（チャットを制限する理由、報告の詳細を消す時機、タスクREADMEの「採用」、
   秘匿しない例外を確信度とtestに結び付ける）を直した。秘匿する候補のタスク名を一般的なものにし、なお残る
   公開（未修正の問題がある事実・時期・IDの観点）を受け入れる前提として`audit.md` §4に書いた。
