@@ -13,7 +13,7 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 ## 絶対に守ること
 
 - 監査（手順1〜5）では、コード・`docs/`・設定を変えない。コミット・push・外部への投稿をしない。worktree・
-  ブランチ・DBを作らない。書いてよいのは`<git-common-dir>/audits/`だけ。例外は、人間が依頼したときの後半の
+  ブランチ・DBを作らない。書いてよいのは`<git-common-dir>/audits/`だけ（`git fetch`による追跡refの更新を除く）。例外は、人間が依頼したときの後半の
   2節（「採用した候補をタスクに起こす」「秘匿していた候補の修正がmainに入った後」）で、どちらも文書の変更として
   ブランチを作り、`pr-review-cycle`に従ってPRにする。
 - 秘密情報（`.env*`、`master.key`、`credentials/*.key`）を読まない。DBの中身・ログ（`apps/api/log/`等）・`tmp/`を読まない。
@@ -55,8 +55,8 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 
 ### 4. 報告を書く
 
-1. `audits/<YYYY-MM-DD>-<観点>.md`に、`audit.md` §3の形式で書く。同じ日の同じ観点のファイルがあれば、
-   連番を続けて追記する。
+1. `audits/<YYYY-MM-DD>-<観点>.md`に、`audit.md` §3の形式で書く。同じ日の同じ観点のファイルがあれば
+   追記する。IDの連番は、その日の報告すべてで続ける（IDに観点を入れないため）。
 2. 候補がなければ、確認した範囲と「候補なし」を書く（次の監査で同じ範囲を見たことが分かるように）。
 
 ### 5. チャットで渡す

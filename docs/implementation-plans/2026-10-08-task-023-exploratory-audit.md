@@ -63,7 +63,7 @@
 - Q2: A（手動だけ）。手動で数回回した後に、定期実行に入れるかを判断する。
 - Q3: B（報告の全体をQ1と同じ非公開の場所に置く）。
 
-### レビューで止まった点（2026-10-08、人間の判断待ち）
+### レビューで止まった点（2026-10-08。判断済み）
 
 Codexの後のサブエージェント段階で、3回レビューしてもLGTMにならなかった（`pr-review-cycle`の止まる条件）。
 残った🟡と、許可に関わる判断は次の2つ。
@@ -71,11 +71,11 @@ Codexの後のサブエージェント段階で、3回レビューしてもLGTM�
 - R1: 報告のID（`AUD-<YYYYMMDD>-<観点>-<連番>`）に観点が入るため、秘匿する候補のslugを`audit-fix`に固定しても、
   タスクファイルとPlanに写すIDから`security` / `privacy`の問題が未修正であることが分かる。
   A: IDから観点を外す（`AUD-<YYYYMMDD>-<連番>`、観点は報告の欄だけに書く）。B: 受け入れ、その判断をここに記録する。
-  推奨はA（変更が小さく、slugを固定した意味が保たれる）。
+  推奨はA（変更が小さく、slugを固定した意味が保たれる）。**人間の判断: A。**
 - R2: 監査がGrep toolでgitignore済みの開発ログ（`apps/api/log/`）まで読みうる。skillでは`git grep`を優先し範囲を
   絞るとしたが、指示だけの防御になる。A: `.claude/settings.json`のdenyに`Read(./apps/api/log/**)`・
   `Read(./apps/api/tmp/**)`を足す（許可を絞る向き。denyがGrep・Globに効くかは足した後に確かめる）。
-  B: skillの指示だけにする。推奨はA（個人データを読まない約束を指示だけに頼らないため）。
+  B: skillの指示だけにする。推奨はA（個人データを読まない約束を指示だけに頼らないため）。**人間の判断: A。**
 
 ### 未決定事項（判断前の整理。判断の結果は上）
 
@@ -179,7 +179,7 @@ skill: 正本（仕様・audit.md）と実装を読む（変更しない）
 
 ## 10. Files to Change
 
-1つのPR（見積もり10ファイル）。
+1つのPR（見積もり11ファイル）。
 
 - 新規: `.claude/skills/exploratory-audit/SKILL.md`（監査の手順・入出力）
 - 新規: `docs/code-review/audit.md`（観点ごとの確認項目）
@@ -188,6 +188,7 @@ skill: 正本（仕様・audit.md）と実装を読む（変更しない）
 - 変更: `docs/tasks/README.md`（監査から起こしたタスクの扱い）
 - 変更: `AGENTS.md`（監査の入口）
 - 変更: `README.md`（文書一覧と、監査の起動方法）
+- 変更: `.claude/settings.json`（denyに開発ログと`tmp/`のReadを足す。R2）
 - 変更: `.claude/skills/pr-review-cycle/SKILL.md`（秘匿する候補の修正PRでは、再発防止の追記を後のPRへ回すポインタ）
 - 変更: `.claude/agents/code-reviewer.md`・`docs/code-review/final-check.md`（秘匿する候補の修正PRで、指摘に再現手順・攻撃の経路を書かない）
 
@@ -233,7 +234,8 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
     （reviewerの定義を変えるが、報告に書かない範囲を足す向きで、検査は緩めていない）。
   - `audit.md`は`docs/code-review/`に置いたが、差分のレビューの入口ではないため、
     [`documentation.md`](../code-review/documentation.md) §1の「入口を増やしたら4か所へ接続する」の対象にせず、
-    `code-reviewer`・`final-check.md`には接続していない（`AGENTS.md`の表と`README.md`からは辿れる）。
+    `code-reviewer`・`final-check.md`の手順2（読むレビュー入口）には接続していない（`AGENTS.md`の表と`README.md`からは
+    辿れる）。両ファイルには、秘匿する候補の修正PRで`audit.md` §4の「修正のセッション」に従うというポインタだけを足した。
   - 秘匿する候補から起こしたタスクを実装するセッションへ書き方の制限を伝える方法は、`run-task`を変えず、
     タスクファイルに1文を書く形にした（`audit.md` §4）。実装するセッションは必ずタスクファイルを読むため。
 - 検証結果:
@@ -246,7 +248,7 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
   - mainへの`spec`観点の監査: 基準`be905cb4eae4235f768d7d1f389034bd5607372a`（HEADと`origin/main`が一致、
     未コミットの変更なし）。対象は`apps/web/src/`・`apps/api/app/`・`contracts/`の全体。報告は
     `<git-common-dir>/audits/2026-10-08-spec.md`。秘匿しない候補2件、秘匿する候補0件。
-    - AUD-20261008-spec-01（🔵、確信度 高）: 契約はDotの操作に`403 email_unconfirmed`を定めるが、
+    - AUD-20261008-01（🔵、確信度 高）: 契約はDotの操作に`403 email_unconfirmed`を定めるが、
       APIはメール未確認の利用者をsessionの復元時に外して`401 unauthenticated`を返し、このcodeを返さない
       （`contracts/openapi.yaml`のForbidden、`apps/api/app/controllers/concerns/authentication.rb`の
       `authenticate_user!`）。TASK-006 Planに差は記録されているが、契約と`contracts/README.md`が直っておらず、
@@ -254,13 +256,22 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
       根拠の箇所は統合した側でも読み直して確かめた。秘匿しない判断（`audit.md` §1の例外）の根拠: 実装は
       Wardenが外した利用者を`401`にする。メール未確認の利用者そのもののspecはないが、同じ経路（Wardenの
       `active_for_authentication?`で外れる）をロック中の利用者で確かめるspec（`apps/api/spec/requests/authentication_spec.rb`）がある。
-    - AUD-20261008-spec-02（🔵、確信度 低）: `/reflection`と`/dot`がserverの今日のDotの有無に関わらず空の状態を
+    - AUD-20261008-02（🔵、確信度 低）: `/reflection`と`/dot`がserverの今日のDotの有無に関わらず空の状態を
       示す（`apps/web/src/router.tsx`）。`dot-history.md`の「実際のデータ状態と矛盾せず示す」に当たるかは
       mockの画面を対象とみなすか次第で、Webからserverに Dotを作れない現状では利用者が当たらない。
       AIの案: 保留（TASK-011の範囲と重なるため、着手時に確かめる）。
   - 報告の全体は非公開に置く（`audit.md` §3）が、ここに秘匿しない2件を場所つきで書き写したのは、TASK-023の完了条件
     「結果と採否をPlanに記録」のための例外である。以後の監査の結果は、採用してタスクに起こしたものだけが公開に出る。
   - 採否: 人間が報告の`採否`と`理由`を書く（未記入）。記入後、採用した候補を`audit.md` §5の手順でタスクに起こす。
+    そのタスクを起こすPR（`docs/audit-tasks-*`）で、この記録に採否を写し、TASK-023の最後の完了条件にチェックを付けて
+    Doneにする。採用がなければ、採否を写すだけの文書のPRで同じことをする。
+  - IDの形式は、R1の判断で`AUD-<YYYYMMDD>-<観点>-<連番>`から`AUD-<YYYYMMDD>-<連番>`に変えた。非公開の報告の
+    2件も同じIDに直した。
+- 要確認: `settings.json`のdeny（R2）がGrep・Glob toolにも効くかは確かめていない。設定はセッションの開始時に
+  読み込まれ、このセッションには反映されないため。次のセッションで、gitignore済みのダミーのファイルを
+  `apps/api/tmp/`に置いてGrep toolで探し、結果に出ないことを確かめる（PRの「確認すること」）。
+- 要確認: 公開してよい時機を「修正がmainに入った後」としたのは、プロダクトAPIを公開する環境がまだないため。
+  deployの仕組みを入れるタスクで、本番に反映された後に変えるかを見直す。
 - 要確認: 秘匿する候補から起こしたタスクを定期実行（`--permission-mode auto`、作業場所は`.claude/worktrees/task-NNN`）
   が拾ったとき、作業場所の外にある`<git-common-dir>/audits/`を読めるかは確かめていない。読めなければ`run-task`の
   止まる条件で止まるだけで、情報が漏れる方向ではない。初めてそのようなタスクを起こしたときに確かめる。
@@ -286,6 +297,9 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
   Grep・Globの範囲を絞るとした（`settings.json`のdenyに`apps/api/log/`・`tmp/`を足すかは許可の変更のため人間に
   回した）。`AGENTS.md`のバグ対応の「原因」と`pr-review-cycle`の手順8に、§4への参照があるPRは同節に従うという
   ポインタを足し、reviewerの2ファイルに「原因が抽象的なことを指摘しない」を足した。
+  （人間の判断の後）R1でIDから観点を外し、R2で`settings.json`のdenyに`apps/api/log/`・`apps/api/tmp/`を足した。
+  reviewerが指摘しない範囲の規則を`audit.md` §4へ移し、reviewerの2ファイルはポインタだけにした。人間のレビュー用
+  ガイドにも再現手順を引用しないとした。skillの禁止事項に`git fetch`の例外を書いた。
   あわせてサブエージェント3回目の🔵（チャットを制限する理由、報告の詳細を消す時機、タスクREADMEの「採用」、
   秘匿しない例外を確信度とtestに結び付ける）を直した。秘匿する候補のタスク名を一般的なものにし、なお残る
   公開（未修正の問題がある事実・時期・IDの観点）を受け入れる前提として`audit.md` §4に書いた。
