@@ -179,7 +179,9 @@ export const RecordingStage = () => {
     );
   }
 
-  const requesting = phase === "requesting" || phase === "idle";
+  // 止めた後（idleに戻ってから次の画面へ移るまで）は、許可待ちとして見せず、もう止められないようにする。
+  const stopRequested = stopping || autoStopped !== null;
+  const requesting = phase === "requesting" || (phase === "idle" && !stopRequested);
 
   return (
     <div className={styles.root}>
@@ -214,7 +216,7 @@ export const RecordingStage = () => {
           type="button"
           className={styles.stopButton}
           onClick={handleStop}
-          disabled={stopping || phase === "stopping"}
+          disabled={stopRequested || phase === "stopping"}
           aria-label="話し終える"
         >
           <StopIcon />

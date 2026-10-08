@@ -184,9 +184,12 @@ describe("RecordingStage", () => {
     await recordFor(mic, 5);
 
     act(() => switchUser());
-    fireEvent.click(screen.getByRole("button", { name: "話し終える" }));
+    // 止めた後に画面は変わらない（Homeへ移るだけ）。DOMの変化を待つwaitForではなく、停止の処理を流しきってから確かめる。
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "話し終える" }));
+    });
 
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true }));
+    expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true });
     expect(navigateMock).not.toHaveBeenCalledWith({ to: "/processing" });
     expect(screen.getByText("no-audio")).toBeInTheDocument();
   });
