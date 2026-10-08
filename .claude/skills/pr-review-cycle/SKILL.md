@@ -67,6 +67,12 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
    apps/apiのRailsコードは`cd apps/api && bundle exec rspec` / `bundle exec rubocop` /
    `bundle exec brakeman`）。pre-push hookで検証されない領域（Railsのtest/lint/security
    scanなど）は、pushする前に自分で実行して結果を確認する。
+   - 画面の見た目に関わる変更（`apps/web/src`のComponent・CSS・Design Token・`index.html`など）では、
+     `pnpm vrt`（Dockerが要る）を実行する。差分が意図した変化なら`pnpm vrt:update`で基準画像を更新して
+     同じコミットに入れ、意図しない変化なら実装を直す（[frontend.md](../../../docs/development/frontend.md)
+     「4. テスト」）。Dockerが使えない環境では実行できなかったことを完了報告に書き、CIの`VRT`ジョブの
+     結果で確かめる。基準画像を更新したら、PR本文の「確認すること」に、更新した画面と「意図した変化だけか」を
+     挙げる（画像は手順9のガイドで人間へ渡す）。
 6. 1-5でコミットした後に、`git diff --name-only origin/<ベースブランチ>...HEAD` で変更ファイルを数える
    （未コミットの変更を数え漏らさないよう、`git status` がcleanになってから数える）。
    [数えないファイル](../../../docs/development/pull-requests.md#大きさの上限)を除いて20を超えるなら、
