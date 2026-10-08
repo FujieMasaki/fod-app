@@ -136,6 +136,11 @@
   時刻・フォント・外部への通信・マイクは`apps/web/vrt/support.ts`で固定する。基準画像に実在の
   個人データ・音声由来の内容を入れない。画面が新しいAPIを呼ぶようになったら、fixtureを足す
   （fixtureのないAPIを呼ぶとVRTが失敗する）。
+- 画面を消す・名前を変えるときは、使わなくなった基準画像を`apps/web/vrt/__screenshots__/`から手で消す
+  （`pnpm vrt:update`は古い画像を消さない）。比べないのは、CPUの種類（手元のApple SiliconとCIのamd64）で描画が
+  変わる要素（録音画面の波形）だけで、specの`mask`で示す。
+- 撮影はVite dev serverで行う（本番のbuildだけで起きるCSSの順序の違いは対象外）。手元はmacOSのDocker Desktop
+  を前提にする（LinuxのDocker Engineでは、作られたファイルがrootの持ち物になる）。
 - 依存はcheckoutごとのDocker volume（`fod-vrt-`で始まる名前）に入る。worktreeを消した後などに片付けるときは
   `docker volume ls -q -f name=fod-vrt-`で確かめてから`docker volume rm`する。
 - PlaywrightはVRTのためだけに使う。E2E（操作の一連の流れの検証）を入れるかは、下の「保留」で判断する。

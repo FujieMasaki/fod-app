@@ -136,12 +136,11 @@ GitHub Actionsでは、Pull Request・`main` へのPush・手動実行時に以�
 | VRT | `pnpm vrt` | 主要な画面のスナップショット比較。公式のPlaywrightコンテナで実行するためDockerが要る。基準画像の更新は`pnpm vrt:update`（[frontend.md](docs/development/frontend.md)「4. テスト」） |
 | Docs & scripts | `pnpm lint:markdown` / `pnpm test:scripts` | 強調の崩れと`scripts/`のtest。**変更の種類に関わらず常に実行する**（文書だけの変更では他のジョブが走らないため） |
 
-`VRT`は依存とNode.jsをPlaywrightのコンテナの中で用意するため、上のバージョンの取得とcacheの対象外です。
-
 `CI Gate`が必須チェックの結果をまとめて検証します。`Docs & scripts`は常に必須で、ほかは
 変更した領域（web / api）に応じて必須になります。
 
 Node.js / pnpmのバージョンは `package.json` から取得し、pnpm storeをキャッシュした上で `--frozen-lockfile` を使用して依存関係をインストールしています。
+`VRT`は依存とNode.jsをPlaywrightのコンテナの中で用意するため、このバージョンの取得とcacheの対象外です。
 
 Dependabotによるnpm / pnpmおよびGitHub Actionsの依存関係更新も設定しています。
 
