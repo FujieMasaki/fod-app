@@ -2,9 +2,8 @@
 
 ## 1. Status
 
-保留（2026-10-08）。ツール・実行環境・APIの用意・フォント・対象と許容値に複数の有力案があり、
-[TASK-020](../tasks/TASK-020-visual-regression-test.md)の指示どおり、選択肢と推奨を整理して人間の判断を待つ。
-判断の後に、7〜16を確定した内容で書き直して実装する。
+実装済み（2026-10-08）。Q1〜Q4はすべて推奨のAで人間が判断した（「未決定事項」）。判断の前の保留の記録は
+コミット`0984827`にある。
 
 ## 2. Goal
 
@@ -38,8 +37,10 @@
 - 対象: VRTの基盤（ツール・設定・実行コマンド・CIのジョブ）、主要な画面の基準画像、更新手順、
   `pr-review-cycle`・`human-review-artifact`への差分画像の受け渡し手順、frontend.mdの「4. テスト」の更新。
 - 対象外: E2E（操作の一連の流れの検証）基盤の導入判断、dark mode（現在ないため。導入したときに加える）、
-  Storybook等のComponent単位のカタログ。
-- 未決定: 「未決定事項」のQ1〜Q4。
+  Storybook等のComponent単位のカタログ、本番のフォント配信の変更（Q3のB）。
+- 品質ゲート（Stop hook）とpre-pushにはVRTを入れない。Dockerを前提にできない環境（定期実行など）でも
+  既存の検査を回せるようにするため。UI変更時は`pr-review-cycle`の手順でローカルの`pnpm vrt`を求め、
+  CIの`VRT`ジョブを必須にして取りこぼさない。
 
 ## 6. References and Documents to Update
 
@@ -47,34 +48,45 @@
   [privacy.md](../privacy.md)、[architecture.md](../architecture.md)、[PRの分割](../development/pull-requests.md)、
   [mizchi「AIコーディングのループと形式手法」](https://zenn.dev/mizchi/articles/ai-coding-loop-formal)。
 - 更新: frontend.md「4. テスト」、`.claude/skills/pr-review-cycle/SKILL.md`、
-  `.claude/skills/human-review-artifact/SKILL.md`、README（実行コマンドを載せる場合）。
+  `.claude/skills/human-review-artifact/SKILL.md`、README（CIの表）。architecture.mdは、アプリの構成・
+  データの流れを変えないため更新しない。privacy.mdは、実データを扱わず外部へ何も送らないため更新しない。
 
 ## 7. Proposed Approach
 
-推奨案（Q1〜Q4がすべてA）で進める場合の手順。判断の結果に合わせて書き直す。
-
-1. `apps/web`にPlaywright（`@playwright/test`、バージョン固定）を入れ、`apps/web/vrt/`にVRTの設定とspecを置く。
-   Vitestの対象（`src/**`）と分ける。
-2. 実行環境を公式のPlaywrightコンテナ（`mcr.microsoft.com/playwright:v<固定>-noble`）に固定し、
-   ローカル（macOS）もCIも同じコンテナで`pnpm vrt`を実行する。Chromiumだけを対象にする。
-3. 認証・APIは`page.route`で`/api/v1/*`を固定のfixtureに差し替える。fixtureは架空のテスト用データで、
-   契約のschemaで検証してから返す（契約から外れたfixtureで基準画像を作らないため）。
-4. フォントは`fonts.googleapis.com`・`fonts.gstatic.com`への要求を`page.route`で止め、repositoryに置いた
-   同じ書体のファイル（SIL Open Font License）を返す。撮影前に`document.fonts.ready`を待つ。
-5. 不安定な要素を止める: `page.clock`で時刻を固定、`reducedMotion: "reduce"`と`toHaveScreenshot`の
-   `animations: "disabled"`、caretを隠す、locale・timezoneを`ja-JP`・`Asia/Tokyo`に固定。
-6. マイクは`/record`の録音前の状態だけを撮る。`navigator.mediaDevices.getUserMedia`を初期化scriptで
-   差し替え、実際のマイクには触れない。
-7. 基準画像を`apps/web/vrt/__screenshots__/`にgitで保存する。更新は`pnpm vrt:update`。
-8. CIに`VRT`ジョブを足す（web変更時だけ）。失敗したらPlaywrightのHTML report（期待・実際・差分の画像）を
-   artifactとして上げる。
-9. `pr-review-cycle`・`human-review-artifact`に、UI変更でVRTの差分が出たときに差分画像（またはCIのartifactのリンク）を
-   人間のレビューガイドへ載せ、「意図した変化か」を確認項目にする手順を加える。
+1. `apps/web`に`@playwright/test`（1.63.0に固定）を入れ、設定を`apps/web/playwright.config.ts`、specと補助を
+   `apps/web/vrt/`に置く。Vitestの対象（`src/**`）と分ける。
+2. 実行環境を公式のPlaywrightコンテナ（`mcr.microsoft.com/playwright:v1.63.0-noble`）に固定する。
+   `scripts/vrt.sh`がイメージのタグを`@playwright/test`のバージョンから作り、リポジトリをmountして実行する。
+   node_modulesはLinux用に入れ直すため、checkoutごとのDocker volumeに置く（手元のmacOS用のものは使わない）。
+   設定ファイルは環境変数`FOD_VRT_CONTAINER=1`がないと止まり、コンテナの外で実行できない。
+3. 認証・APIは`page.route`で`/api/v1/*`を`apps/web/vrt/fixtures.ts`の応答に差し替える。fixtureは架空の
+   データで、契約のZod schemaで検証してから使う。fixtureのないAPIやGET以外の要求は失敗として記録し、
+   撮影後に空であることを確かめる。
+4. フォントは、Google Fontsへの要求を`page.route`で`@fontsource/zen-kaku-gothic-new`・`@fontsource/zen-old-mincho`
+   （devDependencies、OFL、5.3.0に固定）のCSSとwoff2へ差し替える。`index.html`の`family`と`wght`から読む
+   ファイルを決め、対応するファイルがなければ失敗させる。撮影前に`document.fonts.ready`を待つ。
+5. 不安定な要素を止める: `page.clock.setFixedTime`で`Date`を2026-09-28 10:00 JSTに固定（timerは動かす）、
+   `reducedMotion: "reduce"`と`animations: "disabled"`、caretを隠す、locale・timezoneを`ja-JP`・`Asia/Tokyo`に固定、
+   自分のdev server以外への通信を止める。
+6. マイクは`getUserMedia`を応答しないPromiseに差し替える。録音画面は許可を待つ状態（経過時間00:00）で止まり、
+   実際のマイクには触れない。
+7. 基準画像を`apps/web/vrt/__screenshots__/<mobile|desktop>/<画面>.png`にgitで保存する。比較は`pnpm vrt`、
+   更新は`pnpm vrt:update`。
+8. CIに`VRT`ジョブを足す（web変更時だけ、`scripts/vrt.sh`をそのまま実行）。失敗したらHTML report（期待・実際・
+   差分の画像）を`vrt-report` artifactとして14日残す。`CI Gate`でwebの変更時に必須にする。
+9. `pr-review-cycle`の1-5に、画面の見た目に関わる変更で`pnpm vrt`を実行し、基準画像を更新したら「確認すること」に
+   挙げる手順を加える。`human-review-artifact`に、変えた基準画像の変更前・変更後をガイドの「確認すること」へ
+   並べる手順を加える。
 10. frontend.md「4. テスト」にVRTの対象・更新手順と、PlaywrightはVRTのためでE2E基盤の保留とは別であることを書く。
 
 ## 8. Why This Approach
 
-判断の後に記載する（推奨の理由は「未決定事項」の各Qを参照）。
+- コンテナで固定する（Q1のA）: 完了条件「ローカルとCIで同じコマンド」を満たし、macOSとLinuxの文字の描画の
+  違いを基準画像に持ち込まない。外部サービスへ画面を送らない。
+- APIをfixtureに差し替える（Q2のA）: 見た目の回帰の検出に絞り、Railsとの結合の失敗でVRTが落ちないようにする。
+  契約のschemaで検証するので、契約から外れた見た目を基準にしない。
+- フォントをVRTの中だけ差し替える（Q3のA）: 本番の配信を変えずに、通信の状態で書体が揺れないようにする。
+- 1pxの差も失敗にする（Q4のA）: 静けさ・可読性に効く小さな崩れを検出する。揺れは環境とfixtureの固定で抑える。
 
 ## 9. Data Flow
 
@@ -94,43 +106,64 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
 
 ## 10. Files to Change
 
-推奨案での見積もり。合計20以下のため1つのPR（ブランチ`test/task-020-visual-regression`、base `main`）。
+合計19ファイル（lockfile・基準画像は数えない）のため1つのPR（ブランチ`test/task-020-visual-regression`、base `main`）。
 
-- 新規: `apps/web/playwright.config.ts`、`apps/web/vrt/*.spec.ts`（1〜2）、`apps/web/vrt/fixtures/*`（API・フォント）、
-  `scripts/vrt.sh`（コンテナで実行する入口）
-- 変更: `apps/web/package.json`、`package.json`、`.github/workflows/ci.yml`、`eslint.config.*`（必要な場合）、
+- 新規: `apps/web/playwright.config.ts`、`apps/web/vrt/screens.spec.ts`、`apps/web/vrt/support.ts`、
+  `apps/web/vrt/fixtures.ts`、`scripts/vrt.sh`
+- 変更: `package.json`、`apps/web/package.json`、`.gitignore`、`.github/workflows/ci.yml`、`scripts/ci-gate.mjs`、
+  `scripts/ci-gate.test.mjs`、`scripts/ci-changes.mjs`、`scripts/ci-changes.test.mjs`、`README.md`、
   `docs/development/frontend.md`、`.claude/skills/pr-review-cycle/SKILL.md`、`.claude/skills/human-review-artifact/SKILL.md`、
   本Plan、タスクファイル
-- 数えない: lockfile、基準画像（生成物）
+- 数えない: `pnpm-lock.yaml`、`apps/web/vrt/__screenshots__/`（16枚）
 
 ## 11. Libraries / APIs
 
-判断の後に記載する（候補: `@playwright/test`のスクリーンショット比較）。
+- `@playwright/test` 1.63.0: `toHaveScreenshot`による比較、`page.route`（API・フォント・外部通信の差し替え）、
+  `page.clock.setFixedTime`、`webServer`（Vite dev server）。1.64.0は公開から日が浅く、pnpmの
+  `minimumReleaseAge`の除外が必要になるため選ばなかった（除外を足さない）。
+- `@fontsource/zen-kaku-gothic-new`・`@fontsource/zen-old-mincho` 5.3.0（OFL-1.1）: 本番と同じ書体のwoff2を、
+  VRTの中だけで返す。
+- 公式のPlaywrightコンテナ`mcr.microsoft.com/playwright:v1.63.0-noble`（Node.js 24、Chromium同梱）。
 
 ## 12. Alternatives Considered
 
-「未決定事項」の各Qに記載した。
+「未決定事項」の各QのB・Cに記載した。実装中に選んだものは次のとおり。
+
+- フォントファイルをリポジトリに置く（Planの当初の書き方）ではなく、devDependenciesの`@fontsource`から読む。
+  日本語の書体は5つの太さで数十MBになり、gitの履歴に残すと重いため。lockfileのintegrityで中身が固定され、
+  `pnpm install`の後は通信なしで返せるため、Q3のA（本番を変えずVRTの中だけ差し替える）の範囲に収まる。
+- 録音画面はマイクの許可を待つ状態で撮る。`getUserMedia`を失敗させると無音のモードで経過時間のtimerが動き、
+  撮るたびに表示が変わりうるため。
+- `page.clock.install`・`pauseAt`でtimerまで止める方法は採らない。React Queryの通知がsetTimeoutを使うため、
+  止めると読み込み中のまま描画されない。
+- CIの`VRT`ジョブは`install-node-deps`を使わない。依存はコンテナの中で入れ直すため、手元に入れても使わない。
 
 ## 13. Risks / Things to Watch
 
-- コンテナとローカルのPlaywrightのバージョンがずれると、ブラウザのバイナリが合わず実行できない。
-  `@playwright/test`とイメージのタグを同じ番号に固定する。
-- 基準画像はバイナリのため、リポジトリが少しずつ大きくなる。画面と幅の数を絞る。
+- `@playwright/test`のバージョンを上げるときは、基準画像を`pnpm vrt:update`で作り直し、差分が描画エンジンの
+  違いだけであることを確かめる（Chromiumの更新で文字の描画が変わりうる）。イメージのタグはscriptが
+  package.jsonから作るので、ずれない。
+- Dependabotがnpmの依存を更新すると、`@playwright/test`や`@fontsource`の更新PRでVRTが落ちうる。その場合は
+  上と同じく基準画像を作り直す。
+- 画面が新しいAPIを呼ぶようになると、fixtureがないためVRTが失敗する。そのときは`fixtures.ts`に架空の応答を足す。
+- 基準画像はバイナリのため、リポジトリが少しずつ大きくなる（現在16枚で約520KB）。画面と幅の数を絞る。
 - `package.json`・lockfile・CI・frontend.md「4. テスト」・`pr-review-cycle`はTASK-019・TASK-021・TASK-022も変える
   （[タスク索引](../tasks/README.md)）。先にマージされた変更とのコンフリクトに注意する。
+- CIのコンテナはrootで動くため、作られた`test-results`・`report`はrootの持ち物になる。GitHubのrunnerは
+  毎回作り直されるため問題にならない。
 
 ## 14. Verification
 
 ### Manual
 
-- 余白か色を意図的に変え、VRTが失敗して差分画像で変化を確認できること。
+- 余白を意図的に変え（`day-screen.module.css`の`.header`の`gap-1`→`gap-2`）、VRTが失敗して差分画像で変化を確認できること。
 - `pnpm vrt:update`で更新した後、VRTが通ること。
 - 同じコミットで連続3回実行して一致すること。
 - 基準画像に実在の個人データ・音声由来の内容がないこと（目視）。
 
 ### Automated
 
-- CIのVRTジョブ、既存の`pnpm check`・`pnpm type-check`・`pnpm test`。
+- CIの`VRT`ジョブ、既存の`pnpm check`・`pnpm type-check`・`pnpm test`・`pnpm build`。
 
 ## 15. Definition of Done
 
@@ -140,12 +173,27 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
 
 ## 16. Completion Record
 
-- 状態: 2026-10-08 保留（下記の判断待ち）。
-- 実装差異: なし（未実装）。
-- 検証結果: 未実施（判断待ちのため）。
+- 状態: 2026-10-08 実装済み。タスクの完了条件はすべて満たした（下記）。人間のレビューで確認すること:
+  基準画像16枚の内容、フォントの取得元を`@fontsource`にした実装差異、CIの`VRT`ジョブの所要時間。
+- 実装差異:
+  - フォントはリポジトリに置かず、devDependenciesの`@fontsource`（5.3.0固定）から返した（12の理由）。
+  - 録音画面は「録音前」ではなく「マイクの許可待ち」の状態を撮った。現在の`/record`は開くと録音を始め、
+    録音前の説明の画面はまだない（TASK-010）。説明の画面ができたら対象に加える。
+  - 画面は7つで、今日のDayを2つの状態で撮るため、基準画像は8状態×2幅の16枚。
+  - `@playwright/test`は1.63.0（11の理由）。
+- 検証結果（2026-10-08、ローカルのmacOS + Docker Engine 20.10.22）:
+  - `pnpm vrt:update`: 16枚を作成。
+  - `pnpm vrt`を連続3回: 3回とも`16 passed`。
+  - 余白を変えた変更: day・day-emptyの4件が失敗（例: `4745 pixels (ratio 0.02 of all image pixels) are different`）、
+    `test-results`に`day-expected.png`・`day-actual.png`・`day-diff.png`が出た。戻した後は`16 passed`。
+  - 基準画像16枚を目視し、fixtureの架空の文章とテスト用のアドレス（`vrt@example.com`）だけが写っていることを確認した。
+  - `pnpm type-check`・`pnpm build`・新しいファイルへの`eslint`: 通過。`pnpm test:scripts`: 210件通過。
+  - CIの`VRT`ジョブ: PRで確認する（未実施）。
 - 関連: [TASK-020](../tasks/TASK-020-visual-regression-test.md)。
 
 ## 未決定事項
+
+なし。Q1〜Q4は2026-10-08に人間がすべてAと判断した（判断の材料として、以下を当時のまま残す）。
 
 既定値で決めたこと（質問しない）:
 
