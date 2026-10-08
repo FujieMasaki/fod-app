@@ -1410,6 +1410,9 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 
 委託先は**Amazon Web Services 1社**（Amazon Transcribe と Amazon Bedrock）。
 
+2026-10-08に、この確認をTASK-003の完了条件7から[TASK-025](../tasks/TASK-025-vendor-verification.md)へ切り出した
+（経緯は[切り出しのPlan](2026-10-08-task-025-vendor-verification-split.md)）。確認の記録先は引き続き本節である。
+
 | # | 確認する項目 | 確認先 | 現状 |
 | --- | --- | --- | --- |
 | 1 | 入力を学習・モデル改善に使わないこと | Transcribe: AWS OrganizationsのAI services opt-out policyを適用し、effective policyを照会。Bedrock: モデルの data retention mode | **要対応。**§18のとおり、Transcribeは**既定ではopt-inのまま**。設定しない限り改善に使われ得る |
