@@ -302,6 +302,22 @@ describe("RecordingStage", () => {
     expect(screen.getByText("audio:audio/webm:10")).toBeInTheDocument();
   });
 
+  it("中断の案内を見ている間に利用者が切り替わったら、「ここまでで整理する」でも前の利用者の録音を渡さずHomeへ戻る", async () => {
+    useRecordingClock();
+    const mic = stubMicrophone();
+    renderStage();
+    await recordFor(mic, 10);
+    act(() => mic.endTrack());
+    await screen.findByText("録音が途中で止まりました");
+
+    act(() => switchUser());
+    fireEvent.click(screen.getByRole("button", { name: "ここまでで整理する" }));
+
+    expect(navigateMock).toHaveBeenCalledWith({ to: "/", replace: true });
+    expect(navigateMock).not.toHaveBeenCalledWith({ to: "/processing" });
+    expect(screen.getByText("no-audio")).toBeInTheDocument();
+  });
+
   it("30分に達したら自動で止めて、整理へ進む", async () => {
     useRecordingClock();
     const mic = stubMicrophone();
