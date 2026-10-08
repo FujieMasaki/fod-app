@@ -102,8 +102,10 @@ export const useRecorder = (): UseRecorder => {
       return;
     }
     setPhase("recording");
+    // 経過時間は録音を始めた時刻からの実時間で数える。背景のタブでtimerが間引かれても、30分の上限を遅らせない。
+    const recordedAt = Date.now();
     intervalRef.current = setInterval(() => {
-      setElapsedSec((sec) => sec + 1);
+      setElapsedSec(Math.floor((Date.now() - recordedAt) / 1000));
     }, 1000);
   }, [autoStop, clearTimer]);
 
