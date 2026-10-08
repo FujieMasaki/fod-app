@@ -389,6 +389,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone({ holdStop: true });
     renderStage();
+    startRecording();
     await recordFor(mic, 10);
 
     act(() => mic.endTrack());
@@ -406,6 +407,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone({ holdStop: true });
     const { unmount } = renderStage();
+    startRecording();
     await recordFor(mic, 10);
 
     fireEvent.click(screen.getByRole("button", { name: "話し終える" }));
