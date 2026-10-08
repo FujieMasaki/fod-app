@@ -357,6 +357,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone({ chunkBytes: 32_000_001 });
     renderStage();
+    startRecording();
     await recordFor(mic, 5);
 
     act(() => mic.endTrack());
