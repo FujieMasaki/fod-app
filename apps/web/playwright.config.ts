@@ -23,9 +23,10 @@ export default defineConfig({
   reporter: [["list"], ["html", { outputFolder: "./vrt/report", open: "never" }]],
   expect: {
     toHaveScreenshot: {
-      // 1pxの違いも失敗にする（TASK-020 Plan Q4）。thresholdは色の差の判定で、Playwrightの既定値。
+      // 1pxの違いも、わずかな色の違いも失敗にする（TASK-020 Plan Q4・Q5）。既定のthreshold 0.2では、
+      // 淡い配色のDesign Tokenの変化（各チャンネル±16程度）を同じ色とみなして見逃す。
       maxDiffPixelRatio: 0,
-      threshold: 0.2,
+      threshold: 0,
       animations: "disabled",
       caret: "hide",
     },

@@ -130,7 +130,7 @@
   描画が違うため、コンテナの外では実行しない。
 - 差分があると失敗し、`apps/web/vrt/report`（CIでは`vrt-report` artifact）に期待・実際・差分の画像が出る。
   意図した変化なら`pnpm vrt:update`で基準画像（`apps/web/vrt/__screenshots__/`）を更新し、変更と同じ
-  コミットに入れる。意図しない変化なら実装を直す。許容値は1pxの差も失敗にする設定で、揺れたら
+  コミットに入れる。意図しない変化なら実装を直す。許容値は1pxの差も、わずかな色の差も失敗にする設定（`maxDiffPixelRatio: 0`・`threshold: 0`）で、揺れたら
   許容値を緩める前に原因（時刻・animation・fixture）を直す。
 - APIは`apps/web/vrt/fixtures.ts`の架空のデータに差し替え、契約のschemaで検証してから返す。
   時刻・フォント・外部への通信・マイクは`apps/web/vrt/support.ts`で固定する。基準画像に実在の
