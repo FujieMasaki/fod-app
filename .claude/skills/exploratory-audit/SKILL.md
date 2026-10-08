@@ -1,6 +1,7 @@
 ---
 name: exploratory-audit
 description: 観点（spec / performance / privacy / security）を指定して、mainにある実装の全体を探索的に監査し、まだ誰も気づいていない問題を、根拠・重大度・タスク化の案つきの候補として非公開の報告に書く。「監査して」「/exploratory-audit spec」のように依頼されたときと、人間が採否を書いた報告から採用した候補をタスクに起こすときに使う。
+argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 ---
 
 # /exploratory-audit
@@ -11,8 +12,10 @@ description: 観点（spec / performance / privacy / security）を指定して�
 
 ## 絶対に守ること
 
-- コード・`docs/`・設定を変えない。コミット・push・外部への投稿をしない。worktree・ブランチ・DBを作らない。
-  書いてよいのは`<git-common-dir>/audits/`だけ（例外は下の「採用した候補をタスクに起こす」）。
+- 監査（手順1〜5）では、コード・`docs/`・設定を変えない。コミット・push・外部への投稿をしない。worktree・
+  ブランチ・DBを作らない。書いてよいのは`<git-common-dir>/audits/`だけ。例外は、人間が依頼したときの後半の
+  2節（「採用した候補をタスクに起こす」「秘匿していた候補の修正がmainに入った後」）で、どちらも文書の変更として
+  ブランチを作り、`pr-review-cycle`に従ってPRにする。
 - 秘密情報（`.env*`、`master.key`、`credentials/*.key`）を読まない。DBの中身・ログ（`apps/api/log/`等）・`tmp/`を読まない。
   DBを使うコマンド（RSpec・`rails console`等）を実行しない。報告にはコードの場所と振る舞いだけを書き、
   個人データ・秘密情報の値を書かない。
@@ -26,7 +29,7 @@ description: 観点（spec / performance / privacy / security）を指定して�
 
 1. 引数から観点（`spec` / `performance` / `privacy` / `security`、複数可）と、任意の対象範囲
    （ディレクトリ）を読む。観点がなければ、4つから選んでもらうよう人間に尋ねて止まる。
-2. `git rev-parse --abbrev-ref HEAD`が`<type>/task-NNN`の形（`feat` / `fix` / `refactor` / `chore` / `docs` /
+2. （手順1〜5だけに掛かる）`git rev-parse --abbrev-ref HEAD`が`<type>/task-NNN`の形（`feat` / `fix` / `refactor` / `chore` / `docs` /
    `test`）なら止まり、mainに揃えたcheckoutで起動し直すよう伝える（タスクのブランチではStop hookがPRの作成と
    検査を求め、この skill の禁止事項とぶつかるため）。
 3. `git fetch origin main`の後、`git rev-parse HEAD`・`git rev-parse origin/main`・`git status --short`で
@@ -62,10 +65,18 @@ description: 観点（spec / performance / privacy / security）を指定して�
 
 ## 採用した候補をタスクに起こす
 
-人間が報告の`採否`を書いたうえで依頼したときだけ行う。`採否`が「採用」の候補だけを、`audit.md` §5の手順で
-`docs/tasks`へ起こす（秘匿する候補は§4の形）。起こしたタスクのコミット・PRは、通常の文書の変更と同じく
-`pr-review-cycle`に従う。報告ファイルへ起こしたタスクのIDを書き足す。
+人間が報告の`採否`を書いたうえで依頼したときだけ行う。
+
+1. `git switch -c docs/audit-tasks-<YYYYMMDD> origin/main`でブランチを作る（`task-NNN`を含めない。
+   定期実行が着手済みと判定しないように）。
+2. `採否`が「採用」の候補だけを、`audit.md` §5の手順で`docs/tasks`へ起こす（秘匿する候補は§4の形）。
+3. コミット・push・PRは`pr-review-cycle`に従う。報告ファイルへ起こしたタスクのIDを書き足す。
 
 ## 秘匿していた候補の修正がmainに入った後
 
-`audit.md` §4の最後の項目に従い、修正したタスクのPlanへ記録し、報告ファイルの詳細を消す。
+人間が依頼したときだけ行う。
+
+1. `git switch -c docs/task-<3桁の番号>-audit-record origin/main`でブランチを作る（修正したタスクの番号）。
+2. `audit.md` §4の最後の項目に従い、修正したタスクのPlanの`Completion Record`へ記録し、完了条件を確かめて
+   タスクの状態を更新する。
+3. コミット・push・PRは`pr-review-cycle`に従う。PRを作った後に、報告ファイルの該当候補の詳細を消す。

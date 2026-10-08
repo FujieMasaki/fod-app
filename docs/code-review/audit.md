@@ -13,12 +13,14 @@ skillが定める。
 
 | 観点 | 主な対象 | 読む正本 | 秘匿 |
 | --- | --- | --- | --- |
-| `spec` | `apps/web/src/`、`apps/api/app/`、`contracts/` | [`product.md`](../product.md)、[`journaling.md`](../journaling.md)、[`dot-history.md`](../dot-history.md)、[`architecture.md`](../architecture.md)、[`contracts/openapi.yaml`](../../contracts/openapi.yaml) | しない |
+| `spec` | `apps/web/src/`、`apps/api/app/`、`contracts/` | [`product.md`](../product.md)、[`journaling.md`](../journaling.md)、[`dot-history.md`](../dot-history.md)、[`architecture.md`](../architecture.md)、[`contracts/openapi.yaml`](../../contracts/openapi.yaml)、[`contracts/README.md`](../../contracts/README.md) | しない |
 | `performance` | `apps/api/app/`（controller・service・serializer・model）、`apps/api/db/schema.rb`、`apps/web/src/`の取得と再描画 | 性能の正本はまだない（§2を参照） | しない |
 | `privacy` | 録音・文字起こし・Dot・利用者情報を保存・送信・削除・ログ出力する経路 | [`privacy.md`](../privacy.md) §2・§3・§5 | する |
 | `security` | 認証・認可の境界（route・controller・認証状態で変わるWebの処理） | [backend `security.md`](./backend/security.md) §1・§5、[frontend `security.md`](./frontend/security.md) §3 | する |
 
-観点の境界にある指摘（例: N+1の原因が所有権のscopeの抜けにある、仕様との食い違いが個人データの削除漏れに
+観点に関わらず、frontend・backendの`security.md`のどれかの節に当たる指摘（秘密情報の露出、入力・表示・遷移、
+CSRF、ログとエラーなどを含む）と、個人データの保存・送信・削除に関わる指摘は秘匿する。`security`観点の対象は
+認証・認可の境界に絞っているが、秘匿の条件はそれより広い。観点の境界にある指摘（例: N+1の原因が所有権のscopeの抜けにある、仕様との食い違いが個人データの削除漏れに
 当たる）は、**どの観点の監査で見つけても秘匿する指摘として扱う**。迷ったら秘匿する。認証・認可に触れる指摘でも、
 実装が契約より厳しく拒否している（例: 契約は`403`、実装は`401`で拒否する）だけで、拒否すべきものが通る経路が
 ないものは秘匿しない。
