@@ -85,8 +85,9 @@ for (const screen of screens) {
     const unexpected = await preparePage(page, screen.api);
     await page.goto(screen.path);
     await expect(screen.ready(page)).toBeVisible();
-    await waitForFonts(page);
-    // 基準画像の更新（--update-snapshots）でも、想定外の要求があった画面を基準にしない。
+    expect(await waitForFonts(page), "書体を読み込めなかった").toEqual([]);
+    // 基準画像の更新（--update-snapshots）でも、撮影の前までに想定外の要求があった画面は基準にしない
+    // （撮影の後の確認で失敗したときは、書かれた基準画像をコミットしない）。
     expect(unexpected, "想定外の要求があった").toEqual([]);
 
     // maskは何にも当たらなくても失敗しないため、画面の構造が変わって外れていないことを確かめる。

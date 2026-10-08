@@ -99,23 +99,32 @@ export const preparePage = async (page: Page, api: ApiFixtures): Promise<string[
   await page.route(
     (url) => url.hostname === "127.0.0.1" && url.pathname.startsWith("/api/"),
     async (route) => {
-    const url = new URL(route.request().url());
-    const key = `${url.pathname}${url.search}`;
-    if (route.request().method() !== "GET" || !(key in api)) {
-      unexpected.push(`${route.request().method()} ${key}`);
-      await route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
-      return;
-    }
-    await route.fulfill({ contentType: "application/json", body: JSON.stringify(api[key]) });
+      const url = new URL(route.request().url());
+      const key = `${url.pathname}${url.search}`;
+      if (route.request().method() !== "GET" || !(key in api)) {
+        unexpected.push(`${route.request().method()} ${key}`);
+        await route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
+        return;
+      }
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify(api[key]) });
     },
   );
 
   return unexpected;
 };
 
-/** 撮影の直前に、使われている書体の読み込みが終わるまで待つ */
-export const waitForFonts = async (page: Page): Promise<void> => {
-  await page.evaluate(async () => {
+/**
+ * 撮影の直前に、使われている書体の読み込みが終わるまで待つ。読み込みに失敗した書体を返す（撮影の前に空であることを
+ * 確かめる）。`document.fonts.ready`は失敗しても解決し、画面は代わりの書体で描画されるため。
+ */
+export const waitForFonts = async (page: Page): Promise<string[]> => {
+  return page.evaluate(async () => {
     await document.fonts.ready;
+    const failed = [...document.fonts].filter((face) => face.status === "error");
+    const loaded = [...document.fonts].filter((face) => face.status === "loaded");
+    return [
+      ...failed.map((face) => `font error ${face.family} ${face.weight}`),
+      ...(loaded.length === 0 ? ["font none loaded"] : []),
+    ];
   });
 };

@@ -24,7 +24,8 @@ export default defineConfig({
   expect: {
     toHaveScreenshot: {
       // 1pxの違いも、わずかな色の違いも失敗にする（TASK-020 Plan Q4・Q5）。既定のthreshold 0.2では、
-      // 淡い配色のDesign Tokenの変化（各チャンネル±16程度）を同じ色とみなして見逃す。
+      // 淡い配色のDesign Tokenの変化（各チャンネル±16程度）を同じ色とみなして見逃す。ただしPlaywrightの比較は、
+      // anti-aliasingと判定した輪郭の画素を差に数えない（設定で変えられない。Plan Q8）。
       maxDiffPixelRatio: 0,
       threshold: 0,
       animations: "disabled",
