@@ -54,6 +54,7 @@ TASK-003で選んだ委託先（Amazon Transcribe と Amazon Bedrock）につい
   - 項目1のTranscribe: AI services opt-out policyを適用し、effective policyで効いていることを確認している。確かめる範囲は、音声を送り得るすべてのAWSアカウントである（TASK-009の開発・検証と、定期実行のマシンにある認証情報のアカウントを含む）
   - 項目3: Transcribeを東京リージョンで使うことと、Bedrockは推論が日本国内に収まる経路から選ぶ方針であることを確認している。実際に選んだ経路が国内に収まることの確認は、TASK-009の完了条件に任せる
 - [ ] 確認の結果を[privacy.md §5-1](../privacy.md)の外部provider行に反映している。
+- [ ] 「着手するときに人間と決めること」の3点について、決めた内容と理由を同Plan §26に記録している。Bedrockのmodel idごとの受け入れを機械的に止めると決めた場合は、その手段が入ってからDoneにする。
 
 ## 依存するタスクID
 
