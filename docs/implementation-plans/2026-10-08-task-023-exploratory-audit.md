@@ -215,7 +215,7 @@ skill: 正本（仕様・audit.md）と実装を読む（変更しない）
 - 変更: `docs/tasks/README.md`（監査から起こしたタスクの扱い）
 - 変更: `AGENTS.md`（監査の入口）
 - 変更: `README.md`（文書一覧と、監査の起動方法）
-- 変更: `.claude/settings.json`（denyに開発ログ・`tmp/`・`storage/`のReadを足す。R2）
+- 変更: `.claude/settings.json`（denyに開発ログ・`tmp/`・`storage/`のReadを、ルート直下とworktreeの両方の形で足す。R2）
 - 変更: `.claude/skills/human-review-artifact/SKILL.md`（秘匿する候補の修正PRで、ページに再現手順を引用しないポインタ）
 - 変更: `.claude/skills/pr-review-cycle/SKILL.md`（秘匿する候補の修正PRでは、再発防止の追記を後のPRへ回すポインタ）
 - 変更: `.claude/agents/code-reviewer.md`・`docs/code-review/final-check.md`（秘匿する候補の修正PRで、指摘に再現手順・攻撃の経路を書かない）
@@ -283,8 +283,10 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
       Webに通らない分岐が残る。AIの案: 採用（契約・READMEを実装に合わせる小さな文書タスク）。
       根拠の箇所は統合した側でも読み直して確かめた。秘匿しない判断（`audit.md` §1の例外）の根拠: 実装は
       Wardenが外した利用者を`401`にする。メール未確認の利用者そのもののspecはないが、同じ経路（Wardenの
-      `active_for_authentication?`で外れる）をロック中の利用者で確かめるspec（`apps/api/spec/requests/authentication_spec.rb`）がある。採用する場合は、メール未確認の利用者
-      そのものの`401`を確かめるspecを足すことをタスク化の案に含める。
+      `active_for_authentication?`で外れる）をロック中の利用者で確かめるspec（`apps/api/spec/requests/authentication_spec.rb`）がある。この条件で通すかどうかを決める設定は
+      `apps/api/config/initializers/devise.rb`の`allow_unconfirmed_access_for = 0.days`で、確認前のアクセスを許していない
+      （`audit.md` §1の例外の条件）。採用する場合は、メール未確認の利用者そのものの`401`を確かめるspecを足すことを
+      タスク化の案に含める。
     - AUD-20261008-02（🔵、確信度 低）: `/reflection`と`/dot`がserverの今日のDotの有無に関わらず空の状態を
       示す（`apps/web/src/router.tsx`）。`dot-history.md`の「実際のデータ状態と矛盾せず示す」に当たるかは
       mockの画面を対象とみなすか次第で、Webからserverに Dotを作れない現状では利用者が当たらない。
@@ -341,6 +343,9 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
   「PRは分けない」を足した。まだ通していない経路の範囲を区切った（上の「範囲の区切り」）。
 - レビューで直したこと（Codex、2回目）: 同じ日に監査を並行で回すとIDの連番が重なりうるため、`audits/.lock`を
   `mkdir`で取り、同時に動く監査を1つにした。
+  （Codex2回目の後のサブエージェント1回目）秘匿しない例外の条件を、条件そのもののspecがあるか、別の条件のspecを
+  使うときは条件ごとの設定値を根拠に書く場合に限った。AUD-20261008-01の根拠に設定値を足した。「修正のセッション」の
+  項目を1つにまとめ、Codexの`確かめ方`の規則を§4へ移した。denyにルート直下の形も足した。
   あわせてサブエージェント3回目の🔵（チャットを制限する理由、報告の詳細を消す時機、タスクREADMEの「採用」、
   秘匿しない例外を確信度とtestに結び付ける）を直した。秘匿する候補のタスク名を一般的なものにし、なお残る
   公開（未修正の問題がある事実・時期・IDの観点）を受け入れる前提として`audit.md` §4に書いた。

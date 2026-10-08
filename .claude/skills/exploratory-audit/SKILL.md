@@ -29,7 +29,7 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 
 1. 引数から観点（`spec` / `performance` / `privacy` / `security`、複数可）と、任意の対象範囲
    （ディレクトリ）を読む。観点がなければ、4つから選んでもらうよう人間に尋ねて止まる。
-2. （手順1〜5だけに掛かる）`git rev-parse --abbrev-ref HEAD`が`<type>/task-NNN`の形（`feat` / `fix` / `refactor` / `chore` / `docs` /
+2. （手順1〜5だけに掛かる）`git rev-parse --abbrev-ref HEAD`が`<type>/task-NNN`か`<type>/task-NNN-*`の形（`feat` / `fix` / `refactor` / `chore` / `docs` /
    `test`）なら止まり、mainに揃えたcheckoutで起動し直すよう伝える（タスクのブランチではStop hookがPRの作成と
    検査を求め、この skill の禁止事項とぶつかるため）。
 3. `git fetch origin main`の後、`git rev-parse HEAD`・`git rev-parse origin/main`・`git status --short`で
