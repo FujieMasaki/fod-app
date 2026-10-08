@@ -89,7 +89,8 @@
 
 - `journaling.md` §1の表（録音開始・録音停止）と§2の「録音Blob」の現在の列、§4「録音前認証と期限切れ」の
   TASK-010の記述。
-- `architecture.md`「実装済み」の録音処理の項。
+- `architecture.md`「実装済み」の録音処理の項と、Session Providerが持つ値・消す値の記述。
+- `code-review/frontend/security.md` §6のSession Providerの記述（録音時間だけでなく音声Blobを持つ）。
 - privacy.md §5は変えない（新しい保持先を作らない。Blobはmemoryだけ）。
 
 ## 7. Proposed Approach
