@@ -65,7 +65,8 @@ export const RequireAuth = ({ children, startsOnEnter = false }: RequireAuthProp
  * sessionのqueryの今の状態を、取得しない観測者（enabled: false）で購読して判断する。
  */
 const EntryVerifiedGuard = ({ children }: { children: ReactNode }) => {
-  const { refresh } = useAuth();
+  const { refresh, endReason } = useAuth();
+  const { pathname } = useLocation();
   const queryClient = useQueryClient();
   const live = useQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession, enabled: false });
   // 入るときの確かめ直しの結果。確かめ直しが終わった時点のqueryの状態から決める。
@@ -127,7 +128,11 @@ const EntryVerifiedGuard = ({ children }: { children: ReactNode }) => {
     }
   }
   if (leftRef.current !== null) {
-    return leftRef.current === "login" ? <Navigate to="/login" replace /> : <Navigate to="/" replace />;
+    if (leftRef.current === "home") return <Navigate to="/" replace />;
+    // ログインの後に戻す画面（録音画面なら録音前の案内。開いてもマイクは始まらない）。このタブでlogoutした後は
+    // 同じ画面へ戻さない（SessionGuardと同じ）。
+    const redirect = endReason === "signed_out" ? "/" : safeRedirect(pathname);
+    return <Navigate to="/login" search={redirect === "/" ? {} : { redirect }} replace />;
   }
   if (showing) return children;
   return (

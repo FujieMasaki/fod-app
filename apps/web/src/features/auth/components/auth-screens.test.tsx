@@ -117,8 +117,8 @@ describe("RequireAuth", () => {
     expect(screen.queryByText("本人の画面")).not.toBeInTheDocument();
   });
 
-  it.each(["/processing", "/record"])("戻り先にできない画面（%s）からはredirectを付けない", async (pathname) => {
-    locationMock.pathname = pathname;
+  it("戻り先にできない画面（/processing）からはredirectを付けない", async () => {
+    locationMock.pathname = "/processing";
     mockApi({ "GET /api/v1/session": [anonymous] });
     renderWithAuth(<RequireAuth>本人の画面</RequireAuth>);
 
@@ -530,7 +530,7 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     );
   };
 
-  it("cacheでは認証済みでも、確かめ直して未認証なら中身を一度もmountせずログインへ移る", async () => {
+  it("cacheでは認証済みでも、確かめ直して未認証なら中身を一度もmountせず、録音前の案内を戻り先にしてログインへ移る", async () => {
     locationMock.pathname = "/record";
     mounted.count = 0;
     const requests = mockApi({ "GET /api/v1/session": [signedIn, anonymous] });
@@ -547,7 +547,7 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     fireEvent.click(screen.getByRole("button", { name: "enter" }));
 
     expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
-    expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
+    expect(await screen.findByText("navigate:/login?redirect=%2Frecord")).toBeInTheDocument();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(mounted.count).toBe(0);
     expect(requests.filter((r) => r.key === "GET /api/v1/session")).toHaveLength(2);
@@ -745,7 +745,7 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
       focusManager.setFocused(true);
     });
 
-    expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
+    expect(await screen.findByText("navigate:/login?redirect=%2Frecord")).toBeInTheDocument();
     expect(mounted.count).toBe(1);
   });
 
@@ -793,7 +793,7 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     });
     await waitFor(() => expect(getCount).toBe(4));
 
-    expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
+    expect(await screen.findByText("navigate:/login?redirect=%2Frecord")).toBeInTheDocument();
     expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
   });
 
@@ -877,8 +877,16 @@ describe("副作用を始める画面のguard（startsOnEnter）", () => {
     mockApi({ "GET /api/v1/session": [anonymous] });
     renderWithAuth(<RequireAuth startsOnEnter>録音画面</RequireAuth>);
 
-    expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
+    expect(await screen.findByText("navigate:/login?redirect=%2Frecord")).toBeInTheDocument();
     expect(screen.queryByText("録音画面")).not.toBeInTheDocument();
+  });
+
+  it("整理の画面（/processing）を直接開いて未認証なら、戻り先を付けずにログインへ移る", async () => {
+    locationMock.pathname = "/processing";
+    mockApi({ "GET /api/v1/session": [anonymous] });
+    renderWithAuth(<RequireAuth startsOnEnter>整理の画面</RequireAuth>);
+
+    expect(await screen.findByText("navigate:/login")).toBeInTheDocument();
   });
 
   it("確かめ直して認証済みなら中身を出す", async () => {
