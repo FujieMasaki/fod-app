@@ -39,6 +39,7 @@ TASK-003に残っていた委託先への9項目の確認（完了条件7）を�
   - `docs/tasks/TASK-015-privacy-security-verification.md`（依存にTASK-025を追加する）
   - `docs/tasks/TASK-009-backend-audio-generation.md`（9項目の担当の参照と、音声を外部へ送る前の関門の完了条件）
   - `docs/tasks/TASK-017-breach-response-design.md`（9項目の担当の参照を付け替える）
+  - `docs/tasks/TASK-010-frontend-recording.md`（委託先の確認が出るまで案内の該当部分を確定させない）
   - `docs/tasks/README.md`（索引・要判断事項）
   - `docs/product.md` §5、`docs/privacy.md`、`docs/architecture.md`、`docs/journaling.md`（9項目の担当の参照）
   - `docs/implementation-plans/2026-09-29-task-003-generation-design.md` §26（担当がTASK-025へ移ったことの追記）
@@ -72,7 +73,7 @@ TASK-003に残っていた委託先への9項目の確認（完了条件7）を�
 
 ## 10. Files to Change
 
-§6の「更新」のとおり。合計12ファイルで、1つのPRにする。
+§6の「更新」のとおり。合計13ファイルで、1つのPRにする。
 
 ## 11. Libraries / APIs
 
@@ -87,6 +88,8 @@ TASK-003に残っていた委託先への9項目の確認（完了条件7）を�
 ## 13. Risks / Things to Watch
 
 - TASK-009は、TASK-025の項目1が済む前に自動で着手される。音声を外部へ送る前にopt-outと経路を確認することはTASK-009の完了条件にあり、外部の設定が要る時点で`/run-task`は止まる。
+- TASK-010は、TASK-009とTASK-025より先に自動で着手される。録音前の案内（経路・保持・人によるレビュー）の材料はTASK-009の記録とTASK-025の確認から来るので、それまでは該当部分を確定させず、未確認の委託先の事実を書かないことをTASK-010の完了条件に書き足した。
+- 送信前の関門の項目1は、Transcribeのopt-outに絞っている。正本の§26「確認の担当と時期」と同じ範囲である。Bedrock側の学習利用・保持（data retention mode）は、TASK-009の完了条件にある構成の確認で扱う。
 - 「完了条件7」という呼び方は過去のPlanに残る。現行文書ではTASK-025と書く。
 
 ## 14. Verification
@@ -110,7 +113,7 @@ TASK-003に残っていた委託先への9項目の確認（完了条件7）を�
 ## 16. Completion Record
 
 - 状態: 2026-10-08 完了。
-- 実装差異: レビューの指摘で次を足した。TASK-009の完了条件に、TASK-025の項目1と項目3（経路が国内に収まること）が済むまで実際の音声を外部へ送らないことを入れた（TASK-003がIn progressだったことが関門として働いていたのが外れるため）。TASK-025の完了条件に、受け入れの判断と、§26の「追加の確認対象」を入れた。README.mdのMVPのタスクの範囲と実施順にTASK-025を入れた。
+- 実装差異: レビューの指摘で次を足した。TASK-009の完了条件に、TASK-025の項目1と項目3（経路が国内に収まること）が済むまで実際の音声を外部へ送らないことを入れた（TASK-003がIn progressだったことが関門として働いていたのが外れるため）。TASK-025の完了条件に、受け入れの判断と、§26の「追加の確認対象」を入れた。README.mdのMVPのタスクの範囲と実施順にTASK-025を入れた。TASK-010の完了条件に、委託先の確認が出るまで案内の該当部分を確定させないことを入れた。
 - 検証結果:
   - `pnpm lint:markdown`: 通った。
   - `node scripts/task-status.mjs`: TASK-003はDone、TASK-009とTASK-010はrunnable（依存先がすべてDone）、TASK-025は設計判断のため実行不可、TASK-015はTASK-025を含む依存待ち。
