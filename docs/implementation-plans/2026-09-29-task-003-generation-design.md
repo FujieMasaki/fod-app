@@ -1405,7 +1405,7 @@ TASK-003の「必要な検証」に対応する。**外部AIの応答前後の�
 曲げない（曲げるならarchitecture.mdを先に直す）」としているとおり、**正本の側を先に直す手順で行った。**
 なお、**「方針を変えたこと」と「越境移転の規律の確認が済んだこと」は別である**（§5、TASK-017）。
 
-## 26. 委託先に確認する9項目（TASK-025。**未確認**）
+## 26. 委託先に確認する9項目（TASK-025。**確認中**）
 
 TASK-003の完了条件7が求める9項目について、**確認先と確認方法を定めた。項目別の状態は下表のとおりで、
 一次資料で確認できた項目もあるが、9項目全体の確認・AWSアカウントの設定・日本の個人情報保護法上の
@@ -1419,9 +1419,9 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 | # | 確認する項目 | 確認先 | 現状 |
 | --- | --- | --- | --- |
 | 1 | 入力を学習・モデル改善に使わないこと | Transcribe: AWS OrganizationsのAI services opt-out policyを適用し、effective policyを照会。Bedrock: モデルの data retention mode | **要対応。**§18のとおり、Transcribeは**既定ではopt-inのまま**。設定しない限り改善に使われ得る |
-| 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）と**保持データの所在リージョン**、Transcribeのjob記録の保持 | Bedrockは、**保持しないことを原則とし、保持が必須のモデルがあることを2026-10-08に公開資料で確認した。ただし未設定のリージョンはモデルの既定に従い、保持しないことを保証するには`none`の明示が要る**（下記）。model idごとの値は未確認（TASK-009）。保持ありを選ぶなら**所在リージョンの確認が必須**（§18必須条件3）。**Transcribeのjob記録は各リージョンで90日保持（調整不可）** で、[endpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)に記載があり**確認済み**。`privacy.md §5-1`は`DeleteTranscriptionJob`で消す設計なので矛盾しない |
+| 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）と**保持データの所在リージョン**、Transcribeのjob記録の保持 | Bedrockは、**保持しないことを原則とし、保持が必須のモデルがあることを2026-10-08に公開資料で確認した。ただし未設定のリージョンはモデルの既定に従い、保持しないことを保証するにはaccountとprojectの両方で`none`になっている必要がある**（下記）。model idごとの値は未確認（TASK-009）。保持ありを選ぶなら**所在リージョンの確認が必須**（§18必須条件3）。**Transcribeのjob記録は各リージョンで90日保持（調整不可）** で、[endpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)に記載があり**確認済み**。`privacy.md §5-1`は`DeleteTranscriptionJob`で消す設計なので矛盾しない |
 | 3 | 処理・保存のリージョン。越境する場合の手続き | Bedrockの In-Region / Geo / Global の別。Transcribeのopt-out前の保存先 | **方針は2026-10-03に決定済み**（`architecture.md`「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」）。**手続きは未確認。委託であっても「外国にある第三者への提供」には別の規律がかかる整理があり、同意の取得または移転先の体制整備と本人への情報提供が必要になり得る**（TASK-017）。**確認が済むまでは国内に収まる経路で運用する**（範囲の定義は`architecture.md`「データ所在地と費用」）。opt-outしない限りTranscribeも利用リージョン外へ保存され得る |
-| 4 | 人によるレビューの有無と条件、**その実施地とアクセス経路** | Bedrockの `aws_review` モードの要否、abuse detectionの条件、**レビューをどこから行うか**、**prompt cache等の滞留先** | 一般的な部分（人によるレビューが必須のモデルがあること、レビューするのはAWSで提供元へは渡らないこと）は確認済み。**実施する国・アクセス経路とcacheの滞留先は未確認**。**モデルによってはAWSによる人的レビューが必須**になり得る。**`architecture.md`「データ所在地と費用」が求める「誰がどこから閲覧し得るか」の確認はここで行う**（実施地が国外なら、保存が国内でも要求に反する）。cacheの滞留先も同じ理由で含める。**一般的な部分は2026-10-08に公開資料で確認した**（下記「2026-10-08 公開資料での確認」） |
+| 4 | 人によるレビューの有無と条件、**その実施地とアクセス経路** | Bedrockの `aws_review` モードの要否、abuse detectionの条件、**レビューをどこから行うか**、**prompt cache等の滞留先** | 一般的な部分（人によるレビューが必須のモデルがあること、レビューするのはAWSで提供元へは渡らないこと）は確認済み。**実施する国・アクセス経路とcacheの滞留先は未確認**。**`architecture.md`「データ所在地と費用」が求める「誰がどこから閲覧し得るか」の確認はここで行う**（実施地が国外なら、保存が国内でも要求に反する）。cacheの滞留先も同じ理由で含める（下記「2026-10-08 公開資料での確認」） |
 | 5 | サブプロセッサの開示 | AWSのサブプロセッサ一覧 | **公開資料で確認済み**（下記「2026-10-08 公開資料での確認」）。更新通知の購読の要件は未確認 |
 | 6 | 委託契約（DPA相当）を結べること | AWS DPA（Service Termsへ組み込み済み・自動適用） | **確認済み**。別途の締結を要しない。ただし**日本の個人情報保護法上の委託先としての評価は自分たちで行う** |
 | 7 | 事故発生時の通知義務と期限 | AWS DPAの該当条項 | **公開資料で確認済み**（下記）。**DPA上は時間で区切った期限は無い**。Supplementary Addendumは未確認。TASK-017の漏えい対応と接続する |
@@ -1458,8 +1458,9 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
   this DPA, the terms of this DPA will control, except that the Service Terms will control over this DPA." で、
   Service TermsがDPAより優先する。
 - **項目7 事故時の通知**（確認済み）。DPA 9.1 "AWS will (a) notify Customer of a Security Incident without undue
-  delay after becoming aware of the Security Incident"。通知は管理者へ、メールを含むAWSが選ぶ方法で届き、
-  連絡先を正しく保つのは顧客の責任である（9.4）。**DPA上は、時間で区切った期限（72時間など）は無い**。通知の対象の "Security Incident" は "a breach of AWS’s security leading to the accidental or unlawful destruction, loss,
+  delay after becoming aware of the Security Incident"。通知の方法は "Notification(s) of Security Incidents, if any, will be delivered to one or more of Customer’s
+  administrators by any means AWS selects, including via email. It is Customer’s sole responsibility to ensure Customer’s
+  administrators maintain accurate contact information on the AWS management console"（9.4）。**DPA上は、時間で区切った期限（72時間など）は無い**。通知の対象の "Security Incident" は "a breach of AWS’s security leading to the accidental or unlawful destruction, loss,
   alteration, unauthorized disclosure of, or access to, Customer Data" と定義され（17）、Customer Dataに及ぶ侵害に限られる。
   未遂のもの（ping・ポートスキャンなど）は除かれる（9.3）。Supplementary Addendum（1.14.2で、DPAと同じ条件で組み込まれる）は見ていない。DPAのPDFに版の日付は見当たらず、
   2026-10-08に配布元のURLから取得したものを読んだ。
@@ -1483,8 +1484,12 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
   automated offline abuse detection. Classifier-flagged traffic will be subject to potential human review performed by AWS."
   つまり、ZOAの原則に対し、保持が必須のモデルではAWSが人によるレビューを行い得るという例外が同じページにある。
   同じ箇所に、Enterprise Frontier Safeguardsの対象者は "ZDR through December 31, 2026" という例外もある。
+  ほかに、画像の入力でCSAMを検知した場合に "Amazon Bedrock may store and review the flagged input or output" とし、NCMECへ
+  報告し得るという経路がある。このアプリがBedrockへ送るのは文字起こしのテキストだけなので、当てはまらない。
   保持の方式は[data retention](https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html)のモード
   （`none`・`default`・`aws_review`、旧来の`provider_data_share`、未設定を表す`inherit`）で決まり、リージョンごとに設定する。
+  設定の段はprojectとaccountの2つで、"effective mode = first non-inherit value of (project → account → model default)" と
+  **projectがaccountより優先する**（projectはbedrock-mantleだけにある）。
   **何も設定しないリージョンは`inherit`で、モデルの既定に従う**（"A Region you have not configured remains at inherit and
   falls back to each model's default."）。`default`では "AWS may retain the data for safety and abuse-prevention purposes"
   とされ、保持しないことを保証するには`none`を明示する（"If you require guaranteed zero retention, set data_retention_mode
@@ -1492,7 +1497,9 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
   includes none, we won't persist anything" という書き方もあり、2つが併存する。ここでは安全側の、`none`を明示する方を採る。
   `none`にすると保持が要るモデルの呼び出しはエラーになり、SCPで`none`以外への変更を禁止できる。設定のAPIとSCPのactionは
   endpointで別で、bedrock-runtimeは`bedrock:PutAccountDataRetention`、bedrock-mantleは`bedrock-mantle:PutAccountDataRetention`
-  である（片方だけ禁止すると穴が残る。使うendpointに合わせた禁止はTASK-009への申し送り）。
+  である。全体を`none`に固定するSCPの例は、これに加えて`bedrock-mantle:CreateProject`と`bedrock-mantle:UpdateProject`も禁止する。
+  **accountだけを`none`にしてもprojectで上書きできるので、project側も塞ぐ必要がある**（どちらかが抜けると穴が残る。
+  使うendpointに合わせた禁止はTASK-009への申し送り）。
   cross-region inferenceでは、保持された内容は推論先のリージョンに置かれる。
   人によるレビューについて、data retentionのページは "Review is carried out by AWS within the AWS boundary — the model
   provider does not review your content" とし、`aws_review`では内容がAWSの外へ出ないとする。**レビューするのはAWSで、
@@ -1518,7 +1525,9 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
   FAQはこの扱いをAWS Supportへの連絡による手段について書いている。一方、Service Terms 50.3は、リージョン外への保存を
   "solely in connection with the development and improvement described in clauses (a) and (b)" に限り、
   "by configuring an AI services opt-out policy using AWS Organizations" でその利用と保存を止められるとする。したがって
-  **契約上は、Organizationsのopt-out後はリージョン外へ保存されない**と読める。実際に効いていることの確認は、項目1の
+  **契約上は、Organizationsのopt-out後は、改善のためのリージョン外への保存（50.3）は行われない**と読める。サービスの提供と
+  法令対応のための例外は別にあり、DPA 12.1は "except as necessary to provide the Services initiated by Customer, or as
+  necessary to comply with the law or valid and binding order of a governmental body" とする。実際に効いていることの確認は、項目1の
   effective policyの照会に残す。
 
 ### 確認の担当と時期
