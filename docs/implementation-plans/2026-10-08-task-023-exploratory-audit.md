@@ -80,7 +80,7 @@ Codexの後のサブエージェント段階で、3回レビューしてもLGTM�
   同じ経路になるため）。denyが効くのは組み込みのファイルtool（Read、Grep・Globはベストエフォート）だけで、Bashの
   子プロセス（`grep -r`・`rg`・`cat`）には効かない。Bashの経路はskillの指示で防ぐ。
 
-### レビューで止まった点（2回目、2026-10-08、人間の判断待ち）
+### レビューで止まった点（2回目、2026-10-08。判断済み）
 
 R1・R2の判断の後のサブエージェント段階でも、3回レビューしてLGTMにならなかった。🟡の数は2→2→1と減っているが、
 どれも一度も通していない秘匿の流れ（タスクを起こすPR・修正のPR）の端の経路で、直すたびに隣の経路が見つかる。
@@ -283,9 +283,8 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
       Webに通らない分岐が残る。AIの案: 採用（契約・READMEを実装に合わせる小さな文書タスク）。
       根拠の箇所は統合した側でも読み直して確かめた。秘匿しない判断（`audit.md` §1の例外）の根拠: 実装は
       Wardenが外した利用者を`401`にする。メール未確認の利用者そのもののspecはないが、同じ経路（Wardenの
-      `active_for_authentication?`で外れる）をロック中の利用者で確かめるspec（`apps/api/spec/requests/authentication_spec.rb`）がある。メール未確認の利用者が外れる決め手は`apps/api/config/initializers/devise.rb`の`allow_unconfirmed_access_for = 0.days`で、
-      この設定を変えるとDotを操作できる経路になりうる（メール未確認の利用者そのものの`401`を確かめるspecを足すことを、
-      採用時のタスク化の案に含める）。
+      `active_for_authentication?`で外れる）をロック中の利用者で確かめるspec（`apps/api/spec/requests/authentication_spec.rb`）がある。採用する場合は、メール未確認の利用者
+      そのものの`401`を確かめるspecを足すことをタスク化の案に含める。
     - AUD-20261008-02（🔵、確信度 低）: `/reflection`と`/dot`がserverの今日のDotの有無に関わらず空の状態を
       示す（`apps/web/src/router.tsx`）。`dot-history.md`の「実際のデータ状態と矛盾せず示す」に当たるかは
       mockの画面を対象とみなすか次第で、Webからserverに Dotを作れない現状では利用者が当たらない。
