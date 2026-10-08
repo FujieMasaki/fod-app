@@ -211,7 +211,34 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
 
 ## 16. Completion Record
 
-- 状態: 2026-10-08 保留。Q1〜Q3の人間の判断待ち。
-- 実装差異: なし（未実装）。
-- 検証結果: 未実施。
+- 状態: 2026-10-08 実装済み。監査の結果の採否は人間の判断待ち（タスクはIn progressのまま）。
+- 実装差異:
+  - 変えるファイルに`README.md`（文書一覧と起動方法）を足した。
+  - `audit.md`は`docs/code-review/`に置いたが、差分のレビューの入口ではないため、
+    [`documentation.md`](../code-review/documentation.md) §1の「入口を増やしたら4か所へ接続する」の対象にせず、
+    `code-reviewer`・`final-check.md`には接続していない（`AGENTS.md`の表と`README.md`からは辿れる）。
+  - 秘匿する候補から起こしたタスクを実装するセッションへ書き方の制限を伝える方法は、`run-task`を変えず、
+    タスクファイルに1文を書く形にした（`audit.md` §4）。実装するセッションは必ずタスクファイルを読むため。
+- 検証結果:
+  - `pnpm lint:markdown`: 成功。
+  - 意図的な食い違いの検出: `origin/main`（`be905cb`）から作ったローカルのブランチで、`Dot.by_day`の並びを
+    昇順に、`DayList::DEFAULT_LIMIT`を30から50に変え、中立なメッセージでコミットした（pushせず、検証後に
+    worktreeとブランチを削除）。食い違えた場所を伝えず、履歴（`git log`・`git diff`）を見ないよう指定した
+    サブエージェントに、`spec`観点・履歴の範囲で監査させた。2件とも正しい場所で指摘された（並び: 🟠・確信度 高、
+    既定値: 🟡・確信度 高）。秘匿する候補は0件。
+  - mainへの`spec`観点の監査: 基準`be905cb4eae4235f768d7d1f389034bd5607372a`（HEADと`origin/main`が一致、
+    未コミットの変更なし）。対象は`apps/web/src/`・`apps/api/app/`・`contracts/`の全体。報告は
+    `<git-common-dir>/audits/2026-10-08-spec.md`。秘匿しない候補2件、秘匿する候補0件。
+    - AUD-20261008-spec-01（🔵、確信度 高）: 契約はDotの操作に`403 email_unconfirmed`を定めるが、
+      APIはメール未確認の利用者をsessionの復元時に外して`401 unauthenticated`を返し、このcodeを返さない
+      （`contracts/openapi.yaml`のForbidden、`apps/api/app/controllers/concerns/authentication.rb`の
+      `authenticate_user!`）。TASK-006 Planに差は記録されているが、契約と`contracts/README.md`が直っておらず、
+      Webに通らない分岐が残る。AIの案: 採用（契約・READMEを実装に合わせる小さな文書タスク）。
+      根拠の箇所は統合した側でも読み直して確かめた。
+    - AUD-20261008-spec-02（🔵、確信度 低）: `/reflection`と`/dot`がserverの今日のDotの有無に関わらず空の状態を
+      示す（`apps/web/src/router.tsx`）。`dot-history.md`の「実際のデータ状態と矛盾せず示す」に当たるかは
+      mockの画面を対象とみなすか次第で、Webからserverに Dotを作れない現状では利用者が当たらない。
+      AIの案: 保留（TASK-011の範囲と重なるため、着手時に確かめる）。
+  - 採否: 人間が報告の`採否`と`理由`を書く（未記入）。記入後、採用した候補を`audit.md` §5の手順でタスクに起こす。
+- 未実施: `privacy` / `security`観点の監査（完了条件は1観点以上で、手動で回す運用のため）。
 - 関連: [TASK-023](../tasks/TASK-023-exploratory-audit-loop.md)
