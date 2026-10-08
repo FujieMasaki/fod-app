@@ -76,17 +76,23 @@ export const RecordingStage = () => {
     clearRecordedAudio();
   }, [clearRecordedAudio]);
 
+  // 録音を始めた後に利用者が切り替わっていたら、前の利用者の録音を残さずHomeへ戻す。
+  const leaveIfSwitched = (): boolean => {
+    if (currentEpochRef.current === startedEpochRef.current) return false;
+    navigate({ to: "/", replace: true });
+    return true;
+  };
+
   const proceed = (audio: RecordedAudio) => {
+    // 中断の案内を見ている間に切り替わった場合も、新しい利用者へ前の利用者の録音を渡さない。
+    if (leaveIfSwitched()) return;
     setRecordedAudio(audio);
     navigate({ to: "/processing" });
   };
 
-  // 止めた結果で次を決める。止める間に利用者が切り替わっていたら、録音を残さずHomeへ戻す。
+  // 止めた結果で次を決める。
   const finish = (outcome: RecordingOutcome, reason: "user" | "interrupted" | "limit") => {
-    if (currentEpochRef.current !== startedEpochRef.current) {
-      navigate({ to: "/", replace: true });
-      return;
-    }
+    if (leaveIfSwitched()) return;
     if (reason === "interrupted") {
       setEnded({ kind: "interrupted", audio: outcome.kind === "recorded" ? outcome.audio : null });
     } else if (outcome.kind === "recorded") {
