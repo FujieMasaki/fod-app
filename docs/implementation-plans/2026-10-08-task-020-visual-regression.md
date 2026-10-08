@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実装済み（2026-10-08）。Q1〜Q4はすべて推奨のAで人間が判断し、レビューを受けて追加したQ5（色の閾値）も同日にAと判断した（「未決定事項」）。判断の前の保留の記録は
+実装済み（2026-10-08）。Q1〜Q4はすべて推奨のAで人間が判断し、レビューを受けて追加したQ5（色の閾値）・Q6（イメージをdigestで固定）も同日にAと判断した（「未決定事項」）。判断の前の保留の記録は
 コミット`0984827`にある。
 
 ## 2. Goal
@@ -59,7 +59,7 @@
 1. `apps/web`に`@playwright/test`（1.63.0に固定）を入れ、設定を`apps/web/playwright.config.ts`、specと補助を
    `apps/web/vrt/`に置く。Vitestの対象（`src/**`）と分ける。
 2. 実行環境を公式のPlaywrightコンテナ（`mcr.microsoft.com/playwright:v1.63.0-noble`）に固定する。
-   `scripts/vrt.sh`がイメージのタグを`@playwright/test`のバージョンから作り、リポジトリをmountして実行する。
+   `scripts/vrt.sh`がイメージをタグとdigestで固定し（`@playwright/test`のバージョンと違えば止まる）、リポジトリをmountして実行する。
    node_modulesはLinux用に入れ直すため、checkoutごとのDocker volumeに置く（手元のmacOS用のものは使わない）。
    設定ファイルは環境変数`FOD_VRT_CONTAINER=1`がないと止まり、コンテナの外で実行できない。
 3. 認証・APIは`page.route`で`/api/v1/*`を`apps/web/vrt/fixtures.ts`の応答に差し替える。fixtureは架空の
@@ -90,6 +90,7 @@
   契約のschemaで検証するので、契約から外れた見た目を基準にしない。
 - フォントをVRTの中だけ差し替える（Q3のA）: 本番の配信を変えずに、通信の状態で書体が揺れないようにする。
 - 1pxの差も失敗にする（Q4のA）: 静けさ・可読性に効く小さな崩れを検出する。揺れは環境とfixtureの固定で抑える。
+- イメージをdigestで固定する（Q6のA）: 同じタグが作り直されても手元とCIで同じ中身を使い、GitHub ActionsのSHA固定と揃える。
 - 色の閾値を0にする（Q5のA）: 既定の0.2では淡い配色のDesign Tokenの変化を見逃すため。0でも連続3回揺れなかった。
 
 ## 9. Data Flow
@@ -153,8 +154,8 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
 ## 13. Risks / Things to Watch
 
 - `@playwright/test`のバージョンを上げるときは、基準画像を`pnpm vrt:update`で作り直し、差分が描画エンジンの
-  違いだけであることを確かめる（Chromiumの更新で文字の描画が変わりうる）。イメージのタグはscriptが
-  package.jsonから作るので、ずれない。
+  違いだけであることを確かめる（Chromiumの更新で文字の描画が変わりうる）。`scripts/vrt.sh`の`pinned_version`と`digest`も
+  更新する（`@playwright/test`と違えばscriptが止まるので、更新し忘れに気づける）。
 - Dependabotがnpmの依存を更新すると、`@playwright/test`や`@fontsource`の更新PRでVRTが落ちうる。その場合は
   上と同じく基準画像を作り直す。
 - threshold 0のため、CPUの種類で描画が変わる要素が増えると、手元では通りCIだけで落ちる。そのときはその要素を`mask`に
@@ -217,10 +218,10 @@ toHaveScreenshot が基準画像（apps/web/vrt/__screenshots__/）と比較
 
 ## 未決定事項
 
-Q6（イメージの固定のしかた）が残っている。Q1〜Q4は2026-10-08に人間がすべてAと判断した。サブエージェントのレビューを
-受けて追加したQ5も、同日に人間がAと判断した（判断の材料として、下に当時のまま残す）。
+なし。Q1〜Q4は2026-10-08に人間がすべてAと判断した。サブエージェントのレビューを受けて追加したQ5・Q6も、
+同日に人間がAと判断した（判断の材料として、下に当時のまま残す）。
 
-### Q6. Playwrightのイメージの固定のしかた（未決定）
+### Q6. Playwrightのイメージの固定のしかた
 
 - 決めること: `scripts/vrt.sh`がイメージをタグ（`v1.63.0-noble`）だけで指定している現状のままにするか。
 - 止まるもの: サブエージェントのレビュー（3回目で、この点がMediumとして残った）とCodexの最終チェック。
