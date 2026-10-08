@@ -76,6 +76,9 @@ Codexの後のサブエージェント段階で、3回レビューしてもLGTM�
   絞るとしたが、指示だけの防御になる。A: `.claude/settings.json`のdenyに`Read(./apps/api/log/**)`・
   `Read(./apps/api/tmp/**)`を足す（許可を絞る向き。denyがGrep・Globに効くかは足した後に確かめる）。
   B: skillの指示だけにする。推奨はA（個人データを読まない約束を指示だけに頼らないため）。**人間の判断: A。**
+  実装では、同じ向きでActive Storageの保存先`apps/api/storage/**`もdenyに足した（今は空だが、録音を置く実装が入ると
+  同じ経路になるため）。denyが効くのは組み込みのファイルtool（Read、Grep・Globはベストエフォート）だけで、Bashの
+  子プロセス（`grep -r`・`rg`・`cat`）には効かない。Bashの経路はskillの指示で防ぐ。
 
 ### 未決定事項（判断前の整理。判断の結果は上）
 
@@ -179,7 +182,7 @@ skill: 正本（仕様・audit.md）と実装を読む（変更しない）
 
 ## 10. Files to Change
 
-1つのPR（見積もり11ファイル）。
+1つのPR（見積もり12ファイル）。
 
 - 新規: `.claude/skills/exploratory-audit/SKILL.md`（監査の手順・入出力）
 - 新規: `docs/code-review/audit.md`（観点ごとの確認項目）
@@ -188,7 +191,8 @@ skill: 正本（仕様・audit.md）と実装を読む（変更しない）
 - 変更: `docs/tasks/README.md`（監査から起こしたタスクの扱い）
 - 変更: `AGENTS.md`（監査の入口）
 - 変更: `README.md`（文書一覧と、監査の起動方法）
-- 変更: `.claude/settings.json`（denyに開発ログと`tmp/`のReadを足す。R2）
+- 変更: `.claude/settings.json`（denyに開発ログ・`tmp/`・`storage/`のReadを足す。R2）
+- 変更: `.claude/skills/human-review-artifact/SKILL.md`（秘匿する候補の修正PRで、ページに再現手順を引用しないポインタ）
 - 変更: `.claude/skills/pr-review-cycle/SKILL.md`（秘匿する候補の修正PRでは、再発防止の追記を後のPRへ回すポインタ）
 - 変更: `.claude/agents/code-reviewer.md`・`docs/code-review/final-check.md`（秘匿する候補の修正PRで、指摘に再現手順・攻撃の経路を書かない）
 
@@ -300,6 +304,10 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
   （人間の判断の後）R1でIDから観点を外し、R2で`settings.json`のdenyに`apps/api/log/`・`apps/api/tmp/`を足した。
   reviewerが指摘しない範囲の規則を`audit.md` §4へ移し、reviewerの2ファイルはポインタだけにした。人間のレビュー用
   ガイドにも再現手順を引用しないとした。skillの禁止事項に`git fetch`の例外を書いた。
+  （判断の後のサブエージェント1回目）denyの効く範囲を正確に書き、Bashの検索の範囲をskillで絞り、`storage/`をdenyと
+  禁止事項に足した。秘匿する候補の修正PRは分けないとした（間のサブのPRには秘匿の合図が届かないため）。
+  `human-review-artifact`に§4へのポインタを足し、秘匿を扱うセッションを共有しないこと、IDの連番を書く直前に
+  決めることを書いた。
   あわせてサブエージェント3回目の🔵（チャットを制限する理由、報告の詳細を消す時機、タスクREADMEの「採用」、
   秘匿しない例外を確信度とtestに結び付ける）を直した。秘匿する候補のタスク名を一般的なものにし、なお残る
   公開（未修正の問題がある事実・時期・IDの観点）を受け入れる前提として`audit.md` §4に書いた。

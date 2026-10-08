@@ -16,7 +16,7 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
   ブランチ・DBを作らない。書いてよいのは`<git-common-dir>/audits/`だけ（`git fetch`による追跡refの更新を除く）。例外は、人間が依頼したときの後半の
   2節（「採用した候補をタスクに起こす」「秘匿していた候補の修正がmainに入った後」）で、どちらも文書の変更として
   ブランチを作り、`pr-review-cycle`に従ってPRにする。
-- 秘密情報（`.env*`、`master.key`、`credentials/*.key`）を読まない。DBの中身・ログ（`apps/api/log/`等）・`tmp/`を読まない。
+- 秘密情報（`.env*`、`master.key`、`credentials/*.key`）を読まない。DBの中身・ログ（`apps/api/log/`等）・`tmp/`・`storage/`（Active Storageの保存先）を読まない。
   DBを使うコマンド（RSpec・`rails console`等）を実行しない。報告にはコードの場所と振る舞いだけを書き、
   個人データ・秘密情報の値を書かない。
 - 秘匿する指摘（`audit.md` §1・§4）は、チャット・`docs/tasks`・Plan・コミット・PR・Issueに場所と再現方法を
@@ -46,9 +46,10 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 ### 3. 探索して確かめる
 
 1. `audit.md` §2の向きで、正本の約束ごとに実装とtestを辿る。検索は`git grep`（追跡しているファイルだけを
-   探すので、gitignore済みのログ・`tmp/`を読まない）を優先する。Grep・Glob toolを使うときは、`path`を
-   `apps/api/app`・`apps/web/src`・`contracts`・`docs`などの対象に絞り、`apps/api`のルートや`log/`・`tmp/`を
-   含む範囲には掛けない。任意のコードを実行するコマンド（`node -e`・`ruby -e`等）は、ファイル・DB・ネットワークに
+   探すので、gitignore済みのログ・`tmp/`・`storage/`を読まない）を優先する。Grep・Glob toolと、Bashの
+   `grep -r`・`rg`・`find`・`cat`は、`apps/api/app`・`apps/web/src`・`contracts`・`docs`などの対象に絞り、
+   `apps/api`のルートや`log/`・`tmp/`・`storage/`を含む範囲には掛けない（`settings.json`のdenyが効くのは組み込みの
+   ファイルtoolだけで、Bashの子プロセスには効かないため）。任意のコードを実行するコマンド（`node -e`・`ruby -e`等）は、ファイル・DB・ネットワークに
    触れないことを確かめられる場合だけにする（ライブラリの挙動の確認など）。
 2. 候補ごとに、場所の行を実際に読み直してから書く。正本の記述も引用元の節を確かめる。
 3. 観点が複数のときは、観点ごとに報告ファイルを分ける。
@@ -56,7 +57,8 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 ### 4. 報告を書く
 
 1. `audits/<YYYY-MM-DD>-<観点>.md`に、`audit.md` §3の形式で書く。同じ日の同じ観点のファイルがあれば
-   追記する。IDの連番は、その日の報告すべてで続ける（IDに観点を入れないため）。
+   追記する。IDの連番は、その日の報告すべてで続ける（IDに観点を入れないため）。書く直前に`audits/<YYYY-MM-DD>-*.md`を
+   読み直して次の番号を決める（同じ日に別の観点の監査を並行で回しても重ならないように）。
 2. 候補がなければ、確認した範囲と「候補なし」を書く（次の監査で同じ範囲を見たことが分かるように）。
 
 ### 5. チャットで渡す
