@@ -26,6 +26,9 @@ const CANDIDATE_TYPES: readonly { recorderType: string; mimeType: AudioMimeType 
 // 止めた後にstopの通知を待つ上限。通知が来ない実装でも、停止の操作を止めたままにしない。
 const STOP_TIMEOUT_MS = 3_000;
 
+// 録音中に音声を受け取る間隔。stopの通知が上限までに届かなくても、ここまでに受け取った音声で進める。
+const CHUNK_INTERVAL_MS = 1_000;
+
 // 30分でも契約の32MBに十分収まる大きさにする（Safariのmp4は既定のbitrateが高い）。
 const AUDIO_BITS_PER_SECOND = 64_000;
 
@@ -137,7 +140,7 @@ export const createRecorder = ({ onInterrupt }: RecorderOptions = {}): RecorderH
       });
       stream.getTracks().forEach((track) => track.addEventListener("ended", interrupt));
       recorder = next;
-      next.start();
+      next.start(CHUNK_INTERVAL_MS);
     } catch {
       recorder = null;
       return false;
@@ -169,8 +172,11 @@ export const createRecorder = ({ onInterrupt }: RecorderOptions = {}): RecorderH
 
     if (active && active.state !== "inactive") active.stop();
     // 自動で止まった直後（stateはinactiveでも、最後のdataとstopの通知がまだ）も、届くまで待つ。
+    // 上限までに届かなければ、録音中に受け取った音声で進める（失うのは最後の受け取り以降だけ）。
     if (active && done) {
-      await Promise.race([done, new Promise((resolve) => setTimeout(resolve, STOP_TIMEOUT_MS))]);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([done, new Promise((resolve) => (timer = setTimeout(resolve, STOP_TIMEOUT_MS)))]);
+      clearTimeout(timer);
     }
     const blob = chunks.length ? new Blob(chunks, { type: mimeType ?? undefined }) : null;
     chunks = [];

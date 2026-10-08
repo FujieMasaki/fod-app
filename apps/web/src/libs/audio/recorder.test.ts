@@ -59,12 +59,14 @@ const stubMicrophone = ({
     onstop: (() => void) | null = null;
     onerror: (() => void) | null = null;
     options: MediaRecorderOptions | undefined;
+    timeslice: number | undefined;
     constructor(_: MediaStream, options?: MediaRecorderOptions) {
       this.options = options;
       recorders.push(this);
     }
-    start() {
+    start(timeslice?: number) {
       this.state = "recording";
+      this.timeslice = timeslice;
     }
     stop() {
       this.state = "inactive";
@@ -101,6 +103,8 @@ describe("createRecorder", () => {
     expect(result.blob?.type).toBe("audio/webm");
     expect(result.blob?.size).toBeGreaterThan(0);
     expect(result.durationSec).toBeCloseTo(12.4);
+    // stopの通知が届いたら、待つ上限のtimerを残さない
+    expect(vi.getTimerCount()).toBe(0);
     expect(stopTrack).toHaveBeenCalled();
     expect(closeContext).toHaveBeenCalled();
   });
@@ -225,6 +229,27 @@ describe("createRecorder", () => {
     media.onstop?.();
 
     expect((await stopping).blob?.size).toBe(4);
+  });
+
+  it("stopの通知が上限までに届かなくても、録音中に受け取った音声で返す", async () => {
+    vi.useFakeTimers();
+    const { recorders } = stubMicrophone();
+    const recorder = createRecorder();
+    await recorder.open();
+    recorder.record();
+    const media = recorders[0];
+    // 録音中も1秒ごとに音声を受け取る
+    expect(media.timeslice).toBe(1_000);
+    media.ondataavailable?.({ data: new Blob(["early"]) });
+    // 止めても最後のdataとstopの通知が届かない
+    media.stop = () => {
+      media.state = "inactive";
+    };
+
+    const stopping = recorder.stop();
+    await vi.advanceTimersByTimeAsync(3_000);
+
+    expect((await stopping).blob?.size).toBe(5);
   });
 
   it("片付けると、録音中のMediaRecorderとstreamを止め、AudioContextを閉じる", async () => {
