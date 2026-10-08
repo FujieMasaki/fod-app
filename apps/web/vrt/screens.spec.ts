@@ -84,6 +84,6 @@ for (const screen of screens) {
     await waitForFonts(page);
 
     await expect(page).toHaveScreenshot(`${screen.name}.png`, { fullPage: true });
-    expect(unexpected, "fixtureのないAPIを呼んだ").toEqual([]);
+    expect(unexpected, "想定外の要求があった").toEqual([]);
   });
 }

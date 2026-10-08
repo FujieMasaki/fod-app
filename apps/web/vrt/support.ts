@@ -28,9 +28,13 @@ const fontCss = async (cssUrl: URL): Promise<string> => {
     for (const weight of weights) {
       const css = await readFile(path.join(dir, `${weight}.css`), "utf8");
       // woff2だけを使い、置き場所をroute（下のfonts.gstatic.com）へ向ける。
-      parts.push(
-        css.replace(/src: url\(\.\/files\/([a-z0-9-]+\.woff2)\)[^;]*;/g, `src: url(${fontHost}/${slug}/$1) format('woff2');`),
+      const replaced = css.replace(
+        /src: url\(\.\/files\/([a-z0-9-]+\.woff2)\)[^;]*;/g,
+        `src: url(${fontHost}/${slug}/$1) format('woff2');`,
       );
+      // @fontsourceのCSSの形が変わって置き換えられなかったら、別の書体で撮らないよう失敗させる。
+      if (replaced.includes("./files/")) throw new Error(`@fontsource/${slug}/${weight}.cssの形が想定と違う`);
+      parts.push(replaced);
     }
   }
   return parts.join("\n");
@@ -45,7 +49,10 @@ const fontFile = (fileUrl: URL): string => {
 /** `/api/v1/...`のpath（query付き）ごとの応答 */
 export type ApiFixtures = Record<string, unknown>;
 
-/** 画面を開く前に呼ぶ。返す配列には、fixtureのないAPIの要求が入る（撮影後に空であることを確かめる） */
+/**
+ * 画面を開く前に呼ぶ。返す配列には、想定外の要求（fixtureのないAPI、止めた外への通信、フォントを返せなかった
+ * 要求）が入る。撮影後に空であることを確かめる（失敗しても画面は描画されうるため、ここで見落とさない）。
+ */
 export const preparePage = async (page: Page, api: ApiFixtures): Promise<string[]> => {
   const unexpected: string[] = [];
 
@@ -60,13 +67,26 @@ export const preparePage = async (page: Page, api: ApiFixtures): Promise<string[
   // Playwrightは後に登録したrouteを先に使う。最後の手段として、外への要求をすべて止める。
   await page.route(
     (url) => url.hostname !== "127.0.0.1",
-    (route) => route.abort("blockedbyclient"),
+    async (route) => {
+      unexpected.push(`blocked ${route.request().url()}`);
+      await route.abort("blockedbyclient");
+    },
   );
   await page.route("https://fonts.googleapis.com/css2?**", async (route) => {
-    await route.fulfill({ contentType: "text/css", body: await fontCss(new URL(route.request().url())) });
+    try {
+      await route.fulfill({ contentType: "text/css", body: await fontCss(new URL(route.request().url())) });
+    } catch (error) {
+      unexpected.push(`font ${String(error)}`);
+      await route.abort();
+    }
   });
   await page.route(`${fontHost}/**`, async (route) => {
-    await route.fulfill({ contentType: "font/woff2", body: await readFile(fontFile(new URL(route.request().url()))) });
+    try {
+      await route.fulfill({ contentType: "font/woff2", body: await readFile(fontFile(new URL(route.request().url()))) });
+    } catch (error) {
+      unexpected.push(`font ${String(error)}`);
+      await route.abort();
+    }
   });
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
