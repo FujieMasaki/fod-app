@@ -19,8 +19,8 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 - 秘密情報（`.env*`、`master.key`、`credentials/*.key`）を読まない。DBの中身・ログ（`apps/api/log/`等）・`tmp/`・`storage/`（Active Storageの保存先）を読まない。
   DBを使うコマンド（RSpec・`rails console`等）を実行しない。報告にはコードの場所と振る舞いだけを書き、
   個人データ・秘密情報の値を書かない。
-- 秘匿する指摘（`audit.md` §1・§4）は、チャット・`docs/tasks`・Plan・コミット・PR・Issueに場所と再現方法を
-  書かない。迷ったら秘匿する。
+- 秘匿する指摘（`audit.md` §1）は、`audit.md` §4の公開の場に場所と再現方法を書かない（チャットは手順5の形だけ）。
+  迷ったら秘匿する。
 - 根拠を確かめていない候補を事実として書かない。確かめきれないものは確信度を下げ、前提を`推測`に書く。
 
 ## 手順
