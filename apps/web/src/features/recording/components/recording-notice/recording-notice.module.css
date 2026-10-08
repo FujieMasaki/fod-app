@@ -1,0 +1,13 @@
+@reference "@/styles/tailwind.css";
+
+.root {
+  @apply flex flex-col gap-6 py-8;
+}
+
+.body {
+  @apply flex flex-col gap-3;
+}
+
+.actions {
+  @apply flex flex-col gap-2;
+}
