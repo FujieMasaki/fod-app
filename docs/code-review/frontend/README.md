@@ -41,7 +41,7 @@ Focus on Dot のフロントエンドコードレビューにおける運用ル�
 | --- | --- |
 | すべての変更 | `security.md` |
 | `apps/web/src/features/recording/**`, `apps/web/src/libs/audio/**` | 権限要求、録音データの保存・送信・破棄。ブラウザの通知（`MediaRecorder`の`dataavailable`・`stop`、trackの`ended`）が遅れる・来ない・重なるときに、録音した音声を失ったり、停止の操作を止めたままにしたりしないか（通知を遅らせる・出さないtestがあるか）。録音の設定値（形式・bitrate・時間と大きさの上限）が、採用済みのPlanと契約の値と一致しているか |
-| `apps/web/src/features/session/**` | 端末への保存を足していないか（足すなら `security.md` §6）、認証の終了・利用者の切り替わりで消えるか、前の利用者の値を見せないか、リセット |
+| `apps/web/src/features/session/**` | 端末への保存を足していないか（足すなら `security.md` §6）、認証の終了・利用者の切り替わりで消えるか、前の利用者の値を見せないか、リセット。同じ値をSession Provider以外にも渡していないか（TanStack Queryのmutationの`variables`・query cacheは既定の`gcTime`の間残り、Session Providerを消しても消えない） |
 | `apps/web/src/features/auth/**`、認証状態で表示・処理を変える箇所 | 通信の順序（Cookieの書き戻し）と、切り替わりの前の結果の照合（`security.md` §3）。Providerの値は再描画されるまで古いため、その場の判断にはqueryの今の状態（`getQueryState`など）を使っているか。offlineで一時停止した取得（TanStack Queryの`fetchStatus: "paused"`）を、取得済みとして判断していないか。直接開く・再読み込み（Providerの購読より子のeffectが先に動く）でも判断できるか |
 | 開いたときに副作用（マイク・生成・送信）を始める画面・effect | 利用者の操作なしに始まる・始め直される経路（`security.md` §2）。StrictModeの二重実行で開始と片付けが対になり、片付けた後に非同期の結果がstate・timer・streamを動かさないか。StrictModeで包んだtestで、開始と片付けの回数を確かめているか |
 | 入力欄の制限（`maxLength`など） | serverの検証と同じ単位か（HTMLの`maxLength`はUTF-16の単位、Railsの`length`はコードポイントの単位で数える。byteの単位の制限がある値は別に確かめる）。serverが許す値を入力欄で切り詰めていないか |
@@ -77,4 +77,5 @@ Focus on Dot のフロントエンドコードレビューにおける運用ル�
   利用者の操作なしに録音・生成が始まる経路、入力欄の文字数の単位の指摘が繰り返し出たため、認証・副作用を
   始める画面・入力欄の確認観点を追加。
 - 2026-10-09: TASK-010（PR #93）のレビューで、stopの通知が遅れると録音を丸ごと失う問題と、bitrateが採用済みの
-  値と違う問題が見つかったため、録音の行にブラウザの通知の遅れと設定値の確認観点を追加。
+  値と違う問題が見つかったため、録音の行にブラウザの通知の遅れと設定値の確認観点を追加。PR #94のレビューで、
+  mutationへ渡した録音がcacheに残る問題が見つかったため、sessionの行にSession Provider以外の置き場所の観点を追加。
