@@ -345,11 +345,13 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
   - 失敗・中断の表示を`recording-notice`へ分けた。既存の`recording-stage.module.css`は`var(--fod-*)`を直接書く
     未移行のCSSで、新しいUIのTailwindの`@apply`と同じファイルに混ぜられないため（§10）。
   - `create-dot.ts`は変えず、`useCreateDot`のmutationの入力の型だけを録音にした（mockは録音を受け取らない）。
+  - self-reviewで、中断の案内を見ている間に利用者が切り替わると、「ここまでで整理する」で前の利用者の録音が
+    新しい利用者の整理へ渡り得ることを見つけた。押した時点でも利用者の世代を確かめ、変わっていればHomeへ戻すよう直した。
   - `RequireAuth startsOnEnter`も、未認証のときにログインの戻り先を付けるようにした。録音画面から来た利用者を
     録音前の案内へ戻すには、`safeRedirect`の許可だけでは足りなかった（このguardは戻り先を付けていなかった）（§7-7）。
 - 検証結果:
   - `pnpm lint`（ESLint・命名・Markdown・契約のlintと生成した型の一致）、`pnpm type-check`、`pnpm test`
-    （scriptsのtestと、webの19ファイル・436件）、`pnpm build`がすべて通った。
+    （scriptsのtestと、webの19ファイル・437件）、`pnpm build`がすべて通った。
   - 自動のtestで確かめたこと: 権限拒否・非対応・マイクが無い・使用中のそれぞれで録音を始めず次の操作を示すこと、
     録音中にマイクが切れたときの「ここまでで整理する／録り直す」、1秒未満と32,000,000 bytes超えで進まないこと、
     30分の自動停止、二重停止で止めるのも進むのも1回だけなこと、止めた・片付けた・画面を離れたときのtrackの停止と
