@@ -196,6 +196,10 @@
 `safeRedirect`の許可に`/record`を加える。開くと案内が出るだけでマイクは始まらないため、Googleから戻った直後でも
 利用者の操作なしに録音は始まらない。`/processing`は引き続き戻り先にしない。
 
+録音・整理の画面を包む`RequireAuth startsOnEnter`は、未認証のときに戻り先を付けずにログインへ移していた（戻り先に
+できる画面が無かったため）。`SessionGuard`と同じく`safeRedirect`の結果を戻り先に付ける（このタブでlogoutした後は
+付けない）。
+
 ## 8. Why This Approach
 
 - 案内を`/record`の最初の段階にするのは、Homeのマイクの操作・履歴の「録音する」・ログインの後の戻り先のすべてが
@@ -249,14 +253,16 @@ PR 1/2 `feat/task-010-1-recorder-result`（録音の結果の区別と音声の�
 | `apps/web/src/features/session/session-context.test.tsx` | 変更 | 同上 |
 | `apps/web/src/features/session/index.ts` | 変更 | 型のexport |
 | `apps/web/src/features/recording/components/recording-stage/recording-stage.tsx` | 変更 | 失敗・中断・結果の画面、受け渡し |
-| `apps/web/src/features/recording/components/recording-stage/recording-stage.module.css` | 変更 | 同上 |
 | `apps/web/src/features/recording/components/recording-stage/recording-stage.test.tsx` | 変更 | 同上 |
+| `apps/web/src/features/recording/components/recording-notice/recording-notice.tsx` | 新規 | 失敗・中断の理由と次の操作の表示 |
+| `apps/web/src/features/recording/components/recording-notice/recording-notice.module.css` | 新規 | 同上（Tailwindの`@apply`） |
 | `apps/web/src/libs/api-contract/schemas.ts` | 変更 | `recordingAttemptSchema` |
 | `apps/web/src/libs/api-contract/schemas.test.ts` | 変更 | 契約のexampleで検証 |
 | `apps/web/src/features/recording/api.ts` | 新規 | `createRecordingAttempt` |
-| `apps/web/src/features/recording/api.test.ts` | 新規 | 上記のtest |
+| `apps/web/src/features/recording/api.test.tsx` | 新規 | 上記のtest |
 
-数える: 17。
+数える: 18。失敗・中断の表示を別のComponentにしたのは、既存の`recording-stage.module.css`が`var(--fod-*)`を
+直接書く未移行のCSSで、新しいUIはTailwindの`@apply`で書くため（design-system.md）。同じファイルに混ぜられない。
 
 PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる音声がない場合・戻り先・現行文書）:
 
@@ -268,16 +274,16 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 | `apps/web/src/features/recording/components/recording-stage/recording-stage.test.tsx` | 変更 | 同上 |
 | `apps/web/src/features/processing/components/processing-indicator/processing-indicator.tsx` | 変更 | 音声が無い場合、mutationへ渡す、成功で消す |
 | `apps/web/src/features/processing/components/processing-indicator/processing-indicator.test.tsx` | 変更 | 同上 |
-| `apps/web/src/features/processing/hooks/use-create-dot.ts` | 変更 | 入力を受け取る |
-| `apps/web/src/features/processing/create-dot.ts` | 変更 | 同上（mockは使わない） |
+| `apps/web/src/features/processing/hooks/use-create-dot.ts` | 変更 | 入力（録音）を受け取る。mockは使わない |
 | `apps/web/src/features/auth/redirect.ts` | 変更 | `/record`を戻り先へ |
+| `apps/web/src/features/auth/components/require-auth.tsx` | 変更 | 録音・整理の画面のguardでも戻り先を付ける |
 | `apps/web/src/features/auth/messages.test.ts` | 変更 | 同上 |
 | `apps/web/src/features/auth/components/auth-screens.test.tsx` | 変更 | 同上 |
 | `docs/journaling.md` | 変更 | 現行挙動 |
 | `docs/architecture.md` | 変更 | 実装済み |
 | Plan・タスクファイル | 変更 | 完了の記録 |
 
-数える: 15前後。
+数える: 15。`create-dot.ts`は変えない（mutationの入力の型だけを録音にし、mockは受け取らない）。
 
 ## 11. Libraries / APIs
 
