@@ -89,7 +89,11 @@ for (const screen of screens) {
     // 基準画像の更新（--update-snapshots）でも、想定外の要求があった画面を基準にしない。
     expect(unexpected, "想定外の要求があった").toEqual([]);
 
-    await expect(page).toHaveScreenshot(`${screen.name}.png`, { fullPage: true, mask: screen.mask?.(page) });
+    // maskは何にも当たらなくても失敗しないため、画面の構造が変わって外れていないことを確かめる。
+    const mask = screen.mask?.(page) ?? [];
+    for (const locator of mask) await expect(locator).toHaveCount(1);
+
+    await expect(page).toHaveScreenshot(`${screen.name}.png`, { fullPage: true, mask });
     expect(unexpected, "想定外の要求があった").toEqual([]);
   });
 }
