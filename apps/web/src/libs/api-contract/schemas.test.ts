@@ -12,6 +12,7 @@ import {
   dotSchema,
   generationSchema,
   problemSchema,
+  recordingAttemptSchema,
   sessionSchema,
   todaySchema,
 } from "./schemas";
@@ -24,6 +25,7 @@ const schemasByName: Record<string, z.ZodType> = {
   Problem: problemSchema,
   Dot: dotSchema,
   Generation: generationSchema,
+  RecordingAttempt: recordingAttemptSchema,
   Session: sessionSchema,
   Today: todaySchema,
   DayList: dayListSchema,
@@ -187,6 +189,16 @@ const limitTargets: { contractSchema: string; schema: z.ZodType; valid: Record<s
     },
   },
   {
+    contractSchema: "RecordingAttempt",
+    schema: recordingAttemptSchema,
+    valid: {
+      id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04",
+      attempt_token: "token",
+      started_at: "2026-09-28T13:04:05Z",
+      expires_at: "2026-09-28T15:04:05Z",
+    },
+  },
+  {
     contractSchema: "DaySummary",
     schema: dayListSchema.shape.items.element,
     valid: { date: "2026-09-28", dot_count: 2, latest_dot_id: "6b1f0c2e-7a4d-4c1b-8e2f-3a9d5c7b1e04" },
@@ -247,6 +259,7 @@ describe("Zod schemaの制約値が契約と一致する", () => {
       "GenerationProcessing.poll_after_seconds",
       "ProblemGeneral.status",
       "ProblemRateLimited.retry_after_seconds",
+      "RecordingAttempt.attempt_token",
       "TodayRecorded.dot_count",
     ]);
   });

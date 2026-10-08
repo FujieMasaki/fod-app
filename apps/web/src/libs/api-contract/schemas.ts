@@ -114,6 +114,14 @@ export const dayDetailSchema = z.object({
   next_cursor: z.string().nullable(),
 });
 
+// 録音attempt（録音開始の受付票）。`attempt_token`はWebが解釈せず、memoryにだけ置いて送るときに返す。
+export const recordingAttemptSchema = z.object({
+  id: z.uuid(),
+  attempt_token: z.string().max(1024),
+  started_at: z.iso.datetime(),
+  expires_at: z.iso.datetime(),
+});
+
 const retryExpiresAtSchema = z.iso.datetime();
 
 const transcriptSchema = z.discriminatedUnion("status", [
@@ -183,6 +191,7 @@ export const sessionSchema = z.discriminatedUnion("authenticated", [
 
 export type Problem = z.infer<typeof problemSchema>;
 export type Dot = z.infer<typeof dotSchema>;
+export type RecordingAttempt = z.infer<typeof recordingAttemptSchema>;
 export type Generation = z.infer<typeof generationSchema>;
 export type Today = z.infer<typeof todaySchema>;
 export type DaySummary = z.infer<typeof daySummarySchema>;
@@ -201,6 +210,7 @@ export const contractTypeChecks = {
   rateLimitedProblem: true satisfies TypeMatches<z.infer<typeof rateLimitedProblemSchema>, Schemas["ProblemRateLimited"]>,
   retryExpiredProblem: true satisfies TypeMatches<z.infer<typeof retryExpiredProblemSchema>, Schemas["ProblemRetryExpired"]>,
   dot: true satisfies TypeMatches<Dot, Schemas["Dot"]>,
+  recordingAttempt: true satisfies TypeMatches<RecordingAttempt, Schemas["RecordingAttempt"]>,
   generation: true satisfies TypeMatches<Generation, Schemas["Generation"]>,
   today: true satisfies TypeMatches<Today, Schemas["Today"]>,
   daySummary: true satisfies TypeMatches<DaySummary, Schemas["DaySummary"]>,

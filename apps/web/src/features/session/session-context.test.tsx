@@ -33,22 +33,23 @@ const mockSessionApi = (start: unknown, afterLogin: unknown) => {
 };
 
 const Probe = () => {
-  const { dotSession, recordedDurationSec, hydrated, setDotSession, setRecordedDuration } = useSession();
+  const { dotSession, recordedAudio, hydrated, setDotSession, setRecordedAudio, clearRecordedAudio } = useSession();
   const { status, signIn } = useAuth();
   return (
     <div>
       <p>{hydrated ? "hydrated" : "loading"}</p>
       <p>{status}</p>
       <p>{dotSession ? dotSession.sentence : "no-dot"}</p>
-      <p>{recordedDurationSec ?? "no-duration"}</p>
+      <p>{recordedAudio ? `audio:${recordedAudio.durationSec}` : "no-audio"}</p>
       <button
         onClick={() => {
-          setRecordedDuration(28);
+          setRecordedAudio({ blob: new Blob(["voice"], { type: "audio/webm" }), mimeType: "audio/webm", durationSec: 28 });
           setDotSession(sampleSession);
         }}
       >
         record
       </button>
+      <button onClick={clearRecordedAudio}>discard</button>
       <button onClick={() => void signIn({ email: "b@example.com", password: "password123" })}>login</button>
     </div>
   );
@@ -85,11 +86,11 @@ describe("端末のジャーナリング状態", () => {
     await waitFor(() => expect(screen.getByText("authenticated")).toBeInTheDocument());
     expect(screen.getByText("hydrated")).toBeInTheDocument();
     expect(screen.getByText("no-dot")).toBeInTheDocument();
-    expect(screen.getByText("no-duration")).toBeInTheDocument();
+    expect(screen.getByText("no-audio")).toBeInTheDocument();
     expect(window.localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull();
   });
 
-  it("録音時間とDotはmemoryにだけ持ち、storageへ書かない", async () => {
+  it("録音（音声と録音時間）とDotはmemoryにだけ持ち、storageへ書かない", async () => {
     mockSessionApi(signedInAs(USER_A), signedInAs(USER_A));
     renderSession();
     await waitFor(() => expect(screen.getByText("authenticated")).toBeInTheDocument());
@@ -97,7 +98,21 @@ describe("端末のジャーナリング状態", () => {
     act(() => screen.getByText("record").click());
 
     expect(screen.getByText(sampleSession.sentence)).toBeInTheDocument();
-    expect(window.localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull();
+    expect(screen.getByText("audio:28")).toBeInTheDocument();
+    expect(window.localStorage).toHaveLength(0);
+    expect(window.sessionStorage).toHaveLength(0);
+  });
+
+  it("録音を捨てると、Dotは残したまま録音だけを消す", async () => {
+    mockSessionApi(signedInAs(USER_A), signedInAs(USER_A));
+    renderSession();
+    await waitFor(() => expect(screen.getByText("authenticated")).toBeInTheDocument());
+    act(() => screen.getByText("record").click());
+
+    act(() => screen.getByText("discard").click());
+
+    expect(screen.getByText("no-audio")).toBeInTheDocument();
+    expect(screen.getByText(sampleSession.sentence)).toBeInTheDocument();
   });
 
   it("別の利用者へ切り替わった描画で、前の利用者のDotを1回も描画しない", async () => {
@@ -140,7 +155,7 @@ describe("端末のジャーナリング状態", () => {
     expect(renders.filter((r) => r.user === USER_B && r.dot !== null)).toEqual([]);
   });
 
-  it("利用者が切り替わったら録音時間とDotを消す", async () => {
+  it("利用者が切り替わったら録音とDotを消す", async () => {
     mockSessionApi({ authenticated: false, csrf_token: "t1" }, signedInAs(USER_A));
     renderSession();
     await waitFor(() => expect(screen.getByText("anonymous")).toBeInTheDocument());
@@ -151,6 +166,6 @@ describe("端末のジャーナリング状態", () => {
 
     await waitFor(() => expect(screen.getByText("authenticated")).toBeInTheDocument());
     expect(screen.getByText("no-dot")).toBeInTheDocument();
-    expect(screen.getByText("no-duration")).toBeInTheDocument();
+    expect(screen.getByText("no-audio")).toBeInTheDocument();
   });
 });
