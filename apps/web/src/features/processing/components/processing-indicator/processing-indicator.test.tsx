@@ -96,17 +96,19 @@ describe("整理が終わると今日の一文へ進む", () => {
     expect(window.sessionStorage).toHaveLength(0);
   });
 
-  it("整理の画面を離れたら、mutationに渡した録音をcacheに残さない", async () => {
+  it("録音をmutationのcacheに渡さない（整理の途中で画面を離れても、cacheに音声が残らない）", async () => {
     vi.stubEnv("VITE_DOT_API_URL", "http://api.test");
-    stubFetch(vi.fn(async () => ({ ok: true, json: async () => sampleSession })));
+    // 応答が返らないまま（pending）にする。pendingのmutationは、画面を離れてもcacheから消えない
+    const dotApi = vi.fn(() => new Promise(() => undefined));
+    stubFetch(dotApi);
 
     const { client, unmount } = renderProcessing();
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/dot", replace: true }));
-    // 画面にいる間は、再試行のために録音を持つ
-    expect(client.getMutationCache().getAll()).toHaveLength(1);
-
+    await waitFor(() => expect(dotApi).toHaveBeenCalled());
     unmount();
-    await waitFor(() => expect(client.getMutationCache().getAll()).toHaveLength(0));
+
+    const mutations = client.getMutationCache().getAll();
+    expect(mutations.map((mutation) => mutation.state.status)).toEqual(["pending"]);
+    expect(mutations[0].state.variables).toBeUndefined();
   });
 
   it("受け渡せる録音が無ければ整理を始めず、録音への導線を出す（直接開いた・再読み込みした）", async () => {
@@ -205,8 +207,8 @@ describe("整理が終わると今日の一文へ進む", () => {
         <AuthProvider>
           <SessionProvider>
             <WithAudio>
-            <ProcessingIndicator />
-          </WithAudio>
+              <ProcessingIndicator />
+            </WithAudio>
             <SwitchProbe />
           </SessionProvider>
         </AuthProvider>
@@ -243,8 +245,8 @@ describe("整理が終わると今日の一文へ進む", () => {
         <AuthProvider>
           <SessionProvider>
             <WithAudio>
-            <ProcessingIndicator />
-          </WithAudio>
+              <ProcessingIndicator />
+            </WithAudio>
             <SwitchProbe />
             <DotProbe />
           </SessionProvider>

@@ -28,10 +28,9 @@ export const ProcessingIndicator = () => {
   const audioRef = useRef(recordedAudio);
 
   const start = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
+    if (!audioRef.current) return;
     startedEpochRef.current = identityEpoch;
-    mutate(audio);
+    mutate();
   }, [identityEpoch, mutate]);
 
   // アイドル時に一度だけ整理を開始する

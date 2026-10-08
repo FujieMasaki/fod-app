@@ -183,7 +183,9 @@
 - `recordedDurationSec`・`setRecordedDuration`を、`recordedAudio`（`{ blob, mimeType, durationSec }`）・
   `setRecordedAudio`・`clearRecordedAudio`へ置き換える。録音時間は音声と一緒に渡す（別々に持つと食い違い得る）。
 - 書いたときの`identityEpoch`と一緒に持ち、利用者の切り替わりで消す（既存の方式）。storageへは書かない。
-- `/processing`は開いたときの`recordedAudio`を生成のmutationへ渡す（mockは使わない。TASK-011がuploadに使う）。
+- `/processing`は開いたときの`recordedAudio`を持ち、それがあるときだけ生成を始める（mockは使わない。TASK-011がuploadに使う）。
+  mutationの入力（`variables`）には渡さない。mutation cacheは、画面を離れても通信中と`gcTime`の間入力を持ち続け、
+  Session Providerを消しても消えないため。
   無ければ生成を始めず、「受け渡せる録音がありません」と録音への導線を出す（直接開いた・再読み込みした場合）。
   生成が成功したら音声を消す。
 - 音声Blobを捨てる者: 次の録音の開始、生成の成功、利用者の切り替わり（Session Provider）、再読み込み・タブを閉じる
@@ -278,9 +280,9 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 | `apps/web/src/features/recording/components/recording-guide/recording-guide.module.css` | 新規 | 同上 |
 | `apps/web/src/features/recording/components/recording-stage/recording-stage.tsx` | 変更 | 案内の段階、開始を押したときに始める |
 | `apps/web/src/features/recording/components/recording-stage/recording-stage.test.tsx` | 変更 | 同上 |
-| `apps/web/src/features/processing/components/processing-indicator/processing-indicator.tsx` | 変更 | 音声が無い場合、mutationへ渡す、成功で消す |
+| `apps/web/src/features/processing/components/processing-indicator/processing-indicator.tsx` | 変更 | 音声が無い場合、成功で消す |
 | `apps/web/src/features/processing/components/processing-indicator/processing-indicator.test.tsx` | 変更 | 同上 |
-| `apps/web/src/features/processing/hooks/use-create-dot.ts` | 変更 | 入力（録音）を受け取る。mockは使わない |
+| `apps/web/src/features/processing/hooks/use-create-dot.ts` | 変更 | 録音を入力にしない理由を残す。mockは使わない |
 | `apps/web/src/features/auth/redirect.ts` | 変更 | `/record`を戻り先へ |
 | `apps/web/src/features/auth/components/require-auth.tsx` | 変更 | 録音・整理の画面のguardでも戻り先を付ける |
 | `apps/web/src/features/auth/messages.test.ts` | 変更 | 同上 |
@@ -291,7 +293,7 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 | `docs/code-review/frontend/README.md` | 変更 | 1/2のレビューで見つかった問題の再発防止の観点 |
 | Plan・タスクファイル | 変更 | 完了の記録 |
 
-数える: 17。`create-dot.ts`は変えない（mutationの入力の型だけを録音にし、mockは受け取らない）。
+数える: 17。`create-dot.ts`は変えない（mockは録音を受け取らない）。
 
 ## 11. Libraries / APIs
 
@@ -351,7 +353,8 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 - 実装差異:
   - 失敗・中断の表示を`recording-notice`へ分けた。既存の`recording-stage.module.css`は`var(--fod-*)`を直接書く
     未移行のCSSで、新しいUIのTailwindの`@apply`と同じファイルに混ぜられないため（§10）。
-  - `create-dot.ts`は変えず、`useCreateDot`のmutationの入力の型だけを録音にした（mockは録音を受け取らない）。
+  - `create-dot.ts`は変えず、録音はmutationの入力にしなかった（mockは録音を受け取らない）。最初は入力にしたが、
+    レビューで、mutation cacheが通信中と`gcTime`の間録音を持ち続け、Session Providerを消しても消えないと分かった。
   - self-reviewで、中断の案内を見ている間に利用者が切り替わると、「ここまでで整理する」で前の利用者の録音が
     新しい利用者の整理へ渡り得ることを見つけた。押した時点でも利用者の世代を確かめ、変わっていればHomeへ戻すよう直した。
   - `RequireAuth startsOnEnter`も、未認証のときにログインの戻り先を付けるようにした。録音画面から来た利用者を
