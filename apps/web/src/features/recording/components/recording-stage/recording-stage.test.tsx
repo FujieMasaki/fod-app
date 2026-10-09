@@ -217,6 +217,19 @@ describe("RecordingStage", () => {
     expect(mic.requests).toBe(0);
   });
 
+  it("確かめ直しの通信が失敗したら（offlineではない）、マイクを要求しない（Homeへ移すのはguard）", async () => {
+    const mic = stubMicrophone();
+    const { sessionRequests } = renderStage({ sessions: [signedIn, new TypeError("network")] });
+    await waitFor(() => expect(sessionRequests.count).toBe(1));
+
+    startRecording();
+
+    await waitFor(() => expect(sessionRequests.count).toBeGreaterThanOrEqual(2));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mic.requests).toBe(0);
+    expect(screen.queryByText("ログインの状態を確かめられませんでした")).not.toBeInTheDocument();
+  });
+
   it("offlineで認証を確かめられなければ、マイクを要求せず理由と次の操作を示す", async () => {
     const mic = stubMicrophone();
     const { sessionRequests } = renderStage();

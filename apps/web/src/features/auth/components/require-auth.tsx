@@ -60,7 +60,9 @@ const VERIFY_TIMEOUT_MS = 10_000;
  * 副作用（マイク）を始める操作の直前に、Railsで認証を確かめ直す（journaling.md §4「録音前認証と期限切れ」）。
  * 入るときのguardの確かめ直しから操作までは、案内を読む時間だけ空くため、操作のたびに確かめる。
  * - ok: 認証済み。始めてよい
- * - anonymous / lost: 認証が終わった。始めない（画面を離れるのは`RequireAuth startsOnEnter`が行う）
+ * - anonymous: 認証が終わった。始めない（ログインへ移すのは`RequireAuth startsOnEnter`）
+ * - lost: 退会の手続き中か、取り直しが失敗した（serverの失敗・通信の失敗）。始めない（Homeへ移すのは
+ *   `RequireAuth startsOnEnter`。入るときの確認で失敗した場合と同じく、利用者がもう一度始める）
  * - busy: 確かめられなかった（offlineで取り直しが止まった、など）。始めない
  */
 export const useVerifySession = () => {
