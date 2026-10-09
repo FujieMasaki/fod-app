@@ -46,9 +46,11 @@ const GUIDE_ITEMS: readonly { heading: string; body: string }[] = [
 type RecordingGuideProps = {
   onStart: () => void;
   onCancel: () => void;
+  /** 始める前にログインの状態を確かめている間。押し直せないようにする */
+  verifying?: boolean;
 };
 
-export const RecordingGuide = ({ onStart, onCancel }: RecordingGuideProps) => {
+export const RecordingGuide = ({ onStart, onCancel, verifying = false }: RecordingGuideProps) => {
   return (
     <section className={styles.root} aria-labelledby="recording-guide-title">
       <div className={styles.head}>
@@ -70,7 +72,9 @@ export const RecordingGuide = ({ onStart, onCancel }: RecordingGuideProps) => {
       </dl>
 
       <div className={styles.actions}>
-        <Button onClick={onStart}>録音を始める</Button>
+        <Button onClick={onStart} disabled={verifying}>
+          {verifying ? "確かめています…" : "録音を始める"}
+        </Button>
         <Text variant="small" tone="tertiary" align="center">
           始めると、ブラウザがマイクの使用の許可を求めます。
         </Text>

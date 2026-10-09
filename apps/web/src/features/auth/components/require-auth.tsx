@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Navigate, useLocation } from "@tanstack/react-router";
 
 import { ErrorState } from "@/components/error-state/error-state";
@@ -54,6 +54,23 @@ const liveVerdictOf = (state: SessionQueryState | undefined): "ok" | "anonymous"
 // 利用者の操作なしに録音が始まらないよう、それまでに中身を出せなければHomeへ戻す（確かめ直しが済んだ
 // 直後に別の取り直しが始まって止まった場合も含む）。
 const VERIFY_TIMEOUT_MS = 10_000;
+
+/**
+ * 副作用（マイク）を始める操作の直前に、Railsで認証を確かめ直す（journaling.md §4「録音前認証と期限切れ」）。
+ * 入るときのguardの確かめ直しから操作までは、案内を読む時間だけ空くため、操作のたびに確かめる。
+ * - ok: 認証済み。始めてよい
+ * - anonymous / lost: 認証が終わった。始めない（画面を離れるのは`RequireAuth startsOnEnter`が行う）
+ * - busy: 確かめられなかった（offlineで取り直しが止まった、など）。始めない
+ */
+export const useVerifySession = () => {
+  const { refresh } = useAuth();
+  const queryClient = useQueryClient();
+  return useCallback(async () => {
+    await refresh().catch(() => undefined);
+    // contextの値は通知が届くまで前の値のことがあるため、queryの今の状態で判断する。
+    return liveVerdictOf(queryClient.getQueryState<Session>(SESSION_QUERY_KEY));
+  }, [refresh, queryClient]);
+};
 
 export const RequireAuth = ({ children, startsOnEnter = false }: RequireAuthProps) => {
   if (startsOnEnter) return <EntryVerifiedGuard>{children}</EntryVerifiedGuard>;

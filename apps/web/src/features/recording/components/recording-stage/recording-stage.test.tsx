@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
 
 import { AuthProvider, useAuth } from "@/features/auth";
 import { SessionProvider, useSession } from "@/features/session";
@@ -109,10 +109,32 @@ const SwitchProbe = () => {
   return null;
 };
 
-const renderStage = ({ strict = false } = {}) => {
+const signedIn = {
+  authenticated: true,
+  csrf_token: "t",
+  expires_at: "2026-10-12T03:00:00Z",
+  account_status: "active",
+  user: {
+    id: "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10",
+    email: "user@example.com",
+    email_confirmed: true,
+    sign_in_methods: ["password"],
+  },
+};
+
+// 認証の状態（GET /api/v1/session）を返す。録音を始める前の確かめ直しも、ここへ来る。
+// - sessions: 順に返す応答（最後の応答を繰り返す）。Errorなら通信の失敗
+const renderStage = ({ strict = false, sessions = [signedIn] as (object | Error)[] } = {}) => {
+  const queue = [...sessions];
+  const sessionRequests = { count: 0 };
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => Response.json({ authenticated: false, csrf_token: "t" })),
+    vi.fn(async () => {
+      sessionRequests.count += 1;
+      const reply = queue.length > 1 ? queue.shift()! : queue[0];
+      if (reply instanceof Error) throw reply;
+      return Response.json(reply);
+    }),
   );
   const tree = (
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -125,7 +147,7 @@ const renderStage = ({ strict = false } = {}) => {
       </AuthProvider>
     </QueryClientProvider>
   );
-  return render(strict ? <StrictMode>{tree}</StrictMode> : tree);
+  return { ...render(strict ? <StrictMode>{tree}</StrictMode> : tree), sessionRequests };
 };
 
 // 録音前の案内を読み、「録音を始める」を押す。
@@ -170,6 +192,45 @@ describe("RecordingStage", () => {
     expect(guide).not.toHaveTextContent(/保存しません|時間で消え|時間以内に消え|学習に使われ|国内で処理/);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(mic.requests).toBe(0);
+  });
+
+  it("「録音を始める」を押すと、Railsで認証を確かめ直してからマイクを要求する", async () => {
+    const mic = stubMicrophone();
+    const { sessionRequests } = renderStage();
+    await waitFor(() => expect(sessionRequests.count).toBe(1));
+
+    startRecording();
+
+    await waitFor(() => expect(mic.requests).toBe(1));
+    expect(sessionRequests.count).toBe(2);
+  });
+
+  it("確かめ直しで認証が終わっていたら、マイクを要求しない（ログインへ移すのはguard）", async () => {
+    const mic = stubMicrophone();
+    const { sessionRequests } = renderStage({ sessions: [signedIn, { authenticated: false, csrf_token: "t" }] });
+    await waitFor(() => expect(sessionRequests.count).toBe(1));
+
+    startRecording();
+
+    await waitFor(() => expect(sessionRequests.count).toBe(2));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mic.requests).toBe(0);
+  });
+
+  it("offlineで認証を確かめられなければ、マイクを要求せず理由と次の操作を示す", async () => {
+    const mic = stubMicrophone();
+    const { sessionRequests } = renderStage();
+    await waitFor(() => expect(sessionRequests.count).toBe(1));
+    onlineManager.setOnline(false);
+    try {
+      startRecording();
+      expect(screen.getByRole("button", { name: "確かめています…" })).toBeDisabled();
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("ログインの状態を確かめられませんでした");
+      expect(mic.requests).toBe(0);
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 
   it("案内で「やめる」を選ぶと、マイクを要求せずHomeへ戻る", () => {

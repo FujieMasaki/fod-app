@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button, Dot, Ripple, Text, Waveform, StopIcon } from "@/design-system";
-import { useAuth } from "@/features/auth";
+import { useAuth, useVerifySession } from "@/features/auth";
 import { useSession, type RecordedAudio } from "@/features/session";
 import { formatDuration } from "@/utils/format-duration";
 import { useRecorder, type RecorderFailure } from "../../hooks/use-recorder";
@@ -51,9 +51,15 @@ export const RecordingStage = () => {
   const navigate = useNavigate();
   const { setRecordedAudio, clearRecordedAudio } = useSession();
   const { identityEpoch } = useAuth();
+  const verifySession = useVerifySession();
   const { phase, elapsedSec, failure, autoStopped, getAmplitude, start, stop } = useRecorder();
   // 案内を読んで「録音を始める」を押したか
   const [started, setStarted] = useState(false);
+  // 始める前にRailsで認証を確かめている間か。確かめている間に押し直しても、二重に始めない。
+  const [verifying, setVerifying] = useState(false);
+  const verifyingRef = useRef(false);
+  // 認証を確かめられなかった（offlineなど）。録音は始めず、理由を示す。
+  const [unverified, setUnverified] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [ended, setEnded] = useState<Ended | null>(null);
   // 録音を始めたときの利用者の世代。止めたときに利用者が切り替わっていたら、前の利用者の録音を残さない。
@@ -71,7 +77,22 @@ export const RecordingStage = () => {
     };
   }, []);
 
-  const begin = () => {
+  // 始める操作（録音を始める・もう一度試す・録り直す）のたびに、マイクを要求する前にRailsで認証を確かめ直す
+  // （journaling.md §4。案内を読んでいる間に期限が切れ得るため）。
+  const verifyAndStart = async () => {
+    if (verifyingRef.current) return;
+    verifyingRef.current = true;
+    setVerifying(true);
+    const verdict = await verifySession();
+    verifyingRef.current = false;
+    if (!mountedRef.current) return;
+    setVerifying(false);
+    // 認証が終わっていたら始めない（ログイン・Homeへ移すのはguard）。確かめられなければ理由を示す。
+    if (verdict !== "ok") {
+      setUnverified(verdict === "busy");
+      return;
+    }
+    setUnverified(false);
     // 前の録音は使わない（録り直す・新しく始める）。
     clearRecordedAudio();
     startedEpochRef.current = currentEpochRef.current;
@@ -80,6 +101,10 @@ export const RecordingStage = () => {
     setEnded(null);
     setStopping(false);
     void start();
+  };
+
+  const begin = () => {
+    void verifyAndStart();
   };
 
   // 前の録音は、この画面に来た時点で使わない。録音はunmountでuseRecorderが片付ける。
@@ -132,7 +157,23 @@ export const RecordingStage = () => {
 
   const goHome = () => navigate({ to: "/" });
 
-  if (!started) return <RecordingGuide onStart={begin} onCancel={goHome} />;
+  if (unverified) {
+    return (
+      <RecordingNotice
+        title="ログインの状態を確かめられませんでした"
+        description="録音は始まっていません。通信の状態を確かめてから、もう一度お試しください。"
+      >
+        <Button onClick={begin} disabled={verifying}>
+          もう一度試す
+        </Button>
+        <Button variant="ghost" onClick={goHome}>
+          Homeへ戻る
+        </Button>
+      </RecordingNotice>
+    );
+  }
+
+  if (!started) return <RecordingGuide onStart={begin} onCancel={goHome} verifying={verifying} />;
 
   if (failure) {
     const notice = FAILURE_NOTICE[failure];
