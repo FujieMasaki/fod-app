@@ -10,7 +10,7 @@
 ```text
 Homeで「タップして話す」
 ↓
-/record（入るときにRailsで確かめ直す。未認証なら /login へ。ログイン後は /record の録音前の案内へ戻る）
+/record（入るときにRailsで確かめ直す。未認証なら /login へ。録音画面から来た場合、ログイン後は /record の録音前の案内へ戻る）
 ↓
 /record で録音前の案内を読み、「録音を始める」（ここで初めてマイクを要求する）
 ↓
@@ -56,7 +56,7 @@ Zodで検証したDotSessionをSession Provider（memory）へ保存
 | データ | 現在の正本・保持場所 | 現在の削除・受け渡し | 実サービスの方針（2026-09-28採用、未実装） |
 | --- | --- | --- | --- |
 | マイクstream / AudioContext | 録音中のbrowser memory | stop / dispose時にtrackを停止しAudioContextを閉じる。外部送信・永続化しない。 | 変えない。録音中のmemoryだけに置く。権限説明・対応ブラウザ・中断UXはTASK-010 |
-| 録音Blob | 停止時に`MediaRecorder`のdataから作り、Session Provider（memory）に置く | `/processing`へ渡すが、mockは使わず、送信・保存しない。次の録音の開始・整理の成功・認証の終了・利用者の切り替わり・再読み込みで消える。整理のmutationの入力には渡さない（mutation cacheに残さないため。2026-10-09にTASK-010で変更）。storageへは書かない。 | 同一originのRails経由で送る。**長期保存しない**が、処理が終わるまでS3東京へ一時的に預かる（非公開・暗号化・versioningを有効にしない）。**DotがRDSへ保存されるまで完了したら**即削除（文字起こしや生成が通った時点ではない）。失敗した場合は受理から24時間を再試行の期限とし、期限が来たらアプリが削除する（lifecycleは保険で、それ自体は24時間を保証しない）。Dot削除は対象の処理のもの、退会は本人の全部を削除。端末のstorageへは書かない。最長30分・32MB |
+| 録音Blob | 停止時に`MediaRecorder`のdataから作り、Session Provider（memory）に置く | `/processing`へ渡すが、mockは使わず、送信・保存しない。録音画面を開いた時点・整理の成功・認証の終了・利用者の切り替わり・再読み込みで消える。整理に失敗したまま画面を離れた場合は残る（扱いはTASK-011で決める）。整理のmutationの入力には渡さない（mutation cacheに残さないため。2026-10-09にTASK-010で変更）。storageへは書かない。 | 同一originのRails経由で送る。**長期保存しない**が、処理が終わるまでS3東京へ一時的に預かる（非公開・暗号化・versioningを有効にしない）。**DotがRDSへ保存されるまで完了したら**即削除（文字起こしや生成が通った時点ではない）。失敗した場合は受理から24時間を再試行の期限とし、期限が来たらアプリが削除する（lifecycleは保険で、それ自体は24時間を保証しない）。Dot削除は対象の処理のもの、退会は本人の全部を削除。端末のstorageへは書かない。最長30分・32MB |
 | 録音時間 | Session Provider（memory。録音Blobと一緒に持つ） | 録音Blobと同じ契機で消える。 | Dotと同じrequestで送り、RDSの`dots`を正本にする。保持・削除もDotと同じ |
 | Dot（id、date、started_at、duration、sentence、summary） | Session Provider（memory）に現在の1件（現行のDotSessionは`date`のみで`started_at`はなく、`reflection`と`closing`を含む） | 新しい成功responseで上書きされる。`reset`はあるがUIから未実行。 | RDS東京の`dots`を正本にし、所有者をserverが決める。本人が削除するか退会するまで保持。`sentence`と`summary`は本人が編集でき、編集前の値は残さない。1件ごとの削除はゴミ箱（受理から7日で削除処理を始める）、即時の完全削除も備える。**`reflection`と`closing`は生成も保存もしない**。録音1回ごとに1件を保存し、`started_at`（録音開始操作をserverが受理した時刻・UTC）をserverが決め、`date`はそこから算出したAsia/Tokyoの暦日とする。`started_at`は`date`・`duration`と同じく本人に編集させず、保持・削除はDot本体と同じ（[dot-history §2](./dot-history.md)で2026-09-29採用） |
 | 文字起こし | 存在しない | 生成・保存・送信しない。 | 生成の入力として使い、**全文はRDSへ保存しない**。ただし**Amazon Transcribeが結果をS3へ書き出すため、自前のbucketへ出して端末が受け取るまで置く**（2026-09-29にTASK-003で追加）。responseで端末へ返し、`sessionStorage`にタブを閉じるまで保持する。logout・User切替で消す。server側の保持・削除は[privacy.md §5](./privacy.md)を正本とする |

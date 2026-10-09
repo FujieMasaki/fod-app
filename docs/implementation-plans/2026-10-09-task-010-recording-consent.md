@@ -190,7 +190,8 @@
   生成が成功したら音声を消す。
 - 音声Blobを捨てる者: 次の録音の開始、生成の成功、利用者の切り替わり（Session Provider）、再読み込み・タブを閉じる
   （memory）。生成が失敗したまま画面を離れた場合は、次のいずれかまでmemoryに残る（TASK-011で再試行と一緒に決める）。
-- TASK-011でuploadを組み込むときに決めること（2/2のレビューで見つかった、今はmockのため影響のない経路）:
+- TASK-011でuploadを組み込むときに決めること（2/2のレビューで見つかった、今はmockのため影響のない経路。TASK-011の
+  完了条件に加えた）:
   - 送る直前に`identityEpoch`を照合し、変わっていたら画面のrefの録音を捨てる（refは利用者の切り替わりの後も
     unmountまでBlobを参照する）。
   - 生成が失敗した後に別の画面へ移り、履歴で`/processing`へ戻ると、残っている録音で生成が自動で始まり得る。
@@ -293,13 +294,14 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 | `apps/web/src/features/auth/messages.test.ts` | 変更 | 同上 |
 | `apps/web/src/features/auth/components/auth-screens.test.tsx` | 変更 | 同上 |
 | `apps/web/src/features/auth/components/sign-in-prompt.tsx` | 変更 | Homeの導線に戻り先を付けない理由のコメント |
+| `docs/tasks/TASK-011-frontend-generation.md` | 変更 | §7-5の申し送りを完了条件にする |
 | `docs/journaling.md` | 変更 | 現行挙動 |
 | `docs/architecture.md` | 変更 | 実装済み |
 | `docs/code-review/frontend/security.md` | 変更 | §6のSession Providerが持つ値 |
 | `docs/code-review/frontend/README.md` | 変更 | 1/2のレビューで見つかった問題の再発防止の観点 |
 | Plan・タスクファイル | 変更 | 完了の記録 |
 
-数える: 18。`create-dot.ts`は変えない（mockは録音を受け取らない）。
+数える: 19。`create-dot.ts`は変えない（mockは録音を受け取らない）。
 
 ## 11. Libraries / APIs
 

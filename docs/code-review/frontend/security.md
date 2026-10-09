@@ -65,8 +65,8 @@ Focus on Dot は現時点で Vite によるクライアントSPAである。し�
 
 - `apps/web/src/features/session/session-context.tsx` は、TASK-007で `fod.session.v1` への保存・復元を
   やめ、録音（音声Blob・形式・録音時間）と現在のDotをmemoryにだけ持ち、起動時に `fod.session.v1` を消す。
-  録音が消える契機は[`../../journaling.md`](../../journaling.md) §2の「録音Blob」の行が正本で、整理に失敗したまま
-  画面を離れた場合は残る（TASK-011で決める）。整理のmutationの入力には渡さない（mutation cacheは
+  録音が消える契機と残る場合は、[`../../journaling.md`](../../journaling.md) §2の「録音Blob」の行が正本。
+  整理のmutationの入力には渡さない（mutation cacheは
   通信中と`gcTime`の間、入力を持ち続け、Session Providerを消しても消えないため。TASK-010）。端末への保存を足すレビューでは、
   個人性・機密性・削除要件と、利用者の切り替わりで消えることを必ず確認する。
 - `apps/web/src/components/error-state/error-state.tsx` の既定文言「音声は保存されています」は、
