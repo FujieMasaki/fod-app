@@ -11,6 +11,7 @@ const successful = {
   markdownResult: "success",
   typesResult: "success",
   testsResult: "success",
+  vrtResult: "success",
   railsResult: "success",
 };
 
@@ -26,6 +27,7 @@ test("permits only the unrelated suite to be skipped", () => {
     lintResult: "skipped",
     typesResult: "skipped",
     testsResult: "skipped",
+    vrtResult: "skipped",
   }));
   assert.doesNotThrow(() => verifyGate({ ...successful, apiTarget: "false", railsResult: "skipped" }));
   assert.doesNotThrow(() => verifyGate({
@@ -39,6 +41,7 @@ test("permits only the unrelated suite to be skipped", () => {
 
 test("fails when a required check fails or is skipped", () => {
   assert.throws(() => verifyGate({ ...successful, testsResult: "skipped" }), /Required Tests/);
+  assert.throws(() => verifyGate({ ...successful, vrtResult: "failure" }), /Required VRT/);
   assert.throws(() => verifyGate({ ...successful, railsResult: "failure" }), /Required Rails/);
 });
 
@@ -51,6 +54,7 @@ test("markdown is required even for a docs-only change that skips both suites", 
     lintResult: "skipped",
     typesResult: "skipped",
     testsResult: "skipped",
+    vrtResult: "skipped",
     railsResult: "skipped",
   };
   assert.doesNotThrow(() => verifyGate(docsOnly));

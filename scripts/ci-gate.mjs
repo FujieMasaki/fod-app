@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export function verifyGate({ changesResult, webTarget, apiTarget, buildResult, lintResult, markdownResult, typesResult, testsResult, railsResult }) {
+export function verifyGate({ changesResult, webTarget, apiTarget, buildResult, lintResult, markdownResult, typesResult, testsResult, vrtResult, railsResult }) {
   if (changesResult !== "success") {
     webTarget = "true";
     apiTarget = "true";
@@ -22,6 +22,7 @@ export function verifyGate({ changesResult, webTarget, apiTarget, buildResult, l
       Check: lintResult,
       TypeScript: typesResult,
       Tests: testsResult,
+      VRT: vrtResult,
     })) {
       if (result !== "success") throw new Error(`Required ${name} check ended with: ${result}`);
     }
@@ -42,6 +43,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     markdownResult: process.env.MARKDOWN_RESULT,
     typesResult: process.env.TYPES_RESULT,
     testsResult: process.env.TESTS_RESULT,
+    vrtResult: process.env.VRT_RESULT,
     railsResult: process.env.RAILS_RESULT,
   });
   console.log("All required CI checks passed");

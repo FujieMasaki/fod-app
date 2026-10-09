@@ -120,9 +120,40 @@
 - 純粋な変換はunit test、HookとComponentの状態遷移はcomponent/integration test、実ブラウザの
   権限・録音・複数画面の一連操作は必要になった時点でE2Eを選ぶ。
 
+### 画面のスナップショット比較（VRT）
+
+- 主要な画面の見た目を基準画像と比べ、意図しない見た目の変化を検出する。対象はホーム（未認証）、
+  ログイン、録音（マイクの許可待ち）、今日のDay（Dotあり・なし）、過去の一覧、日の詳細、設定で、
+  幅は390px・1280pxの2つ（`apps/web/vrt/screens.spec.ts`）。dark modeは導入したときに加える。
+- 実行は`pnpm vrt`、基準画像の更新は`pnpm vrt:update`。どちらも公式のPlaywrightコンテナで実行し
+  （Dockerが要る）、CIの`VRT`ジョブも同じscript（`scripts/vrt.sh`）を使う。macOSとLinuxで文字の
+  描画が違うため、コンテナの外では実行しない。
+- 差分があると失敗し、`apps/web/vrt/report`（CIでは`vrt-report` artifact）に期待・実際・差分の画像が出る。
+  意図した変化なら`pnpm vrt:update`で基準画像（`apps/web/vrt/__screenshots__/`）を更新し、変更と同じ
+  コミットに入れる。意図しない変化なら実装を直す。許容値は1pxの差も、わずかな色の差も失敗にする設定（`maxDiffPixelRatio: 0`・`threshold: 0`）で、
+  anti-aliasingと判定された輪郭の画素だけはPlaywrightの比較が差に数えない。揺れたら
+  許容値を緩める前に原因（時刻・animation・fixture）を直す。
+- APIは`apps/web/vrt/fixtures.ts`の架空のデータに差し替え、契約のschemaで検証してから返す。
+  時刻・フォント・外部への通信・マイクは`apps/web/vrt/support.ts`で固定する。基準画像に実在の
+  個人データ・音声由来の内容を入れない。画面が新しいAPIを呼ぶようになったら、fixtureを足す
+  （fixtureのないAPIを呼ぶとVRTが失敗する）。
+- 画面を消す・名前を変えるときは、使わなくなった基準画像を`apps/web/vrt/__screenshots__/`から手で消す
+  （`pnpm vrt:update`は古い画像を消さない）。比べないのは、CPUの種類（手元のApple SiliconとCIのamd64）で描画が
+  変わる要素（録音画面の波形）だけで、specの`mask`で示す。
+- 撮影はreduced-motion（`prefers-reduced-motion: reduce`）の状態で行う。framer-motionの部品は動きを止めた側を
+  描くため、通常の動きの側の静止状態だけを変えた変更は検出しない。
+- 撮影はVite dev serverで行う（本番のbuildだけで起きるCSSの順序の違いは対象外）。手元はmacOSのDocker Desktop
+  を前提にする（LinuxのDocker Engineでは、作られたファイルがrootの持ち物になる）。
+- Playwrightのコンテナのイメージは`scripts/vrt.sh`でdigestまで固定する。`@playwright/test`を上げたら、同scriptの
+  `pinned_version`と`digest`を更新し、`pnpm vrt:update`で作り直した基準画像の差分が描画エンジンの違いだけか確かめる。
+- 依存はcheckoutごとのDocker volume（`fod-vrt-`で始まる名前）に入る。worktreeを消した後などに片付けるときは
+  `docker volume ls -q -f name=fod-vrt-`で確かめてから`docker volume rm`する。
+- PlaywrightはVRTのためだけに使う。E2E（操作の一連の流れの検証）を入れるかは、下の「保留」で判断する。
+
 ### 保留
 
 - E2E基盤は、実サービス接続または重要な回帰がunit / component testで防げないときに導入判断する。
+  VRTのためにPlaywrightを入れたことは、この判断を済ませたことにならない。
 
 ## 5. 実装前チェック
 
