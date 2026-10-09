@@ -342,6 +342,23 @@ describe("RecordingStage", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
+  it("「もう一度試す」でも、Railsで認証を確かめ直し、認証が終わっていればマイクを要求しない", async () => {
+    const mic = stubMicrophone({ reject: "NotAllowedError" });
+    const { sessionRequests } = renderStage({
+      sessions: [signedIn, signedIn, { authenticated: false, csrf_token: "t" }],
+    });
+    await waitFor(() => expect(sessionRequests.count).toBe(1));
+    startRecording();
+    await screen.findByText("マイクの使用が許可されていません");
+    expect(mic.requests).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "もう一度試す" }));
+
+    await waitFor(() => expect(sessionRequests.count).toBe(3));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mic.requests).toBe(1);
+  });
+
   it("マイクの使用が拒否されたら、録音したように見せず、許可してからやり直す操作とHomeへ戻る操作を示す", async () => {
     const mic = stubMicrophone({ reject: "NotAllowedError" });
     renderStage();

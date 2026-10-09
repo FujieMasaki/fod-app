@@ -179,7 +179,11 @@ export const RecordingStage = () => {
     const notice = FAILURE_NOTICE[failure];
     return (
       <RecordingNotice title={notice.title} description={notice.description}>
-        {notice.canRetry && <Button onClick={begin}>もう一度試す</Button>}
+        {notice.canRetry && (
+          <Button onClick={begin} disabled={verifying}>
+            もう一度試す
+          </Button>
+        )}
         <Button variant={notice.canRetry ? "ghost" : "primary"} onClick={goHome}>
           Homeへ戻る
         </Button>
@@ -195,7 +199,7 @@ export const RecordingStage = () => {
         description="マイクが使えなくなったため、録音を止めました。ここまでの録音で整理するか、録り直せます。"
       >
         <Button onClick={() => proceed(audio)}>ここまでで整理する</Button>
-        <Button variant="ghost" onClick={begin}>
+        <Button variant="ghost" onClick={begin} disabled={verifying}>
           録り直す
         </Button>
       </RecordingNotice>
@@ -218,7 +222,7 @@ export const RecordingStage = () => {
           };
     return (
       <RecordingNotice title={notice.title} description={notice.description}>
-        <Button onClick={begin}>録り直す</Button>
+        <Button onClick={begin} disabled={verifying}>録り直す</Button>
         <Button variant="ghost" onClick={goHome}>
           Homeへ戻る
         </Button>
