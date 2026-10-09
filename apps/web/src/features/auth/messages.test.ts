@@ -69,8 +69,8 @@ describe("safeRedirect", () => {
     expect(safeRedirect("/dots/2026-09-28")).toBe("/dots");
     expect(safeRedirect("/dots/2026-09-28/x")).toBe("/");
     expect(safeRedirect("/dots/2026-09-28\n")).toBe("/");
-    // 録音画面は開くとすぐ録音を始めるため、ログインの後に自動で戻さない
-    expect(safeRedirect("/record")).toBe("/");
+    // 録音画面は録音前の案内へ戻す（開いてもマイクは始まらない）。整理の画面は録音の直後にだけ意味があるため戻さない
+    expect(safeRedirect("/record")).toBe("/record");
     expect(safeRedirect("/processing")).toBe("/");
     expect(safeRedirect("//evil.example")).toBe("/");
     expect(safeRedirect("https://evil.example/dot")).toBe("/");

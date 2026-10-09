@@ -16,14 +16,17 @@
   CSRF token・期限を持つ（2026-10-05にTASK-007で実装）。保護APIは`useAuth().request`から呼び、
   `csrf_invalid`の1回の再送と`401`の検出をここに集める。利用者が変わったら（logout・期限切れ・
   別タブでの入れ替わり・login・login中のpassword再設定）、認証以外のquery cacheを消し、購読者（`subscribeIdentityChange`）へ
-  通知する。Session Providerはこの通知で録音時間と現在のDotを消す。
+  通知する。Session Providerはこの通知で録音（音声と録音時間）と現在のDotを消す。
 - `apps/web/src/libs/api-client`がRails APIを同一originで呼ぶ入口で、失敗を`problem`・`network`・
   `schema`・`http`に分ける。開発ではViteのproxyが`/api`・`/auth`をRailsへ送る（Hostを書き換えない）。
-- Session ProviderはReact stateを画面間で共有し、録音時間と現在のDot sessionをmemoryにだけ持つ。
+- Session ProviderはReact stateを画面間で共有し、録音（音声Blob・形式・録音時間）と現在のDot sessionをmemoryにだけ持つ。
   以前に使っていた`localStorage`の`fod.session.v1`は、起動時に消す（2026-10-05にTASK-007で変更）。
 - Dot生成はTanStack Queryのmutationから呼び出す。`VITE_DOT_API_URL` が設定されている場合は
   `dot` endpointへPOSTし、設定されていない場合はローカルmockをZodで検証して返す。
-- 録音処理はブラウザのMediaDevices / MediaRecorder APIを利用する。
+- 録音処理はブラウザのMediaDevices / MediaRecorder APIを利用する。`libs/audio/recorder.ts`がマイクを開く段階
+  （`open`。権限拒否・非対応などの理由を返す）と録音を始める段階（`record`）を分け、録音attemptの発行を間に挟める
+  形にしている（発行はendpointの実装後。2026-10-09にTASK-010で変更）。`/record`は録音前の案内を出してから、
+  利用者の操作でマイクを要求する。録音attemptの通信関数（`features/recording/api.ts`）はあるが、まだ呼ばない。
 - Frontendのbuild、test、型検査設定とweb固有dependencyは `apps/web/` が管理する。
 - `apps/api/` はRuby on RailsのAPI backendである。現在実装済みなのはRails基盤、
   PostgreSQL接続、RSpec、品質・security検査、CIに加え、認証（TASK-006。下記「認証詳細」）と、
