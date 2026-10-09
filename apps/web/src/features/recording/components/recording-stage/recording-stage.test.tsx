@@ -256,7 +256,7 @@ describe("RecordingStage", () => {
     expect(mic.requests).toBe(0);
   });
 
-  it("録音中に画面を離れたら、マイクを止めて録音を残さない", async () => {
+  it("録音中に画面を離れたら、マイクを止めて整理へ進まない", async () => {
     useRecordingClock();
     const mic = stubMicrophone();
     const { unmount } = renderStage();
