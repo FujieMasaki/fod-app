@@ -190,6 +190,11 @@
   生成が成功したら音声を消す。
 - 音声Blobを捨てる者: 次の録音の開始、生成の成功、利用者の切り替わり（Session Provider）、再読み込み・タブを閉じる
   （memory）。生成が失敗したまま画面を離れた場合は、次のいずれかまでmemoryに残る（TASK-011で再試行と一緒に決める）。
+- TASK-011でuploadを組み込むときに決めること（2/2のレビューで見つかった、今はmockのため影響のない経路）:
+  - 送る直前に`identityEpoch`を照合し、変わっていたら画面のrefの録音を捨てる（refは利用者の切り替わりの後も
+    unmountまでBlobを参照する）。
+  - 生成が失敗した後に別の画面へ移り、履歴で`/processing`へ戻ると、残っている録音で生成が自動で始まり得る。
+    録音画面から移った直後の1回だけを受け付ける形にする（利用者の操作なしに同じ音声を送り直さない）。
 
 ### 7-6. 録音attemptの通信関数
 
@@ -236,7 +241,7 @@ recorder.stop → Blob・録音時間 → recorded-audioで区別 ── empty�
 ↓ recorded
 Session Provider.recordedAudio（memory。identityEpochと一緒）
 ↓
-/processing: useCreateDot.mutate(recordedAudio)（mockは使わない）→ 成功で音声を消す
+/processing: 開いたときのrecordedAudioをrefに持ち、あれば useCreateDot.mutate()（引数なし。mockは録音を使わない）→ 成功で音声を消す
 ```
 
 source of truth: 音声Blobと録音時間は、送るまでSession Providerのmemoryだけ。
@@ -287,13 +292,14 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 | `apps/web/src/features/auth/components/require-auth.tsx` | 変更 | 録音・整理の画面のguardでも戻り先を付ける |
 | `apps/web/src/features/auth/messages.test.ts` | 変更 | 同上 |
 | `apps/web/src/features/auth/components/auth-screens.test.tsx` | 変更 | 同上 |
+| `apps/web/src/features/auth/components/sign-in-prompt.tsx` | 変更 | Homeの導線に戻り先を付けない理由のコメント |
 | `docs/journaling.md` | 変更 | 現行挙動 |
 | `docs/architecture.md` | 変更 | 実装済み |
 | `docs/code-review/frontend/security.md` | 変更 | §6のSession Providerが持つ値 |
 | `docs/code-review/frontend/README.md` | 変更 | 1/2のレビューで見つかった問題の再発防止の観点 |
 | Plan・タスクファイル | 変更 | 完了の記録 |
 
-数える: 17。`create-dot.ts`は変えない（mockは録音を受け取らない）。
+数える: 18。`create-dot.ts`は変えない（mockは録音を受け取らない）。
 
 ## 11. Libraries / APIs
 
@@ -339,7 +345,7 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 - unit: `recorder`（open・record・stop・失敗の種類・形式・中断・許可待ちの離脱）、`recorded-audio`（区別と制限）、
   schema（契約のexample）、`createRecordingAttempt`。
 - component: `RecordingStage`（案内 → 開始、失敗ごとの画面と次の操作、中断、二重停止、利用者の切り替わり、
-  StrictMode）、`ProcessingIndicator`（音声が無い場合、渡す、成功で消す）、Session Provider、戻り先。
+  StrictMode）、`ProcessingIndicator`（音声が無い場合、mutationの入力に渡さない、成功で消す）、Session Provider、戻り先。
 
 ## 15. Definition of Done
 
