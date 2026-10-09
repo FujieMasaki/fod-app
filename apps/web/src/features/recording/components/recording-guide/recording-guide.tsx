@@ -9,7 +9,7 @@ import styles from "./recording-guide.module.css";
 const GUIDE_ITEMS: readonly { heading: string; body: string }[] = [
   {
     heading: "送る先",
-    body: "録音した音声は、Focus on Dotのサーバーを経由して、文字起こし（Amazon Transcribe、東京リージョン）と、今日の一文と要約の生成（Amazon BedrockのClaude）へ渡ります。",
+    body: "録音した音声は、Focus on Dotのサーバーを経由して、文字起こし（Amazon Transcribe、東京リージョン）へ渡ります。文字起こしの全文は、今日の一文と要約の生成（Amazon BedrockのClaude）へ渡ります。",
   },
   {
     // 生成の推論経路（国内か国外か）と、委託先での保持・人によるレビューの有無は、TASK-009の記録とTASK-025の
@@ -23,7 +23,7 @@ const GUIDE_ITEMS: readonly { heading: string; body: string }[] = [
   },
   {
     heading: "文字起こし",
-    body: "文字起こしの全文も、この端末が受け取るまでお預かりします。受け取った時点、または受け付けから24時間を過ぎたあとに削除処理を始めます。全文はこのタブを閉じるまで、この端末で読めます。残るのは「今日の一文」と「話した内容の要約」です。",
+    body: "文字起こしの全文も、この端末が受け取るまでお預かりします。受け取った時点、または受け付けから24時間を過ぎたあとに削除処理を始めます。全文はこのタブを閉じるかログアウトするまで、この端末で読めます。残るのは「今日の一文」と「話した内容の要約」です。",
   },
   {
     heading: "削除が遅れる場合",
