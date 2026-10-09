@@ -63,13 +63,25 @@ const VERIFY_TIMEOUT_MS = 10_000;
  * - anonymous: 認証が終わった。始めない（ログインへ移すのは`RequireAuth startsOnEnter`）
  * - lost: 退会の手続き中か、取り直しが失敗した（serverの失敗・通信の失敗）。始めない（Homeへ移すのは
  *   `RequireAuth startsOnEnter`。入るときの確認で失敗した場合と同じく、利用者がもう一度始める）
- * - busy: 確かめられなかった（offlineで取り直しが止まった、など）。始めない
+ * - busy: 確かめられなかった（offlineで取り直しが止まった、上限までに応答が無い、など）。始めない
+ *
+ * 待つのはguardと同じ上限まで。取り直しはofflineやfocusが外れている間止まり、戻った時点で終わり得るため、
+ * 上限を過ぎた後に届いた結果で始めない（利用者の操作なしにマイクを始めない。security.md §2）。
  */
 export const useVerifySession = () => {
   const { refresh } = useAuth();
   const queryClient = useQueryClient();
   return useCallback(async () => {
-    await refresh().catch(() => undefined);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<true>((resolve) => {
+      timer = setTimeout(() => resolve(true), VERIFY_TIMEOUT_MS);
+    });
+    const refreshed = refresh()
+      .catch(() => undefined)
+      .then(() => false as const);
+    const expired = await Promise.race([refreshed, timedOut]);
+    clearTimeout(timer);
+    if (expired) return "busy";
     // contextの値は通知が届くまで前の値のことがあるため、queryの今の状態で判断する。
     return liveVerdictOf(queryClient.getQueryState<Session>(SESSION_QUERY_KEY));
   }, [refresh, queryClient]);

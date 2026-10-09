@@ -166,8 +166,9 @@ export const RecordingStage = () => {
         <Button onClick={begin} disabled={verifying}>
           もう一度試す
         </Button>
-        <Button variant="ghost" onClick={goHome}>
-          Homeへ戻る
+        {/* 直前の画面（案内・失敗・中断）へ戻る。中断の後なら「ここまでで整理する」を選び直せる */}
+        <Button variant="ghost" onClick={() => setUnverified(false)} disabled={verifying}>
+          戻る
         </Button>
       </RecordingNotice>
     );

@@ -123,8 +123,8 @@ const signedIn = {
 };
 
 // 認証の状態（GET /api/v1/session）を返す。録音を始める前の確かめ直しも、ここへ来る。
-// - sessions: 順に返す応答（最後の応答を繰り返す）。Errorなら通信の失敗
-const renderStage = ({ strict = false, sessions = [signedIn] as (object | Error)[] } = {}) => {
+// - sessions: 順に返す応答（最後の応答を繰り返す）。Errorなら通信の失敗、Promiseなら解決したときに返す
+const renderStage = ({ strict = false, sessions = [signedIn] as (object | Error | Promise<object>)[] } = {}) => {
   const queue = [...sessions];
   const sessionRequests = { count: 0 };
   vi.stubGlobal(
@@ -133,6 +133,7 @@ const renderStage = ({ strict = false, sessions = [signedIn] as (object | Error)
       sessionRequests.count += 1;
       const reply = queue.length > 1 ? queue.shift()! : queue[0];
       if (reply instanceof Error) throw reply;
+      if (reply instanceof Promise) return Response.json(await reply);
       return Response.json(reply);
     }),
   );
@@ -244,6 +245,35 @@ describe("RecordingStage", () => {
     } finally {
       onlineManager.setOnline(true);
     }
+    // 回線が戻って止まっていた取り直しが終わっても、利用者が押し直すまでマイクを要求しない
+    await waitFor(() => expect(sessionRequests.count).toBe(2));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mic.requests).toBe(0);
+
+    // 「戻る」で直前の画面（案内）へ戻れる
+    fireEvent.click(screen.getByRole("button", { name: "戻る" }));
+    expect(screen.getByRole("region", { name: "録音の前に" })).toBeInTheDocument();
+  });
+
+  it("確かめ直しの応答が上限までに返らなければ始めず、後から届いても利用者の操作なしにマイクを要求しない", async () => {
+    const mic = stubMicrophone();
+    let arrive: (session: object) => void = () => undefined;
+    const late = new Promise<object>((resolve) => {
+      arrive = resolve;
+    });
+    const { sessionRequests } = renderStage({ sessions: [signedIn, late, signedIn] });
+    await waitFor(() => expect(sessionRequests.count).toBe(1));
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+    startRecording();
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+    vi.useRealTimers();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("ログインの状態を確かめられませんでした");
+    // 上限の後に認証済みの応答が届いても、始めない
+    await act(async () => arrive(signedIn));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mic.requests).toBe(0);
   });
 
   it("案内で「やめる」を選ぶと、マイクを要求せずHomeへ戻る", () => {
