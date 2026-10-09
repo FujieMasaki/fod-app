@@ -164,8 +164,12 @@
 
 段階ごとに出し分ける。
 
-- 案内（§7-1）→「録音を始める」→ マイクの許可待ち（「マイクを準備しています」）→ 録音中（既存の画面。
+- 案内（§7-1）→「録音を始める」→ Railsで認証を確かめ直す（ボタンは「確かめています…」）→ マイクの許可待ち（「マイクを準備しています」）→ 録音中（既存の画面。
   「30分で自動的に終わります」を添える）→ 停止 → 結果に応じて整理へ、または下記。
+- 始める操作（「録音を始める」「もう一度試す」「録り直す」）のたびに、マイクを要求する前にRailsで認証を確かめ直す
+  （journaling.md §4。`useVerifySession`）。`/record`に入ったときのguardの確認から、案内を読む時間だけ空くため
+  （2026-10-09に2/2のレビューの指摘を受けて人間が判断）。認証が終わっていればマイクを要求せず、移動はguardに任せる。
+  確かめられなければ（offline）「ログインの状態を確かめられませんでした」と「もう一度試す」「Homeへ戻る」。
 - 失敗の画面（次の操作）:
   - `denied`: 「マイクの使用が許可されていません」。ブラウザの設定でこのサイトのマイクを許可してから「もう一度試す」。
     「Homeへ戻る」。
@@ -290,10 +294,11 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 | `apps/web/src/features/processing/components/processing-indicator/processing-indicator.test.tsx` | 変更 | 同上 |
 | `apps/web/src/features/processing/hooks/use-create-dot.ts` | 変更 | 録音を入力にしない理由を残す。mockは使わない |
 | `apps/web/src/features/auth/redirect.ts` | 変更 | `/record`を戻り先へ |
-| `apps/web/src/features/auth/components/require-auth.tsx` | 変更 | 録音・整理の画面のguardでも戻り先を付ける |
+| `apps/web/src/features/auth/components/require-auth.tsx` | 変更 | 録音・整理の画面のguardでも戻り先を付ける。始める直前の確かめ直し（`useVerifySession`） |
 | `apps/web/src/features/auth/messages.test.ts` | 変更 | 同上 |
 | `apps/web/src/features/auth/components/auth-screens.test.tsx` | 変更 | 同上 |
 | `apps/web/src/features/auth/components/sign-in-prompt.tsx` | 変更 | Homeの導線に戻り先を付けない理由のコメント |
+| `apps/web/src/features/auth/index.ts` | 変更 | `useVerifySession`のexport |
 | `docs/tasks/TASK-011-frontend-generation.md` | 変更 | §7-5の申し送りを完了条件にする |
 | `docs/journaling.md` | 変更 | 現行挙動 |
 | `docs/architecture.md` | 変更 | 実装済み |
@@ -301,7 +306,7 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 | `docs/code-review/frontend/README.md` | 変更 | 1/2のレビューで見つかった問題の再発防止の観点 |
 | Plan・タスクファイル | 変更 | 完了の記録 |
 
-数える: 19。`create-dot.ts`は変えない（mockは録音を受け取らない）。
+数える: 20。`create-dot.ts`は変えない（mockは録音を受け取らない）。
 
 ## 11. Libraries / APIs
 
@@ -365,6 +370,11 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
     レビューで、mutation cacheが通信中と`gcTime`の間録音を持ち続け、Session Providerを消しても消えないと分かった。
   - self-reviewで、中断の案内を見ている間に利用者が切り替わると、「ここまでで整理する」で前の利用者の録音が
     新しい利用者の整理へ渡り得ることを見つけた。押した時点でも利用者の世代を確かめ、変わっていればHomeへ戻すよう直した。
+  - 2/2のレビューで、案内を挟んだことで`/record`に入ったときの確認からマイクの要求までが空き、journaling.md §4の
+    「マイクを開始する前にRailsで確認する」を満たす場所が無いと指摘された。人間の判断で、始める操作のたびに確かめ直す
+    ようにした（§7-4）。
+  - 案内の文面は実サービスを前提にしており、mockの間（TASK-011まで）は、送る先・やり直し・削除の説明と実際の挙動が
+    一致しない。mockと実サービスの区別はTASK-011の完了条件で扱う（§5）。
   - `RequireAuth startsOnEnter`も、未認証のときにログインの戻り先を付けるようにした。録音画面から来た利用者を
     録音前の案内へ戻すには、`safeRedirect`の許可だけでは足りなかった（このguardは戻り先を付けていなかった）（§7-7）。
 - 検証結果:
