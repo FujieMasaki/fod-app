@@ -91,6 +91,8 @@
   TASK-010の記述。
 - `architecture.md`「実装済み」の録音処理の項と、Session Providerが持つ値・消す値の記述。
 - `code-review/frontend/security.md` §6のSession Providerの記述（録音時間だけでなく音声Blobを持つ）。
+- `product.md` §3「実装済み」の行（Session Providerが音声Blobも持つこと、録音前の案内を出してから利用者の操作で
+  マイクを要求すること）。
 - `code-review/frontend/README.md`の録音の行と§5の履歴（1/2のレビューで見つかった、ブラウザの通知の遅れと
   採用済みの設定値との食い違いを、次のレビューで確かめるため）。
 - privacy.md §5は変えない（新しい保持先を作らない。Blobはmemoryだけ）。
@@ -169,7 +171,9 @@
 - 始める操作（「録音を始める」「もう一度試す」「録り直す」）のたびに、マイクを要求する前にRailsで認証を確かめ直す
   （journaling.md §4。`useVerifySession`）。`/record`に入ったときのguardの確認から、案内を読む時間だけ空くため
   （2026-10-09に2/2のレビューの指摘を受けて人間が判断）。認証が終わっていればマイクを要求せず、移動はguardに任せる。
-  確かめられなければ（offline）「ログインの状態を確かめられませんでした」と「もう一度試す」「Homeへ戻る」。
+  serverや通信の失敗で確かめ直しが失敗したら、マイクを要求せず、guardがHomeへ移す（入るときの確認で失敗した
+  場合と同じ方針。guardを変えずに済む）。確かめられなければ（offline）「ログインの状態を確かめられませんでした」と
+  「もう一度試す」「Homeへ戻る」。
 - 失敗の画面（次の操作）:
   - `denied`: 「マイクの使用が許可されていません」。ブラウザの設定でこのサイトのマイクを許可してから「もう一度試す」。
     「Homeへ戻る」。
@@ -236,6 +240,8 @@ User（Homeのマイク／「録音する」）
 ↓
 /record: RecordingGuide（案内。マイクはまだ）
 ↓「録音を始める」
+useVerifySession（Railsで認証を確かめ直す）── ok以外 → 始めない（未認証・失敗はguardが移す、offlineは理由を示す）
+↓ ok
 useRecorder.start → recorder.open（getUserMedia）── 拒否・非対応など → 失敗の画面（次の操作）
 ↓ ok
 （将来: createRecordingAttempt → attemptをmemoryへ。失敗なら録音を始めない）
@@ -297,7 +303,7 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 | `apps/web/src/features/auth/components/require-auth.tsx` | 変更 | 録音・整理の画面のguardでも戻り先を付ける。始める直前の確かめ直し（`useVerifySession`） |
 | `apps/web/src/features/auth/messages.test.ts` | 変更 | 同上 |
 | `apps/web/src/features/auth/components/auth-screens.test.tsx` | 変更 | 同上 |
-| `apps/web/src/features/auth/components/sign-in-prompt.tsx` | 変更 | Homeの導線に戻り先を付けない理由のコメント |
+| `docs/product.md` | 変更 | §3「実装済み」の録音（音声をmemoryに持つ・録音前の案内） |
 | `apps/web/src/features/auth/index.ts` | 変更 | `useVerifySession`のexport |
 | `docs/tasks/TASK-011-frontend-generation.md` | 変更 | §7-5の申し送りを完了条件にする |
 | `docs/journaling.md` | 変更 | 現行挙動 |
@@ -373,6 +379,9 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
   - 2/2のレビューで、案内を挟んだことで`/record`に入ったときの確認からマイクの要求までが空き、journaling.md §4の
     「マイクを開始する前にRailsで確認する」を満たす場所が無いと指摘された。人間の判断で、始める操作のたびに確かめ直す
     ようにした（§7-4）。
+  - レビューで`sign-in-prompt.tsx`のコメントの根拠（`redirect.ts`の旧い理由）が古いと指摘されたが、2/2が上限の
+    20ファイルに達したため、product.mdの更新を優先して外した。挙動には関係しないコメントで、次に同じファイルを
+    変える変更で直す。
   - 案内の文面は実サービスを前提にしており、mockの間（TASK-011まで）は、送る先・やり直し・削除の説明と実際の挙動が
     一致しない。mockと実サービスの区別はTASK-011の完了条件で扱う（§5）。
   - `RequireAuth startsOnEnter`も、未認証のときにログインの戻り先を付けるようにした。録音画面から来た利用者を

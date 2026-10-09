@@ -10,7 +10,7 @@ export const SignInPrompt = () => {
   return (
     <div className={styles.prompt}>
       <p className={styles.message}>話し始めるには、ログインしてください。</p>
-      {/* Homeの導線からは戻り先を付けない。ログイン後はHomeへ戻り、利用者がマイクを押して録音前の案内へ進む */}
+      {/* ログイン後はHomeへ戻り、利用者がマイクを押して録音を始める（redirect.ts） */}
       <TextLink to="/login">
         ログイン・新規登録
       </TextLink>
