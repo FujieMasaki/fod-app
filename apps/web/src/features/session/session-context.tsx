@@ -9,9 +9,8 @@ import {
   useState,
 } from "react";
 import { useAuth } from "@/features/auth";
-import type { Seconds } from "@/types";
 import type { DotSession } from "./schema";
-import type { SessionContextValue } from "./types";
+import type { RecordedAudio, SessionContextValue } from "./types";
 
 // 以前に録音時間と現在のDotを保存していたkey。利用者を区別しないため、前の利用者の値を別の利用者の
 // 画面へ復元してしまう。読み取りをやめ、起動時に消す（journaling.md §2。TASK-007 Plan §13）。
@@ -29,14 +28,14 @@ const removeLegacyStorage = () => {
 };
 
 /**
- * routeをまたぐ短いジャーナリング途中の状態（録音時間と現在のDot）をmemoryにだけ持つ。
+ * routeをまたぐ短いジャーナリング途中の状態（録音した音声と録音時間、現在のDot）をmemoryにだけ持つ。
  * browserのstorageへは書かない（frontend.md §2。正本はserver）。
  */
 export const SessionProvider = ({ children }: { children: React.ReactNode }) => {
   const { identityEpoch, subscribeIdentityChange } = useAuth();
   // 値は、書いたときの利用者の世代番号と一緒に持つ。番号が今と違えば前の利用者の値なので見せない
   // （切り替わりの描画では、消す通知より先に新しい利用者が描画されるため。TASK-007 Plan §7-3）。
-  const [recorded, setRecorded] = useState<{ epoch: number; value: Seconds } | null>(null);
+  const [recorded, setRecorded] = useState<{ epoch: number; value: RecordedAudio } | null>(null);
   const [dot, setDot] = useState<{ epoch: number; value: DotSession } | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
@@ -46,12 +45,16 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     setHydrated(true);
   }, []);
 
-  const setRecordedDuration = useCallback(
-    (sec: Seconds) => {
-      setRecorded({ epoch: identityEpoch, value: sec });
+  const setRecordedAudio = useCallback(
+    (audio: RecordedAudio) => {
+      setRecorded({ epoch: identityEpoch, value: audio });
     },
     [identityEpoch],
   );
+
+  const clearRecordedAudio = useCallback(() => {
+    setRecorded(null);
+  }, []);
 
   const setDotSession = useCallback(
     (session: DotSession) => {
@@ -66,22 +69,23 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     removeLegacyStorage();
   }, []);
 
-  // 認証の終了・利用者の切り替わりで、前の利用者の録音時間とDotを消す（TASK-007 Plan §7-3）。
+  // 認証の終了・利用者の切り替わりで、前の利用者の録音とDotを消す（TASK-007 Plan §7-3）。
   useEffect(() => subscribeIdentityChange(reset), [subscribeIdentityChange, reset]);
 
-  const recordedDurationSec = recorded && recorded.epoch === identityEpoch ? recorded.value : null;
+  const recordedAudio = recorded && recorded.epoch === identityEpoch ? recorded.value : null;
   const dotSession = dot && dot.epoch === identityEpoch ? dot.value : null;
 
   const value = useMemo<SessionContextValue>(
     () => ({
-      recordedDurationSec,
+      recordedAudio,
       dotSession,
       hydrated,
-      setRecordedDuration,
+      setRecordedAudio,
+      clearRecordedAudio,
       setDotSession,
       reset,
     }),
-    [recordedDurationSec, dotSession, hydrated, setRecordedDuration, setDotSession, reset],
+    [recordedAudio, dotSession, hydrated, setRecordedAudio, clearRecordedAudio, setDotSession, reset],
   );
 
   return (
