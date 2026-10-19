@@ -7,7 +7,7 @@
 | 対象領域 | Frontend |
 | 作業区分 | 実装 |
 | 優先度 | P1 |
-| 状態 | Blocked |
+| 状態 | In progress |
 
 ## 目的と作業範囲
 
@@ -34,7 +34,7 @@
 - TASK-005
 - TASK-007
 
-依存関係の上流にある設計判断・API契約が未確定のためBlocked。確定後は依存先の提供状況を確認して着手する。
+依存先の設計判断とAPI契約は確定している（4件ともDone）。録音attemptの発行とuploadのbackendは未実装のため、それに依存する完了条件は残してIn progressとする（上記）。
 
 ## 根拠となる仕様書と見出し
 
@@ -51,4 +51,4 @@
 
 ## 関連Implementation Plan
 
-未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+- [2026-10-09 TASK-010 録音前の説明と音声の受け渡し・中断UX](../implementation-plans/2026-10-09-task-010-recording-consent.md)
