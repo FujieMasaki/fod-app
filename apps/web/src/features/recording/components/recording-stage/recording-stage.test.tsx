@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, onlineManager } from "@tanstack/react-query";
 
 import { AuthProvider, useAuth } from "@/features/auth";
 import { SessionProvider, useSession } from "@/features/session";
@@ -109,10 +109,33 @@ const SwitchProbe = () => {
   return null;
 };
 
-const renderStage = ({ strict = false } = {}) => {
+const signedIn = {
+  authenticated: true,
+  csrf_token: "t",
+  expires_at: "2026-10-12T03:00:00Z",
+  account_status: "active",
+  user: {
+    id: "0f8e6a8c-3d0e-4b8e-9a51-5b2d7a1c9e10",
+    email: "user@example.com",
+    email_confirmed: true,
+    sign_in_methods: ["password"],
+  },
+};
+
+// 認証の状態（GET /api/v1/session）を返す。録音を始める前の確かめ直しも、ここへ来る。
+// - sessions: 順に返す応答（最後の応答を繰り返す）。Errorなら通信の失敗、Promiseなら解決したときに返す
+const renderStage = ({ strict = false, sessions = [signedIn] as (object | Error | Promise<object>)[] } = {}) => {
+  const queue = [...sessions];
+  const sessionRequests = { count: 0 };
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => Response.json({ authenticated: false, csrf_token: "t" })),
+    vi.fn(async () => {
+      sessionRequests.count += 1;
+      const reply = queue.length > 1 ? queue.shift()! : queue[0];
+      if (reply instanceof Error) throw reply;
+      if (reply instanceof Promise) return Response.json(await reply);
+      return Response.json(reply);
+    }),
   );
   const tree = (
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
@@ -125,7 +148,12 @@ const renderStage = ({ strict = false } = {}) => {
       </AuthProvider>
     </QueryClientProvider>
   );
-  return render(strict ? <StrictMode>{tree}</StrictMode> : tree);
+  return { ...render(strict ? <StrictMode>{tree}</StrictMode> : tree), sessionRequests };
+};
+
+// 録音前の案内を読み、「録音を始める」を押す。
+const startRecording = () => {
+  fireEvent.click(screen.getByRole("button", { name: "録音を始める" }));
 };
 
 // 録音時間に関わる時計（経過時間のtimerとDate）だけを差し替え、testが進めた分だけ進める。実時間では進めない
@@ -147,10 +175,135 @@ afterEach(() => {
 });
 
 describe("RecordingStage", () => {
+  it("開いた時点では録音前の案内だけを出し、マイクを要求しない", async () => {
+    const mic = stubMicrophone();
+    renderStage();
+
+    const guide = screen.getByRole("region", { name: "録音の前に" });
+    // 送る先・預かりとやり直しの期限・削除処理を始める契機・言い換え・長さの上限を、録音の前に示す
+    expect(guide).toHaveTextContent("Amazon Transcribe");
+    expect(guide).toHaveTextContent("Amazon BedrockのClaude");
+    expect(guide).toHaveTextContent("受け付けから24時間はやり直せます");
+    expect(guide).toHaveTextContent("削除処理を始めます");
+    expect(guide).toHaveTextContent("この端末が受け取るまでお預かりします");
+    expect(guide).toHaveTextContent("言い換えて話せます");
+    expect(guide).toHaveTextContent("30分まで");
+    // 確認が済んでいない委託先の事実と、消える時刻の約束は書かない（privacy.md §5-2、TASK-010 Plan §5）
+    expect(guide).toHaveTextContent("確認が済んでからここに記載します");
+    expect(guide).not.toHaveTextContent(/保存しません|時間で消え|時間以内に消え|学習に使われ|国内で処理/);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mic.requests).toBe(0);
+  });
+
+  it("「録音を始める」を押すと、Railsで認証を確かめ直してからマイクを要求する", async () => {
+    const mic = stubMicrophone();
+    const { sessionRequests } = renderStage();
+    await waitFor(() => expect(sessionRequests.count).toBe(1));
+
+    startRecording();
+
+    await waitFor(() => expect(mic.requests).toBe(1));
+    expect(sessionRequests.count).toBe(2);
+  });
+
+  it("確かめ直しで認証が終わっていたら、マイクを要求しない（ログインへ移すのはguard）", async () => {
+    const mic = stubMicrophone();
+    const { sessionRequests } = renderStage({ sessions: [signedIn, { authenticated: false, csrf_token: "t" }] });
+    await waitFor(() => expect(sessionRequests.count).toBe(1));
+
+    startRecording();
+
+    await waitFor(() => expect(sessionRequests.count).toBe(2));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mic.requests).toBe(0);
+  });
+
+  it("確かめ直しの通信が失敗したら（offlineではない）、マイクを要求しない（Homeへ移すのはguard）", async () => {
+    const mic = stubMicrophone();
+    const { sessionRequests } = renderStage({ sessions: [signedIn, new TypeError("network")] });
+    await waitFor(() => expect(sessionRequests.count).toBe(1));
+
+    startRecording();
+
+    await waitFor(() => expect(sessionRequests.count).toBeGreaterThanOrEqual(2));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mic.requests).toBe(0);
+    expect(screen.queryByText("ログインの状態を確かめられませんでした")).not.toBeInTheDocument();
+  });
+
+  it("offlineで認証を確かめられなければ、マイクを要求せず理由と次の操作を示す", async () => {
+    const mic = stubMicrophone();
+    const { sessionRequests } = renderStage();
+    await waitFor(() => expect(sessionRequests.count).toBe(1));
+    onlineManager.setOnline(false);
+    try {
+      startRecording();
+      expect(screen.getByRole("button", { name: "確かめています…" })).toBeDisabled();
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("ログインの状態を確かめられませんでした");
+      expect(mic.requests).toBe(0);
+    } finally {
+      onlineManager.setOnline(true);
+    }
+    // 回線が戻って止まっていた取り直しが終わっても、利用者が押し直すまでマイクを要求しない
+    await waitFor(() => expect(sessionRequests.count).toBe(2));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mic.requests).toBe(0);
+
+    // 「戻る」で直前の画面（案内）へ戻れる
+    fireEvent.click(screen.getByRole("button", { name: "戻る" }));
+    expect(screen.getByRole("region", { name: "録音の前に" })).toBeInTheDocument();
+  });
+
+  it("確かめ直しの応答が上限までに返らなければ始めず、後から届いても利用者の操作なしにマイクを要求しない", async () => {
+    const mic = stubMicrophone();
+    let arrive: (session: object) => void = () => undefined;
+    const late = new Promise<object>((resolve) => {
+      arrive = resolve;
+    });
+    const { sessionRequests } = renderStage({ sessions: [signedIn, late, signedIn] });
+    await waitFor(() => expect(sessionRequests.count).toBe(1));
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+    startRecording();
+    await act(() => vi.advanceTimersByTimeAsync(10_000));
+    vi.useRealTimers();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("ログインの状態を確かめられませんでした");
+    // 上限の後に認証済みの応答が届いても、始めない
+    await act(async () => arrive(signedIn));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mic.requests).toBe(0);
+  });
+
+  it("案内で「やめる」を選ぶと、マイクを要求せずHomeへ戻る", () => {
+    const mic = stubMicrophone();
+    renderStage();
+
+    fireEvent.click(screen.getByRole("button", { name: "やめる" }));
+
+    expect(navigateMock).toHaveBeenCalledWith({ to: "/" });
+    expect(mic.requests).toBe(0);
+  });
+
+  it("録音中に画面を離れたら、マイクを止めて整理へ進まない", async () => {
+    useRecordingClock();
+    const mic = stubMicrophone();
+    const { unmount } = renderStage();
+    startRecording();
+    await recordFor(mic, 5);
+
+    unmount();
+
+    expect(mic.stoppedTracks).toBe(1);
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
   it("止めたら録音した音声と録音時間を確定して整理へ進む", async () => {
     useRecordingClock();
     const mic = stubMicrophone();
     renderStage();
+    startRecording();
     await recordFor(mic, 30);
 
     fireEvent.click(screen.getByRole("button", { name: "話し終える" }));
@@ -166,6 +319,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone();
     renderStage();
+    startRecording();
     await recordFor(mic, 5);
 
     const stopButton = screen.getByRole("button", { name: "話し終える" });
@@ -181,6 +335,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone();
     renderStage();
+    startRecording();
     await recordFor(mic, 5);
 
     act(() => switchUser());
@@ -194,20 +349,20 @@ describe("RecordingStage", () => {
     expect(screen.getByText("no-audio")).toBeInTheDocument();
   });
 
-  it("StrictModeで開始が二重に実行されても、片付けた録音の後に新しく始め直し、マイクで録音する", async () => {
+  it("StrictModeでも、「録音を始める」を押したときに1回だけマイクを要求して録音する", async () => {
     useRecordingClock();
     const counts = stubMicrophone();
 
     renderStage({ strict: true });
+    startRecording();
 
-    // 1回目の録音は片付けてtrackを止め、2回目の録音だけが始まって続く
     await waitFor(() => expect(counts.recordingStarts).toBe(1));
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(counts.requests).toBe(2);
-    expect(counts.stoppedTracks).toBe(1);
+    expect(counts.requests).toBe(1);
+    expect(counts.stoppedTracks).toBe(0);
     expect(counts.recordingStarts).toBe(1);
 
-    // 片付けた録音の経過時間の計測は残らない（1秒で1つだけ進む）
+    // 経過時間は1秒で1つだけ進む
     await act(() => vi.advanceTimersByTimeAsync(1000));
     expect(screen.getByRole("status")).toHaveAccessibleName("録音中 00:01");
   });
@@ -216,6 +371,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone({ hold: true });
     renderStage();
+    startRecording();
     await waitFor(() => expect(mic.requests).toBe(1));
     expect(screen.getByRole("status")).toHaveAccessibleName("マイクを準備しています");
 
@@ -229,9 +385,27 @@ describe("RecordingStage", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
+  it("「もう一度試す」でも、Railsで認証を確かめ直し、認証が終わっていればマイクを要求しない", async () => {
+    const mic = stubMicrophone({ reject: "NotAllowedError" });
+    const { sessionRequests } = renderStage({
+      sessions: [signedIn, signedIn, { authenticated: false, csrf_token: "t" }],
+    });
+    await waitFor(() => expect(sessionRequests.count).toBe(1));
+    startRecording();
+    await screen.findByText("マイクの使用が許可されていません");
+    expect(mic.requests).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "もう一度試す" }));
+
+    await waitFor(() => expect(sessionRequests.count).toBe(3));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(mic.requests).toBe(1);
+  });
+
   it("マイクの使用が拒否されたら、録音したように見せず、許可してからやり直す操作とHomeへ戻る操作を示す", async () => {
     const mic = stubMicrophone({ reject: "NotAllowedError" });
     renderStage();
+    startRecording();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("マイクの使用が許可されていません");
     expect(screen.queryByRole("button", { name: "話し終える" })).not.toBeInTheDocument();
@@ -251,6 +425,7 @@ describe("RecordingStage", () => {
   ])("マイクを開けない（%s）ときは、理由とやり直す操作を示す", async (reject, title) => {
     stubMicrophone({ reject });
     renderStage();
+    startRecording();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(title);
     expect(screen.getByRole("button", { name: "もう一度試す" })).toBeInTheDocument();
@@ -259,6 +434,7 @@ describe("RecordingStage", () => {
   it("録音できないブラウザでは、マイクを要求せず、対応ブラウザとHomeへ戻る操作だけを示す", async () => {
     const mic = stubMicrophone({ supported: [] });
     renderStage();
+    startRecording();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("このブラウザでは録音できません");
     expect(screen.getByRole("alert")).toHaveTextContent("Chrome・Edge・Firefox・Safari");
@@ -271,6 +447,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone();
     renderStage();
+    startRecording();
     await waitFor(() => expect(mic.recordingStarts).toBe(1));
 
     fireEvent.click(screen.getByRole("button", { name: "話し終える" }));
@@ -287,6 +464,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone({ chunkBytes: 32_000_001 });
     renderStage();
+    startRecording();
     await recordFor(mic, 5);
 
     fireEvent.click(screen.getByRole("button", { name: "話し終える" }));
@@ -300,6 +478,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone({ chunkBytes: 32_000_001 });
     renderStage();
+    startRecording();
     await recordFor(mic, 5);
 
     act(() => mic.endTrack());
@@ -312,6 +491,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone();
     renderStage();
+    startRecording();
     await recordFor(mic, 10);
 
     act(() => mic.endTrack());
@@ -329,6 +509,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone();
     renderStage();
+    startRecording();
     await recordFor(mic, 10);
     act(() => mic.endTrack());
     await screen.findByText("録音が途中で止まりました");
@@ -345,6 +526,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone({ holdStop: true });
     renderStage();
+    startRecording();
     await recordFor(mic, 10);
 
     act(() => mic.endTrack());
@@ -362,6 +544,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone({ holdStop: true });
     const { unmount } = renderStage();
+    startRecording();
     await recordFor(mic, 10);
 
     fireEvent.click(screen.getByRole("button", { name: "話し終える" }));
@@ -376,6 +559,7 @@ describe("RecordingStage", () => {
     useRecordingClock();
     const mic = stubMicrophone();
     renderStage();
+    startRecording();
     await waitFor(() => expect(mic.recordingStarts).toBe(1));
     // 1秒ごとの描画を1800回繰り返さないよう、まとめて進める
     act(() => vi.advanceTimersByTime(1800 * 1000));

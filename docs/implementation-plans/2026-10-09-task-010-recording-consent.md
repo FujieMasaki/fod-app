@@ -2,7 +2,8 @@
 
 ## 1. Status
 
-実施中（2026-10-09）。録音attemptの発行とuploadのendpointがbackendに無いため、それに依存する完了条件は残す（§5）。
+実施中（2026-10-09）。§5の対象は実装し、自動の検証を終えた（§16）。録音attemptの発行とuploadのendpointがbackendに
+無いため、それに依存する完了条件と、案内の所在地・保持の部分の確定、実ブラウザでの確認は残す。
 
 ## 2. Goal
 
@@ -88,7 +89,12 @@
 
 - `journaling.md` §1の表（録音開始・録音停止）と§2の「録音Blob」の現在の列、§4「録音前認証と期限切れ」の
   TASK-010の記述。
-- `architecture.md`「実装済み」の録音処理の項。
+- `architecture.md`「実装済み」の録音処理の項と、Session Providerが持つ値・消す値の記述。
+- `code-review/frontend/security.md` §6のSession Providerの記述（録音時間だけでなく音声Blobを持つ）。
+- `product.md` §3「実装済み」の行（Session Providerが音声Blobも持つこと、録音前の案内を出してから利用者の操作で
+  マイクを要求すること）。
+- `code-review/frontend/README.md`の録音の行と§5の履歴（1/2のレビューで見つかった、ブラウザの通知の遅れと
+  採用済みの設定値との食い違いを、次のレビューで確かめるため）。
 - privacy.md §5は変えない（新しい保持先を作らない。Blobはmemoryだけ）。
 
 ## 7. Proposed Approach
@@ -103,13 +109,13 @@
 
 | 項目 | 文面 |
 | --- | --- |
-| 1 送る先 | 録音した音声は、Focus on Dotのサーバーを経由して、文字起こし（Amazon Transcribe、東京リージョン）と、今日の一文と要約の生成（Amazon BedrockのClaude）へ渡ります。 |
+| 1 送る先 | 録音した音声は、Focus on Dotのサーバーを経由して、文字起こし（Amazon Transcribe、東京リージョン）へ渡ります。文字起こしの全文は、今日の一文と要約の生成（Amazon BedrockのClaude）へ渡ります。 |
 | 所在地・保持（architecture） | 生成を行う国と、委託先での保持や人による確認の有無は、確認が済んでからここに記載します。 |
 | 2 音声の預かり | 音声は、Dotを作るあいだだけお預かりします。うまくいかなかったときは、受け付けから24時間はやり直せます。Dotができた時点、または期限を過ぎたあとに削除処理を始めます。 |
-| 3（言い換え） | 文字起こしの全文も、この端末が受け取るまでお預かりします。受け取った時点、または受け付けから24時間を過ぎたあとに削除処理を始めます。全文はこのタブを閉じるまで、この端末で読めます。残るのは「今日の一文」と「話した内容の要約」です。 |
+| 3（言い換え） | 文字起こしの全文も、この端末が受け取るまでお預かりします。受け取った時点、または受け付けから24時間を過ぎたあとに削除処理を始めます。全文はこのタブを閉じるかログアウトするまで、この端末で読めます。残るのは「今日の一文」と「話した内容の要約」です。 |
 | 2・6 遅れと外部 | 障害が起きたときは、削除が遅れることがあります。外部へ渡った内容を、すぐに消せるとは約束できません。 |
 | 4 Dot | Dotはあなただけが見られます。1件ずつ削除でき、退会するとすべてが削除の対象になります。 |
-| 5 他人の情報 | 他の人の実名や住所・連絡先は、必要がなければ言い換えて話せます（例:「同僚のAさん」）。 |
+| 5 他人の情報 | ほかの人の実名や住所・連絡先は、必要がなければ言い換えて話せます（例:「同僚のAさん」）。 |
 | 制限 | 1回の録音は30分までです。 |
 | 7 | 置換を行わないため該当しない（タスクの完了条件3）。 |
 
@@ -160,8 +166,16 @@
 
 段階ごとに出し分ける。
 
-- 案内（§7-1）→「録音を始める」→ マイクの許可待ち（「マイクを準備しています」）→ 録音中（既存の画面。
+- 案内（§7-1）→「録音を始める」→ Railsで認証を確かめ直す（ボタンは「確かめています…」）→ マイクの許可待ち（「マイクを準備しています」）→ 録音中（既存の画面。
   「30分で自動的に終わります」を添える）→ 停止 → 結果に応じて整理へ、または下記。
+- 始める操作（「録音を始める」「もう一度試す」「録り直す」）のたびに、マイクを要求する前にRailsで認証を確かめ直す
+  （journaling.md §4。`useVerifySession`）。`/record`に入ったときのguardの確認から、案内を読む時間だけ空くため
+  （2026-10-09に2/2のレビューの指摘を受けて人間が判断）。認証が終わっていればマイクを要求せず、移動はguardに任せる。
+  serverや通信の失敗で確かめ直しが失敗したら、マイクを要求せず、guardがHomeへ移す（入るときの確認で失敗した
+  場合と同じ方針。guardを変えずに済む）。確かめられなければ（offline、またはguardと同じ10秒の上限までに応答が
+  無い）「ログインの状態を確かめられませんでした」と「もう一度試す」「戻る」（直前の案内・失敗・中断の画面へ）。
+  上限の後に届いた応答では始めない（取り直しはofflineやfocusが外れている間止まり、戻った時点で終わり得るため。
+  security.md §2）。
 - 失敗の画面（次の操作）:
   - `denied`: 「マイクの使用が許可されていません」。ブラウザの設定でこのサイトのマイクを許可してから「もう一度試す」。
     「Homeへ戻る」。
@@ -179,11 +193,19 @@
 - `recordedDurationSec`・`setRecordedDuration`を、`recordedAudio`（`{ blob, mimeType, durationSec }`）・
   `setRecordedAudio`・`clearRecordedAudio`へ置き換える。録音時間は音声と一緒に渡す（別々に持つと食い違い得る）。
 - 書いたときの`identityEpoch`と一緒に持ち、利用者の切り替わりで消す（既存の方式）。storageへは書かない。
-- `/processing`は開いたときの`recordedAudio`を生成のmutationへ渡す（mockは使わない。TASK-011がuploadに使う）。
+- `/processing`は開いたときの`recordedAudio`を持ち、それがあるときだけ生成を始める（mockは使わない。TASK-011がuploadに使う）。
+  mutationの入力（`variables`）には渡さない。mutation cacheは、画面を離れても通信中と`gcTime`の間入力を持ち続け、
+  Session Providerを消しても消えないため。
   無ければ生成を始めず、「受け渡せる録音がありません」と録音への導線を出す（直接開いた・再読み込みした場合）。
   生成が成功したら音声を消す。
 - 音声Blobを捨てる者: 次の録音の開始、生成の成功、利用者の切り替わり（Session Provider）、再読み込み・タブを閉じる
   （memory）。生成が失敗したまま画面を離れた場合は、次のいずれかまでmemoryに残る（TASK-011で再試行と一緒に決める）。
+- TASK-011でuploadを組み込むときに決めること（2/2のレビューで見つかった、今はmockのため影響のない経路。TASK-011の
+  完了条件に加えた）:
+  - 送る直前に`identityEpoch`を照合し、変わっていたら画面のrefの録音を捨てる（refは利用者の切り替わりの後も
+    unmountまでBlobを参照する）。
+  - 生成が失敗した後に別の画面へ移り、履歴で`/processing`へ戻ると、残っている録音で生成が自動で始まり得る。
+    録音画面から移った直後の1回だけを受け付ける形にする（利用者の操作なしに同じ音声を送り直さない）。
 
 ### 7-6. 録音attemptの通信関数
 
@@ -220,6 +242,8 @@ User（Homeのマイク／「録音する」）
 ↓
 /record: RecordingGuide（案内。マイクはまだ）
 ↓「録音を始める」
+useVerifySession（Railsで認証を確かめ直す）── ok以外 → 始めない（未認証・失敗はguardが移す、offlineは理由を示す）
+↓ ok
 useRecorder.start → recorder.open（getUserMedia）── 拒否・非対応など → 失敗の画面（次の操作）
 ↓ ok
 （将来: createRecordingAttempt → attemptをmemoryへ。失敗なら録音を始めない）
@@ -230,7 +254,7 @@ recorder.stop → Blob・録音時間 → recorded-audioで区別 ── empty�
 ↓ recorded
 Session Provider.recordedAudio（memory。identityEpochと一緒）
 ↓
-/processing: useCreateDot.mutate(recordedAudio)（mockは使わない）→ 成功で音声を消す
+/processing: 開いたときのrecordedAudioをrefに持ち、あれば useCreateDot.mutate()（引数なし。mockは録音を使わない）→ 成功で音声を消す
 ```
 
 source of truth: 音声Blobと録音時間は、送るまでSession Providerのmemoryだけ。
@@ -274,18 +298,23 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 | `apps/web/src/features/recording/components/recording-guide/recording-guide.module.css` | 新規 | 同上 |
 | `apps/web/src/features/recording/components/recording-stage/recording-stage.tsx` | 変更 | 案内の段階、開始を押したときに始める |
 | `apps/web/src/features/recording/components/recording-stage/recording-stage.test.tsx` | 変更 | 同上 |
-| `apps/web/src/features/processing/components/processing-indicator/processing-indicator.tsx` | 変更 | 音声が無い場合、mutationへ渡す、成功で消す |
+| `apps/web/src/features/processing/components/processing-indicator/processing-indicator.tsx` | 変更 | 音声が無い場合、成功で消す |
 | `apps/web/src/features/processing/components/processing-indicator/processing-indicator.test.tsx` | 変更 | 同上 |
-| `apps/web/src/features/processing/hooks/use-create-dot.ts` | 変更 | 入力（録音）を受け取る。mockは使わない |
+| `apps/web/src/features/processing/hooks/use-create-dot.ts` | 変更 | 録音を入力にしない理由を残す。mockは使わない |
 | `apps/web/src/features/auth/redirect.ts` | 変更 | `/record`を戻り先へ |
-| `apps/web/src/features/auth/components/require-auth.tsx` | 変更 | 録音・整理の画面のguardでも戻り先を付ける |
+| `apps/web/src/features/auth/components/require-auth.tsx` | 変更 | 録音・整理の画面のguardでも戻り先を付ける。始める直前の確かめ直し（`useVerifySession`） |
 | `apps/web/src/features/auth/messages.test.ts` | 変更 | 同上 |
 | `apps/web/src/features/auth/components/auth-screens.test.tsx` | 変更 | 同上 |
+| `docs/product.md` | 変更 | §3「実装済み」の録音（音声をmemoryに持つ・録音前の案内） |
+| `apps/web/src/features/auth/index.ts` | 変更 | `useVerifySession`のexport |
+| `docs/tasks/TASK-011-frontend-generation.md` | 変更 | §7-5の申し送りを完了条件にする |
 | `docs/journaling.md` | 変更 | 現行挙動 |
 | `docs/architecture.md` | 変更 | 実装済み |
+| `docs/code-review/frontend/security.md` | 変更 | §6のSession Providerが持つ値 |
+| `docs/code-review/frontend/README.md` | 変更 | 1/2のレビューで見つかった問題の再発防止の観点 |
 | Plan・タスクファイル | 変更 | 完了の記録 |
 
-数える: 15。`create-dot.ts`は変えない（mutationの入力の型だけを録音にし、mockは受け取らない）。
+数える: 20。`create-dot.ts`は変えない（mockは録音を受け取らない）。
 
 ## 11. Libraries / APIs
 
@@ -331,7 +360,7 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 - unit: `recorder`（open・record・stop・失敗の種類・形式・中断・許可待ちの離脱）、`recorded-audio`（区別と制限）、
   schema（契約のexample）、`createRecordingAttempt`。
 - component: `RecordingStage`（案内 → 開始、失敗ごとの画面と次の操作、中断、二重停止、利用者の切り替わり、
-  StrictMode）、`ProcessingIndicator`（音声が無い場合、渡す、成功で消す）、Session Provider、戻り先。
+  StrictMode）、`ProcessingIndicator`（音声が無い場合、mutationの入力に渡さない、成功で消す）、Session Provider、戻り先。
 
 ## 15. Definition of Done
 
@@ -341,4 +370,43 @@ PR 2/2 `feat/task-010-2-recording-guide`（録音前の案内・受け渡せる�
 
 ## 16. Completion Record
 
-（実装後に記入）
+- 状態: 2026-10-09、実施中（タスクはIn progressのまま）。
+- 実装差異:
+  - 失敗・中断の表示を`recording-notice`へ分けた。既存の`recording-stage.module.css`は`var(--fod-*)`を直接書く
+    未移行のCSSで、新しいUIのTailwindの`@apply`と同じファイルに混ぜられないため（§10）。
+  - `create-dot.ts`は変えず、録音はmutationの入力にしなかった（mockは録音を受け取らない）。最初は入力にしたが、
+    レビューで、mutation cacheが通信中と`gcTime`の間録音を持ち続け、Session Providerを消しても消えないと分かった。
+  - self-reviewで、中断の案内を見ている間に利用者が切り替わると、「ここまでで整理する」で前の利用者の録音が
+    新しい利用者の整理へ渡り得ることを見つけた。押した時点でも利用者の世代を確かめ、変わっていればHomeへ戻すよう直した。
+  - 2/2のレビューで、案内を挟んだことで`/record`に入ったときの確認からマイクの要求までが空き、journaling.md §4の
+    「マイクを開始する前にRailsで確認する」を満たす場所が無いと指摘された。人間の判断で、始める操作のたびに確かめ直す
+    ようにした（§7-4）。
+  - レビューで`sign-in-prompt.tsx`のコメントの根拠（`redirect.ts`の旧い理由）が古いと指摘されたが、2/2が上限の
+    20ファイルに達したため、product.mdの更新を優先して外した。挙動には関係しないコメントで、次に同じファイルを
+    変える変更で直す。
+  - 案内の文面は実サービスを前提にしており、mockの間（TASK-011まで）は、送る先・やり直し・削除の説明と実際の挙動が
+    一致しない。mockと実サービスの区別はTASK-011の完了条件で扱う（§5）。
+  - `RequireAuth startsOnEnter`も、未認証のときにログインの戻り先を付けるようにした。録音画面から来た利用者を
+    録音前の案内へ戻すには、`safeRedirect`の許可だけでは足りなかった（このguardは戻り先を付けていなかった）（§7-7）。
+- 検証結果:
+  - `pnpm lint`（ESLint・命名・Markdown・契約のlintと生成した型の一致）、`pnpm type-check`、`pnpm test`
+    （scriptsのtestと、webの19ファイル・437件）、`pnpm build`がすべて通った。
+  - 自動のtestで確かめたこと: 権限拒否・非対応・マイクが無い・使用中のそれぞれで録音を始めず次の操作を示すこと、
+    録音中にマイクが切れたときの「ここまでで整理する／録り直す」、1秒未満と32,000,000 bytes超えで進まないこと、
+    30分の自動停止、二重停止で止めるのも進むのも1回だけなこと、止めた・片付けた・画面を離れたときのtrackの停止と
+    AudioContextを閉じること、許可を待っている間に止めたら許可の後に録音を始めないこと、利用者の切り替わりで録音を
+    残さないこと、録音と案内の操作でlocalStorage・sessionStorageに何も書かないこと、案内に送る先・やり直しの期限・
+    削除処理を始める契機・言い換え・長さの上限を示し、「保存しません」「◯時間で消えます」や未確認の委託先の事実を
+    書かないこと、マイクの要求が「録音を始める」の後だけなこと、`/processing`を録音なしで開いたら整理を始めないこと、
+    ログインの戻り先（`/record`は案内へ戻し、`/processing`は戻さない）、録音attemptのschemaが契約のexampleと
+    一致し、通信関数がCSRF tokenを付けて送ること。
+  - 未実施と理由:
+    - 対応ブラウザ（Chrome・Edge・Firefox・Safari、iOS Safari）での初回許可・拒否・非対応・停止・中断・画面離脱の
+      手動確認。実際のマイクと権限のダイアログを、この環境から操作できないため。人間の確認に残す（PRの「確認すること」）。
+    - 録音attemptの発行を録音の手順へ組み込むこと、古いattemptの破棄、発行から録音開始までの遅れの実機計測、
+      決定した音声入力をbackendへ受け渡すこと。`POST /api/v1/recording_attempts`と`POST /api/v1/dots`が未実装のため
+      （タスク本文）。
+    - 案内のうち、生成を行う国と委託先での保持・人によるレビューの有無。TASK-009の構成の記録とTASK-025の確認を待つ。
+      説明と実際の処理の一致も、実サービスへ送るまで確かめられない。
+- 関連: メインのPR #92。残りはTASK-009（backendの受け口と構成の記録）・TASK-025（委託先の確認）の後に、TASK-010の
+  続きとして行う。

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Navigate, useLocation } from "@tanstack/react-router";
 
 import { ErrorState } from "@/components/error-state/error-state";
@@ -21,7 +21,8 @@ import styles from "./require-auth.module.css";
 type RequireAuthProps = {
   children: ReactNode;
   /**
-   * 中身が開いたときに副作用を始める画面（録音画面はマイクを開いて録音を、整理の画面は生成を始める）ならtrue。
+   * 中身が開いたときに副作用を始める画面（整理の画面は生成を始める）と、副作用の前に案内を出す録音画面ならtrue。
+   * 録音画面は開いても案内を出すだけで、マイクは「録音を始める」の直前に`useVerifySession`で確かめ直してから要求する。
    * - 開いたときにserverへ認証を確かめ直し、その応答で認証済みと分かるまで中身を出さない（マイクを開始する
    *   前・送る前にRailsで確かめる。journaling.md §4「録音前認証と期限切れ」）。
    * - 中身を出した後に認証済みでなくなったら、状態が戻っても中身を出し直さずHome（未認証ならログイン）へ移る。
@@ -51,9 +52,40 @@ const liveVerdictOf = (state: SessionQueryState | undefined): "ok" | "anonymous"
 };
 
 // 副作用を始める画面で、中身を出すまで待つ上限。offlineで取り直しが止まったまま、回線が戻ったときに
-// 利用者の操作なしに録音が始まらないよう、それまでに中身を出せなければHomeへ戻す（確かめ直しが済んだ
+// 利用者の操作なしに生成が始まらないよう、それまでに中身を出せなければHomeへ戻す（確かめ直しが済んだ
 // 直後に別の取り直しが始まって止まった場合も含む）。
 const VERIFY_TIMEOUT_MS = 10_000;
+
+/**
+ * 副作用（マイク）を始める操作の直前に、Railsで認証を確かめ直す（journaling.md §4「録音前認証と期限切れ」）。
+ * 入るときのguardの確かめ直しから操作までは、案内を読む時間だけ空くため、操作のたびに確かめる。
+ * - ok: 認証済み。始めてよい
+ * - anonymous: 認証が終わった。始めない（ログインへ移すのは`RequireAuth startsOnEnter`）
+ * - lost: 退会の手続き中か、取り直しが失敗した（serverの失敗・通信の失敗）。始めない（Homeへ移すのは
+ *   `RequireAuth startsOnEnter`。入るときの確認で失敗した場合と同じく、利用者がもう一度始める）
+ * - busy: 確かめられなかった（offlineで取り直しが止まった、上限までに応答が無い、など）。始めない
+ *
+ * 待つのはguardと同じ上限まで。取り直しはofflineやfocusが外れている間止まり、戻った時点で終わり得るため、
+ * 上限を過ぎた後に届いた結果で始めない（利用者の操作なしにマイクを始めない。security.md §2）。
+ */
+export const useVerifySession = () => {
+  const { refresh } = useAuth();
+  const queryClient = useQueryClient();
+  return useCallback(async () => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<true>((resolve) => {
+      timer = setTimeout(() => resolve(true), VERIFY_TIMEOUT_MS);
+    });
+    const refreshed = refresh()
+      .catch(() => undefined)
+      .then(() => false as const);
+    const expired = await Promise.race([refreshed, timedOut]);
+    clearTimeout(timer);
+    if (expired) return "busy";
+    // contextの値は通知が届くまで前の値のことがあるため、queryの今の状態で判断する。
+    return liveVerdictOf(queryClient.getQueryState<Session>(SESSION_QUERY_KEY));
+  }, [refresh, queryClient]);
+};
 
 export const RequireAuth = ({ children, startsOnEnter = false }: RequireAuthProps) => {
   if (startsOnEnter) return <EntryVerifiedGuard>{children}</EntryVerifiedGuard>;
@@ -65,7 +97,8 @@ export const RequireAuth = ({ children, startsOnEnter = false }: RequireAuthProp
  * sessionのqueryの今の状態を、取得しない観測者（enabled: false）で購読して判断する。
  */
 const EntryVerifiedGuard = ({ children }: { children: ReactNode }) => {
-  const { refresh } = useAuth();
+  const { refresh, endReason } = useAuth();
+  const { pathname } = useLocation();
   const queryClient = useQueryClient();
   const live = useQuery({ queryKey: SESSION_QUERY_KEY, queryFn: getSession, enabled: false });
   // 入るときの確かめ直しの結果。確かめ直しが終わった時点のqueryの状態から決める。
@@ -127,7 +160,11 @@ const EntryVerifiedGuard = ({ children }: { children: ReactNode }) => {
     }
   }
   if (leftRef.current !== null) {
-    return leftRef.current === "login" ? <Navigate to="/login" replace /> : <Navigate to="/" replace />;
+    if (leftRef.current === "home") return <Navigate to="/" replace />;
+    // ログインの後に戻す画面（録音画面なら録音前の案内。開いてもマイクは始まらない）。このタブでlogoutした後は
+    // 同じ画面へ戻さない（SessionGuardと同じ）。
+    const redirect = endReason === "signed_out" ? "/" : safeRedirect(pathname);
+    return <Navigate to="/login" search={redirect === "/" ? {} : { redirect }} replace />;
   }
   if (showing) return children;
   return (
