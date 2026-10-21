@@ -1622,10 +1622,14 @@ SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付け�
 効いていることの確認（アプリ用、2026-10-21）:
 
 - 3か所とも、設定後の値が`none`であることを読み直して確かめた。
-- `none`以外（`default`）へ変える操作は、大阪の`bedrock-runtime`と東京の`bedrock-mantle`で、SCPによる明示的な拒否
-  （"with an explicit deny in a service control policy"）になることを出力で確かめた。東京の`bedrock-runtime`も同じ操作を
-  行い、直後の値は`none`だったが、拒否のメッセージは記録に残せた範囲に含まれていない。SCPはリージョンを問わず効く。
+- `none`以外（`default`）へ変える操作は、3か所とも、SCPによる明示的な拒否（"with an explicit deny in a service control
+  policy"）になることを出力で確かめた（東京の`bedrock-runtime`は、最初の確認で出力を残せなかったので取り直した）。
 - 確かめた後に`none`を設定し直し、3か所とも`none`のままであることを確かめた。
+- `bedrock-mantle`（東京）のprojectは、自動で作られる`default`の1つだけで、その保持は`inherit`だった。projectの値は
+  accountより優先するが、`inherit`はaccountの値（`none`）に従う。projectを`none`以外へ変える操作（`UpdateProject`）と、
+  `none`以外のprojectを作る操作（`CreateProject`）はSCPで禁止している。
+- 保持の値を変えるAPIは、data retentionのページのIAM actionsの表では`PutAccountDataRetention`と、mantleのprojectの作成・
+  更新だけで、値を消したり既定へ戻したりする別の操作は載っていない（`inherit`へ戻す操作も、`none`以外なのでSCPで拒否される）。
 
 **残ること**: 東京・大阪以外のリージョンは`inherit`のままで、モデルの既定に従う。国外へ出る経路（Globalなど）を使う
 場合は、推論先になり得るリージョンの扱いを一次資料で確かめてから使う（TASK-009の完了条件。国外経路はTASK-017の結論が
