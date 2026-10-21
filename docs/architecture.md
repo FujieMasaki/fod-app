@@ -274,7 +274,7 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   IAMで行い、長期固定のAPIキーをアプリで持たない**（ECSはSDKへ一時credentialを供給するため、
   鍵の確認項目が無くなるわけではない）。対象bucketと対象モデルだけを許す最小権限にする。
   **9項目の確認は全体としては未完了で、公開前に済ませる**（TASK-025の範囲は2026-10-21に終えた。
-  残りはTASK-009・TASK-015・TASK-017。項目別の状態は[privacy.md §5-1](privacy.md)の外部provider行から参照する）。
+  残りはTASK-009・TASK-015・TASK-017。項目別の状態は[TASK-003 Plan §26](implementation-plans/2026-09-29-task-003-generation-design.md)）。
   **音声・テキストを送るAWSアカウントは「アプリ用」（Organizationsのメンバーアカウント）だけとし、
   管理アカウントには処理を載せない**（SCPが管理アカウントに効かないため。2026-10-20にTASK-025で決定）。
 - **Transcribeについて、AWS OrganizationsのAI services opt-out policyの適用を必須とする。**
