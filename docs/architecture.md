@@ -273,13 +273,17 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   （[privacy.md §5-1](privacy.md)の外部provider行）の対象が1つになる。**認証はECS task roleの
   IAMで行い、長期固定のAPIキーをアプリで持たない**（ECSはSDKへ一時credentialを供給するため、
   鍵の確認項目が無くなるわけではない）。対象bucketと対象モデルだけを許す最小権限にする。
-  **9項目は未確認で、確認は公開前に人間が行う**（TASK-025）。
+  **9項目の確認は全体としては未完了で、公開前に済ませる**（TASK-025の範囲は2026-10-21に終えた。
+  残りはTASK-009・TASK-015・TASK-017。項目別の状態は[privacy.md §5-1](privacy.md)の外部provider行から参照する）。
+  **音声・テキストを送るAWSアカウントは「アプリ用」（Organizationsのメンバーアカウント）だけとし、
+  管理アカウントには処理を載せない**（SCPが管理アカウントに効かないため。2026-10-20にTASK-025で決定）。
 - **Transcribeについて、AWS OrganizationsのAI services opt-out policyの適用を必須とする。**
   AWSのAIサービスは**既定では顧客コンテンツをサービス改善に利用し、利用リージョン外へ保存し得る**。
   Transcribeはこのopt-out policyの対象サービスで、**設定しない限りopt-inのままである。**
   適用せずに音声を送ると、下記「データ所在地と費用」の「保存と閲覧は日本国内」が成り立たない（改善目的で利用リージョン外へ
   保存され得るため。**推論の所在地を緩めても、保存を日本国内に限る前提は変わらない（自分たちのRDS・S3は東京、Transcribeは`ap-northeast-1`）**）。
-  適用後にeffective policyを照会して効いていることを確認する（TASK-009/015）。
+  適用後にeffective policyを照会して効いていることを確認する（2026-10-21にTASK-025で、OrganizationsのRootへ適用し
+  両方のアカウントで効いていることを確認した。公開前にTASK-015で改めて確かめる）。
   なおBedrockはこのopt-out policyの対象外で、モデルごとのdata retention modeで別に確認する。
 - **Bedrockのモデルの推論経路は、下記「データ所在地と費用」に従う**（2026-10-03に変更。変更前は
   「推論が日本国外へ出ない経路で使えるものから選ぶ」だった）。**「国内に収まる経路」かどうかの判定方法は同節に
@@ -566,7 +570,9 @@ Webの接続は2026-10-05に[TASK-007 Plan](implementation-plans/2026-10-05-task
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
   （ログ14日・backup 7日は既定案であり、実値は未確定）
 - promptの最終文面、Bedrockのmodel idとdata retention mode（TASK-009で確定）
-- 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認結果（公開前に人間が実施。TASK-025）
+- 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認のうち、構成と実環境で確かめる残り
+  （TASK-025の範囲は2026-10-21に終えた。残りはmodel idごとの保持・人によるレビュー・経路をTASK-009、
+  鍵の取得経路と侵害時の手順をTASK-015が公開前に確かめる）
 - **越境移転の規律への対応**（TASK-017。9項目の項目3に対応するが、経路を問わない部分は項目3の文言より
   範囲が広い）。**確認が済むまでは**上記「データ所在地と費用」のとおり国内に収まる経路で運用し、
   **国外経路を使ってよいかはTASK-017の結論を待って人間が判断する。**
