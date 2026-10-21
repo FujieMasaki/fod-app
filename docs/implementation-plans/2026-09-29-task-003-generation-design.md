@@ -1627,7 +1627,17 @@ SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付け�
 - 確かめた後に`none`を設定し直し、3か所とも`none`のままであることを確かめた。
 - `bedrock-mantle`（東京）のprojectは、自動で作られる`default`の1つだけで、その保持は`inherit`だった。projectの値は
   accountより優先するが、`inherit`はaccountの値（`none`）に従う。projectを`none`以外へ変える操作（`UpdateProject`）と、
-  `none`以外のprojectを作る操作（`CreateProject`）はSCPで禁止している。
+  `none`以外のprojectを作る操作（`CreateProject`）はSCPで禁止している。`default`のprojectを`default`へ更新する操作が
+  SCPで拒否され、値が`inherit`のままであることを出力で確かめた。条件の演算子は`StringNotEquals`である。「projectは保持を
+  `none`と明示したときだけ作れる」はAWSの例とこの演算子からの推論で、作成は試していない。
+- **管理用のアカウント**にもSCPは効かないが、念のため東京・大阪の`bedrock-runtime`の系統と東京の`bedrock-mantle`の保持を
+  `none`に設定した（2026-10-21）。管理用で`none`以外へ変える操作は機械的には止まらない。管理用に処理を載せないこと（決定1）は
+  文章で止める。
+- **定期実行のマシンの認証情報**（TASK-025の完了条件の確認範囲）。2026-10-21に、このマシンのAWS CLIの設定に長期固定の
+  アクセスキーが2つあった。1つは旧IAMユーザーのもので、すでに無効だった。もう1つは**今回の組織の外にある別のAWSアカウント**
+  （2022年の学習用）の、管理者権限のIAMユーザーのもので、有効だった。そのアカウントにはopt-outもSCPも効かない。人間が
+  そのキーを無効化し、このマシンからAWS CLIの認証情報のファイルを削除した。無効化した後は、そのキーで認証が通らないことを
+  確かめた。**このマシンには、2026-10-21時点でAWSの長期キーが無い**。今後はIAM Identity Center経由でアプリ用だけを使う（決定1）。
 - 保持の値を変えるAPIは、data retentionのページのIAM actionsの表では`PutAccountDataRetention`と、mantleのprojectの作成・
   更新だけで、値を消したり既定へ戻したりする別の操作は載っていない（`inherit`へ戻す操作も、`none`以外なのでSCPで拒否される）。
 
@@ -1652,7 +1662,7 @@ SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付け�
 
 2026-10-21に、本節（上記「2026-10-08 公開資料での確認」と表）で引用した出典をすべて取り直し、Last Updatedと、
 引用した文が原文に残っているかを照合した。Last Updatedの無いページ（AWSのドキュメント・FAQ）とDPAは、引用した文が
-残っているかで照合した。
+残っているかで照合した。引用文の無い参照ページ（Bedrockのdata protectionなど）は、照合の対象外とした。
 
 - **変わっていなかったもの**: Sub-processors（Last Updated: July 28, 2026。Transcribeの処理地には日本以外が引き続き
   含まれる）、DPA（6.1・9.1・9.3・9.4・9.5・12.1・16・17）、SOC（August 11, 2026）・ISO（September 1, 2026）・
@@ -1679,6 +1689,11 @@ SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付け�
   ある」は、今のページでは原則の文そのものが「モデル別の検知とCSAMの検知を条件とする」と限定している、と読み替える。
   「保持しないことを保証するには`none`を明示する」「保持が必須のモデルではAWSが人によるレビューを行い得る」
   「レビューするのはAWSで、提供元へは渡らない」という結論は変わらない。
+  ただし、保持を`none`にしてもCSAMの検知による保存とレビュー（"may store and review the flagged input or output"）まで
+  止まるかは、data retentionのページ（`none`は "No request or response data is written to durable storage"）と
+  abuse detectionのページのどちらにも明記が無く、未確認である。abuse detectionの記述は画像の入出力についてで、
+  このアプリはテキストだけを送受信するが、Service Terms 50.12.2.1は入力の種類を限っていない。確認はTASK-009が行い、
+  確認するまで利用者への説明で「保持しない」と書かない。
 
 #### 追加で確認した資料
 
@@ -1716,6 +1731,8 @@ SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付け�
 | 4 Transcribeの人によるレビュー | 未確認（ある・ないの記述が無い。権限を持つ従業員がアクセスし得る） | **条件つきで受け入れる**。条件は、録音前の案内（TASK-010）で「人が見ることはない」とは書かないこと。改善目的の利用はopt-outで止めてあり、案内が事実より強い約束をしなければ利用者を誤導しない。AWS Supportへの問い合わせは、技術的な問い合わせに有料プランが要り、問い合わせの規律もTASK-017で決まる前なので選ばない | 条件はTASK-010の完了条件に入れた |
 | 9 ISOの証明書の本文 | 未確認 | 受け入れる（参考扱いの項目で、対象範囲は公開ページで確認済み） | なし（受け入れ） |
 | 1・2・4 東京・大阪以外でのBedrockの保持 | `inherit`（モデルの既定に従う） | **機械的には止めず、TASK-009の完了条件の文章で止めることを受け入れる**（上記の決定3） | TASK-009 |
+| 1・2・4 管理用のアカウントでの呼び出し | 東京・大阪の保持は`none`。SCPは効かない | **管理用に処理を載せないことを文章で止める**（上記の決定1。2026-10-21に人間が受け入れた） | TASK-009 |
+| 2・4 `none`のもとでのCSAMの検知による保存・レビュー | 未確認 | **公開を止める**（下記「出典の照合」の結論への影響） | TASK-009 |
 | 8の(b)(c) | 実環境が要る | **公開を止める** | TASK-015 |
 | 1・2・4のmodel idごとの違い、8の(a)、`DeleteTranscriptionJob`で消える範囲 | 構成を決めてから確かめる | **公開を止める**（既定どおり） | TASK-009 |
 | 3の越境の手続き、AWS Supportへの問い合わせの規律、契約主体の評価 | 法的評価 | **公開を止める**（既定どおり） | TASK-017 |
