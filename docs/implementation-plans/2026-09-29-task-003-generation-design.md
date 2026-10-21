@@ -1425,7 +1425,7 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 | # | 確認する項目 | 確認先 | 現状 |
 | --- | --- | --- | --- |
 | 1 | 入力を学習・モデル改善に使わないこと | Transcribe: AWS OrganizationsのAI services opt-out policyを適用し、effective policyを照会。Bedrock: モデルの data retention mode | **2026-10-21に対応済み**（2026-10-08時点は要対応。§18のとおり、Transcribeは**既定ではopt-inのまま**で、設定しない限り改善に使われ得る）。OrganizationsのRootにopt-out policy（既定で`optOut`、下位で上書き不可）を付け、管理用・アプリ用の両方のアカウントでeffective policyが`optOut`であることを確認した（下記）。Bedrockのmodel idごとの値はTASK-009 |
-| 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）と**保持データの所在リージョン**、Transcribeのjob記録の保持 | Bedrockは、**保持しないことを原則とし、保持が必須のモデルがあることを2026-10-08に公開資料で確認した。ただし未設定のリージョンはモデルの既定に従い、保持しないことを保証するには、効く値（project → account → モデルの既定の順で最初の`inherit`以外の値）が`none`であることと、`none`以外へ変えられないようSCPでaccountとproject（bedrock-mantleの場合）の両方を塞ぐことが要る**（下記）。model idごとの値は未確認（TASK-009）。保持ありを選ぶなら**所在リージョンの確認が必須**（§18必須条件3）。**Transcribeのjob記録は各リージョンで90日保持（調整不可）** で、[endpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)に記載があり**確認済み**。`privacy.md §5-1`は`DeleteTranscriptionJob`で消す設計なので矛盾しない。**2026-10-20**: Bedrockの保持を`none`に固定する手段（設定と、変更を禁止するSCP）はTASK-009で入れると決めた（下記） |
+| 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）と**保持データの所在リージョン**、Transcribeのjob記録の保持 | Bedrockは、**保持しないことを原則とし、保持が必須のモデルがあることを2026-10-08に公開資料で確認した。ただし未設定のリージョンはモデルの既定に従い、保持しないことを保証するには、効く値（project → account → モデルの既定の順で最初の`inherit`以外の値）が`none`であることと、`none`以外へ変えられないようSCPでaccountとproject（bedrock-mantleの場合）の両方を塞ぐことが要る**（下記）。model idごとの値は未確認（TASK-009）。保持ありを選ぶなら**所在リージョンの確認が必須**（§18必須条件3）。**Transcribeのjob記録は各リージョンで90日保持（調整不可）** で、[endpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)に記載があり**確認済み**。`privacy.md §5-1`は`DeleteTranscriptionJob`で消す設計なので矛盾しない。**2026-10-21に固定した**: アプリ用の東京・大阪で保持を`none`にし、`none`以外への変更をSCPで禁止した（下記「Bedrockの保持の固定」。10-20にはTASK-009で入れると決めたが、10-21に変えた） |
 | 3 | 処理・保存のリージョン。越境する場合の手続き | Bedrockの In-Region / Geo / Global の別。Transcribeのopt-out前の保存先 | **方針は2026-10-03に決定済み**（`architecture.md`「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」）。**手続きは未確認。委託であっても「外国にある第三者への提供」には別の規律がかかる整理があり、同意の取得または移転先の体制整備と本人への情報提供が必要になり得る**（TASK-017）。**確認が済むまでは国内に収まる経路で運用する**（範囲の定義は`architecture.md`「データ所在地と費用」）。opt-outしない限りTranscribeも利用リージョン外へ保存され得る。**2026-10-21に関門の範囲を確認した**: Transcribeのバッチが東京（`ap-northeast-1`）で提供されていることと、Bedrockは推論が国内に収まる経路から選ぶ方針（`architecture.md`「データ所在地と費用」）であること。実際に選んだ経路の確認はTASK-009、手続きはTASK-017 |
 | 4 | 人によるレビューの有無と条件、**その実施地とアクセス経路** | Bedrockの `aws_review` モードの要否、abuse detectionの条件、**レビューをどこから行うか**、**prompt cache等の滞留先** | 一般的な部分（人によるレビューが必須のモデルがあること、レビューするのはAWSで提供元へは渡らないこと）は確認済み。**実施する国・アクセス経路とcacheの滞留先は未確認**。**`architecture.md`「データ所在地と費用」が求める「誰がどこから閲覧し得るか」の確認はここで行う**（実施地が国外なら、保存が国内でも要求に反する）。cacheの滞留先も同じ理由で含める（下記「2026-10-08 公開資料での確認」）。**2026-10-21**: 契約上の根拠（Service Terms 50.12.2）を確認した。Transcribeの人によるレビューは未確認のまま、人間が条件つきで受け入れた（下記）。実施地・アクセス経路・cacheの滞留先はTASK-009 |
 | 5 | サブプロセッサの開示 | AWSのサブプロセッサ一覧 | **確認済み**（下記「2026-10-08 公開資料での確認」）。**2026-10-21に更新通知を購読した** |
@@ -1561,11 +1561,15 @@ TASK-025の「着手するときに人間と決めること」の3点:
 2. **公開を止めると判断した項目のうち、実際の環境が要るもの（項目8の(b)(c)）はTASK-015で確かめる**。
    TASK-015は実サービス構成で検証するタスクで、すでにTASK-025に依存している。なお、ECSなどの本番環境を
    作るタスクは2026-10-21時点で`docs/tasks/`に無い（TASK-025の範囲外の課題として記録だけする）。
-3. **Bedrockのmodel idごとの受け入れは、TASK-009の完了条件の文章で止める形のままにする**。あわせて、
-   Bedrockの保持を`none`に固定する手段（使うendpointのaccountとprojectで`none`を設定し、`none`以外への変更を
-   SCPで禁止する）をTASK-009の完了条件に入れる。理由: 手段の中身がendpoint（`bedrock-runtime`か
-   `bedrock-mantle`か）の選択に依存し、その選択はTASK-009が行う。TASK-025で入れると、決まっていない
-   endpointの両方を塞ぐことになり、TASK-009と互いを待つ形にも戻る。
+3. **Bedrockの保持をTASK-025の中で`none`に固定し、`none`以外への変更をSCPで禁止する**（機械的に止める）。
+   model idの選定とendpointの選択はTASK-009に残す。保持が必須のモデルは、`none`のもとでは呼び出しがエラーに
+   なるので、TASK-009がどのモデルを選んでも保持されない。
+   経緯: 2026-10-20には「TASK-009の完了条件の文章で止め、固定する手段もTASK-009で入れる」と決めた。手段が
+   endpointの選択に依存するためである。しかし2026-10-21のレビューで、TASK-025をDoneにするとTASK-009の依存先が
+   すべてDoneになり、定期実行がTASK-009に着手できる（`node scripts/task-status.mjs TASK-009`が`runnable: true`）
+   ことが分かった。保持を固定する前の送信は取り消せないため、2026-10-08の「送る前の事故は依存で機械的に防ぐ」と
+   同じ考え方で、2026-10-21に人間が判断を変えた。endpointの選択に依存する問題は、両方のendpointを固定する
+   ことで避けた（下記「Bedrockの保持の固定」）。
 
 ほかに決めたこと:
 
@@ -1583,6 +1587,38 @@ TASK-025の「着手するときに人間と決めること」の3点:
 | AI services opt-out policy（項目1） | 管理用・アプリ用の両方で、effective policyが`{"services":{"default":{"opt_out_policy":"optOut"}}}` | Organizations →「AWS アカウント」→ 各アカウント →「ポリシー」→ AIサービスのオプトアウトポリシーの有効なポリシー。付けたポリシーはRootにあり、`services`・`default`・`opt_out_policy`のすべてで`@@operators_allowed_for_child_policies`が`@@none`（下位で上書きできない） |
 | 事故時の連絡先（項目7） | 管理用・アプリ用の両方で、セキュリティ・運用の代替連絡先が登録済み | アカウント設定の「代替の連絡先」 |
 | サブプロセッサの更新通知（項目5） | 購読済み（確認メールは無かった） | [購読フォーム](https://pages.awscloud.com/sub-processors.html) |
+
+#### Bedrockの保持の固定（項目1・2・4。2026-10-21に人間が実施）
+
+[data retention](https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html)は "The setting is per-Region:
+it governs every request in the Region where you set it and does not propagate to other Regions." とする。国内に収まる
+経路で推論先になり得る東京・大阪を対象にした。[endpointの提供リージョン](https://docs.aws.amazon.com/bedrock/latest/userguide/endpoints-region-availability.html)
+では、`bedrock-mantle`は東京にあり大阪に無いので、設定は3か所である。音声やテキストは送っていない（設定のAPIだけを
+呼んだ）。
+
+| 場所（アプリ用） | 設定前 | 設定後 | 設定の方法 |
+| --- | --- | --- | --- |
+| `bedrock-runtime`（control plane）× 東京 | `inherit` | `none` | `aws bedrock put-account-data-retention --mode none` |
+| `bedrock-runtime`（control plane）× 大阪 | `inherit` | `none` | 同上 |
+| `bedrock-mantle` × 東京 | `inherit` | `none` | `PUT /v1/data_retention`（CLIに無いため、SigV4で署名したcurl） |
+
+SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付けた（SCPの種類はこのとき有効にした。既定の
+`FullAWSAccess`は残してある）。中身はdata retentionのページの2つの例をまとめたもので、`bedrock-mantle:PutAccountDataRetention`・
+`bedrock-mantle:CreateProject`・`bedrock-mantle:UpdateProject`と`bedrock:PutAccountDataRetention`を、条件キー
+`DataRetentionMode`が`none`でないときに拒否する（projectは保持を`none`と明示したときだけ作れる）。SCPは管理アカウントに
+効かないが、管理アカウントには処理を載せない（上記の決定1）。
+
+効いていることの確認（アプリ用、2026-10-21）:
+
+- 3か所とも、設定後の値が`none`であることを読み直して確かめた。
+- `none`以外（`default`）へ変える操作は、大阪の`bedrock-runtime`と東京の`bedrock-mantle`で、SCPによる明示的な拒否
+  （"with an explicit deny in a service control policy"）になることを出力で確かめた。東京の`bedrock-runtime`も同じ操作を
+  行い、直後の値は`none`だったが、拒否のメッセージは記録に残せた範囲に含まれていない。SCPはリージョンを問わず効く。
+- 確かめた後に`none`を設定し直し、3か所とも`none`のままであることを確かめた。
+
+**残ること**: 東京・大阪以外のリージョンは`inherit`のままで、モデルの既定に従う。国外へ出る経路（Globalなど）を使う
+場合は、推論先になり得るリージョンの扱いを一次資料で確かめてから使う（TASK-009の完了条件。国外経路はTASK-017の結論が
+先に要る）。SCPは保持の設定を変える操作を止めるもので、リージョンの設定そのものが`none`かどうかは見ない。
 
 AWSの準備のうち、この確認の前提になる事実（2026-10-20時点。人間が実施）:
 
@@ -1677,6 +1713,7 @@ AWSの準備のうち、この確認の前提になる事実（2026-10-20時点�
 | 3の越境の手続き、AWS Supportへの問い合わせの規律、契約主体の評価 | 法的評価 | **公開を止める**（既定どおり） | TASK-017 |
 
 TASK-009の前の関門（項目1のTranscribeのopt-outと、項目3の方針）は、受け入れの対象にせず確認した（上記）。
+Bedrockの保持も、TASK-009が送る前に`none`へ固定した（上記「Bedrockの保持の固定」）。
 
 #### TASK-010への申し送り
 
