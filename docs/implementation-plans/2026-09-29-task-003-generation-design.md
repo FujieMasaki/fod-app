@@ -1563,7 +1563,12 @@ TASK-025の「着手するときに人間と決めること」の3点:
    作るタスクは2026-10-21時点で`docs/tasks/`に無い（TASK-025の範囲外の課題として記録だけする）。
 3. **Bedrockの保持をTASK-025の中で`none`に固定し、`none`以外への変更をSCPで禁止する**（機械的に止める）。
    model idの選定とendpointの選択はTASK-009に残す。保持が必須のモデルは、`none`のもとでは呼び出しがエラーに
-   なるので、TASK-009がどのモデルを選んでも保持されない。
+   なるので、**アプリ用の東京・大阪で推論する限り**、TASK-009がどのモデルを選んでも保持されない。それ以外の
+   リージョンでの呼び出しや国外へ出る経路は、保持の設定が`inherit`のままモデルの既定に従う。これは機械的には止めず、
+   TASK-009の完了条件（国内に収まる経路だけを使う、推論先のリージョンの扱いを確かめる）の文章で止めることを、
+   2026-10-21に人間が改めて受け入れた（経路の確認を文章で止めることは、2026-10-08の切り出しでも受け入れている）。
+   理由: 別のリージョンを明示して呼んだときだけ開く穴で、送るのは開発中のテストデータであり、SCPのリージョン
+   条件で止める手間に見合わないため。
    経緯: 2026-10-20には「TASK-009の完了条件の文章で止め、固定する手段もTASK-009で入れる」と決めた。手段が
    endpointの選択に依存するためである。しかし2026-10-21のレビューで、TASK-025をDoneにするとTASK-009の依存先が
    すべてDoneになり、定期実行がTASK-009に着手できる（`node scripts/task-status.mjs TASK-009`が`runnable: true`）
@@ -1588,6 +1593,12 @@ TASK-025の「着手するときに人間と決めること」の3点:
 | 事故時の連絡先（項目7） | 管理用・アプリ用の両方で、セキュリティ・運用の代替連絡先が登録済み | アカウント設定の「代替の連絡先」 |
 | サブプロセッサの更新通知（項目5） | 購読済み（確認メールは無かった） | [購読フォーム](https://pages.awscloud.com/sub-processors.html) |
 
+AWSの準備のうち、この確認の前提になる事実（2026-10-20時点。人間が実施）:
+
+- 利用者は両方のアカウントへIAM Identity Center経由で入る。長期固定のアクセスキーを残さない対応をした（項目8に関係する）。
+- アカウントの「サービスプロバイダー」はAmazon Web Services Japan G.K.である。契約主体が国内法人か外国法人かは
+  TASK-017の判定に関わるため、事実として渡す（評価はしない）。日本語版のAWSカスタマーアグリーメントの版は2026-08-14。
+
 #### Bedrockの保持の固定（項目1・2・4。2026-10-21に人間が実施）
 
 [data retention](https://docs.aws.amazon.com/bedrock/latest/userguide/data-retention.html)は "The setting is per-Region:
@@ -1598,14 +1609,14 @@ it governs every request in the Region where you set it and does not propagate t
 
 | 場所（アプリ用） | 設定前 | 設定後 | 設定の方法 |
 | --- | --- | --- | --- |
-| `bedrock-runtime`（control plane）× 東京 | `inherit` | `none` | `aws bedrock put-account-data-retention --mode none` |
-| `bedrock-runtime`（control plane）× 大阪 | `inherit` | `none` | 同上 |
+| `bedrock-runtime`の系統 × 東京 | `inherit` | `none` | `aws bedrock put-account-data-retention --mode none`（設定はcontrol planeのAPIで、名前空間は`bedrock`） |
+| `bedrock-runtime`の系統 × 大阪 | `inherit` | `none` | 同上 |
 | `bedrock-mantle` × 東京 | `inherit` | `none` | `PUT /v1/data_retention`（CLIに無いため、SigV4で署名したcurl） |
 
 SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付けた（SCPの種類はこのとき有効にした。既定の
 `FullAWSAccess`は残してある）。中身はdata retentionのページの2つの例をまとめたもので、`bedrock-mantle:PutAccountDataRetention`・
-`bedrock-mantle:CreateProject`・`bedrock-mantle:UpdateProject`と`bedrock:PutAccountDataRetention`を、条件キー
-`DataRetentionMode`が`none`でないときに拒否する（projectは保持を`none`と明示したときだけ作れる）。SCPは管理アカウントに
+`bedrock-mantle:CreateProject`・`bedrock-mantle:UpdateProject`を条件キー`bedrock-mantle:DataRetentionMode`が、
+`bedrock:PutAccountDataRetention`を条件キー`bedrock:DataRetentionMode`が、それぞれ`none`でないときに拒否する（projectは保持を`none`と明示したときだけ作れる）。SCPは管理アカウントに
 効かないが、管理アカウントには処理を載せない（上記の決定1）。
 
 効いていることの確認（アプリ用、2026-10-21）:
@@ -1619,15 +1630,7 @@ SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付け�
 **残ること**: 東京・大阪以外のリージョンは`inherit`のままで、モデルの既定に従う。国外へ出る経路（Globalなど）を使う
 場合は、推論先になり得るリージョンの扱いを一次資料で確かめてから使う（TASK-009の完了条件。国外経路はTASK-017の結論が
 先に要る）。SCPは保持の設定を変える操作を止めるもので、リージョンの設定そのものが`none`かどうかは見ない。
-
-AWSの準備のうち、この確認の前提になる事実（2026-10-20時点。人間が実施）:
-
-- IAM Identity Centerは`us-east-1`で、利用者は両方のアカウントへIAM Identity Center経由で入る。
-- 以前にMac上で使っていたIAMユーザーは、アクセスキーとコンソールアクセスを無効にしてあり、後日削除する
-  （長期固定のキーを残さない。項目8に関係する）。
-- 管理用のrootにはMFAを設定し、予算アラートを置いた。
-- アカウントの「サービスプロバイダー」はAmazon Web Services Japan G.K.である。契約主体が国内法人か外国法人かは
-  TASK-017の判定に関わるため、事実として渡す（評価はしない）。日本語版のAWSカスタマーアグリーメントの版は2026-08-14。
+東京・大阪以外での呼び出しを機械的に止めることはしない（上記の決定3。2026-10-21に人間が受け入れた）。
 
 #### AWS Artifactのレポート（項目9）
 
@@ -1706,8 +1709,9 @@ AWSの準備のうち、この確認の前提になる事実（2026-10-20時点�
 
 | 項目 | 状態 | 人間の判断（2026-10-20〜21） | 確かめる担当 |
 | --- | --- | --- | --- |
-| 4 Transcribeの人によるレビュー | 未確認（ある・ないの記述が無い。権限を持つ従業員がアクセスし得る） | **条件つきで受け入れる**。条件は、録音前の案内（TASK-010）で「人が見ることはない」とは書かないこと。改善目的の利用はopt-outで止めてあり、案内が事実より強い約束をしなければ利用者を誤導しない。AWS Supportへの問い合わせは、技術的な問い合わせに有料プランが要り、問い合わせの規律もTASK-017で決まる前なので選ばない | なし（受け入れ） |
+| 4 Transcribeの人によるレビュー | 未確認（ある・ないの記述が無い。権限を持つ従業員がアクセスし得る） | **条件つきで受け入れる**。条件は、録音前の案内（TASK-010）で「人が見ることはない」とは書かないこと。改善目的の利用はopt-outで止めてあり、案内が事実より強い約束をしなければ利用者を誤導しない。AWS Supportへの問い合わせは、技術的な問い合わせに有料プランが要り、問い合わせの規律もTASK-017で決まる前なので選ばない | 条件はTASK-010の完了条件に入れた |
 | 9 ISOの証明書の本文 | 未確認 | 受け入れる（参考扱いの項目で、対象範囲は公開ページで確認済み） | なし（受け入れ） |
+| 1・2・4 東京・大阪以外でのBedrockの保持 | `inherit`（モデルの既定に従う） | **機械的には止めず、TASK-009の完了条件の文章で止めることを受け入れる**（上記の決定3） | TASK-009 |
 | 8の(b)(c) | 実環境が要る | **公開を止める** | TASK-015 |
 | 1・2・4のmodel idごとの違い、8の(a)、`DeleteTranscriptionJob`で消える範囲 | 構成を決めてから確かめる | **公開を止める**（既定どおり） | TASK-009 |
 | 3の越境の手続き、AWS Supportへの問い合わせの規律、契約主体の評価 | 法的評価 | **公開を止める**（既定どおり） | TASK-017 |

@@ -285,6 +285,10 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   適用後にeffective policyを照会して効いていることを確認する（2026-10-21にTASK-025で、OrganizationsのRootへ適用し
   両方のアカウントで効いていることを確認した。公開前にTASK-015で改めて確かめる）。
   なおBedrockはこのopt-out policyの対象外で、モデルごとのdata retention modeで別に確認する。
+- **Bedrockの保持は、アプリ用の東京・大阪で`none`に固定し、`none`以外への変更をSCPで禁止する**（2026-10-21に
+  TASK-025で設定。経緯と確認の記録は[TASK-003 Plan §26](implementation-plans/2026-09-29-task-003-generation-design.md)）。
+  保持が必須のモデルは呼び出しがエラーになるので使えない。使う場合は、人間の受け入れの判断とSCPの変更を先に行う。
+  それ以外のリージョンは`inherit`のままで、国内に収まる経路だけを使う運用（下記「データ所在地と費用」）で止める。
 - **Bedrockのモデルの推論経路は、下記「データ所在地と費用」に従う**（2026-10-03に変更。変更前は
   「推論が日本国外へ出ない経路で使えるものから選ぶ」だった）。**「国内に収まる経路」かどうかの判定方法は同節に
   置く**。なお**Globalプロファイルは世界中へルーティングされる**。endpointによって可否が違うため、
@@ -569,7 +573,7 @@ Webの接続は2026-10-05に[TASK-007 Plan](implementation-plans/2026-10-05-task
 - `rate_limit_counters`の定期削除の実行基盤、本番のメール配送（SES）とGoogle OAuth clientの設定
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
   （ログ14日・backup 7日は既定案であり、実値は未確定）
-- promptの最終文面、Bedrockのmodel idとdata retention mode（TASK-009で確定）
+- promptの最終文面、Bedrockのmodel id（TASK-009で確定。data retention modeはアプリ用の東京・大阪で`none`に固定済み）
 - 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認のうち、構成と実環境で確かめる残り
   （TASK-025の範囲は2026-10-21に終えた。残りはmodel idごとの保持・人によるレビュー・経路をTASK-009、
   鍵の取得経路と侵害時の手順をTASK-015が公開前に確かめる）
