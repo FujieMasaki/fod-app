@@ -1424,14 +1424,14 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 | # | 確認する項目 | 確認先 | 現状 |
 | --- | --- | --- | --- |
 | 1 | 入力を学習・モデル改善に使わないこと | Transcribe: AWS OrganizationsのAI services opt-out policyを適用し、effective policyを照会。Bedrock: モデルの data retention mode | **要対応。**§18のとおり、Transcribeは**既定ではopt-inのまま**。設定しない限り改善に使われ得る。**2026-10-21に対応済み**: OrganizationsのRootにopt-out policy（既定で`optOut`、下位で上書き不可）を付け、管理用・アプリ用の両方のアカウントでeffective policyが`optOut`であることを確認した（下記）。Bedrockのmodel idごとの値はTASK-009 |
-| 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）と**保持データの所在リージョン**、Transcribeのjob記録の保持 | Bedrockは、**保持しないことを原則とし、保持が必須のモデルがあることを2026-10-08に公開資料で確認した。ただし未設定のリージョンはモデルの既定に従い、保持しないことを保証するには、効く値（project → account → モデルの既定の順で最初の`inherit`以外の値）が`none`であることと、`none`以外へ変えられないようSCPでaccountとproject（bedrock-mantleの場合）の両方を塞ぐことが要る**（下記）。model idごとの値は未確認（TASK-009）。保持ありを選ぶなら**所在リージョンの確認が必須**（§18必須条件3）。**Transcribeのjob記録は各リージョンで90日保持（調整不可）** で、[endpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)に記載があり**確認済み**。`privacy.md §5-1`は`DeleteTranscriptionJob`で消す設計なので矛盾しない。**2026-10-21**: Bedrockの保持を`none`に固定する手段（設定と、変更を禁止するSCP）はTASK-009で入れると決めた（下記） |
+| 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）と**保持データの所在リージョン**、Transcribeのjob記録の保持 | Bedrockは、**保持しないことを原則とし、保持が必須のモデルがあることを2026-10-08に公開資料で確認した。ただし未設定のリージョンはモデルの既定に従い、保持しないことを保証するには、効く値（project → account → モデルの既定の順で最初の`inherit`以外の値）が`none`であることと、`none`以外へ変えられないようSCPでaccountとproject（bedrock-mantleの場合）の両方を塞ぐことが要る**（下記）。model idごとの値は未確認（TASK-009）。保持ありを選ぶなら**所在リージョンの確認が必須**（§18必須条件3）。**Transcribeのjob記録は各リージョンで90日保持（調整不可）** で、[endpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)に記載があり**確認済み**。`privacy.md §5-1`は`DeleteTranscriptionJob`で消す設計なので矛盾しない。**2026-10-20**: Bedrockの保持を`none`に固定する手段（設定と、変更を禁止するSCP）はTASK-009で入れると決めた（下記） |
 | 3 | 処理・保存のリージョン。越境する場合の手続き | Bedrockの In-Region / Geo / Global の別。Transcribeのopt-out前の保存先 | **方針は2026-10-03に決定済み**（`architecture.md`「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」）。**手続きは未確認。委託であっても「外国にある第三者への提供」には別の規律がかかる整理があり、同意の取得または移転先の体制整備と本人への情報提供が必要になり得る**（TASK-017）。**確認が済むまでは国内に収まる経路で運用する**（範囲の定義は`architecture.md`「データ所在地と費用」）。opt-outしない限りTranscribeも利用リージョン外へ保存され得る。**2026-10-21に関門の範囲を確認した**: Transcribeのバッチが東京（`ap-northeast-1`）で提供されていることと、Bedrockは推論が国内に収まる経路から選ぶ方針（`architecture.md`「データ所在地と費用」）であること。実際に選んだ経路の確認はTASK-009、手続きはTASK-017 |
 | 4 | 人によるレビューの有無と条件、**その実施地とアクセス経路** | Bedrockの `aws_review` モードの要否、abuse detectionの条件、**レビューをどこから行うか**、**prompt cache等の滞留先** | 一般的な部分（人によるレビューが必須のモデルがあること、レビューするのはAWSで提供元へは渡らないこと）は確認済み。**実施する国・アクセス経路とcacheの滞留先は未確認**。**`architecture.md`「データ所在地と費用」が求める「誰がどこから閲覧し得るか」の確認はここで行う**（実施地が国外なら、保存が国内でも要求に反する）。cacheの滞留先も同じ理由で含める（下記「2026-10-08 公開資料での確認」）。**2026-10-21**: 契約上の根拠（Service Terms 50.12.2）を確認した。Transcribeの人によるレビューは未確認のまま、人間が条件つきで受け入れた（下記）。実施地・アクセス経路・cacheの滞留先はTASK-009 |
 | 5 | サブプロセッサの開示 | AWSのサブプロセッサ一覧 | **確認済み**（下記「2026-10-08 公開資料での確認」）。**2026-10-21に更新通知を購読した** |
 | 6 | 委託契約（DPA相当）を結べること | AWS DPA（Service Termsへ組み込み済み・自動適用） | **確認済み**。別途の締結を要しない。ただし**日本の個人情報保護法上の委託先としての評価は自分たちで行う** |
 | 7 | 事故発生時の通知義務と期限 | AWS DPAの該当条項 | **公開資料で確認済み**（下記）。**DPA上は時間で区切った期限は無い**。**2026-10-21に確認済み**: Supplementary Addendumにも事故通知の時期の定めは無く、両アカウントでセキュリティ・運用の連絡先が登録済みである。TASK-017の漏えい対応と接続する |
-| 8 | 鍵の最小権限・ローテーション・漏えい時の失効 | ECS task roleのIAM policy、credential取得経路 | **一部を設計で解決。長期固定のAPIキーは持たない**が、**ECSはSDKへ一時credentialを供給する**ため項目は残る。確認対象は(a)roleの最小権限（対象bucketと対象モデルだけ）、(b)credential取得経路の保護、(c)侵害時のrole/policy無効化とtask停止の手順。policyの内容はTASK-009。**2026-10-21**: (b)(c)は実際のECS環境が要るため、公開を止めたうえでTASK-015で確かめると人間が決めた |
-| 9 | 第三者認証の有無 | AWS Artifact（SOC 1/2/3、ISO 27001/27017/27018） | **対象範囲のページで確認済み**（下記）。**2026-10-21にAWS ArtifactでSOC 2 Type 2の本文を確認した**（下記）。ISOの証明書の本文は未確認。**これだけを根拠にしない** |
+| 8 | 鍵の最小権限・ローテーション・漏えい時の失効 | ECS task roleのIAM policy、credential取得経路 | **一部を設計で解決。長期固定のAPIキーは持たない**が、**ECSはSDKへ一時credentialを供給する**ため項目は残る。確認対象は(a)roleの最小権限（対象bucketと対象モデルだけ）、(b)credential取得経路の保護、(c)侵害時のrole/policy無効化とtask停止の手順。policyの内容はTASK-009。**2026-10-20**: (b)(c)は実際のECS環境が要るため、公開を止めたうえでTASK-015で確かめると人間が決めた |
+| 9 | 第三者認証の有無 | AWS Artifact（SOC 1/2/3、ISO 27001/27017/27018） | **対象範囲のページで確認済み**（下記）。**2026-10-21にAWS ArtifactでSOC 2 Type 2の本文を確認した**（内容は機密のため記録しない。下記）。ISOの証明書の本文は未確認。**これだけを根拠にしない** |
 
 追加の確認対象（レビュー指摘で判明。9項目の外だが同じ確認の中で扱う）:
 
@@ -1594,16 +1594,14 @@ AWSの準備のうち、この確認の前提になる事実（2026-10-20時点�
 
 #### AWS Artifactのレポート（項目9）
 
-SOC 2 Type 2（"Description of the Amazon Web Services System Relevant to Security, Availability, Confidentiality,
-and Privacy"）を2026-10-21にAWS Artifactから取得して読んだ。**このレポートの利用条件は抜粋を禁じているので、
-引用せず事実だけを記録する**（レポートはリポジトリに置かない）。
+2026-10-21に、AWS ArtifactからSOC 2 Type 2のレポートを取得して本文を確認した。**レポートはAWSの機密情報として
+扱われ、利用条件が開示と抜粋を制限しているので、このリポジトリ（公開）には内容を記録しない**（レポートも置かない）。
+記録するのは、公開の[SOC](https://aws.amazon.com/compliance/services-in-scope/SOC/)の対象範囲ページでも分かる
+事実（Amazon TranscribeとAmazon Bedrockが対象に入ること）と、本文を確認したという事実だけである。本文を見る必要が
+あれば、AWS Artifactから取り直す。
 
-- 対象期間は2025-04-01〜2026-03-31、監査人の報告日は2026-05-29。
-- 監査人の報告の対象サービスに、Amazon TranscribeとAmazon Bedrock（Bedrock Marketplaceを除く）が入る。
-  対象の拠点に東京リージョンが入る。
-- 監査人の意見は限定の付かないもの。統制のテスト結果は、検索した範囲ですべて逸脱なしだった。
-- 監査人は、AIサービスの性能や完全性について意見を述べないと明記している。**SOC 2が裏付けるのはセキュリティの
-  統制までで、学習利用・保持・人によるレビューの扱いは裏付けない**（項目9を「これだけを根拠にしない」理由）。
+- SOC 2はセキュリティ等の統制についての報告で、学習利用・保持・人によるレビューの扱いを裏付けるものではない
+  （項目9を「これだけを根拠にしない」理由）。
 - ISOの証明書の本文は見ていない。参考扱いの項目で、対象サービスは公開ページで確認済みのため、受け入れる。
 
 #### 出典の照合（TASK-025の必要な検証）
