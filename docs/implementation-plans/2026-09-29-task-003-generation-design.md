@@ -1413,7 +1413,7 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 確認していない項目を「問題ない」と扱わない。確認が済むまで公開しない。
 
 **2026-10-21に、TASK-025の範囲の確認を終えた**（下記「2026-10-21 アカウント設定・レポートの確認と出典の
-取り直し」）。TASK-009の前の関門（項目1のTranscribeのopt-outと、項目3の方針）は閉じた。確認できなかった
+取り直し」）。TASK-009の前の関門（項目1のTranscribeのopt-outと、項目3の方針）は、条件を満たしたことを確認した。確認できなかった
 項目は、人間が受け入れるか、公開を止めたうえで確かめるタスクを決めた（同節「受け入れと公開を止める項目」）。
 日本の個人情報保護法上の評価はTASK-017で行い、ここでは扱わない。
 
@@ -1424,7 +1424,7 @@ TASK-003の完了条件7が求める9項目について、**確認先と確認�
 
 | # | 確認する項目 | 確認先 | 現状 |
 | --- | --- | --- | --- |
-| 1 | 入力を学習・モデル改善に使わないこと | Transcribe: AWS OrganizationsのAI services opt-out policyを適用し、effective policyを照会。Bedrock: モデルの data retention mode | **要対応。**§18のとおり、Transcribeは**既定ではopt-inのまま**。設定しない限り改善に使われ得る。**2026-10-21に対応済み**: OrganizationsのRootにopt-out policy（既定で`optOut`、下位で上書き不可）を付け、管理用・アプリ用の両方のアカウントでeffective policyが`optOut`であることを確認した（下記）。Bedrockのmodel idごとの値はTASK-009 |
+| 1 | 入力を学習・モデル改善に使わないこと | Transcribe: AWS OrganizationsのAI services opt-out policyを適用し、effective policyを照会。Bedrock: モデルの data retention mode | **2026-10-21に対応済み**（2026-10-08時点は要対応。§18のとおり、Transcribeは**既定ではopt-inのまま**で、設定しない限り改善に使われ得る）。OrganizationsのRootにopt-out policy（既定で`optOut`、下位で上書き不可）を付け、管理用・アプリ用の両方のアカウントでeffective policyが`optOut`であることを確認した（下記）。Bedrockのmodel idごとの値はTASK-009 |
 | 2 | 保持期間と削除方法 | Bedrockの data retention mode（`none`が選べるか）と**保持データの所在リージョン**、Transcribeのjob記録の保持 | Bedrockは、**保持しないことを原則とし、保持が必須のモデルがあることを2026-10-08に公開資料で確認した。ただし未設定のリージョンはモデルの既定に従い、保持しないことを保証するには、効く値（project → account → モデルの既定の順で最初の`inherit`以外の値）が`none`であることと、`none`以外へ変えられないようSCPでaccountとproject（bedrock-mantleの場合）の両方を塞ぐことが要る**（下記）。model idごとの値は未確認（TASK-009）。保持ありを選ぶなら**所在リージョンの確認が必須**（§18必須条件3）。**Transcribeのjob記録は各リージョンで90日保持（調整不可）** で、[endpointとquota](https://docs.aws.amazon.com/general/latest/gr/transcribe.html)に記載があり**確認済み**。`privacy.md §5-1`は`DeleteTranscriptionJob`で消す設計なので矛盾しない。**2026-10-20**: Bedrockの保持を`none`に固定する手段（設定と、変更を禁止するSCP）はTASK-009で入れると決めた（下記） |
 | 3 | 処理・保存のリージョン。越境する場合の手続き | Bedrockの In-Region / Geo / Global の別。Transcribeのopt-out前の保存先 | **方針は2026-10-03に決定済み**（`architecture.md`「発話内容の保存と閲覧は日本国内に限る。推論のための一時的な処理は日本国外を許容する」）。**手続きは未確認。委託であっても「外国にある第三者への提供」には別の規律がかかる整理があり、同意の取得または移転先の体制整備と本人への情報提供が必要になり得る**（TASK-017）。**確認が済むまでは国内に収まる経路で運用する**（範囲の定義は`architecture.md`「データ所在地と費用」）。opt-outしない限りTranscribeも利用リージョン外へ保存され得る。**2026-10-21に関門の範囲を確認した**: Transcribeのバッチが東京（`ap-northeast-1`）で提供されていることと、Bedrockは推論が国内に収まる経路から選ぶ方針（`architecture.md`「データ所在地と費用」）であること。実際に選んだ経路の確認はTASK-009、手続きはTASK-017 |
 | 4 | 人によるレビューの有無と条件、**その実施地とアクセス経路** | Bedrockの `aws_review` モードの要否、abuse detectionの条件、**レビューをどこから行うか**、**prompt cache等の滞留先** | 一般的な部分（人によるレビューが必須のモデルがあること、レビューするのはAWSで提供元へは渡らないこと）は確認済み。**実施する国・アクセス経路とcacheの滞留先は未確認**。**`architecture.md`「データ所在地と費用」が求める「誰がどこから閲覧し得るか」の確認はここで行う**（実施地が国外なら、保存が国内でも要求に反する）。cacheの滞留先も同じ理由で含める（下記「2026-10-08 公開資料での確認」）。**2026-10-21**: 契約上の根拠（Service Terms 50.12.2）を確認した。Transcribeの人によるレビューは未確認のまま、人間が条件つきで受け入れた（下記）。実施地・アクセス経路・cacheの滞留先はTASK-009 |
