@@ -13,7 +13,7 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 ## 絶対に守ること
 
 - 監査（手順1〜5）では、コード・`docs/`・設定を変えない。コミット・push・外部への投稿をしない。worktree・
-  ブランチ・DBを作らない。書いてよいのは`<git-common-dir>/audits/`だけ（`git fetch`による追跡refの更新と、手順1の2で止まるときの品質ゲートの`--pause`を除く）。例外は、人間が依頼したときの後半の
+  ブランチ・DBを作らない。書いてよいのは`<git-common-dir>/audits/`だけ（`git fetch`による追跡refの更新と、手順1の1で止まるときの品質ゲートの`--pause`を除く）。例外は、人間が依頼したときの後半の
   2節（「採用した候補をタスクに起こす」「秘匿していた候補の修正がmainに入った後」）で、どちらも文書の変更として
   ブランチを作り、`pr-review-cycle`に従ってPRにする。
 - 秘密情報（`.env*`、`master.key`、`credentials/*.key`）を読まない。DBの中身・ログ（`apps/api/log/`等）・`tmp/`・`storage/`（Active Storageの保存先）を読まない。
@@ -27,14 +27,16 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 
 ### 1. 観点と基準を決める
 
-1. 引数から観点（`spec` / `performance` / `privacy` / `security`、複数可）と、任意の対象範囲
-   （ディレクトリ）を読む。観点がなければ、4つから選んでもらうよう人間に尋ねて止まる。
-2. （手順1〜5だけに掛かる）`git rev-parse --abbrev-ref HEAD`が`<type>/task-NNN`か`<type>/task-NNN-*`の形（`feat` / `fix` / `refactor` / `chore` / `docs` /
+1. （手順1〜5だけに掛かる。ほかのどの確認よりも先に行う）`git rev-parse --abbrev-ref HEAD`が`<type>/task-NNN`か`<type>/task-NNN-*`の形（`feat` / `fix` / `refactor` / `chore` / `docs` /
    `test`）なら止まり、mainに揃えたcheckoutで起動し直すよう伝える（タスクのブランチではStop hookがPRの作成と
-   検査を求め、この skill の禁止事項とぶつかるため）。止まる前の最後に
+   検査を求め、この skill の禁止事項とぶつかるため）。止まる前の最後に、品質ゲートの状態ファイル
+   `<git-dir>/claude-task-runner.json`にこのブランチの`paused`がなければ
    `scripts/claude-hook.sh claude-quality-gate.mjs --pause "exploratory-audit: タスクのブランチでは起動しない"`を
-   実行する（Stop hookが止まることを認めるのは`--pause`の後だけのため。書くのは品質ゲートの状態ファイル
-   `<git-dir>/claude-task-runner.json`だけ）。
+   実行する（Stop hookが止まることを認めるのは`--pause`の後だけのため。書くのはこの状態ファイルだけ。既に
+   `paused`があれば、別の判断待ちの理由を上書きしないよう実行しない）。チャットには、このブランチで作業を
+   続けるなら`scripts/claude-hook.sh claude-quality-gate.mjs --reset`で品質ゲートを戻すよう添える。
+2. 引数から観点（`spec` / `performance` / `privacy` / `security`、複数可）と、任意の対象範囲
+   （ディレクトリ）を読む。観点がなければ、4つから選んでもらうよう人間に尋ねて止まる。
 3. `git fetch origin main`の後、`git rev-parse HEAD`・`git rev-parse origin/main`・`git status --short`で
    監査の基準を確かめる。HEADが`origin/main`と違う、または未コミットの変更があれば、そのことを報告の冒頭に書く
    （mainに揃えたcheckoutでの実行を勧める）。

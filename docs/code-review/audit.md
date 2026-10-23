@@ -140,7 +140,8 @@ Planのslug）。
 
 人間が手動で起動する（`/exploratory-audit <観点>`）。目安は週1回と、機能のまとまりがmainに入った後。同時に動かせる監査は
 1つだけで、`audits/.lock`のロックで守る（IDの連番をその日の報告すべてで共有するため）。
-監査はコード・`docs/`を変えず、worktree・ブランチ・DBを作らない。書くのは`<git-common-dir>/audits/`だけで、
+監査はコード・`docs/`を変えず、worktree・ブランチ・DBを作らない。書くのは`<git-common-dir>/audits/`だけで（`git fetch`による追跡refの更新と、
+タスクのブランチで起動を断るときの品質ゲートの状態ファイルを除く。手順はskill）、
 `scripts/task-scheduler.mjs`と`scripts/task-status.mjs`はこの場所を読まない。そのため定期実行の
 `/run-task`と同時に動いても作業は衝突しない。定期実行に入れるかは、手動で数回回した後に判断する
 （2026-10-08の判断。[TASK-023 Plan](../implementation-plans/2026-10-08-task-023-exploratory-audit.md)）。
