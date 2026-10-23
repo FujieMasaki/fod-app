@@ -28,9 +28,12 @@ default: &default
 development:
   <<: *default
 
+# 開発者のshellの環境変数を引き継がない（testの結果が手元の設定で変わらないようにする）
 test:
   <<: *default
   bucket: test-generation-bucket
+  transcribe_data_access_role_arn: ""
+  app_account_id: ""
   bedrock_model_id: test-model
 
 production:

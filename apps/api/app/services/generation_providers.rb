@@ -3,11 +3,21 @@
 # - 認証はSDKの既定の探索に任せる（開発はIAM Identity Center、本番はECS task role）。長期キーを読まない。
 # - SDKのloggerを付けない。requestとresponseに音声・文字起こし・生成の入出力が入るため（architecture「ログへ出さない」）。
 # - 最初に外部へ送る前に、呼び出し元がアプリ用アカウントかを確かめる（CallerAccountGuard）。
+# - 設定（bucket・model id・アカウントID）が1つでも欠けていれば、どのclientも作らない。model idが未確定の間に
+#   音声だけをS3やTranscribeへ送らないため。
 module GenerationProviders
   # 外部の失敗。messageには例外の種類だけを入れ、外部のmessage（入力を含み得る）を写さない。
+  # 元の例外も`cause`に残さない（error trackingがcauseごと送ると、messageが外へ出るため）。
   class Error < StandardError
     def self.wrap(error) = new("#{error.class.name} from the provider")
+
+    def self.raise_from(error)
+      raise wrap(error), cause: nil
+    end
   end
+
+  # 外部へ送る準備ができていない（設定の不足・呼び出し元のアカウントが違う）。何も送っていない
+  class NotReady < Error; end
 
   class << self
     def storage = (@storage ||= AudioStore.new(client: aws_client(Aws::S3::Client), bucket: GenerationSettings.bucket))
@@ -25,8 +35,12 @@ module GenerationProviders
     private
 
     def aws_client(klass)
+      GenerationSettings.verify_ready!
       CallerAccountGuard.verify!
       klass.new(region: GenerationSettings.region, logger: nil, http_wire_trace: false)
+    rescue GenerationSettings::NotConfigured, CallerAccountGuard::Mismatch, Aws::Errors::ServiceError,
+           Seahorse::Client::NetworkingError => e
+      raise NotReady.wrap(e), cause: nil
     end
   end
 end
