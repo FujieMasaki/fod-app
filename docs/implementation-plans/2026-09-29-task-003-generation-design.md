@@ -1637,7 +1637,7 @@ SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付け�
   アクセスキーが2つあった。1つは旧IAMユーザーのもので、すでに無効だった。もう1つは**今回の組織の外にある別のAWSアカウント**
   （2022年の学習用）の、管理者権限のIAMユーザーのもので、有効だった。そのアカウントにはopt-outもSCPも効かない。人間が
   そのキーを無効化し、このマシンからAWS CLIの認証情報のファイルを削除した。無効化した後は、そのキーで認証が通らないことを
-  確かめた。**このマシンのAWS CLIの設定ファイル（`credentials`と`config`）には、2026-10-21時点でAWSの長期キーが無い**。環境変数・shellの設定・ほかのツールの設定は確かめていない。TASK-009の開発・検証に使う端末もこのマシンだけである（2026-10-21に人間が確認）。今後はIAM Identity Center経由でアプリ用だけを使う（決定1）。
+  確かめた。**このマシンのAWS CLIの設定ファイル（`credentials`と`config`）には、2026-10-21時点でAWSの長期キーが無い**。2026-10-23に、人間が自分のshellでAWS CLIを実行し、既定の認証情報の探索（環境変数・設定ファイル・SSOのキャッシュ・`credential_process`など）で何も見つからないこと（"Unable to locate credentials"）を確かめた。SDKも同じ順で探すので、このマシンからTASK-009のコードが既定の設定でAWSへ送れる認証情報は無い。各プロジェクトの`.env`のように、明示して読み込まない限り使われない場所は見ていない。見落としに備え、TASK-009は最初に外部へ送る前に呼び出し元のアカウントを確かめる（TASK-009の完了条件）。TASK-009の開発・検証に使う端末もこのマシンだけである（2026-10-21に人間が確認）。今後はIAM Identity Center経由でアプリ用だけを使う（決定1）。
 - 保持の値を変えるAPIは、data retentionのページのIAM actionsの表では`PutAccountDataRetention`と、mantleのprojectの作成・
   更新だけで、値を消したり既定へ戻したりする別の操作は載っていない（`inherit`へ戻す操作も、`none`以外なのでSCPで拒否される）。
 
@@ -1737,7 +1737,7 @@ SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付け�
 | 1・2・4のmodel idごとの違い、8の(a)、`DeleteTranscriptionJob`で消える範囲 | 構成を決めてから確かめる | **公開を止める**（既定どおり） | TASK-009 |
 | 3の越境の手続き、AWS Supportへの問い合わせの規律、契約主体の評価 | 法的評価 | **公開を止める**（既定どおり） | TASK-017 |
 
-TASK-009の前の関門（項目1のTranscribeのopt-outと、項目3の方針）は、受け入れの対象にせず確認した（上記）。
+TASK-009の前の関門（項目1のTranscribeのopt-outと、項目3の方針）は、受け入れの対象にせず確認した（上記。定期実行のマシンの認証情報は、AWS CLIの既定の探索で何も見つからないことまで）。
 Bedrockの保持も、TASK-009が送る前に`none`へ固定した（上記「Bedrockの保持の固定」）。
 
 #### TASK-010への申し送り
