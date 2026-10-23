@@ -80,7 +80,9 @@ module GenerationProviders
       GenerationSettings.verify_ready!
       CallerAccountGuard.verify!
       klass.new(region: GenerationSettings.region, logger: nil, http_wire_trace: false, **)
-    rescue GenerationSettings::NotConfigured, CallerAccountGuard::Mismatch, *AWS_ERRORS => e
+    # clientを作り終えるまではSTS以外へ何も送っていないので、認証情報の探索の失敗（profileの誤り等。種類が多く、
+    # `AWS_ERRORS`で挙げきれない）も含めて、すべて準備ができていない失敗として扱う
+    rescue StandardError => e
       raise NotReady.wrap(e), cause: nil
     end
   end
