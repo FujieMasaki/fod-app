@@ -1591,7 +1591,7 @@ TASK-025の「着手するときに人間と決めること」の3点:
 | --- | --- | --- |
 | AI services opt-out policy（項目1） | 管理用・アプリ用の両方で、effective policyが`{"services":{"default":{"opt_out_policy":"optOut"}}}` | Organizations →「AWS アカウント」→ 各アカウント →「ポリシー」→ AIサービスのオプトアウトポリシーの有効なポリシー。付けたポリシーはRootにあり、`services`・`default`・`opt_out_policy`のすべてで`@@operators_allowed_for_child_policies`が`@@none`（下位で上書きできない） |
 | 事故時の連絡先（項目7） | 管理用・アプリ用の両方で、セキュリティ・運用の代替連絡先が登録済み | アカウント設定の「代替の連絡先」 |
-| サブプロセッサの更新通知（項目5） | 購読済み（確認メールは無かった） | [購読フォーム](https://pages.awscloud.com/sub-processors.html) |
+| サブプロセッサの更新通知（項目5） | 購読フォームを送信した（登録の確認メールは無く、届くかは未確認。TASK-015がSub-processorsページのLast Updatedも見て確かめ直す） | [購読フォーム](https://pages.awscloud.com/sub-processors.html) |
 
 AWSの準備のうち、この確認の前提になる事実（2026-10-20時点。人間が実施）:
 
@@ -1616,7 +1616,7 @@ it governs every request in the Region where you set it and does not propagate t
 SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付けた（SCPの種類はこのとき有効にした。既定の
 `FullAWSAccess`は残してある）。中身はdata retentionのページの2つの例をまとめたもので、`bedrock-mantle:PutAccountDataRetention`・
 `bedrock-mantle:CreateProject`・`bedrock-mantle:UpdateProject`を条件キー`bedrock-mantle:DataRetentionMode`が、
-`bedrock:PutAccountDataRetention`を条件キー`bedrock:DataRetentionMode`が、それぞれ`none`でないときに拒否する（projectは保持を`none`と明示したときだけ作れる）。SCPは管理アカウントに
+`bedrock:PutAccountDataRetention`を条件キー`bedrock:DataRetentionMode`が、それぞれ`none`でないときに拒否する（projectは保持を`none`と明示したときだけ作れる見込み。推論で、下記のとおり試していない）。SCPは管理アカウントに
 効かないが、管理アカウントには処理を載せない（上記の決定1）。
 
 効いていることの確認（アプリ用、2026-10-21）:
@@ -1637,7 +1637,7 @@ SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付け�
   アクセスキーが2つあった。1つは旧IAMユーザーのもので、すでに無効だった。もう1つは**今回の組織の外にある別のAWSアカウント**
   （2022年の学習用）の、管理者権限のIAMユーザーのもので、有効だった。そのアカウントにはopt-outもSCPも効かない。人間が
   そのキーを無効化し、このマシンからAWS CLIの認証情報のファイルを削除した。無効化した後は、そのキーで認証が通らないことを
-  確かめた。**このマシンには、2026-10-21時点でAWSの長期キーが無い**。TASK-009の開発・検証に使う端末もこのマシンだけである（2026-10-21に人間が確認）。確かめたのはAWS CLIの`credentials`と`config`である。今後はIAM Identity Center経由でアプリ用だけを使う（決定1）。
+  確かめた。**このマシンのAWS CLIの設定ファイル（`credentials`と`config`）には、2026-10-21時点でAWSの長期キーが無い**。環境変数・shellの設定・ほかのツールの設定は確かめていない。TASK-009の開発・検証に使う端末もこのマシンだけである（2026-10-21に人間が確認）。今後はIAM Identity Center経由でアプリ用だけを使う（決定1）。
 - 保持の値を変えるAPIは、data retentionのページのIAM actionsの表では`PutAccountDataRetention`と、mantleのprojectの作成・
   更新だけで、値を消したり既定へ戻したりする別の操作は載っていない（`inherit`へ戻す操作も、`none`以外なのでSCPで拒否される）。
 
@@ -1728,7 +1728,7 @@ SCP `RequireBedrockZeroDataRetention`を作ってOrganizationsのRootに付け�
 
 | 項目 | 状態 | 人間の判断（2026-10-20〜21） | 確かめる担当 |
 | --- | --- | --- | --- |
-| 4 Transcribeの人によるレビュー | 未確認（ある・ないの記述が無い。権限を持つ従業員がアクセスし得る） | **条件つきで受け入れる**。条件は、録音前の案内（TASK-010）で「人が見ることはない」とは書かないこと。改善目的の利用はopt-outで止めてあり、案内が事実より強い約束をしなければ利用者を誤導しない。FAQの「権限を持つ従業員だけがアクセスし得る」は、レビューの仕組みではなくアクセスの統制の説明と読み、`architecture.md`「データ所在地と費用」が「閲覧」の射程から外した**運用・保守のためのアクセス**として扱う（2026-10-21に人間が判断）。所在と範囲の確認はTASK-017が行う。AWS Supportへの問い合わせは、技術的な問い合わせに有料プランが要り、問い合わせの規律もTASK-017で決まる前なので選ばない | 条件はTASK-010の完了条件に入れた |
+| 4 Transcribeの人によるレビュー | 未確認（ある・ないの記述が無い。権限を持つ従業員がアクセスし得る） | **条件つきで受け入れる**。条件は、録音前の案内（TASK-010）で「人が見ることはない」とは書かないこと。改善目的の利用はopt-outで止めてあり、案内が事実より強い約束をしなければ利用者を誤導しない。FAQの「権限を持つ従業員だけがアクセスし得る」は、レビューの仕組みではなくアクセスの統制の説明と読み、`architecture.md`「データ所在地と費用」が「閲覧」の射程から外した**運用・保守のためのアクセス**として扱う（2026-10-21に人間が判断）。所在と範囲の確認はTASK-017が行う。Transcribeで選べる構成はopt-outまでで、opt-outのあとに残り得るアクセスはこの運用・保守のためのアクセスとして扱うため、architecture.mdの「確認できないものは使わない」の対象外と判断した。AWS Supportへの問い合わせは、技術的な問い合わせに有料プランが要り、問い合わせの規律もTASK-017で決まる前なので選ばない | 条件はTASK-010の完了条件に入れた |
 | 9 ISOの証明書の本文 | 未確認 | 受け入れる（参考扱いの項目で、対象範囲は公開ページで確認済み） | なし（受け入れ） |
 | 1・2・4 東京・大阪以外でのBedrockの保持 | `inherit`（モデルの既定に従う） | **機械的には止めず、TASK-009の完了条件の文章で止めることを受け入れる**（上記の決定3） | TASK-009 |
 | 1・2・4 管理用のアカウントでの呼び出し | 東京・大阪の保持は`none`。SCPは効かない | **管理用に処理を載せないことを文章で止める**（上記の決定1。2026-10-21に人間が受け入れた） | TASK-009 |
