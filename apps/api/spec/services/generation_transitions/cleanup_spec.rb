@@ -71,6 +71,15 @@ RSpec.describe "処理の記録の遷移: 後片付け" do # rubocop:disable RSp
       expect(Generation.exists?(generation.id)).to be(false)
     end
 
+    it "T19: 取り消す前に動いていた実行の期限が残っていれば、その期限が切れるまで始めない" do
+      generation.update_columns(lease_expires_at: 3.minutes.from_now) # rubocop:disable Rails/SkipsModelValidations
+
+      expect(cleanup(generation)).to eq(:waiting)
+      expect(generation.reload.state).to eq("cancel_requested")
+
+      travel(4.minutes) { expect(cleanup(generation)).to eq(:done) }
+    end
+
     it "古い試行の音声とjobも消す（記録が持つ現在のkey以外も、prefixと試行番号で拾う）" do
       generation.update!(upload_attempt: 2, transcription_attempt: 2)
       storage.objects["audio/#{generation.id}/2"] = { body: "audio" }
@@ -79,6 +88,25 @@ RSpec.describe "処理の記録の遷移: 後片付け" do # rubocop:disable RSp
       cleanup(generation)
 
       expect([resource_keys(generation), job_names(generation)]).to eq([[], []])
+    end
+
+    it "記録が持つkey・job名が命名規則と違っても、それも消す" do
+      legacy_key = "transcripts/#{SecureRandom.uuid}/legacy.json"
+      generation.update_columns(transcript_key: legacy_key, transcription_job_name: "legacy-job") # rubocop:disable Rails/SkipsModelValidations
+      storage.objects[legacy_key] = { body: "{}" }
+      transcriber.jobs["legacy-job"] = { status: :completed }
+
+      cleanup(generation)
+
+      expect([storage.objects.key?(legacy_key), transcriber.jobs.key?("legacy-job")]).to eq([false, false])
+    end
+
+    it "失敗したら、処理IDと例外の種類だけをログに残す" do
+      transcriber.fail_next(:delete)
+
+      log = captured_log { cleanup(generation) }
+
+      expect(log).to include("generation cleanup deferred", generation.id, "GenerationProviders::Error")
     end
 
     it "既に消えている資源への再実行は成功として扱う" do

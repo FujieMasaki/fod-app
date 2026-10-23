@@ -178,6 +178,15 @@ RSpec.describe "Generations", perform_jobs: false do
         assert_response_schema_confirm(409)
       end
 
+      it "1時間の上限を超えたら429", :fixed_time do
+        GenerationThrottle::LIMITERS[:retry].instance_variable_get(:@limit).times { GenerationThrottle.hit(:retry, user) }
+
+        retry_generation(create(:generation, user:, state: "failed", failure_kind: "generation_failed").id)
+
+        expect(problem_code).to eq("rate_limited")
+        assert_response_schema_confirm(429)
+      end
+
       it "他人の処理は404" do
         retry_generation(create(:generation, state: "failed", failure_kind: "generation_failed").id)
 

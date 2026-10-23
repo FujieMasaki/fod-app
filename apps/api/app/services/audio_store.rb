@@ -8,8 +8,8 @@ class AudioStore
 
   def put(key, body, content_type:)
     @client.put_object(bucket: @bucket, key:, body:, content_type:)
-  rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
-    raise GenerationProviders::Error.wrap(e)
+  rescue *GenerationProviders::AWS_ERRORS => e
+    GenerationProviders::Error.raise_from(e)
   end
 
   def exists?(key)
@@ -17,8 +17,8 @@ class AudioStore
     true
   rescue Aws::S3::Errors::NotFound
     false
-  rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
-    raise GenerationProviders::Error.wrap(e)
+  rescue *GenerationProviders::AWS_ERRORS => e
+    GenerationProviders::Error.raise_from(e)
   end
 
   # 無ければnil
@@ -26,19 +26,22 @@ class AudioStore
     @client.get_object(bucket: @bucket, key:).body.read
   rescue Aws::S3::Errors::NoSuchKey
     nil
-  rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
-    raise GenerationProviders::Error.wrap(e)
+  rescue *GenerationProviders::AWS_ERRORS => e
+    GenerationProviders::Error.raise_from(e)
   end
 
   # prefixの下をすべて消す。現在有効なkeyだけでなく、古い試行のPUTが後から完成したobjectも拾う
   # （TASK-003 Plan §20「孤児の回収」）。既に無ければ何もしない（冪等）。
   def delete_prefix(prefix)
+    # 誤ってbucket全体や別の処理のprefixを消さないよう、`<種類>/<処理ID>/`の形だけを受け付ける
+    raise ArgumentError, "unexpected prefix" unless prefix.match?(%r{\A[a-z]+/[0-9a-f-]{36}/\z})
+
     keys_under(prefix).each_slice(1000) do |keys|
       response = @client.delete_objects(bucket: @bucket, delete: { objects: keys.map { { key: it } }, quiet: true })
       raise GenerationProviders::Error, "S3 refused to delete #{response.errors.size} objects" if response.errors.any?
     end
-  rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
-    raise GenerationProviders::Error.wrap(e)
+  rescue *GenerationProviders::AWS_ERRORS => e
+    GenerationProviders::Error.raise_from(e)
   end
 
   def keys_under(prefix)

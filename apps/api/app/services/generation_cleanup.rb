@@ -3,7 +3,8 @@
 #
 # - succeeded_cleanup_pending: 音声を消す。全文を返さない印（ACK・期限）が付いていれば、文字起こし結果と
 #   Transcribeのjobも消してから記録を消す（T18）。Dotは作り直さない。
-# - cancel_requested → cleanup_pending（T19）: Transcribeのjobが非終端なら終端まで待ち、その処理の全部を消してから
+# - cancel_requested → cleanup_pending（T19）: 取り消す前に動いていた実行の期限が切れるのを待ってから始める。
+#   Transcribeのjobが非終端なら終端まで待ち、その処理の全部を消してから
 #   記録を消す（T21）。
 # - 消すときは現在有効なkeyではなくprefixを列挙して消す（古い試行のPUTが後から完成したobjectも拾う）。
 #   既に無いものは成功として扱う。
@@ -31,6 +32,9 @@ module GenerationCleanup
   end
 
   def start_canceled(generation, now)
+    # 取り消す前に動いていた実行の期限が残っていれば、その実行が終わるのを待つ（期限は取り消しの受理で残してある）
+    return :waiting if generation.lease_expires_at&.>(now)
+
     token = SecureRandom.uuid
     moved = Generation.transition(generation.id, from: Generation::CANCEL_REQUESTED, to: Generation::CLEANUP_PENDING,
                                                  lease_token: token, lease_expires_at: now + LEASE_DURATION)
@@ -48,8 +52,8 @@ module GenerationCleanup
     delete_audio(generation)
     delete_transcript(generation)
     finish(generation, Generation::CLEANUP_PENDING, token)
-  rescue GenerationProviders::Error, TranscriptionGateway::NotTerminal
-    defer(generation, token, now + RETRY_AFTER, :retry)
+  rescue GenerationProviders::Error, TranscriptionGateway::NotTerminal => e
+    retry_later(generation, token, now, e)
   end
 
   def clean_succeeded(generation, now)
@@ -62,33 +66,55 @@ module GenerationCleanup
 
     delete_transcript(generation)
     finish(generation, Generation::SUCCEEDED_CLEANUP_PENDING, token)
-  rescue GenerationProviders::Error, TranscriptionGateway::NotTerminal
+  rescue GenerationProviders::Error, TranscriptionGateway::NotTerminal => e
+    retry_later(generation, token, now, e)
+  end
+
+  # 消し残しに気づけるよう、処理IDと例外の種類だけをログに残す（本文・外部のmessageは出さない）
+  def retry_later(generation, token, now, error)
+    Rails.logger.warn("generation cleanup deferred: generation_id=#{generation.id} error=#{error.class.name}")
     defer(generation, token, now + RETRY_AFTER, :retry)
   end
 
   # 実行権を持ったまま、まだ同じ状態にあるときだけ記録を消す。途中で削除・退会を受理していれば（T22）消さず、
   # cancel側の後片付けに任せる。
   def finish(generation, state, token)
-    deleted = Generation.where(id: generation.id, state:, lease_token: token).delete_all
-    deleted == 1 ? :done : :superseded
+    return :done if Generation.where(id: generation.id, state:, lease_token: token).delete_all == 1
+
+    hand_over(generation)
+    :superseded
+  end
+
+  # 実行中に削除・退会を受理された（T22）。この実行の外部の呼び出しは終わったので、残した期限を切り、
+  # cancel側の後片付けがすぐ始められるようにする（成功後の記録で動いていたのは、この後片付けだけ）
+  def hand_over(generation)
+    Generation.where(id: generation.id, state: Generation::CANCEL_REQUESTED, lease_token: nil)
+              .update_all(lease_expires_at: nil) # rubocop:disable Rails/SkipsModelValidations
   end
 
   def transcription_running?(generation)
     job_names(generation).any? { GenerationProviders.transcriber.status(it) == :in_progress }
   end
 
+  # 消す対象は、命名規則から導いたものに、記録が持つkey・job名を足して決める（規則を変えても、過去の記録が
+  # 指すものを取り残さない。TASK-003 Plan §20「処理の記録に持つ項目」）
   def delete_audio(generation)
-    GenerationProviders.storage.delete_prefix(GenerationNaming.audio_prefix(generation.id))
+    prefixes(GenerationNaming.audio_prefix(generation.id), generation.audio_key)
+      .each { GenerationProviders.storage.delete_prefix(it) }
   end
 
   def delete_transcript(generation)
-    GenerationProviders.storage.delete_prefix(GenerationNaming.transcript_prefix(generation.id))
+    prefixes(GenerationNaming.transcript_prefix(generation.id), generation.transcript_key)
+      .each { GenerationProviders.storage.delete_prefix(it) }
     job_names(generation).each { GenerationProviders.transcriber.delete(it) }
   end
 
-  # これまでの文字起こしの試行のjobすべて（再試行で番号が進んでも、古いjobを取り残さない）
+  def prefixes(derived, key) = [derived, key && "#{File.dirname(key)}/"].compact.uniq
+
+  # これまでの文字起こしの試行のjobすべて（再試行で番号が進んでも、古いjobを取り残さない）と、記録が持つjob名
   def job_names(generation)
-    (1..generation.transcription_attempt).map { GenerationNaming.job_name(generation.id, it) }
+    derived = (1..generation.transcription_attempt).map { GenerationNaming.job_name(generation.id, it) }
+    [*derived, generation.transcription_job_name].compact.uniq
   end
 
   def defer(generation, token, until_time, result)
@@ -100,6 +126,7 @@ module GenerationCleanup
     Generation.release_lease(generation.id, token)
     result
   end
-  private_class_method :start_canceled, :resume_canceled, :clean_all, :clean_succeeded, :finish,
-                       :transcription_running?, :delete_audio, :delete_transcript, :job_names, :defer, :release
+  private_class_method :start_canceled, :resume_canceled, :clean_all, :clean_succeeded, :finish, :hand_over,
+                       :transcription_running?, :delete_audio, :delete_transcript, :prefixes, :job_names, :retry_later,
+                       :defer, :release
 end

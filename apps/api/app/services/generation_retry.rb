@@ -23,16 +23,29 @@ module GenerationRetry
     restart(generation, now)
   end
 
+  # 全文から再開するかは、利用者の行をlockした後の記録でも確かめる（読んだ後に変わった値で決めない）
   def restart(generation, now)
     to = generation.transcript_ready_at ? Generation::GENERATING : Generation::TRANSCRIBING
     GenerationGate.enter(user_id: generation.user_id, generation_id: generation.id, from: Generation::FAILED, to:,
-                         attrs: restart_attrs(to)) do |user, current|
-      NOT_RETRYABLE.include?(current.failure_kind) ? :not_retryable : GenerationGate.proceed_denial(user, current, now)
-    end
+                         attrs: restart_attrs(to)) { |user, current| restart_denial(user, current, to, now) }
     enqueue(to, generation.id)
     :accepted
   rescue GenerationGate::Denied => e
-    generation.reload.expired?(now) && e.reason == :state ? :retry_expired : PROBLEMS.fetch(e.reason)
+    denial_problem(generation, e.reason, now)
+  end
+
+  def restart_denial(user, current, to, now)
+    return :state if current.transcript_ready_at.present? != (to == Generation::GENERATING)
+    return :not_retryable if NOT_RETRYABLE.include?(current.failure_kind)
+
+    GenerationGate.proceed_denial(user, current, now)
+  end
+
+  def denial_problem(generation, reason, now)
+    current = Generation.find_by(id: generation.id)
+    return :not_found unless current
+
+    current.expired?(now) && reason == :state ? :retry_expired : PROBLEMS.fetch(reason)
   end
 
   def enqueue(to, generation_id)
@@ -45,5 +58,5 @@ module GenerationRetry
       to == Generation::TRANSCRIBING ? attrs.merge(GenerationTranscription.next_attempt_attrs(generation)) : attrs
     end
   end
-  private_class_method :restart, :enqueue, :restart_attrs
+  private_class_method :restart, :restart_denial, :denial_problem, :enqueue, :restart_attrs
 end

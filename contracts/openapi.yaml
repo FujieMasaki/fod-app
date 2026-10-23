@@ -531,9 +531,10 @@ paths:
         生成は非同期で、`202`で処理（Generation）を返して終わる。結果は
         `GET /api/v1/generations/{generation_id}`で取得する。
 
-        attemptは`X-Recording-Attempt` headerで渡す（bodyに入れない）。serverはmultipartを解釈する
-        前にheaderのattemptを検証し、同じattemptで再び送られた場合は、新しい処理を作らず、multipartの
-        解釈もS3への保存もせずに既存の処理を返す。例外は既存の処理が`failed`かつ
+        attemptは`X-Recording-Attempt` headerで渡す（bodyに入れない）。serverは音声を使う前に
+        headerのattemptを検証し、同じattemptで再び送られた場合は、新しい処理を作らず、音声の検証も
+        S3への保存もせずに既存の処理を返す（multipartはRailsがrequestの前処理で解釈するため、解釈そのものは
+        省けない。本文の大きさはContent-Lengthで解釈の前に制限する）。例外は既存の処理が`failed`かつ
         `failure.kind=upload_incomplete`の場合で、attemptの期限内なら音声を受け取り直す。
         同じattemptの処理のDotがゴミ箱の中にある場合と、完全削除・退会・処理の取り消しで消した後の
         場合は`422 attempt_invalid`を返す（ゴミ箱の中のDotを返さず、消したものを作り直さないため）。
@@ -1109,8 +1110,8 @@ components:
       in: header
       required: true
       description: |
-        `POST /api/v1/recording_attempts`で受け取った`attempt_token`。multipartを解釈する前に検証
-        できるようheaderで渡す
+        `POST /api/v1/recording_attempts`で受け取った`attempt_token`。音声を使う前に検証できるよう
+        headerで渡す
       schema:
         type: string
         maxLength: 1024

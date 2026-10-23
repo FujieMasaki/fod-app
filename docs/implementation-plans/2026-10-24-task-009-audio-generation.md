@@ -129,7 +129,7 @@
 ### 7-3. 状態機械
 
 - すべての遷移は`UPDATE generations SET ... WHERE id = ? AND state IN (遷移元)`の条件付き更新で行い、
-  更新した行数で勝敗を決める（`Generation.transition!`）。
+  更新した行数で勝敗を決める（`Generation.transition`。真偽値を返す）。
 - 入口の手続き（retry・再upload・cleanup・取り消し・Transcribeの終端後）は`GenerationGate`に集める:
   利用者の行を`FOR UPDATE` → 遷移元の確認 → 契機ごとの認可 → lease発行と条件付き更新 → commit →
   外部の呼び出し。
