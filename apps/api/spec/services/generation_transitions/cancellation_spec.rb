@@ -22,12 +22,14 @@ RSpec.describe "処理の記録の遷移: cancel_requestedへ" do # rubocop:disa
     "T13" => %w[generating canceled],
     "T16" => %w[failed expired]
   }.each do |id, (from, reason)|
-    it "#{id}: #{from} → cancel_requested（#{reason}）。実行中の実行権を失効させる" do
-      generation = create(:generation, state: from, lease_token: SecureRandom.uuid, lease_expires_at: 1.minute.from_now)
+    it "#{id}: #{from} → cancel_requested（#{reason}）。実行中の実行権を失効させ、期限は残す" do
+      lease_expires_at = 1.minute.from_now.floor(6)
+      generation = create(:generation, state: from, lease_token: SecureRandom.uuid, lease_expires_at:)
 
       request(generation, reason)
 
       expect_canceled(generation, reason)
+      expect(generation.reload.lease_expires_at).to eq(lease_expires_at)
     end
   end
 
@@ -64,6 +66,20 @@ RSpec.describe "処理の記録の遷移: cancel_requestedへ" do # rubocop:disa
 
     expect(Generation.transition(generation.id, from: "generating", to: "succeeded_cleanup_pending",
                                                 holding: stale_token)).to be(false)
+  end
+
+  it "取り消しの間に延ばされた実行権の期限を、読んだ時点の値で書き戻さない" do
+    generation = create(:generation, state: "transcribing", lease_token: SecureRandom.uuid,
+                                     lease_expires_at: 1.minute.ago)
+    extended = 10.minutes.from_now.floor(6)
+    allow(Generation).to receive(:transition).and_wrap_original do |original, *args, **kwargs|
+      Generation.where(id: generation.id).update_all(lease_expires_at: extended) # rubocop:disable Rails/SkipsModelValidations
+      original.call(*args, **kwargs)
+    end
+
+    request(generation, "withdrawn")
+
+    expect(generation.reload).to have_attributes(state: "cancel_requested", lease_expires_at: extended)
   end
 
   it "退会の受理後・期限切れでも受け付ける（cleanupにactive・期限内を求めない）" do

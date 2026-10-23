@@ -23,7 +23,7 @@ gem "omniauth-google-oauth2", "1.2.3"
 # OmniAuthの開始POSTでRailsのCSRF tokenを検証する（CVE-2015-9284対策）
 gem "omniauth-rails_csrf_protection", "2.0.1"
 
-# Job基盤（TASK-003で採用）。RDSの同じDBをqueueに使い、当面はPumaと同じプロセスで動かす
+# Job基盤（TASK-003で採用）。RDSの同じDBをqueueに使い、当面はPumaの子プロセスとして同じコンテナで動かす
 gem "solid_queue", "~> 1.2"
 
 # 音声の一時object・文字起こし・生成（TASK-003で採用。リージョンはap-northeast-1に固定する）

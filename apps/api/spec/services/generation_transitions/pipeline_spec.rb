@@ -115,6 +115,26 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
     end
   end
 
+  it "T11の直前に取り消された（実行権を失った）なら、Dotのinsertを巻き戻して保存しない" do
+    generation = generating
+    composer.before_next(:compose) { GenerationCancellation.cancel_by_user(user:, generation_id: generation.id) }
+
+    expect(GenerationComposition.perform(generation.id)).to eq(:skipped)
+    expect(user.dots).to be_empty
+    expect(generation.reload).to have_attributes(state: "cancel_requested", cancel_reason: "canceled")
+  end
+
+  it "文字起こしを始める直前に取り消されたら、音声を送らない" do
+    generation = create(:generation, user:, state: "accepted").tap { seed_resources(it) }
+    allow(Generation).to receive(:exists?).and_wrap_original do |original, *args, **kwargs|
+      GenerationCancellation.cancel_by_user(user:, generation_id: generation.id)
+      original.call(*args, **kwargs)
+    end
+
+    expect(GenerationTranscription.start(generation.id)).to eq(:canceled)
+    expect(transcriber.started).to be_empty
+  end
+
   describe "T12: generating → failed（失敗の種類を分ける）" do
     it "外部AIの失敗" do
       generation = generating

@@ -39,6 +39,11 @@ Rails.application.configure do
 
   # testではJobを実行せずに記録し、必要なspecだけが明示して実行する。
   config.active_job.queue_adapter = :test
+  # 認証メールのJobも、enqueueを確かめられるよう全体のtest adapterに任せる
+  config.x.auth_mail_queue_adapter = nil
+
+  # testから実際のAWSへ届かないようにする（偽物の差し込みを忘れたspecや、開発者のshellの認証情報があっても）。
+  Aws.config.update(stub_responses: true)
 
   # Set host to be used by links generated in mailer templates.
   config.action_mailer.default_url_options = { host: "example.com" }

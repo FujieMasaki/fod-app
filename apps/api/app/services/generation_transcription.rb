@@ -59,18 +59,29 @@ module GenerationTranscription
     end
   end
 
+  # 始める直前に実行権を確かめ直す（取り消された処理の音声を新しく送らない）。取り消しは実行権の期限を残すので、
+  # 後片付けは、この実行が始めたjobを記録から辿って終端まで待てる。
   def begin_job(generation, token, now)
+    return :canceled unless holding?(generation, token)
+
     GenerationProviders.transcriber.start(job_name: generation.transcription_job_name, media_key: generation.audio_key,
                                           content_type: generation.audio_content_type,
                                           output_key: generation.transcript_key)
-    wait(generation, token, now)
-    :started
+    wait(generation, token, now) == :waiting ? :started : :canceled
   rescue GenerationProviders::Error
     fail(generation, token, "transcription_failed")
   end
 
+  def holding?(generation, token)
+    Generation.exists?(id: generation.id, state: Generation::TRANSCRIBING, lease_token: token)
+  end
+
+  # 次の確認まで実行権を延ばす。取り消しで実行権を失っていれば積み直さない（後片付けが引き継ぐ）
   def wait(generation, token, now)
-    Generation.where(id: generation.id, lease_token: token).update_all(lease_expires_at: now + CHECK_INTERVAL) # rubocop:disable Rails/SkipsModelValidations
+    extended = Generation.where(id: generation.id, lease_token: token)
+                         .update_all(lease_expires_at: now + CHECK_INTERVAL) # rubocop:disable Rails/SkipsModelValidations
+    return :canceled if extended.zero?
+
     GenerationTranscriptionCheckJob.set(wait: CHECK_INTERVAL).perform_later(generation.id)
     :waiting
   end
@@ -117,5 +128,6 @@ module GenerationTranscription
                                          failure_kind: kind, lease_token: nil, lease_expires_at: nil, **attrs)
     :failed
   end
-  private_class_method :react, :claim, :begin_job, :empty?, :wait, :finish, :proceed, :cancel_after_denial, :fail
+  private_class_method :react, :claim, :begin_job, :holding?, :empty?, :wait, :finish, :proceed,
+                       :cancel_after_denial, :fail
 end

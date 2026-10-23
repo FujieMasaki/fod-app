@@ -34,8 +34,9 @@ port ENV.fetch("PORT", 3000)
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart
 
-# Solid QueueのworkerをPumaと同じプロセスで動かす（TASK-003で採用。ECSの同じタスクで並走させる）。
-# 実測で詰まれば`SOLID_QUEUE_IN_PUMA=false`にして`bin/jobs`を別に動かす。
+# Solid QueueのworkerをPumaの子プロセスとして同じコンテナで動かす（TASK-003で採用。ECSの同じタスクで並走させる）。
+# 開発でもメールや生成のJobが動くよう、既定で有効にする（Railsの既定はopt-in）。実測で詰まれば
+# `SOLID_QUEUE_IN_PUMA=false`にして`bin/jobs`を別に動かす。
 plugin :solid_queue unless ENV["SOLID_QUEUE_IN_PUMA"] == "false"
 
 # Specify the PID file. Defaults to tmp/pids/server.pid in development.

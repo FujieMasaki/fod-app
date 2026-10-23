@@ -75,8 +75,7 @@ RSpec.describe GenerationWatchdog do
       { status: :in_progress, output_key: generation.transcript_key }
 
     described_class.sweep
-    perform_enqueued_jobs(only: GenerationTranscriptionCheckJob) { nil }
-    GenerationTranscription.check(generation.id)
+    perform_enqueued_jobs(only: GenerationTranscriptionCheckJob)
 
     expect(transcriber.started).to be_empty
     expect(generation.reload.state).to eq("transcribing")

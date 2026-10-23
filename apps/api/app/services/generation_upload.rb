@@ -109,17 +109,24 @@ class GenerationUpload
     end
   end
 
+  # 置けなかったときだけを`upload_failed`にする。置いた後の確定・取り消しの失敗はここで握らない
+  # （退会の後に置いた音声を消せなかったことを、送り直せる失敗に見せないため）。
   def store(generation_id, audio, lease_token)
-    key = Generation.find(generation_id).audio_key
-    GenerationProviders.storage.put(key, audio.io, content_type: audio.content_type)
+    return existing(generation_id) unless put_audio(generation_id, audio, lease_token)
     if GenerationUploadCompletion.complete(generation_id, lease_token) == :accepted
       return Result.new(outcome: :created, generation_id:, problem: nil)
     end
 
     problem(@user.reload.deletion_requested? ? :account_deletion_in_progress : :attempt_invalid)
+  end
+
+  def put_audio(generation_id, audio, lease_token)
+    key = Generation.find(generation_id).audio_key
+    GenerationProviders.storage.put(key, audio.io, content_type: audio.content_type)
+    true
   rescue GenerationProviders::Error
     GenerationUploadCompletion.fail(generation_id, lease_token)
-    existing(generation_id)
+    false
   end
 
   def existing(generation_id) = Result.new(outcome: :existing, generation_id:, problem: nil)
