@@ -10,13 +10,19 @@ module GenerationUploadCompletion
     accepted = ActiveRecord::Base.transaction do
       generation = Generation.find_by(id: generation_id)
       user = generation && User.lock.find(generation.user_id)
-      if user && !user.deletion_requested? && user.generation == generation.user_generation &&
-         Generation.transition(generation_id, from: Generation::UPLOADING, to: Generation::ACCEPTED,
-                                              holding: lease_token, lease_token: nil, lease_expires_at: nil)
-        GenerationTranscribeJob.perform_later(generation_id)
-      end
+      next false unless user && same_generation?(user, generation) && accept(generation_id, lease_token)
+
+      GenerationTranscribeJob.perform_later(generation_id)
+      true
     end
     accepted ? :accepted : discard(generation_id, lease_token)
+  end
+
+  def same_generation?(user, generation) = !user.deletion_requested? && user.generation == generation.user_generation
+
+  def accept(generation_id, lease_token)
+    Generation.transition(generation_id, from: Generation::UPLOADING, to: Generation::ACCEPTED,
+                                         holding: lease_token, lease_token: nil, lease_expires_at: nil)
   end
 
   # T2: 音声が届ききらなかった。同じattemptの期限内なら送り直せる
@@ -35,5 +41,5 @@ module GenerationUploadCompletion
   rescue GenerationGate::Denied
     :canceled
   end
-  private_class_method :discard
+  private_class_method :same_generation?, :accept, :discard
 end
