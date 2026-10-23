@@ -6,12 +6,12 @@ module GenerationDotPurge
   def accept(user:, dot:, now: Time.current)
     raise ArgumentError, "dot belongs to another user" unless dot.user_id == user.id
 
-    generation = user.generations.find_by(id: dot.generation_id, state: Generation::SUCCEEDED_CLEANUP_PENDING)
-    if generation
-      GenerationCancellation.request(user_id: user.id, generation_id: generation.id, reason: "dot_purged", now:)
-    end
     ConsumedRecordingAttempt.record(dot.generation_id, expires_at: dot.started_at + Generation::ATTEMPT_LIFETIME, now:)
+    generation = user.generations.find_by(id: dot.generation_id, state: Generation::SUCCEEDED_CLEANUP_PENDING)
+    return unless generation
+
+    GenerationCancellation.request(user_id: user.id, generation_id: generation.id, reason: "dot_purged", now:)
   rescue GenerationGate::Denied
-    nil # 後片付けが先に終わり記録が消えた。消すものは残っていない
+    nil # 後片付けが先に終わり記録が消えた、または退会で取り消し済み。消すものは別の後片付けが持つ
   end
 end
