@@ -11,7 +11,10 @@ module GenerationProviders
   AWS_ERRORS = [Aws::Errors::ServiceError, Seahorse::Client::NetworkingError, Aws::Errors::MissingCredentialsError,
                 Aws::Sigv4::Errors::MissingCredentialsError, Aws::Errors::InvalidSSOToken,
                 Aws::Errors::InvalidSSOCredentials, Aws::Errors::NoSuchProfileError, Aws::Errors::MissingRegionError,
-                Aws::Errors::ChecksumError, Aws::Errors::RetryCapacityNotAvailableError].freeze
+                Aws::Errors::ChecksumError, Aws::Errors::RetryCapacityNotAvailableError,
+                # 呼び出しの途中で認証情報を取り直すとき（ECSのtask role）の失敗
+                Aws::Errors::MetadataParserError, Aws::ECSCredentials::TokenFileReadError,
+                Aws::ECSCredentials::InvalidTokenError].freeze
   # Bedrockの呼び出しはSDKに自動で再送させない（同じ生成を二重に消費しないため。失敗は再試行の手順で扱う）。
   # 再送の方式を`standard`に固定し、試行を1回にする（`retry_limit`は`legacy`のときだけ効き、方式と回数は環境変数
   # `AWS_RETRY_MODE`・`AWS_MAX_ATTEMPTS`でも変わるため、両方をここで決める）。
