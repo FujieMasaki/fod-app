@@ -11,7 +11,7 @@
 
 ## 目的と作業範囲
 
-決定した音声の受け渡し方式とAI providerを使い、録音内容からDotを生成してTASK-008の永続保存へつなぐ。**文字起こしとJobは2026-09-29にTASK-003で採用済み**（Amazon Transcribe東京、Amazon BedrockのClaude、Solid Queueによる非同期、clientはpolling）。保持・削除方針のうち処理中の一時データの扱いを本タスク、期限による削除と削除要求への対応をTASK-013で扱う。音声を預かるS3 bucket（非公開・暗号化・**versioningを有効にしない**・lifecycleは保険）とIAMの用意、AWS SDKの導入もこのタスクの前提に含む。versioningを有効にする場合は、noncurrent versionのexpiration・期限切れdelete markerの削除・実体が消える削除方法をセットで実装する。replication・backup・object lockの有無も確認する。処理の記録（処理ID＝冪等性key＝録音attemptの識別子・所有者・`started_at`・現在有効な音声と文字起こし結果のobject key・Transcribeのjob名・試行番号・受理時刻・再試行期限・状態・世代番号・最終進捗時刻・失敗の種類）をserverで持ち、再試行とJob実行で所有者を照合する仕組みもここで作る。
+決定した音声の受け渡し方式とAI providerを使い、録音内容からDotを生成してTASK-008の永続保存へつなぐ。**文字起こしとJobは2026-09-29にTASK-003で採用済み**（Amazon Transcribe東京、Amazon BedrockのClaude、Solid Queueによる非同期、clientはpolling）。保持・削除方針のうち処理中の一時データの扱いを本タスク、期限による削除と削除要求への対応をTASK-013で扱う。音声を預かるS3 bucket（非公開・暗号化・**versioningを有効にしない**・lifecycleは保険）とIAMの用意、AWS SDKの導入もこのタスクの前提に含む。versioningを有効にする場合は、noncurrent versionのexpiration・期限切れdelete markerの削除・実体が消える削除方法をセットで実装する。replication・backup・object lockの有無も確認する。処理の記録（処理ID＝冪等性key＝録音attemptの識別子・所有者・`started_at`・録音の長さと形式・現在有効な音声と文字起こし結果のobject key・Transcribeのjob名・試行番号・受理時刻・再試行期限・状態・世代番号・最終進捗時刻・失敗の種類・取り消しの契機・全文の扱いの時刻・実行権）をserverで持ち、再試行とJob実行で所有者を照合する仕組みもここで作る。
 
 **TASK-003の状態機械をそのまま実装する。**[TASK-003 Plan §20](../implementation-plans/2026-09-29-task-003-generation-design.md)が状態と遷移を表で定義しているので、**表にあるすべての遷移をテストで1本ずつ検証する**（下記の完了条件）。文書だけで閉じたと判定するのが難しい領域なので、実装時にテストで閉じる。
 

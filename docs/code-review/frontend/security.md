@@ -80,7 +80,7 @@ Focus on Dot は現時点で Vite によるクライアントSPAである。し�
   送る先・やり直しの期限・削除を説明しており、mockの間（TASK-011まで）は実際の挙動と一致しない。
   [`../../journaling.md`](../../journaling.md)「3. モックと実サービスの区別」が同じ差異を記録している。
   案内の文面を変えるレビューでは、実サービスの挙動（privacy.md §5）と照らし、mockに合わせて約束を弱めない。
-- 認証はRails側をTASK-006で実装した（Webの接続はTASK-007）。Dotなどのプロダクト API と外部AI連携は
-  未実装である。backendの
+- 認証はRails側をTASK-006で実装した（Webの接続はTASK-007）。Dotの履歴（TASK-008）と生成（TASK-009）の
+  APIはRails側にあるが、Webの生成の画面はまだ接続していない（TASK-010/011）。backendの
   認証・認可・CSRF・CORS・レート制限は、実装変更時に
   [`../backend/security.md`](../backend/security.md)の観点と実際の認証・配信構成に沿って確認する。

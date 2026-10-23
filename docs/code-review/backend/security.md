@@ -2,8 +2,9 @@
 
 この文書は、Rails APIのsecurity reviewで必ず確認する観点である。個人データの扱いは
 [`../../privacy.md`](../../privacy.md)を仕様の正本として確認する。認証はRails側をTASK-006で実装した
-（[architecture](../../architecture.md)「認証詳細」）。Dotの履歴の取得・編集のRails側はTASK-008で実装した。
-Dotを作る入口・ゴミ箱と削除の操作・Webの接続・公開配信は未実装である。採用決定と実装・実機検証を区別し、実装される変更で適切な確認を行う。
+（[architecture](../../architecture.md)「認証詳細」）。Dotの履歴の取得・編集のRails側はTASK-008、音声からDotを作る入口
+（録音attempt・送信・生成の状態・取り消し・再試行・ACK）はTASK-009で実装した（実サービスでの確認は未了）。
+ゴミ箱と削除の操作・退会・Webの接続・公開配信は未実装である。採用決定と実装・実機検証を区別し、実装される変更で適切な確認を行う。
 
 ## 1. 認証・認可とresource所有権 🔴
 
@@ -66,15 +67,21 @@ Dotを作る入口・ゴミ箱と削除の操作・Webの接続・公開配信�
 ## 6. 現在の構成での補足
 
 - RailsはAPI-onlyで、routeは`GET /up`と認証（`/api/v1/session`等、`/auth/google_oauth2`）、Dotの
-  履歴の取得・編集（`/api/v1/days`・`/api/v1/dots/{dot_id}`。TASK-008）だけ。保護するendpointは
+  履歴の取得・編集（`/api/v1/days`・`/api/v1/dots/{dot_id}`。TASK-008）、生成（`/api/v1/recording_attempts`・
+  `POST /api/v1/dots`・`/api/v1/generations/{id}`とその`retry`・`transcript`。TASK-009）だけ。保護するendpointは
   `before_action :authenticate_user!`と`current_user`を使い、JSONの項目はbodyからだけ受け取る
   （`JsonParams`。password・tokenをURLに載せない）。`/up`への変更でも不要な内部情報をresponseへ
   追加しない。
 - Railsがparamsを解析するときに、本文が`filter_parameters`を通らずログへ出る経路を塞いでいる（TASK-008）。
   - `/api/`のbodyは`application/json`だけを受け付け、それ以外は解析する前に`422 body invalid_format`に
     する（`lib/middleware/api_request_guard.rb`）。formの不正なUTF-8から本文を含むmessageの
-    `BadRequest`が起きるため。JSON以外を受け取るendpointを足すとき（TASK-009のmultipart）は、同ファイルの
-    `NON_JSON_BODIES`へ足し、その解析で同じ経路が開かないか確かめる。
+    `BadRequest`が起きるため。JSON以外を受け取るendpointは同ファイルの
+    `NON_JSON_BODIES`へ足し、その解析で同じ経路が開かないか確かめる（いまは`POST /api/v1/dots`のmultipartだけ。TASK-009）。
+    multipartはactionより前（requestのログ・CSRFの確認）に解析されるので、本文の大きさを同じmiddlewareが
+    Content-Lengthで先に制限する。足すときは上限も決め、壊れた本文・不正なUTF-8が`500`やログへの値の出力に
+    ならないことをspecで確かめる。
+  - Jobの引数はSolid QueueのDBに平文で残る。token・メールアドレス・本文をJobの引数に入れない（入れるJobは
+    Solid Queueに載せない。認証メールのJobは`config.x.auth_mail_queue_adapter`でmemoryのadapter）。
   - paramsを解釈できない`ActionController::BadRequest`（path・queryの不正なUTF-8など）は`rescue_from`の外で
     起き、値を含むmessageがerrorのログに出るため、同じmiddlewareが`DebugExceptions`の内側で捕まえて
     `422`にする。

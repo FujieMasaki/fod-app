@@ -142,8 +142,9 @@ ALB metricsと機密を除いたRailsログを使う。保持・削除と復元�
 
 ### 音声・文字起こしの経路と保持（2026-09-28採用、2026-10-24にTASK-009で実装。S3のbucketは未構築）
 
-[TASK-002 Plan](implementation-plans/2026-09-28-task-002-data-lifecycle.md)で採用した。実装済みの
-構成ではない。比較は同Plan §18–§21、データごとの保持・削除は同§17。
+[TASK-002 Plan](implementation-plans/2026-09-28-task-002-data-lifecycle.md)で採用し、2026-10-24にTASK-009で実装した
+（S3のbucketは未構築で、実サービスでの確認は未了。下記「生成の実行方式」の「実装（TASK-009）」）。比較は同Plan §18–§21、
+データごとの保持・削除は同§17。
 
 ```text
 Browser（音声は memory のみ。storage へ書かない）
@@ -174,7 +175,7 @@ Browser（音声は memory のみ。storage へ書かない）
   replication・backup・object lockも、有効なら別の場所や別の期間で残り得るため同様に確認する。
 - **server側に処理ID・所有者・object key・受理時刻・再試行期限・状態の記録を持つ**。別requestでの
   再試行、別containerで動くJob、退会時の削除は初回requestの外で所有者を判断するため、この記録で
-  認可する。**推測困難なkeyを所有権の代わりにしない**。記録の置き場と項目はTASK-003/005で確定する。
+  認可する。**推測困難なkeyを所有権の代わりにしない**。記録は`generations`（項目はTASK-003 Plan §20。下記「実装（TASK-009）」）。
   この記録自体も個人データとして保持・削除の対象にする。**処理の記録は、音声・文字起こし結果・
   Transcribeのjobの後片付けが終わった時点で削除する**（2026-09-29にTASK-003で確定。Dotの保存
   時点ではない。後片付けに必要な情報を持っているのがこの記録だけのため）。冪等性keyは`dots`の
@@ -191,7 +192,7 @@ Browser（音声は memory のみ。storage へ書かない）
 - **退会は、進行中の処理と競合しない条件を満たすまで完了としない**。退会より前に認証を通過した
   uploadが削除処理のあとに完了する経路と、S3を読み出し済みのJobが結果を書き込む経路があるため、
   数えて消すだけでは足りない。退会の受理以降は新規の保存・再試行・結果の確定を止め、あとから
-  現れた残存を回収してから完了を表示する。状態遷移と排他方式はTASK-003/005で決める。
+  現れた残存を回収してから完了を表示する。状態遷移と排他方式は下記「生成の実行方式」（TASK-003で決め、TASK-009で実装した）。
 - RDSとS3にまたがるため削除は単一transactionで完結しない。**先にS3を消し、成功してからRDSの行と
   記録を消す**。S3の削除に失敗したら削除要求全体を失敗として扱い、削除済みと表示せず再実行する。
 - S3を使うのは再試行のためだけではない。最長30分の音声は同期HTTPで処理しきれず非同期になるため、
@@ -243,8 +244,8 @@ Browser（音声は memory のみ。storage へ書かない）
 
 ### 生成の実行方式（2026-09-29採用、2026-10-24にTASK-009で実装。実サービスでの確認は未了）
 
-[TASK-003 Plan](implementation-plans/2026-09-29-task-003-generation-design.md)で採用した。
-実装済みの構成ではない。比較は同Plan §18–§21、採用内容は同§25。
+[TASK-003 Plan](implementation-plans/2026-09-29-task-003-generation-design.md)で採用し、2026-10-24にTASK-009で実装した
+（実サービスでの確認は未了。下記「実装（TASK-009）」）。比較は同Plan §18–§21、採用内容は同§25。
 
 ```text
 POST /api/v1/dots（同期）
@@ -384,8 +385,14 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   もう一度enqueueする。待っている間は実行権の期限を次の確認まで延ばす。
 - 止まった処理は毎分の`GenerationWatchdogJob`が状態ごとに拾う（最終進捗から2分、かつ実行権が切れてから2分）。
   `uploading`は`HeadObject`で判定する。期限の到来と、再実行が要る後片付けは毎分の`GenerationMaintenanceJob`が拾う
-  （後片付けのJobは自分を積み直さない）。間隔と実行権の長さ（15分）は初期値で、実測で見直す。
+  （後片付けのJobは自分を積み直さない）。間隔と実行権の長さ（受理から保存までは15分、後片付けは5分）は初期値で、実測で見直す。
+  取り消し・退会・期限は実行中の実行権のtokenだけを失効させて期限は残し、後片付けはその期限が切れてから始める。
 - 録音の発行・送信・再試行は、利用者ごとに1時間でそれぞれ60回・60回・30回までにする（`GenerationThrottle`）。
+- Job基盤をSolid Queueにしたので、Jobの引数はDB（`solid_queue_jobs.arguments`）に平文で残る。生成のJobの引数は
+  処理IDだけにする。**認証メールのJob（引数にメールアドレスと確認・再設定・解除のtokenを持つ）はSolid Queueに載せず、
+  memoryのadapter（async）で動かす**（`config.x.auth_mail_queue_adapter`）。
+- `POST /api/v1/dots`のmultipartはRailsがactionより前に解析するので、`ApiRequestGuard`が本文の大きさをContent-Lengthで
+  先に制限する（33MB。長さの無い本文は受け付けない）。
 - AWSの呼び出しは`GenerationProviders`に集め、clientを作る前に呼び出し元がアプリ用アカウント（`FOD_APP_ACCOUNT_ID`）か
   を確かめる。SDKのloggerは付けない。regionは`ap-northeast-1`に固定する。bucket・role・アカウントIDは環境変数で渡し、
   model idとpromptは`config/generation.yml`で固定する。model idが空の間はBedrockへ送らない。
