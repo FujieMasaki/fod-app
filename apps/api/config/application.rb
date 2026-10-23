@@ -44,6 +44,9 @@ module FocusOnDotApi
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
 
+    # Job基盤はSolid Queue（TASK-003で採用）。処理の記録と同じDBに置くので`connects_to`を指定しない。
+    config.active_job.queue_adapter = :solid_queue
+
     # 認証はRails標準のCookieStore（TASK-001で採用）。API-onlyは既定でsessionを持たないので明示的に足す。
     # 期限（認証から7日・延長なし）はCookieに任せず、Authentication concernがserverで検証する。
     config.session_store :cookie_store,

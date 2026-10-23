@@ -37,6 +37,9 @@ Rails.application.configure do
   # ActionMailer::Base.deliveries array.
   config.action_mailer.delivery_method = :test
 
+  # testではJobを実行せずに記録し、必要なspecだけが明示して実行する。
+  config.active_job.queue_adapter = :test
+
   # Set host to be used by links generated in mailer templates.
   config.action_mailer.default_url_options = { host: "example.com" }
 
