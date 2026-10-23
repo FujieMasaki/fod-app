@@ -41,7 +41,9 @@ class RecordingAttemptToken
     end
 
     def encryptor
-      @encryptor ||= ActiveSupport::MessageEncryptor.new(Rails.application.key_generator.generate_key(PURPOSE, 32))
+      # 中身は文字列だけなのでJSONで直列化する（設定の既定の直列化方式に依存しない）
+      @encryptor ||= ActiveSupport::MessageEncryptor.new(Rails.application.key_generator.generate_key(PURPOSE, 32),
+                                                         serializer: JSON)
     end
   end
 end
