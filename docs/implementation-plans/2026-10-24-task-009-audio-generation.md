@@ -2,8 +2,8 @@
 
 ## 1. Status
 
-実施中（2026-10-24）。コード（状態機械・API・Job・AWSのadapter）はproviderを差し替えたtestで閉じる。
-実サービスでの確認（AWSの資源・認証・model idの受け入れ）は人間の作業が要るので、§5「人間の作業が要るもの」で止める。
+実施中（2026-10-24）。コード（状態機械・API・Job・AWSのadapter）はproviderを差し替えたtestで閉じた。
+実サービスでの確認（AWSの資源・認証・model idの受け入れ）は人間の作業が要るので、§5「人間の作業が要るもの」で止めている。
 
 ## 2. Goal
 
@@ -82,6 +82,16 @@
 
 - 具体的なmodel idと最終的なpromptの文面（H3。promptは実データを見て詰める。TASK-003 Plan §17）。
 - watchdogとpollingの間隔の実値は、下記§7の初期値で入れ、実測（H4）で見直す。
+
+### 実装の中で決めたこと（人間の確認を求める）
+
+設計の大枠はTASK-003・TASK-005で決まっている。その範囲で、次をこのタスクで決めた。PRの「確認すること」に挙げる。
+
+- **回数の制限**（契約のRateLimitedが「採否と具体値はTASK-009で決める」としていた）: 採る。利用者ごとに1時間で、
+  録音attemptの発行60回・送信60回・再試行30回。日々の記録として十分に多く、自動化された大量の送信だけを止める値にした。
+- **Transcribeの完了待ち**: threadを占有せず、15秒ごとに自分をもう一度enqueueする（§8）。
+- **`users`の列**: 退会の受理時刻（`deletion_requested_at`）と世代番号（`generation`）をここで足した（§12）。
+- **送信でS3に置けなかったとき**: `202`で`failed`（`upload_incomplete`）を返し、同じattemptで送り直させる。
 
 ## 6. References and Documents to Update
 
@@ -203,9 +213,10 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 | --- | --- | --- | --- | --- |
 | 1 | `feat/task-009-1-generation-model` | Plan・データと状態機械の核 | このPlan、migration 3つ（users・generations・consumed attempts）、`Generation`・`ConsumedRecordingAttempt`・`User`の変更、`GenerationNaming`、model spec、factory | 12 |
 | 2 | `feat/task-009-2-job-and-aws` | Job基盤とAWSのadapter | Gemfile、Solid Queueのmigrationと設定、`config/generation.yml`（model id・prompt）、S3・Transcribe・Bedrockのadapterとspec、呼び出し元の確認 | 20 |
-| 3 | `feat/task-009-3-cleanup` | 入口の手続き・取り消し・cleanup・ACK・期限・退会/完全削除の入口（T3・T5・T7・T10・T13・T16〜T22） | `GenerationGate`、取り消し・cleanup・ACK・期限のserviceとJob、定期実行の設定、偽物のprovider、遷移テストと5契機のspec | 18 |
-| 4 | `feat/task-009-4-pipeline` | 受理から保存まで（T1・T2・T4・T6・T8・T9・T11・T12・T14・T15）とwatchdog | attempt token、upload・文字起こし開始/完了待ち・生成と保存・再試行・watchdogのserviceとJob、遷移テスト | 18 |
-| 5 | `feat/task-009-5-api` | endpointと文書 | routes・controller・serializer・`ApiRequestGuard`・request spec、呼び出し元を表示するtask、architecture・privacy・backend、タスクファイル | 18 |
+| 3 | `feat/task-009-3-cleanup` | 入口の手続き・取り消し・cleanup・ACK・期限・退会/完全削除の入口（T3・T5・T7・T10・T13・T16〜T22） | `GenerationGate`、取り消し・cleanup・ACK・期限のserviceとJob、定期実行の設定、偽物のprovider、遷移テストと5契機のspec | 19 |
+| 4 | `feat/task-009-4-pipeline` | 受理から保存まで（T1・T2・T4・T6・T8・T9・T11・T12・T14・T15）とwatchdog | attempt token、upload・文字起こし開始/完了待ち・生成と保存・再試行・watchdogのserviceとJob、遷移テスト | 20 |
+| 5 | `feat/task-009-5-api` | endpoint | routes・controller・serializer・`ApiRequestGuard`・回数の制限・request spec・通しのspec | 16 |
+| 6 | `feat/task-009-6-docs` | 文書と完了の記録 | 契約の回数の記述、呼び出し元を表示するtask、architecture・privacy・backend、TASK-013への申し送り、このPlanとタスクファイル | 8 |
 
 取り消し・cleanupを受理から保存までより先に置くのは、受理の側（uploadの世代のずれ、Transcribeの終端後の確認）が
 取り消しの入口を呼ぶためである。取り消しの遷移は、testでは記録を各状態で作って確かめられる。
@@ -264,7 +275,37 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 
 ## 16. Completion Record
 
-- 状態: 実施中
-- 実装差異: 未記入
-- 検証結果: 未記入
-- 関連: 未記入
+- 状態: 実施中（2026-10-24）。コードとtestは6つのPRで終えた。実サービスでの確認（§5のH1〜H4）が残るので、タスクは
+  In progressのまま。
+- 実装差異:
+  - PRを5つの予定から6つに分けた。文書と完了の記録を足すとAPIのPRが20を超えるため。取り消し・cleanupを受理から保存までの
+    前に置いた（受理の側が取り消しの入口を呼ぶため）。
+  - 2番目のPRで、定期実行の設定と呼び出し元を表示するtaskを後ろのPRへ移すコミットを足した（20ファイルに収めるため。
+    履歴は書き換えていない）。
+  - `POST /api/v1/dots`は、attemptを本文の解釈より前に検証して既存の処理を返すが、Railsのrequestのログ（Parameters）が
+    actionの前にmultipartを解釈する。本文はPumaが受け取り終えているので、契約の「本文の再送信そのものは防げない」の範囲で、
+    既存の処理の場合に音声を使わない・S3へ置かないことは守っている。
+  - pollingは、Dotの無いまま`succeeded_cleanup_pending`に残る記録（Dotの完全削除の受理の前後）を404にした。
+- 検証結果:
+  - `cd apps/api && bundle exec rspec`: 608 examples, 0 failures（6番目のPRの時点）。
+  - `bundle exec rubocop`: no offenses。`bundle exec brakeman -q`: No warnings。`bundle exec bundler-audit check`:
+    crassの指摘（GHSA-pq4g-8rxf-4g29。mainにもある）を1.0.8へ上げて解消した。
+  - 遷移テスト: `spec/services/generation_transitions/`にT1〜T22（T1・T2・T3・T4は`generation_upload_spec.rb`、
+    T3は`cancellation_spec.rb`にも）。§24の遷移でない性質は`spec/requests/api/v1/generations_spec.rb`（polling・認可）、
+    `generation_upload_spec.rb`（冪等性・並行送信）、`cleanup_triggers_spec.rb`（5契機）、`cleanup_spec.rb`（個別の失敗と
+    T17/T22の競合の両方の順）。
+  - 未実施（人間の作業が要る。§5）: 実サービスでの録音内容の反映、webm/mp4の実ファイル、`DeleteTranscriptionJob`の範囲、
+    PUTの実際の挙動、model idごとの確認（推論の宛先・保持・人によるレビュー・cache）、`none`のもとでのCSAM、
+    Transcribeのendpointの記録、呼び出し元の初回確認、Pumaとの同居の実測。
+- 関連: メインのPR #101。
+
+## 17. 未決定事項（止まった理由）
+
+コードを書き終え、§5のH1〜H4に当たったので止める。どれも人間の作業か判断が要り、推測で進めない。
+
+| # | 判断・作業 | 選択肢 | 確認済みの事実 |
+| --- | --- | --- | --- |
+| H1 | S3 bucketとIAMを誰がどう作るか | A: 人間がconsoleで作り、設定（非公開・暗号化・versioning無効・lifecycle・prefixごとの権限）をこのPlanへ記録する ／ B: IaC（Terraform等）をリポジトリに足す（新しいtoolの判断が要る） | アプリ用アカウントに資源は無い。コードはbucket名を`FOD_GENERATION_BUCKET`から読む |
+| H2 | 開発マシンの認証と呼び出し元の初回確認 | 人間がIAM Identity Centerでログインし、`bin/rails generation:caller_identity`の結果がアプリ用か確かめ、`FOD_APP_ACCOUNT_ID`をgitに入れない設定へ置く | このマシンに既定の認証情報は無い（2026-10-23）。値が無い間、コードはAWSのclientを作らない |
+| H3 | Bedrockのmodel idと受け入れ | 国内に収まる経路（Geo: JPのinference profile等）から、`none`で呼べ、期限付きの例外に頼らないmodelを選び、モデルカードで推論の宛先を確かめる。CSAMの検知による保存・レビューが`none`で止まるかを確かめ、確かめられなければ受け入れを判断する | `config/generation.yml`の`bedrock_model_id`は空で、空の間はBedrockへ送らない |
+| H4 | Pumaとの同居の実測 | ECSが無いので、TASK-015など実環境を作るタスクで測るか、ローカルで代わりに測るか | worker 1プロセス3 thread、DBの接続数は既定5 |
