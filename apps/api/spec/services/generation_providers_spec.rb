@@ -14,12 +14,16 @@ RSpec.describe GenerationProviders do
     expect(client.config).to have_attributes(region: "ap-northeast-1", logger: nil, http_wire_trace: false)
   end
 
-  it "BedrockのclientはSDKに自動で再送させない（同じ生成を二重に消費しない）" do
+  it "BedrockのclientはSDKに自動で再送させない（同じ生成を二重に消費しない）。環境変数で再送の方式や回数を変えても同じ" do
     allow(described_class::CallerAccountGuard).to receive(:verify!)
     allow(GenerationSettings).to receive(:app_account_id).and_return("111111111111")
+    allow(ENV).to receive(:[]).and_call_original
+    allow(ENV).to receive(:[]).with("AWS_RETRY_MODE").and_return("adaptive")
+    allow(ENV).to receive(:[]).with("AWS_MAX_ATTEMPTS").and_return("5")
     described_class.reset
 
-    expect(described_class.composer.instance_variable_get(:@client).config).to have_attributes(retry_limit: 0)
+    expect(described_class.composer.instance_variable_get(:@client).config).to have_attributes(retry_mode: "standard",
+                                                                                               max_attempts: 1)
   end
 
   it "呼び出し元を確かめられなければclientを作らない（外部へ送らない）" do

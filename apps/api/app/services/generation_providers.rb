@@ -10,8 +10,10 @@ module GenerationProviders
   AWS_ERRORS = [Aws::Errors::ServiceError, Seahorse::Client::NetworkingError, Aws::Errors::MissingCredentialsError,
                 Aws::Sigv4::Errors::MissingCredentialsError].freeze
   # Bedrockの呼び出しはSDKに自動で再送させない（同じ生成を二重に消費しないため。失敗は再試行の手順で扱う）。
+  # 再送の方式を`standard`に固定し、試行を1回にする（`retry_limit`は`legacy`のときだけ効き、方式と回数は環境変数
+  # `AWS_RETRY_MODE`・`AWS_MAX_ATTEMPTS`でも変わるため、両方をここで決める）。
   # 長い出力を待てるよう、読み取りのtimeoutを既定の60秒より長くする。値は実測で見直す
-  BEDROCK_CLIENT_OPTIONS = { retry_limit: 0, http_read_timeout: 120 }.freeze
+  BEDROCK_CLIENT_OPTIONS = { retry_mode: "standard", max_attempts: 1, http_read_timeout: 120 }.freeze
 
   # 外部の失敗。messageには例外の種類とAWSのerror code（入力を含まない）だけを入れ、外部のmessage（入力を含み得る）を
   # 写さない。元の例外も`cause`に残さない（error trackingがcauseごと送ると、messageが外へ出るため）。
