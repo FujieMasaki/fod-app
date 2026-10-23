@@ -25,10 +25,14 @@ RSpec.describe GenerationCancellation do
   end
 
   it "取り消し済み・退会・完全削除で後片付け中の処理、存在しない処理、他人の処理は404" do
-    canceled = create(:generation, user:, state: "cancel_requested", cancel_reason: "canceled")
+    canceled, withdrawn, purged = %w[canceled withdrawn dot_purged].map do |reason|
+      create(:generation, user:, state: "cancel_requested", cancel_reason: reason)
+    end
     others = create(:generation, state: "failed")
 
-    expect([canceled.id, others.id, SecureRandom.uuid].map { cancel(it) }).to all(eq(:not_found))
+    expect([canceled, withdrawn, purged, others].map { cancel(it.id) } + [cancel(SecureRandom.uuid)])
+      .to all(eq(:not_found))
+    expect([withdrawn, purged].map { it.reload.cancel_reason }).to eq(%w[withdrawn dot_purged])
     expect(others.reload.state).to eq("failed")
   end
 
@@ -48,6 +52,17 @@ RSpec.describe GenerationCancellation do
 
     expect(cancel(generation.id)).to eq(:generation_completed)
     expect(generation.reload.state).to eq("succeeded_cleanup_pending")
+  end
+
+  it "退会の受理と並んだときは、利用者の行をlockした後に確かめて受け付けない" do
+    generation = create(:generation, user:, state: "failed")
+    allow(GenerationGate).to receive(:enter).and_wrap_original do |original, **args, &block|
+      User.where(id: user.id).update_all(deletion_requested_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
+      original.call(**args, &block)
+    end
+
+    expect(cancel(generation.id)).to eq(:account_deletion_in_progress)
+    expect(generation.reload.state).to eq("failed")
   end
 
   it "退会の受理後は受け付けない" do

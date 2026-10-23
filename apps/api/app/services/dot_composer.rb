@@ -15,12 +15,15 @@ class DotComposer
     @client = client
   end
 
-  # ツールの入力（Hash）を返す。ツールを使わなかった応答はnil。
+  # ツールの入力（Hash）を返す。ツールを使わなかった・途中で止まった応答はnil。
   def compose(transcript:, date:, duration_seconds:)
     response = @client.converse(**request(transcript, date, duration_seconds))
+    # 上限で切れた・filterで止まったなどの応答は、ツールの入力があっても使わない
+    return unless response.stop_reason == "tool_use"
+
     tool_use = response.output.message.content.filter_map(&:tool_use).find { it.name == TOOL_NAME }
     tool_use&.input
-  rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
+  rescue *GenerationProviders::AWS_ERRORS => e
     GenerationProviders::Error.raise_from(e)
   end
 

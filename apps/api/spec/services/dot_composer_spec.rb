@@ -7,8 +7,8 @@ RSpec.describe DotComposer do
 
   def compose = composer.compose(transcript: "朝に散歩した", date: Date.new(2026, 10, 24), duration_seconds: 120)
 
-  def stub_content(*content)
-    client.stub_responses(:converse, output: { message: { role: "assistant", content: } }, stop_reason: "tool_use",
+  def stub_content(*content, stop_reason: "tool_use")
+    client.stub_responses(:converse, output: { message: { role: "assistant", content: } }, stop_reason:,
                                      usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
                                      metrics: { latency_ms: 1 })
   end
@@ -28,6 +28,14 @@ RSpec.describe DotComposer do
 
     text = client.api_requests.last[:params][:messages].sole[:content].sole[:text]
     expect(text).to eq("録音日: 2026-10-24\n録音時間: 120秒\n<transcript>\n朝に散歩した\n</transcript>")
+  end
+
+  it "上限で切れた・filterで止まった応答は、ツールの入力があっても使わない" do
+    %w[max_tokens content_filtered guardrail_intervened].each do |stop_reason|
+      stub_content({ tool_use: { tool_use_id: "t", name: "record_dot", input: tool_output } }, stop_reason:)
+
+      expect(compose).to be_nil
+    end
   end
 
   it "ツールを使わなかった応答はnil" do

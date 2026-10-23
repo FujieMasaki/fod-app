@@ -52,8 +52,8 @@ module GenerationCleanup
     delete_audio(generation)
     delete_transcript(generation)
     finish(generation, Generation::CLEANUP_PENDING, token)
-  rescue GenerationProviders::Error, TranscriptionGateway::NotTerminal
-    defer(generation, token, now + RETRY_AFTER, :retry)
+  rescue GenerationProviders::Error, TranscriptionGateway::NotTerminal => e
+    retry_later(generation, token, now, e)
   end
 
   def clean_succeeded(generation, now)
@@ -66,7 +66,13 @@ module GenerationCleanup
 
     delete_transcript(generation)
     finish(generation, Generation::SUCCEEDED_CLEANUP_PENDING, token)
-  rescue GenerationProviders::Error, TranscriptionGateway::NotTerminal
+  rescue GenerationProviders::Error, TranscriptionGateway::NotTerminal => e
+    retry_later(generation, token, now, e)
+  end
+
+  # 消し残しに気づけるよう、処理IDと例外の種類だけをログに残す（本文・外部のmessageは出さない）
+  def retry_later(generation, token, now, error)
+    Rails.logger.warn("generation cleanup deferred: generation_id=#{generation.id} error=#{error.class.name}")
     defer(generation, token, now + RETRY_AFTER, :retry)
   end
 
@@ -90,18 +96,25 @@ module GenerationCleanup
     job_names(generation).any? { GenerationProviders.transcriber.status(it) == :in_progress }
   end
 
+  # 消す対象は、命名規則から導いたものに、記録が持つkey・job名を足して決める（規則を変えても、過去の記録が
+  # 指すものを取り残さない。TASK-003 Plan §20「処理の記録に持つ項目」）
   def delete_audio(generation)
-    GenerationProviders.storage.delete_prefix(GenerationNaming.audio_prefix(generation.id))
+    prefixes(GenerationNaming.audio_prefix(generation.id), generation.audio_key)
+      .each { GenerationProviders.storage.delete_prefix(it) }
   end
 
   def delete_transcript(generation)
-    GenerationProviders.storage.delete_prefix(GenerationNaming.transcript_prefix(generation.id))
+    prefixes(GenerationNaming.transcript_prefix(generation.id), generation.transcript_key)
+      .each { GenerationProviders.storage.delete_prefix(it) }
     job_names(generation).each { GenerationProviders.transcriber.delete(it) }
   end
 
-  # これまでの文字起こしの試行のjobすべて（再試行で番号が進んでも、古いjobを取り残さない）
+  def prefixes(derived, key) = [derived, key && "#{File.dirname(key)}/"].compact.uniq
+
+  # これまでの文字起こしの試行のjobすべて（再試行で番号が進んでも、古いjobを取り残さない）と、記録が持つjob名
   def job_names(generation)
-    (1..generation.transcription_attempt).map { GenerationNaming.job_name(generation.id, it) }
+    derived = (1..generation.transcription_attempt).map { GenerationNaming.job_name(generation.id, it) }
+    [*derived, generation.transcription_job_name].compact.uniq
   end
 
   def defer(generation, token, until_time, result)
@@ -114,5 +127,6 @@ module GenerationCleanup
     result
   end
   private_class_method :start_canceled, :resume_canceled, :clean_all, :clean_succeeded, :finish, :hand_over,
-                       :transcription_running?, :delete_audio, :delete_transcript, :job_names, :defer, :release
+                       :transcription_running?, :delete_audio, :delete_transcript, :prefixes, :job_names, :retry_later,
+                       :defer, :release
 end
