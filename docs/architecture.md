@@ -390,7 +390,13 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
 - 録音の発行・送信・再試行は、利用者ごとに1時間でそれぞれ60回・60回・30回までにする（`GenerationThrottle`）。
 - Job基盤をSolid Queueにしたので、Jobの引数はDB（`solid_queue_jobs.arguments`）に平文で残る。生成のJobの引数は
   処理IDだけにする。**認証メールのJob（引数にメールアドレスと確認・再設定・解除のtokenを持つ）はSolid Queueに載せず、
-  memoryのadapter（async）で動かす**（`config.x.auth_mail_queue_adapter`）。
+  memoryのadapter（async）で動かす**（`config.x.auth_mail_queue_adapter`）。これまでと同じ挙動で、**deployや再起動の
+  ときに送る前のメールは失われる**（利用者は再送の操作でやり直せる）。代わりに、引数を利用者のidだけにしてtokenを
+  Jobの中で作り直せばSolid Queueに載せられるが、Deviseがtokenを作ってメールを送る流れを変えることになり、このタスクの
+  範囲を超えるので採らなかった（2026-10-24にTASK-009で決定）。
+- 失敗したJobは、例外のclass・message・backtraceがログとSolid Queue（`solid_queue_failed_executions`）に残り、
+  終わったJobの定期の削除の対象にならない。messageには入力が入り得るので、**`ApplicationJob`が例外をclassの名前だけに
+  包み直してから外へ出す**（外部の失敗を包んだ`GenerationProviders::Error`はmessageに入力を含まないので残す）。
 - `POST /api/v1/dots`のmultipartはRailsがactionより前に解析するので、`ApiRequestGuard`が本文の大きさをContent-Lengthで
   先に制限する（33MB。長さの無い本文は受け付けない）。
 - AWSの呼び出しは`GenerationProviders`に集め、clientを作る前に呼び出し元がアプリ用アカウント（`FOD_APP_ACCOUNT_ID`）か
@@ -567,7 +573,7 @@ Webの接続は2026-10-05に[TASK-007 Plan](implementation-plans/2026-10-05-task
   Devise 5.0.4を導入し、確認期限（標準は無期限）を24時間に設定した。
   メールのリンクはSPAの画面を指し、tokenはURLのfragment（`#token=`）に載せてserverへ送らせない。
   メールはjob（`deliver_later`）で送り、確認の再送・再設定は利用者の検索からjobで行う（応答時間から
-  登録の有無を分からなくするため）。jobはSolid Queueで実行する（2026-10-24にTASK-009で移した）。
+  登録の有無を分からなくするため）。jobはSolid Queueに載せず、Railsの`:async`で実行する（引数にtokenを持つため。上記「生成の実行方式」の「実装（TASK-009）」）。
   ログをdebugにするとActionMailerがメール本文（token）を出すため、productionでdebugにしない。
 - passwordは8〜128文字で文字種は問わない。bcryptは先頭72 byteだけで照合するため、SHA-256にかけてから
   bcryptへ渡し、全文を照合に使う。不一致が10回続いたらアカウントをロックし（Lockable）、

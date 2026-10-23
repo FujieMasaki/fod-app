@@ -361,3 +361,11 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
   3はarchitectureの記述で、設計を変えない）。
 - Q2: 認証メールのJobの扱い。A: `:async`のまま（以前と同じ。deployで未送信が消え得る） ／ B: 引数を利用者のidだけにして
   tokenをJobの中で作り直し、Solid Queueに載せる（Deviseの流れを変える）。推奨: A（このタスクの範囲を広げず、以前と同じ挙動を保つ）。
+
+人間の判断（2026-10-24）: Q1は続ける。Q2は回答が無く、推奨のA（`:async`のまま）を採った。#103の3件は次のとおり直した。
+
+1. Bedrockのclientを`retry_mode: "standard"`・`max_attempts: 1`にした。環境変数`AWS_RETRY_MODE`・`AWS_MAX_ATTEMPTS`を
+   変えても同じ値になることをspecで確かめる（`a865ca7`）。
+2. `ApplicationJob`が失敗した例外をclassの名前だけの`ApplicationJob::Failed`に包み直し、ログとSolid Queueにmessageを
+   残さない（`7642dc8`）。保持の方針はprivacy.md「Jobの記録」（失敗したJobは人間が消すまで残る）。
+3. architecture「実装（TASK-009）」に、`:async`で送る前のメールがdeployで失われることと、採らなかった代替案を書いた。
