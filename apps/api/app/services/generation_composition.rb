@@ -45,18 +45,21 @@ module GenerationComposition
   end
 
   def persist(generation, token, fields, now)
-    saved = ActiveRecord::Base.transaction do
-      user = User.lock.find(generation.user_id)
-      next false if user.deletion_requested? || user.generation != generation.user_generation
-
-      insert_dot(user, generation, fields)
-      raise ActiveRecord::Rollback unless succeed(generation, token, now)
-
-      GenerationCleanupJob.perform_later(generation.id)
-    end
-    saved ? :succeeded : :skipped
+    ActiveRecord::Base.transaction { result_saved?(generation, token, fields, now) } ? :succeeded : :skipped
   rescue ActiveRecord::RecordInvalid, ActiveRecord::StatementInvalid
     fail(generation, token, "persist_failed")
+  end
+
+  # 保存できたらtrue。退会を受理していた・取り消しで実行権を失っていたら保存しない
+  def result_saved?(generation, token, fields, now)
+    user = User.lock.find(generation.user_id)
+    return false if user.deletion_requested? || user.generation != generation.user_generation
+
+    insert_dot(user, generation, fields)
+    raise ActiveRecord::Rollback unless succeed(generation, token, now)
+
+    GenerationCleanupJob.perform_later(generation.id)
+    true
   end
 
   def insert_dot(user, generation, fields)
@@ -76,5 +79,5 @@ module GenerationComposition
                                          failure_kind: kind, lease_token: nil, lease_expires_at: nil, **attrs)
     :failed
   end
-  private_class_method :compose, :valid_text?, :persist, :insert_dot, :succeed, :fail
+  private_class_method :compose, :valid_text?, :persist, :result_saved?, :insert_dot, :succeed, :fail
 end
