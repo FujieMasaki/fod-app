@@ -4,7 +4,7 @@
 # 1. bodyのContent-Typeが`application/json`でなければ、解析する前に`body`の`invalid_format`で拒否する。
 #    契約のrequestBodyはJSONだけで、formのbodyを受け付けると、不正なUTF-8の値から本文を含むmessageの
 #    `BadRequest`が起きる（下の2）。JSON以外を受け取るendpointは`NON_JSON_BODIES`に足す
-#    （`POST /api/v1/dots`のmultipartはTASK-009）。
+#    （`POST /api/v1/dots`の音声のmultipart。TASK-009）。
 # 2. paramsを解釈できないときにRailsが起こす`ActionController::BadRequest`（path・queryの不正なUTF-8など）を
 #    捕まえ、`request`の`invalid_format`にする。`rescue_from`の外で起きるため、捕まえないとProblem形式でない`400`になり、値を含む
 #    messageを`DebugExceptions`がerrorのログへ出す。そのためこのmiddlewareは`DebugExceptions`の内側に置く。
@@ -18,7 +18,7 @@ class ApiRequestGuard
   API_PATH = "/api".freeze
   JSON_MEDIA_TYPE = "application/json".freeze
   # { [method, path] => 受け取るmedia type }
-  NON_JSON_BODIES = {}.freeze
+  NON_JSON_BODIES = { %w[POST /api/v1/dots] => "multipart/form-data" }.freeze
 
   def initialize(app)
     @app = app

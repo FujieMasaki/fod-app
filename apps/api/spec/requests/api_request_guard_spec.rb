@@ -49,6 +49,15 @@ RSpec.describe ApiRequestGuard do
       end
   end
 
+  it "音声の送信（POST /api/v1/dots）だけはmultipartで受け付け、JSONやformのbodyは拒否する" do
+    post "/api/v1/dots", params: "x",
+                         headers: { "X-CSRF-Token" => csrf_token, "CONTENT_TYPE" => "multipart/form-data; boundary=x" }
+    expect(field_errors).not_to eq([{ "field" => "body", "code" => "invalid_format" }])
+
+    json_request(:post, "/api/v1/dots", { duration_seconds: 1 })
+    expect(field_errors).to eq([{ "field" => "body", "code" => "invalid_format" }])
+  end
+
   it "charsetの付いたJSONは受け付ける" do
     json_request(:patch, "/api/v1/dots/#{dot.id}", { sentence: "直した一文" },
                  headers: { "CONTENT_TYPE" => "application/json; charset=utf-8" })

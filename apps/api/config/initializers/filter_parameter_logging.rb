@@ -12,3 +12,5 @@ Rails.application.config.filter_parameters += [/\Acode\z/, /\Astate\z/]
 Rails.application.config.filter_parameters += %i[sentence summary]
 # objectでないJSONのbody（文字列・配列）をRailsは`_json`に入れる。そのまま本文になり得るので値ごと隠す。
 Rails.application.config.filter_parameters += [/\A_json\z/]
+# 録音の音声（multipartのpart）と文字起こし全文。発話の内容そのものなので、requestのログに出さない。
+Rails.application.config.filter_parameters += [/\Aaudio\z/, /\Atext\z/, :transcript]
