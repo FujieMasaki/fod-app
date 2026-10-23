@@ -27,6 +27,19 @@ RSpec.describe GenerationMaintenanceJob do
     expect(enqueued).not_to include(running.id, waiting_for_ack.id)
   end
 
+  it "取り消しを受理した処理は、取り消す前の実行の期限が切れてから後片付けへ渡す" do
+    unowned = create(:generation, state: "cancel_requested", cancel_reason: "canceled", lease_expires_at: nil)
+    lapsed = create(:generation, state: "cancel_requested", cancel_reason: "canceled", lease_expires_at: 1.second.ago)
+    running = create(:generation, state: "cancel_requested", cancel_reason: "canceled",
+                                  lease_expires_at: 1.minute.from_now)
+
+    described_class.perform_now
+
+    enqueued = enqueued_jobs.select { it["job_class"] == "GenerationCleanupJob" }.map { it["arguments"].first }
+    expect(enqueued).to contain_exactly(unowned.id, lapsed.id)
+    expect(enqueued).not_to include(running.id)
+  end
+
   it "期限の過ぎた使用済みattemptを消す" do
     ConsumedRecordingAttempt.create!(id: SecureRandom.uuid, expires_at: 1.second.ago)
     live = ConsumedRecordingAttempt.create!(id: SecureRandom.uuid, expires_at: 1.hour.from_now)
