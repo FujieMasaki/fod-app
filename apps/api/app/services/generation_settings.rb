@@ -15,6 +15,9 @@ module GenerationSettings
   def bedrock_model_id = required(:bedrock_model_id)
   def app_account_id = required(:app_account_id)
 
+  # 外部へ送る前に、送るのに要る設定がすべてあることを確かめる
+  def verify_ready! = [bucket, bedrock_model_id, app_account_id]
+
   # 未設定のまま外部へ送らない。値そのものは例外のmessageに入れない。
   def required(key)
     config[key].presence || raise(NotConfigured, "generation setting is missing: #{key}")

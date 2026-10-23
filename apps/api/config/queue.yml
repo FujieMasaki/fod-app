@@ -1,4 +1,5 @@
 # Solid Queueのworker（TASK-003で採用。並列数・DB poolの実値はTASK-009の実測で見直す）。
+# workerのthreadsはDBの接続数（database.ymlのmax_connections。RAILS_MAX_THREADSに連動）に収まる必要がある。
 default: &default
   dispatchers:
     - polling_interval: 1

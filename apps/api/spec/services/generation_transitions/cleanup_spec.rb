@@ -71,6 +71,15 @@ RSpec.describe "処理の記録の遷移: 後片付け" do # rubocop:disable RSp
       expect(Generation.exists?(generation.id)).to be(false)
     end
 
+    it "T19: 取り消す前に動いていた実行の期限が残っていれば、その期限が切れるまで始めない" do
+      generation.update_columns(lease_expires_at: 3.minutes.from_now) # rubocop:disable Rails/SkipsModelValidations
+
+      expect(cleanup(generation)).to eq(:waiting)
+      expect(generation.reload.state).to eq("cancel_requested")
+
+      travel(4.minutes) { expect(cleanup(generation)).to eq(:done) }
+    end
+
     it "古い試行の音声とjobも消す（記録が持つ現在のkey以外も、prefixと試行番号で拾う）" do
       generation.update!(upload_attempt: 2, transcription_attempt: 2)
       storage.objects["audio/#{generation.id}/2"] = { body: "audio" }

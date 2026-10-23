@@ -17,6 +17,8 @@ class Generation < ApplicationRecord
   # Dotがまだ無く、処理の取り消しを受け付ける状態（architecture「処理の取り消し」）
   CANCELABLE_STATES = %w[uploading upload_failed accepted transcribing generating failed].freeze
   RETRY_WINDOW = 24.hours
+  # `transition`で実行権を照合しないことを表す（nilと区別する）
+  UNCHECKED = Object.new.freeze
   # 録音attemptで送信できる期間（発行から2時間。dot-history.md §2）。発行時刻は`started_at`
   ATTEMPT_LIFETIME = 2.hours
 
@@ -33,14 +35,16 @@ class Generation < ApplicationRecord
 
   # 遷移元が`from`のどれかである場合だけ`to`へ移し、移せたらtrueを返す。`attrs`は同じUPDATEで書く。
   # `holding`を渡すと、その実行権を持っている場合だけ移す（取り消しで実行権を失った実行を止める）。
+  # nilは「照合しない」の意味にしない（取れなかった実行権をそのまま渡すと、照合が黙って外れるため）。
   # 最終進捗時刻も同時に進める（stale判定の材料。単独の根拠にはしない）。
   # 条件付きのUPDATEそのものが目的なので、validationを通さない`update_all`を使う（値はserverが決めたものだけ）。
-  def self.transition(id, from:, to:, holding: nil, **attrs) # rubocop:disable Naming/PredicateMethod
+  def self.transition(id, from:, to:, holding: UNCHECKED, **attrs) # rubocop:disable Naming/PredicateMethod
     raise ArgumentError, "unknown state: #{to}" unless STATES.include?(to)
+    raise ArgumentError, "lease token is nil" if holding.nil?
 
     now = Time.current
     scope = where(id:, state: Array(from))
-    scope = scope.where(lease_token: holding) if holding
+    scope = scope.where(lease_token: holding) unless holding == UNCHECKED
     changes = attrs.merge(state: to, last_progress_at: now, updated_at: now)
     scope.update_all(changes) == 1 # rubocop:disable Rails/SkipsModelValidations
   end

@@ -21,7 +21,7 @@ class DotComposer
     tool_use = response.output.message.content.filter_map(&:tool_use).find { it.name == TOOL_NAME }
     tool_use&.input
   rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
-    raise GenerationProviders::Error.wrap(e)
+    GenerationProviders::Error.raise_from(e)
   end
 
   private

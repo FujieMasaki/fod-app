@@ -123,6 +123,17 @@ RSpec.describe "cleanupの5つの契機" do # rubocop:disable RSpec/DescribeClas
     expect(user.reload).to have_attributes(deletion_requested_at: be_present, generation: 1)
   end
 
+  it "退会: 期限の残るattempt（処理の記録とDot）を使用済みにし、2時間を過ぎたものは残さない" do
+    recent = create(:generation, user:, state: "failed", failure_kind: "generation_failed", started_at: 10.minutes.ago)
+    recent_dot = create(:dot, user:, started_at: 20.minutes.ago)
+    old_dot = create(:dot, user:, started_at: 3.hours.ago)
+
+    GenerationWithdrawal.accept(user)
+
+    expect([recent.id, recent_dot.generation_id].map { ConsumedRecordingAttempt.consumed?(it) }).to eq([true, true])
+    expect(ConsumedRecordingAttempt.exists?(old_dot.generation_id)).to be(false)
+  end
+
   it "Dotの完全削除: 他人のDotは受け付けない" do
     other_dot = create(:dot)
 
