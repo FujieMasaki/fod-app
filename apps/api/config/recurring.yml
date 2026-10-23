@@ -1,0 +1,15 @@
+# 定期実行するJob（Solid Queueのscheduler）。
+default: &default
+  # 期限の到来と、再実行が要る後片付け（TASK-009）
+  generation_maintenance:
+    class: GenerationMaintenanceJob
+    schedule: every minute
+
+development:
+  <<: *default
+
+production:
+  <<: *default
+  clear_solid_queue_finished_jobs:
+    command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
+    schedule: every hour at minute 12
