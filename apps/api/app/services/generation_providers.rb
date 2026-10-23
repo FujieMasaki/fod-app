@@ -6,9 +6,12 @@
 # - 設定（bucket・model id・アカウントID）が1つでも欠けていれば、どのclientも作らない。model idが未確定の間に
 #   音声だけをS3やTranscribeへ送らないため。
 module GenerationProviders
-  # 外部の呼び出しで起き得る例外（サービスの失敗・通信の失敗・認証情報が無い／期限切れ）
+  # 外部の呼び出しで起き得る例外（サービスの失敗・通信の失敗・認証情報が無い／期限切れ・設定の誤り・checksumの不一致・
+  # 再送の枠の枯渇）。`ServiceError`の子でないSDKの例外も挙げる（漏れると呼ぶ側の`rescue Error`を素通りするため）
   AWS_ERRORS = [Aws::Errors::ServiceError, Seahorse::Client::NetworkingError, Aws::Errors::MissingCredentialsError,
-                Aws::Sigv4::Errors::MissingCredentialsError].freeze
+                Aws::Sigv4::Errors::MissingCredentialsError, Aws::Errors::InvalidSSOToken,
+                Aws::Errors::InvalidSSOCredentials, Aws::Errors::NoSuchProfileError, Aws::Errors::MissingRegionError,
+                Aws::Errors::ChecksumError, Aws::Errors::RetryCapacityNotAvailableError].freeze
   # Bedrockの呼び出しはSDKに自動で再送させない（同じ生成を二重に消費しないため。失敗は再試行の手順で扱う）。
   # 再送の方式を`standard`に固定し、試行を1回にする（`retry_limit`は`legacy`のときだけ効き、方式と回数は環境変数
   # `AWS_RETRY_MODE`・`AWS_MAX_ATTEMPTS`でも変わるため、両方をここで決める）。

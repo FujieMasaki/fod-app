@@ -43,6 +43,14 @@ RSpec.describe GenerationProviders do
     expect { described_class.transcriber }.to raise_error(GenerationProviders::NotReady) { expect(it.cause).to be_nil }
   end
 
+  it "ServiceErrorの子でないSDKの例外（IAM Identity Centerのsessionの期限切れ等）も、外部の失敗として包む" do
+    store = AudioStore.new(client: Aws::S3::Client.new(stub_responses: true, region: "ap-northeast-1"), bucket: "b")
+    allow(store.instance_variable_get(:@client)).to receive(:put_object).and_raise(Aws::Errors::InvalidSSOToken)
+
+    expect { store.put("audio/x/1", "bytes", content_type: "audio/webm") }
+      .to raise_error(GenerationProviders::Error) { expect(it.cause).to be_nil }
+  end
+
   it "model idが未設定の間は、S3・Transcribeのclientも作らない（音声だけを外部へ送らない）" do
     allow(described_class::CallerAccountGuard).to receive(:verify!)
     allow(GenerationSettings).to receive(:bedrock_model_id).and_raise(GenerationSettings::NotConfigured)
