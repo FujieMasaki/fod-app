@@ -4,6 +4,10 @@ default: &default
   generation_maintenance:
     class: GenerationMaintenanceJob
     schedule: every minute
+  # 止まった処理の回収（TASK-009）
+  generation_watchdog:
+    class: GenerationWatchdogJob
+    schedule: every minute
 
 development:
   <<: *default
