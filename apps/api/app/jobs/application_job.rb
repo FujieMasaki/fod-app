@@ -1,7 +1,22 @@
+# Jobの共通の振る舞い。
 class ApplicationJob < ActiveJob::Base
-  # Automatically retry jobs that encountered a deadlock
-  # retry_on ActiveRecord::Deadlocked
+  # Jobの失敗は、例外のclass・message・backtraceがログとSolid Queueの`solid_queue_failed_executions.error`に残り、
+  # 失敗したJobは消す対象にならない（privacy.md「Jobの記録」）。messageには入力（文字起こし・生成の入出力・DBの値・
+  # メールアドレス）が入り得るので、外へ出す前に例外のclassの名前だけにする。messageが入力を含まないと決めた
+  # 例外（外部の失敗を包んだもの）だけはmessageを残す。backtraceは調査のために残す。
+  class Failed < StandardError; end
 
-  # Most jobs are safe to ignore if the underlying records are no longer available
-  # discard_on ActiveJob::DeserializationError
+  SAFE_MESSAGE_ERRORS = %w[GenerationProviders::Error].freeze
+
+  around_perform do |job, block|
+    block.call
+  rescue StandardError => e
+    raise ApplicationJob.sanitize(e, job:), cause: nil
+  end
+
+  def self.sanitize(error, job:)
+    safe = SAFE_MESSAGE_ERRORS.any? { |name| error.is_a?(name.constantize) }
+    detail = safe ? ": #{error.message}" : ""
+    Failed.new("#{error.class.name}#{detail} in #{job.class.name}").tap { it.set_backtrace(error.backtrace) }
+  end
 end
