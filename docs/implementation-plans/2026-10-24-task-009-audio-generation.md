@@ -369,3 +369,12 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 2. `ApplicationJob`が失敗した例外をclassの名前だけの`ApplicationJob::Failed`に包み直し、ログとSolid Queueにmessageを
    残さない（`7642dc8`）。保持の方針はprivacy.md「Jobの記録」（失敗したJobは人間が消すまで残る）。
 3. architecture「実装（TASK-009）」に、`:async`で送る前のメールがdeployで失われることと、採らなかった代替案を書いた。
+
+#103はその後のサブエージェントのレビューで、包まれないSDKの例外（`2dc7bb0`・`4fd0065`）と、YAMLで
+アカウントIDが整数になる問題（`7719cea`）を直した。3回目に要確認のMedium（生成の出力の上限）が残ったので止まり、
+人間が判断した（2026-10-24）。
+
+- Q1（出力の上限）: A。`bedrock_max_tokens`を4096にし、H3で最長の出力のtoken数を測って見直す（`9c44bdc`）。
+- Q2（任意の指摘）: A。今回は直さず、理由と扱う先を#103の本文に書いた（`AuthMailDeliveryJob`の失敗のmessage、
+  mailerを足したときの既定の配送のJob、長期キーの強制、`expected_bucket_owner`と`s3:ListBucket`（H1）、
+  `solid_queue`の版の指定、認証メールのJobのspec）。
