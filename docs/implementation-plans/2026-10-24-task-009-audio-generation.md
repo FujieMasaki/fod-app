@@ -287,7 +287,7 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
     既存の処理の場合に音声を使わない・S3へ置かないことは守っている。
   - pollingは、Dotの無いまま`succeeded_cleanup_pending`に残る記録（Dotの完全削除の受理の前後）を404にした。
 - 検証結果:
-  - `cd apps/api && bundle exec rspec`: 608 examples, 0 failures（6番目のPRの時点）。
+  - `cd apps/api && bundle exec rspec`: 610 examples, 0 failures（6番目のPRの時点）。
   - `bundle exec rubocop`: no offenses。`bundle exec brakeman -q`: No warnings。`bundle exec bundler-audit check`:
     crassの指摘（GHSA-pq4g-8rxf-4g29。mainにもある）を1.0.8へ上げて解消した。
   - 遷移テスト: `spec/services/generation_transitions/`にT1〜T22（T1・T2・T3・T4は`generation_upload_spec.rb`、
