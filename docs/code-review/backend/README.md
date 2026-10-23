@@ -58,8 +58,24 @@ Mediumがなければ`LGTM`と明記する。
 | --- | --- |
 | route / Controller | 認証前提、resourceの所有権、strong parameters、status code、error response |
 | Model / migration | validationとDB制約、UUID foreign key、data migration、rollback、既存dataへの影響 |
-| AI / storage / 外部API | 送信内容の最小化、timeout、failure、再試行、冪等性、ログ・削除。SDKの例外を包むときは、包む対象のclassをSDKの例外の階層で確かめる（共通の親（`ServiceError`など）を継承しない例外、clientを作る途中や認証情報を取り直す途中の例外が漏れやすい）。SDKの再送の設定は、その設定が効く条件（再送のmode）と、明示しなかった値を決める環境変数・共有の設定ファイル（`~/.aws/config`のprofile）も確かめる |
-| Job | enqueueのtransaction境界、重複実行、retry、dead letter相当の観測方法。失敗したJobの例外のmessageと引数が、ログ（ActiveJobの引数のログを含む）、queueの記録（`solid_queue_failed_executions.error`のmessage・backtrace、`solid_queue_jobs.arguments`）、error tracking（`cause`を含む）に何を残すか |
-| 設定（`config/*.yml`・ERB） | 環境変数を埋め込んだ値が、YAMLで意図した型として読まれるか。引用符のない値はYAMLが型を推測し、値の中身しだいで整数・8進数（先頭が0で0〜7だけ）・真偽値（`yes`・`off`など）・`nil`（空の値）になるか、文字列のまま残る（例であって全部ではない）。型が決まっている値は文字列として埋め込むか読んだ側で変換し、境目の値（先頭が0・空）でtestしているか。値が連動する設定（workerのthreadsとDBの接続数など）を片方だけ変えていないか。連動する値は、片方を変えると落ちるtestがあるか |
+| AI / storage / 外部API | 送信内容の最小化、timeout、failure、再試行、冪等性、ログ・削除。SDKの例外を包む対象と再送の設定（下の補足） |
+| Job | enqueueのtransaction境界、重複実行、retry、dead letter相当の観測方法。引数と失敗の例外が何に残るか（下の補足） |
+| 設定（`config/*.yml`・ERB） | 埋め込んだ環境変数の型・構造、連動する設定値（下の補足） |
 | WebとAPIの同時変更 | request / response schema、互換性、同一PRでの更新（分けた場合は、契約のPRに生成した型・Zodが入っているか、expand・migrate・contractの段階を同じ統合ブランチにまとめていないか）、デプロイ時差 |
 | auth / CORS / CSRF | 採用した認証方式、Cookieかtokenか、配信origin、ブラウザからの利用経路 |
+
+補足（処理系の挙動で見落としやすいもの）:
+
+- SDKの例外を包むときは、包む対象のclassをSDKの例外の階層で確かめる。共通の親（`ServiceError`など）を
+  継承しない例外や、clientを作る途中・認証情報を取り直す途中の例外が漏れやすい。SDKの再送の設定は、その設定が
+  効く条件（再送のmode）と、明示しなかった値を決める環境変数・共有の設定ファイル（`~/.aws/config`のprofile）も
+  確かめる。
+- Jobの引数は成否に関係なく、ログ（ActiveJobの引数のログ）と`solid_queue_jobs.arguments`（終わったJobも
+  片付けまで残る）に残る。失敗したときは、さらに例外のmessageとbacktraceが`solid_queue_failed_executions.error`と
+  error tracking（`cause`を含む）に残る。
+- 引用符のない値はYAMLが型と構造を推測する。値の中身しだいで整数・8進数（先頭が0で0〜7だけ）・真偽値
+  （`yes`・`off`など）・`nil`（空の値）になるか、文字列のまま残る。` #`より後はコメントとして消える（例であって
+  全部ではない）。YAMLが読んだ後に変換しても元の値には戻らないので、型はERBの中で決めてから埋め込む（文字列は
+  `.to_json`で引用符とescapeを付け、数値は`.to_i`する）。境目の値（先頭が0・空）でtestしているかも確かめる。
+- 値が連動する設定（workerのthreadsとDBの接続数など）を片方だけ変えていないか。連動する値は、片方を変えると
+  落ちるtestがあるか。
