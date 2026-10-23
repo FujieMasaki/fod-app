@@ -51,6 +51,15 @@ RSpec.describe GenerationProviders do
       .to raise_error(GenerationProviders::Error) { expect(it.cause).to be_nil }
   end
 
+  it "clientを作る途中の失敗（認証情報の探索の誤り等）は、準備ができていない失敗として返す" do
+    allow(described_class::CallerAccountGuard).to receive(:verify!)
+    allow(GenerationSettings).to receive(:app_account_id).and_return("111111111111")
+    allow(Aws::S3::Client).to receive(:new).and_raise(Aws::Errors::NoSourceProfileError)
+    described_class.reset
+
+    expect { described_class.storage }.to raise_error(GenerationProviders::NotReady) { expect(it.cause).to be_nil }
+  end
+
   it "model idが未設定の間は、S3・Transcribeのclientも作らない（音声だけを外部へ送らない）" do
     allow(described_class::CallerAccountGuard).to receive(:verify!)
     allow(GenerationSettings).to receive(:bedrock_model_id).and_raise(GenerationSettings::NotConfigured)
@@ -77,6 +86,18 @@ RSpec.describe GenerationProviders do
       2.times { described_class.verify!(sts:) }
 
       expect(sts.api_requests.size).to eq(1)
+    end
+
+    it "環境変数のアカウントID（数字だけ）を文字列として読み、STSの値と一致させる" do
+      original = ENV.fetch("FOD_APP_ACCOUNT_ID", nil)
+      ENV["FOD_APP_ACCOUNT_ID"] = "012345670123"
+      config = Rails.application.config_for(:generation, env: "development")
+      allow(GenerationSettings).to receive(:config).and_return(config)
+      caller_account("012345670123")
+
+      expect { described_class.verify!(sts:) }.not_to raise_error
+    ensure
+      ENV["FOD_APP_ACCOUNT_ID"] = original
     end
 
     it "違うアカウントなら止める" do
