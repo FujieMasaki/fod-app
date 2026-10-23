@@ -1,6 +1,6 @@
 ---
 name: exploratory-audit
-description: 観点（spec / performance / privacy / security）を指定して、mainにある実装の全体を探索的に監査し、まだ誰も気づいていない問題を、根拠・重大度・タスク化の案つきの候補として非公開の報告に書く。「監査して」「/exploratory-audit spec」のように依頼されたときと、人間が採否を書いた報告から採用した候補をタスクに起こすときに使う。
+description: 観点（spec / performance / privacy / security）を指定して、mainにある実装の全体を探索的に監査し、まだ誰も気づいていない問題を、根拠・重大度・タスク化の案つきの候補として非公開の報告に書く。「監査して」「/exploratory-audit spec」のように依頼されたとき、人間が採否を書いた報告から採用した候補をタスクに起こすとき、秘匿していた候補の修正がmainに入った後の記録を依頼されたときに使う。
 argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 ---
 
@@ -13,7 +13,7 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 ## 絶対に守ること
 
 - 監査（手順1〜5）では、コード・`docs/`・設定を変えない。コミット・push・外部への投稿をしない。worktree・
-  ブランチ・DBを作らない。書いてよいのは`<git-common-dir>/audits/`だけ（`git fetch`による追跡refの更新を除く）。例外は、人間が依頼したときの後半の
+  ブランチ・DBを作らない。書いてよいのは`<git-common-dir>/audits/`だけ（`git fetch`による追跡refの更新と、手順1の2で止まるときの品質ゲートの`--pause`を除く）。例外は、人間が依頼したときの後半の
   2節（「採用した候補をタスクに起こす」「秘匿していた候補の修正がmainに入った後」）で、どちらも文書の変更として
   ブランチを作り、`pr-review-cycle`に従ってPRにする。
 - 秘密情報（`.env*`、`master.key`、`credentials/*.key`）を読まない。DBの中身・ログ（`apps/api/log/`等）・`tmp/`・`storage/`（Active Storageの保存先）を読まない。
@@ -31,7 +31,10 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
    （ディレクトリ）を読む。観点がなければ、4つから選んでもらうよう人間に尋ねて止まる。
 2. （手順1〜5だけに掛かる）`git rev-parse --abbrev-ref HEAD`が`<type>/task-NNN`か`<type>/task-NNN-*`の形（`feat` / `fix` / `refactor` / `chore` / `docs` /
    `test`）なら止まり、mainに揃えたcheckoutで起動し直すよう伝える（タスクのブランチではStop hookがPRの作成と
-   検査を求め、この skill の禁止事項とぶつかるため）。
+   検査を求め、この skill の禁止事項とぶつかるため）。止まる前の最後に
+   `scripts/claude-hook.sh claude-quality-gate.mjs --pause "exploratory-audit: タスクのブランチでは起動しない"`を
+   実行する（Stop hookが止まることを認めるのは`--pause`の後だけのため。書くのは品質ゲートの状態ファイル
+   `<git-dir>/claude-task-runner.json`だけ）。
 3. `git fetch origin main`の後、`git rev-parse HEAD`・`git rev-parse origin/main`・`git status --short`で
    監査の基準を確かめる。HEADが`origin/main`と違う、または未コミットの変更があれば、そのことを報告の冒頭に書く
    （mainに揃えたcheckoutでの実行を勧める）。
@@ -43,8 +46,10 @@ argument-hint: "spec|performance|privacy|security [対象のディレクトリ]"
 ### 2. 読む
 
 1. [`audit.md`](../../../docs/code-review/audit.md)と、選んだ観点の「読む正本」を読む。
-2. `audits/`にある同じ観点の過去の報告を読み、`採否`が不採用・保留の候補と、その理由を把握する。
-   同じ根拠の候補は再び挙げない。新しい根拠があるときだけ、`根拠`に「再提起: <前のID>」と書いて挙げる。
+2. `audits/`にある同じ観点の過去の報告を読み、残っている候補の`採否`（未判断・採用・不採用・保留）と理由を把握する。
+   同じ根拠の候補は、`採否`が何であっても新しいIDで挙げ直さない（採用済みや未判断の候補を重ねて挙げると、
+   同じ問題のタスクを2つ起こしうるため）。不採用・保留の候補に新しい根拠があるときだけ、`根拠`に
+   「再提起: <前のID>」と書いて挙げる。未判断・採用の候補に新しい根拠があれば、前の候補の`根拠`へ書き足す。
 
 ### 3. 探索して確かめる
 
