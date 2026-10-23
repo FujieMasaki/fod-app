@@ -14,7 +14,11 @@ class Generation < ApplicationRecord
   CANCEL_REASONS = %w[canceled expired withdrawn dot_purged].freeze
   # 生成へ進まない状態（以後は後片付けだけ）
   CANCELED_STATES = %w[cancel_requested cleanup_pending].freeze
+  # Dotがまだ無く、処理の取り消しを受け付ける状態（architecture「処理の取り消し」）
+  CANCELABLE_STATES = %w[uploading upload_failed accepted transcribing generating failed].freeze
   RETRY_WINDOW = 24.hours
+  # 録音attemptで送信できる期間（発行から2時間。dot-history.md §2）。発行時刻は`started_at`
+  ATTEMPT_LIFETIME = 2.hours
 
   STATES.each { |state| const_set(state.upcase, state) }
 
@@ -28,18 +32,36 @@ class Generation < ApplicationRecord
   validates :duration_seconds, numericality: { only_integer: true, in: Dot::DURATION_RANGE }
 
   # 遷移元が`from`のどれかである場合だけ`to`へ移し、移せたらtrueを返す。`attrs`は同じUPDATEで書く。
+  # `holding`を渡すと、その実行権を持っている場合だけ移す（取り消しで実行権を失った実行を止める）。
   # 最終進捗時刻も同時に進める（stale判定の材料。単独の根拠にはしない）。
   # 条件付きのUPDATEそのものが目的なので、validationを通さない`update_all`を使う（値はserverが決めたものだけ）。
-  def self.transition(id, from:, to:, **attrs) # rubocop:disable Naming/PredicateMethod
+  def self.transition(id, from:, to:, holding: nil, **attrs) # rubocop:disable Naming/PredicateMethod
     raise ArgumentError, "unknown state: #{to}" unless STATES.include?(to)
 
     now = Time.current
+    scope = where(id:, state: Array(from))
+    scope = scope.where(lease_token: holding) if holding
     changes = attrs.merge(state: to, last_progress_at: now, updated_at: now)
-    where(id:, state: Array(from)).update_all(changes) == 1 # rubocop:disable Rails/SkipsModelValidations
+    scope.update_all(changes) == 1 # rubocop:disable Rails/SkipsModelValidations
+  end
+
+  # 実行権が空いていれば（無い・期限切れ）、状態を変えずに新しい実行権を取り、そのtokenを返す。取れなければnil。
+  # cleanupの再実行（自己遷移T17・T20）と、止まったJobの再実行で使う。
+  def self.acquire_lease(id, state:, duration:, now: Time.current)
+    token = SecureRandom.uuid
+    free = where(lease_expires_at: nil).or(where(lease_expires_at: ..now))
+    changes = { lease_token: token, lease_expires_at: now + duration, updated_at: now }
+    token if where(id:, state:).merge(free).update_all(changes) == 1 # rubocop:disable Rails/SkipsModelValidations
+  end
+
+  # 実行権を手放す（失敗した後片付けを、次の実行が取り直せるようにする）。
+  def self.release_lease(id, token)
+    where(id:, lease_token: token).update_all(lease_token: nil, lease_expires_at: nil) # rubocop:disable Rails/SkipsModelValidations
   end
 
   def canceled? = CANCELED_STATES.include?(state)
   def expired?(now = Time.current) = retry_expires_at <= now
+  def attempt_expires_at = started_at + ATTEMPT_LIFETIME
 
   # 契約の`failure.kind`。文字起こし・生成・保存の失敗は`processing_failed`にまとめ、再開点はserverが決める。
   def contract_failure_kind

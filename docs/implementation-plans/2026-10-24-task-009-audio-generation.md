@@ -127,7 +127,7 @@
 
 | 遷移 | 起こすもの |
 | --- | --- |
-| T1 uploading→accepted / T2 →upload_failed / T3 →cancel_requested | upload service（PUTの成否・世代の再確認）、watchdog（`HeadObject`） |
+| T1 uploading→accepted / T2 →upload_failed / T3 →cancel_requested | upload service（PUTの成否・世代の再確認）、watchdog（`HeadObject`）／取り消し・退会・期限 |
 | T4 upload_failed→uploading / T5 →cancel_requested | 同じattemptでの再送（期限内・旧lease失効）／取り消し・退会・期限 |
 | T6 accepted→transcribing / T7 →cancel_requested | 文字起こし開始Job／取り消し・退会・期限 |
 | T8 transcribing→generating / T9 →failed / T10 →cancel_requested | 完了待ちJob（`GetTranscriptionJob`の終端後に入口を通す）／同左 |
@@ -202,10 +202,13 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 | 順番 | ブランチ | 内容 | 主なファイル | 数 |
 | --- | --- | --- | --- | --- |
 | 1 | `feat/task-009-1-generation-model` | Plan・データと状態機械の核 | このPlan、migration 3つ（users・generations・consumed attempts）、`Generation`・`ConsumedRecordingAttempt`・`User`の変更、`GenerationNaming`、model spec、factory | 12 |
-| 2 | `feat/task-009-2-job-and-aws` | Job基盤とAWSのadapter | Gemfile、Solid Queueのmigrationと設定、`config/generation.yml`（model id・prompt）、S3・Transcribe・Bedrockのadapterとspec、偽物、`verify_caller`のrake task | 16 |
-| 3 | `feat/task-009-3-pipeline` | 受理から保存まで（T1〜T15） | `GenerationGate`・upload・文字起こし開始/完了待ち・生成と保存・再試行のserviceとJob、遷移テスト | 18 |
-| 4 | `feat/task-009-4-cleanup` | 取り消し・cleanup・ACK・期限・watchdog・退会/完全削除の入口（T16〜T22） | service・Job・spec、recurringの設定 | 18 |
-| 5 | `feat/task-009-5-api` | endpointと文書 | routes・controller 4つ・serializer・`ApiRequestGuard`・`ProblemDetails`・request spec、architecture・privacy・backend、タスクファイル | 18 |
+| 2 | `feat/task-009-2-job-and-aws` | Job基盤とAWSのadapter | Gemfile、Solid Queueのmigrationと設定、`config/generation.yml`（model id・prompt）、S3・Transcribe・Bedrockのadapterとspec、呼び出し元の確認 | 20 |
+| 3 | `feat/task-009-3-cleanup` | 入口の手続き・取り消し・cleanup・ACK・期限・退会/完全削除の入口（T3・T5・T7・T10・T13・T16〜T22） | `GenerationGate`、取り消し・cleanup・ACK・期限のserviceとJob、定期実行の設定、偽物のprovider、遷移テストと5契機のspec | 18 |
+| 4 | `feat/task-009-4-pipeline` | 受理から保存まで（T1・T2・T4・T6・T8・T9・T11・T12・T14・T15）とwatchdog | attempt token、upload・文字起こし開始/完了待ち・生成と保存・再試行・watchdogのserviceとJob、遷移テスト | 18 |
+| 5 | `feat/task-009-5-api` | endpointと文書 | routes・controller・serializer・`ApiRequestGuard`・request spec、呼び出し元を表示するtask、architecture・privacy・backend、タスクファイル | 18 |
+
+取り消し・cleanupを受理から保存までより先に置くのは、受理の側（uploadの世代のずれ、Transcribeの終端後の確認）が
+取り消しの入口を呼ぶためである。取り消しの遷移は、testでは記録を各状態で作って確かめられる。
 
 ## 11. Libraries / APIs
 
