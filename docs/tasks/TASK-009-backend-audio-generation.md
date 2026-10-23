@@ -7,7 +7,7 @@
 | 対象領域 | Backend |
 | 作業区分 | 実装 |
 | 優先度 | P1 |
-| 状態 | Blocked |
+| 状態 | In progress |
 
 ## 目的と作業範囲
 
@@ -80,4 +80,4 @@
 
 ## 関連Implementation Plan
 
-未作成。着手時にAGENTS.mdの規約に従って作成し、ここへリンクを追記する。
+[2026-10-24-task-009-audio-generation.md](../implementation-plans/2026-10-24-task-009-audio-generation.md)
