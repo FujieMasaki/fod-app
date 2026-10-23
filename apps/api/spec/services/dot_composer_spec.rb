@@ -39,6 +39,9 @@ RSpec.describe DotComposer do
   it "外部の失敗はmessageを写さずに包む" do
     client.stub_responses(:converse, Aws::BedrockRuntime::Errors::ValidationException.new(nil, "朝に散歩した"))
 
-    expect { compose }.to raise_error(GenerationProviders::Error) { expect(it.message).not_to include("散歩") }
+    expect { compose }.to raise_error(GenerationProviders::Error) do |error|
+      expect(error.message).not_to include("散歩")
+      expect(error.cause).to be_nil
+    end
   end
 end

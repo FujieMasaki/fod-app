@@ -19,38 +19,50 @@ class TranscriptionGateway
   rescue Aws::TranscribeService::Errors::ConflictException
     :exists
   rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
-    raise GenerationProviders::Error.wrap(e)
+    GenerationProviders::Error.raise_from(e)
   end
 
   # :in_progress / :completed / :failed / :missing
   def status(job_name)
     job = @client.get_transcription_job(transcription_job_name: job_name).transcription_job
-    STATUSES.fetch(job.transcription_job_status)
+    STATUSES.fetch(job.transcription_job_status) { raise GenerationProviders::Error, "unknown transcription status" }
   rescue Aws::TranscribeService::Errors::NotFoundException
     :missing
   rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
-    raise GenerationProviders::Error.wrap(e)
+    GenerationProviders::Error.raise_from(e)
   end
 
   # 既に無ければ成功として扱う（冪等）。非終端なら`NotTerminal`。
+  # `BadRequestException`は「存在しない」と「非終端」のどちらでも返り得るので、状態を見直して分ける
+  # （存在しないjobを非終端と扱うと、後片付けが終わらなくなる）。
   def delete(job_name)
     @client.delete_transcription_job(transcription_job_name: job_name)
   rescue Aws::TranscribeService::Errors::NotFoundException
     nil
   rescue Aws::TranscribeService::Errors::BadRequestException
-    raise NotTerminal, "transcription job is not in a terminal state"
+    explain_refused_delete(job_name)
   rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
-    raise GenerationProviders::Error.wrap(e)
+    GenerationProviders::Error.raise_from(e)
   end
 
   # 書き出された結果（JSON）から全文を取り出す。形が違えばnil。
   def self.text_from(json)
-    JSON.parse(json).dig("results", "transcripts", 0, "transcript")
-  rescue JSON::ParserError
+    parsed = JSON.parse(json)
+    text = parsed.dig("results", "transcripts", 0, "transcript") if parsed.is_a?(Hash)
+    text if text.is_a?(String)
+  rescue JSON::ParserError, TypeError
     nil
   end
 
   private
+
+  def explain_refused_delete(job_name)
+    case status(job_name)
+    when :missing then nil
+    when :in_progress then raise NotTerminal, "transcription job is not in a terminal state"
+    else raise GenerationProviders::Error, "transcription job could not be deleted"
+    end
+  end
 
   def start_params(job_name, media_key, content_type, output_key)
     bucket = GenerationSettings.bucket
