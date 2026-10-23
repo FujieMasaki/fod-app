@@ -19,13 +19,14 @@ module GenerationCancellation
   module_function
 
   # cleanupの認可はretryと違い、activeも期限内も求めない（退会・期限到来の後片付けを止めないため）。
-  def request(user_id:, generation_id:, reason:, now: Time.current)
+  # blockを渡すと入口の認可に使う（利用者の行をlockした後に確かめたい条件）。
+  def request(user_id:, generation_id:, reason:, now: Time.current, &)
     attrs = lambda do |generation|
       { cancel_reason: reason, transcript_withheld_at: generation.transcript_withheld_at || now, lease_token: nil,
-        lease_expires_at: generation.lease_expires_at }
+        lease_expires_at: GenerationGate::KEEP }
     end
     entry = GenerationGate.enter(user_id:, generation_id:, from: FROM.fetch(reason),
-                                 to: Generation::CANCEL_REQUESTED, attrs:)
+                                 to: Generation::CANCEL_REQUESTED, attrs:, &)
     GenerationCleanupJob.perform_later(generation_id)
     entry.generation
   end
@@ -54,10 +55,15 @@ module GenerationCancellation
     end
   end
 
+  # 退会の受理と並んだときに取り消しとして受け付けないよう、利用者の行をlockした後でも確かめる
   def request_by_user(generation, now)
-    request(user_id: generation.user_id, generation_id: generation.id, reason: "canceled", now:)
+    request(user_id: generation.user_id, generation_id: generation.id, reason: "canceled", now:) do |user, _|
+      :account_deletion_in_progress if user.deletion_requested?
+    end
     :accepted
-  rescue GenerationGate::Denied
+  rescue GenerationGate::Denied => e
+    return :account_deletion_in_progress if e.reason == :account_deletion_in_progress
+
     # 成功の確定（T11）や期限の到来が先に勝った場合。改めて状態を見て答える
     current = Generation.find_by(id: generation.id)
     return :not_found unless current
@@ -66,7 +72,8 @@ module GenerationCancellation
     current.canceled? ? relabel_expired(current) : :not_found
   end
 
-  # 期限到来で後片付けに入った記録は、状態を変えずに取り消しとして扱い直す（使用済みのattemptを残すため）
+  # 期限到来で後片付けに入った記録は、状態を変えずに取り消しとして扱い直す（以後の照会を`expired`ではなく、
+  # 取り消しを受理した処理として`404`にするため）
   def relabel_expired(generation)
     relabeled = Generation.where(id: generation.id, state: Generation::CANCELED_STATES, cancel_reason: "expired")
                           .update_all(cancel_reason: "canceled", updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations

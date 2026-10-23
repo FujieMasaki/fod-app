@@ -8,6 +8,8 @@
 # 5. 外部の呼び出しは、呼ぶ側がcommitのあとに行う
 module GenerationGate
   LEASE_DURATION = 15.minutes
+  # `attrs`で実行権の期限に渡すと、その列を書き換えない（読んだ値を書き戻して、並行して延ばされた期限を消さない）
+  KEEP = Object.new.freeze
 
   Entry = Data.define(:generation, :lease_token)
 
@@ -51,6 +53,7 @@ module GenerationGate
     token = SecureRandom.uuid
     extra = attrs.respond_to?(:call) ? attrs.call(generation) : attrs
     changes = { lease_token: token, lease_expires_at: Time.current + LEASE_DURATION }.merge(extra)
+    changes.delete(:lease_expires_at) if changes[:lease_expires_at] == KEEP
     raise Denied, :state unless Generation.transition(generation.id, from: generation.state, to:, **changes)
 
     Entry.new(generation: generation.reload, lease_token: changes[:lease_token])
