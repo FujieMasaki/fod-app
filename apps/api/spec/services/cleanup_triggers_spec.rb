@@ -105,6 +105,24 @@ RSpec.describe "cleanupの5つの契機" do # rubocop:disable RSpec/DescribeClas
     expect_bystander_untouched
   end
 
+  it "Dotの完全削除: 記録が先に消えていても、同じattemptで作り直されないよう使用済みにする" do
+    dot = create(:dot, user:, started_at: 10.minutes.ago)
+
+    GenerationDotPurge.accept(user:, dot:)
+
+    expect(ConsumedRecordingAttempt.consumed?(dot.generation_id)).to be(true)
+  end
+
+  it "退会: 読んだ後に別の遷移が勝った記録があっても、受理全体を巻き戻さない" do
+    allow(GenerationCancellation).to receive(:request).and_call_original
+    allow(GenerationCancellation).to receive(:request)
+      .with(hash_including(generation_id: bystander.id)).and_raise(GenerationGate::Denied, :state)
+
+    GenerationWithdrawal.accept(user)
+
+    expect(user.reload).to have_attributes(deletion_requested_at: be_present, generation: 1)
+  end
+
   it "Dotの完全削除: 他人のDotは受け付けない" do
     other_dot = create(:dot)
 

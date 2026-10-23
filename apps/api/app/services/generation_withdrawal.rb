@@ -23,6 +23,9 @@ module GenerationWithdrawal
   def cancel_all(user, now)
     user.generations.where(state: GenerationCancellation::FROM.fetch("withdrawn")).find_each do |generation|
       GenerationCancellation.request(user_id: user.id, generation_id: generation.id, reason: "withdrawn", now:)
+    rescue GenerationGate::Denied
+      # 読んだ後に後片付けへ進んだ記録。1件の競合で受理全体を巻き戻さない（後片付けは別に進む）
+      nil
     end
   end
 
