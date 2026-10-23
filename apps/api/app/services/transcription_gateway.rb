@@ -18,7 +18,7 @@ class TranscriptionGateway
     :started
   rescue Aws::TranscribeService::Errors::ConflictException
     :exists
-  rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
+  rescue *GenerationProviders::AWS_ERRORS => e
     GenerationProviders::Error.raise_from(e)
   end
 
@@ -28,7 +28,7 @@ class TranscriptionGateway
     STATUSES.fetch(job.transcription_job_status) { raise GenerationProviders::Error, "unknown transcription status" }
   rescue Aws::TranscribeService::Errors::NotFoundException
     :missing
-  rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
+  rescue *GenerationProviders::AWS_ERRORS => e
     GenerationProviders::Error.raise_from(e)
   end
 
@@ -41,7 +41,7 @@ class TranscriptionGateway
     nil
   rescue Aws::TranscribeService::Errors::BadRequestException
     explain_refused_delete(job_name)
-  rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
+  rescue *GenerationProviders::AWS_ERRORS => e
     GenerationProviders::Error.raise_from(e)
   end
 
@@ -71,6 +71,7 @@ class TranscriptionGateway
       media_format: MEDIA_FORMATS.fetch(content_type), media: { media_file_uri: "s3://#{bucket}/#{media_key}" },
       output_bucket_name: bucket, output_key:
     }
+    # roleを渡すには、AWSのAPI上`AllowDeferredExecution`も要る（同時実行の上限を超えると待ち行列に入る）
     role = GenerationSettings.transcribe_data_access_role_arn
     params[:job_execution_settings] = { allow_deferred_execution: true, data_access_role_arn: role } if role
     params

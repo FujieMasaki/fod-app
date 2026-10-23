@@ -8,7 +8,7 @@ class AudioStore
 
   def put(key, body, content_type:)
     @client.put_object(bucket: @bucket, key:, body:, content_type:)
-  rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
+  rescue *GenerationProviders::AWS_ERRORS => e
     GenerationProviders::Error.raise_from(e)
   end
 
@@ -17,7 +17,7 @@ class AudioStore
     true
   rescue Aws::S3::Errors::NotFound
     false
-  rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
+  rescue *GenerationProviders::AWS_ERRORS => e
     GenerationProviders::Error.raise_from(e)
   end
 
@@ -26,7 +26,7 @@ class AudioStore
     @client.get_object(bucket: @bucket, key:).body.read
   rescue Aws::S3::Errors::NoSuchKey
     nil
-  rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
+  rescue *GenerationProviders::AWS_ERRORS => e
     GenerationProviders::Error.raise_from(e)
   end
 
@@ -40,7 +40,7 @@ class AudioStore
       response = @client.delete_objects(bucket: @bucket, delete: { objects: keys.map { { key: it } }, quiet: true })
       raise GenerationProviders::Error, "S3 refused to delete #{response.errors.size} objects" if response.errors.any?
     end
-  rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
+  rescue *GenerationProviders::AWS_ERRORS => e
     GenerationProviders::Error.raise_from(e)
   end
 
