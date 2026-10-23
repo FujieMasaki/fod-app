@@ -16,14 +16,17 @@
   CSRF token・期限を持つ（2026-10-05にTASK-007で実装）。保護APIは`useAuth().request`から呼び、
   `csrf_invalid`の1回の再送と`401`の検出をここに集める。利用者が変わったら（logout・期限切れ・
   別タブでの入れ替わり・login・login中のpassword再設定）、認証以外のquery cacheを消し、購読者（`subscribeIdentityChange`）へ
-  通知する。Session Providerはこの通知で録音時間と現在のDotを消す。
+  通知する。Session Providerはこの通知で録音（音声と録音時間）と現在のDotを消す。
 - `apps/web/src/libs/api-client`がRails APIを同一originで呼ぶ入口で、失敗を`problem`・`network`・
   `schema`・`http`に分ける。開発ではViteのproxyが`/api`・`/auth`をRailsへ送る（Hostを書き換えない）。
-- Session ProviderはReact stateを画面間で共有し、録音時間と現在のDot sessionをmemoryにだけ持つ。
+- Session ProviderはReact stateを画面間で共有し、録音（音声Blob・形式・録音時間）と現在のDot sessionをmemoryにだけ持つ。
   以前に使っていた`localStorage`の`fod.session.v1`は、起動時に消す（2026-10-05にTASK-007で変更）。
 - Dot生成はTanStack Queryのmutationから呼び出す。`VITE_DOT_API_URL` が設定されている場合は
   `dot` endpointへPOSTし、設定されていない場合はローカルmockをZodで検証して返す。
-- 録音処理はブラウザのMediaDevices / MediaRecorder APIを利用する。
+- 録音処理はブラウザのMediaDevices / MediaRecorder APIを利用する。`libs/audio/recorder.ts`がマイクを開く段階
+  （`open`。権限拒否・非対応などの理由を返す）と録音を始める段階（`record`）を分け、録音attemptの発行を間に挟める
+  形にしている（発行はendpointの実装後。2026-10-09にTASK-010で変更）。`/record`は録音前の案内を出してから、
+  利用者の操作でマイクを要求する。録音attemptの通信関数（`features/recording/api.ts`）はあるが、まだ呼ばない。
 - Frontendのbuild、test、型検査設定とweb固有dependencyは `apps/web/` が管理する。
 - `apps/api/` はRuby on RailsのAPI backendである。現在実装済みなのはRails基盤、
   PostgreSQL接続、RSpec、品質・security検査、CIに加え、認証（TASK-006。下記「認証詳細」）と、
@@ -270,14 +273,22 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   （[privacy.md §5-1](privacy.md)の外部provider行）の対象が1つになる。**認証はECS task roleの
   IAMで行い、長期固定のAPIキーをアプリで持たない**（ECSはSDKへ一時credentialを供給するため、
   鍵の確認項目が無くなるわけではない）。対象bucketと対象モデルだけを許す最小権限にする。
-  **9項目は未確認で、確認は公開前に人間が行う。**
+  **9項目の確認は全体としては未完了で、公開前に済ませる**（TASK-025の範囲は2026-10-23に終えた。
+  残りはTASK-009・TASK-015・TASK-017。項目別の状態は[TASK-003 Plan §26](implementation-plans/2026-09-29-task-003-generation-design.md)）。
+  **音声・テキストを送るAWSアカウントは「アプリ用」（Organizationsのメンバーアカウント）だけとし、
+  管理アカウントには処理を載せない**（SCPが管理アカウントに効かないため。2026-10-20にTASK-025で決定）。
 - **Transcribeについて、AWS OrganizationsのAI services opt-out policyの適用を必須とする。**
   AWSのAIサービスは**既定では顧客コンテンツをサービス改善に利用し、利用リージョン外へ保存し得る**。
   Transcribeはこのopt-out policyの対象サービスで、**設定しない限りopt-inのままである。**
   適用せずに音声を送ると、下記「データ所在地と費用」の「保存と閲覧は日本国内」が成り立たない（改善目的で利用リージョン外へ
   保存され得るため。**推論の所在地を緩めても、保存を日本国内に限る前提は変わらない（自分たちのRDS・S3は東京、Transcribeは`ap-northeast-1`）**）。
-  適用後にeffective policyを照会して効いていることを確認する（TASK-009/015）。
+  適用後にeffective policyを照会して効いていることを確認する（2026-10-21にTASK-025で、OrganizationsのRootへ適用し
+  両方のアカウントで効いていることを確認した。公開前にTASK-015で改めて確かめる）。
   なおBedrockはこのopt-out policyの対象外で、モデルごとのdata retention modeで別に確認する。
+- **Bedrockの保持は、アプリ用の東京・大阪で`none`に固定し、`none`以外への変更をSCPで禁止する**（2026-10-21に
+  TASK-025で設定。経緯と確認の記録は[TASK-003 Plan §26](implementation-plans/2026-09-29-task-003-generation-design.md)）。
+  保持が必須のモデルは呼び出しがエラーになるので使えない（`none`のもとでCSAMの検知による保存・レビューが止まるかは未確認。TASK-009）。使う場合は、人間の受け入れの判断とSCPの変更を先に行う。
+  それ以外のリージョンは`inherit`のままで、国内に収まる経路だけを使う運用（下記「データ所在地と費用」）で止める。
 - **Bedrockのモデルの推論経路は、下記「データ所在地と費用」に従う**（2026-10-03に変更。変更前は
   「推論が日本国外へ出ない経路で使えるものから選ぶ」だった）。**「国内に収まる経路」かどうかの判定方法は同節に
   置く**。なお**Globalプロファイルは世界中へルーティングされる**。endpointによって可否が違うため、
@@ -386,7 +397,7 @@ AI処理も東京を優先する」だった）。**自分たちの保存（RDS�
 data retention modeによる保持、cacheの滞留）。**線を引いた理由**: 「確認できないものは使わない」は
 自分たちが選べる構成に向けた要求で、委託先の社内運用まで射程に入れると、その所在を一次資料で
 確認できない以上どの基盤も選べなくなる。採用済みの東京のS3・RDS・Transcribeと衝突する。
-**TASK-009が確認するのは構成の側、TASK-017が扱うのは委託先の側**という分担にする。
+**TASK-009が確認するのは構成の側、TASK-017が扱うのは委託先の側**という分担にする。Amazon TranscribeのFAQにある「権限を持つ従業員だけがアクセスし得る」は、この運用・保守のためのアクセスとして扱う（2026-10-21にTASK-025で人間が判断。TASK-003 Plan §26）。
 
 **この文書では軸を数え上げない**（2026-10-04に方針を変更。経緯は下記）。**構成（経路・モデル・設定）を
 選ぶ側が、使う構成について「どこに保存されるか」「誰がどこから閲覧し得るか」を一次資料で確認し、記録
@@ -486,7 +497,7 @@ FAQ Q10-24は、**委託先が日本国内のサーバに保存された個人�
 挙げている）。**判定がどちらに転んでも、委託先の
 監督（法第25条）と安全管理措置の公表（法第32条第1項第4号）は要る。当たると判明した場合に追加される
 のは、外的環境の把握（法第23条）と、公表へ外国の名称と制度の概要を含めることである**（経路が国内に
-収まっていても追加される）。下記「未決定」にその形で挙げてある。**完了条件7の9項目の項目3（処理・保存のリージョンと
+収まっていても追加される）。下記「未決定」にその形で挙げてある。**TASK-025の9項目の項目3（処理・保存のリージョンと
 越境する場合の手続き）に対応する確認だが、経路を問わない部分は項目3の文言より範囲が広い。**
 
 **上記の要求は自分たちと委託先の構成に対する内部要求であって、国内限定を利用者への法的・契約上の
@@ -562,8 +573,9 @@ Webの接続は2026-10-05に[TASK-007 Plan](implementation-plans/2026-10-05-task
 - `rate_limit_counters`の定期削除の実行基盤、本番のメール配送（SES）とGoogle OAuth clientの設定
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
   （ログ14日・backup 7日は既定案であり、実値は未確定）
-- promptの最終文面、Bedrockのmodel idとdata retention mode（TASK-009で確定）
-- 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認結果（公開前に人間が実施）
+- promptの最終文面、Bedrockのmodel id（TASK-009で確定。data retention modeはアプリ用の東京・大阪で`none`に固定済み）
+- 委託先（Amazon Transcribe / Amazon Bedrock）への9項目の確認のうち、構成と実環境で確かめる残り
+  （TASK-025の範囲は2026-10-23に終えた。残りと担当はTASK-003 Plan §26の「受け入れと公開を止める項目」）
 - **越境移転の規律への対応**（TASK-017。9項目の項目3に対応するが、経路を問わない部分は項目3の文言より
   範囲が広い）。**確認が済むまでは**上記「データ所在地と費用」のとおり国内に収まる経路で運用し、
   **国外経路を使ってよいかはTASK-017の結論を待って人間が判断する。**

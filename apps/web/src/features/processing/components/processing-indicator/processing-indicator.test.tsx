@@ -1,3 +1,4 @@
+import { useEffect, useState, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider, focusManager } from "@tanstack/react-query";
@@ -22,26 +23,50 @@ const stubFetch = (dotApi: (...args: unknown[]) => unknown) => {
   );
 };
 
+// 録音画面から受け取った録音（SessionProviderのmemory）を置いてから、整理の画面を開く。
+const WithAudio = ({ children }: { children: ReactNode }) => {
+  const { setRecordedAudio } = useSession();
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setRecordedAudio({ blob: new Blob(["voice"], { type: "audio/webm" }), mimeType: "audio/webm", durationSec: 30 });
+    setReady(true);
+  }, [setRecordedAudio]);
+  return ready ? children : null;
+};
+
+const AudioProbe = () => {
+  const { recordedAudio } = useSession();
+  return <p>{recordedAudio ? "has-audio" : "no-audio"}</p>;
+};
+
 // 整理の結果が確定した現在のDot（SessionProviderのmemory）を表示する。
 const DotProbe = () => {
   const { dotSession } = useSession();
   return <p>{dotSession ? `dot:${dotSession.sentence}` : "no-dot"}</p>;
 };
 
-const renderProcessing = () => {
+const renderProcessing = ({ withAudio = true } = {}) => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <AuthProvider>
         <SessionProvider>
-          <ProcessingIndicator />
+          {withAudio ? (
+            <WithAudio>
+              <ProcessingIndicator />
+            </WithAudio>
+          ) : (
+            <ProcessingIndicator />
+          )}
           <DotProbe />
+          <AudioProbe />
         </SessionProvider>
       </AuthProvider>
     </QueryClientProvider>,
   );
+  return { ...view, client };
 };
 
 afterEach(() => {
@@ -64,9 +89,40 @@ describe("整理が終わると今日の一文へ進む", () => {
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/dot", replace: true }));
 
-    // 今日の一文がセッション（memory）に確定し、browserのstorageへは書かない
+    // 今日の一文がセッション（memory）に確定し、整理が済んだ録音は捨てる。browserのstorageへは書かない
     expect(screen.getByText(`dot:${sampleSession.sentence}`)).toBeInTheDocument();
-    expect(window.localStorage.getItem("fod.session.v1")).toBeNull();
+    expect(screen.getByText("no-audio")).toBeInTheDocument();
+    expect(window.localStorage).toHaveLength(0);
+    expect(window.sessionStorage).toHaveLength(0);
+  });
+
+  it("録音をmutationのcacheに渡さない（整理の途中で画面を離れても、cacheに音声が残らない）", async () => {
+    vi.stubEnv("VITE_DOT_API_URL", "http://api.test");
+    // 応答が返らないまま（pending）にする。pendingのmutationは、画面を離れてもcacheから消えない
+    const dotApi = vi.fn(() => new Promise(() => undefined));
+    stubFetch(dotApi);
+
+    const { client, unmount } = renderProcessing();
+    await waitFor(() => expect(dotApi).toHaveBeenCalled());
+    unmount();
+
+    const mutations = client.getMutationCache().getAll();
+    expect(mutations.map((mutation) => mutation.state.status)).toEqual(["pending"]);
+    expect(mutations[0].state.variables).toBeUndefined();
+  });
+
+  it("受け渡せる録音が無ければ整理を始めず、録音への導線を出す（直接開いた・再読み込みした）", async () => {
+    vi.stubEnv("VITE_DOT_API_URL", "http://api.test");
+    const dotApi = vi.fn();
+    stubFetch(dotApi);
+
+    renderProcessing({ withAudio: false });
+
+    expect(screen.getByText("受け渡せる録音がありません。")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "録音する" }));
+    expect(navigateMock).toHaveBeenCalledWith({ to: "/record" });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(dotApi).not.toHaveBeenCalled();
   });
 
   it("失敗しても不安にさせず、もう一度試すと今日の一文へ進む", async () => {
@@ -83,6 +139,8 @@ describe("整理が終わると今日の一文へ進む", () => {
     const retry = await screen.findByRole("button", { name: "もう一度" });
     expect(screen.getByText("今日のDotをうまく整理できませんでした。")).toBeInTheDocument();
 
+    // 失敗しても録音は捨てず、同じ録音でやり直す
+    expect(screen.getByText("has-audio")).toBeInTheDocument();
     fireEvent.click(retry);
 
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith({ to: "/dot", replace: true }));
@@ -148,7 +206,9 @@ describe("整理が終わると今日の一文へ進む", () => {
       <QueryClientProvider client={client}>
         <AuthProvider>
           <SessionProvider>
-            <ProcessingIndicator />
+            <WithAudio>
+              <ProcessingIndicator />
+            </WithAudio>
             <SwitchProbe />
           </SessionProvider>
         </AuthProvider>
@@ -184,7 +244,9 @@ describe("整理が終わると今日の一文へ進む", () => {
       <QueryClientProvider client={client}>
         <AuthProvider>
           <SessionProvider>
-            <ProcessingIndicator />
+            <WithAudio>
+              <ProcessingIndicator />
+            </WithAudio>
             <SwitchProbe />
             <DotProbe />
           </SessionProvider>

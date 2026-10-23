@@ -51,3 +51,7 @@ apps/api/config/credentials/*.key
 
 # typescript
 *.tsbuildinfo
+
+# VRT (scripts/vrt.sh)
+apps/web/vrt/test-results/
+apps/web/vrt/report/

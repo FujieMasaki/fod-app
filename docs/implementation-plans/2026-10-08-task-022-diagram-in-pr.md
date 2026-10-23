@@ -135,7 +135,7 @@ flowchart TD
 
 ## 16. Completion Record
 
-- 状態: 2026-10-08 実装を終え、GitHubでの描画の確認を人間に残している。
+- 状態: 2026-10-08 実装を終え、PR #86のマージ後に人間がGitHubでの描画を確認したため、TASK-022をDoneにした。
 - 実装差異: サブエージェントのレビューを受けて、独立した段でも図を確かめるよう`code-reviewer`に図を渡す手順を足した。
   AGENTS.mdは条件を書き写さず参照だけにした。図を含む本文は`--body-file`で渡すと書いた。
   タスクは「`diagram` skillを使えない環境（定期実行など）」と書いているが、定期実行で起動したこのセッションでは
@@ -151,5 +151,5 @@ flowchart TD
     - 載せない: #59（依存の更新）、#68（完了報告に振り返りメモを促す1文。1つの主体の中で完結する手順の追記）、
       #81（ガイドの例の追記。文言）、#84（styleのCSS Modulesへの移行。振る舞いを変えない整理）。
   - PR #86の本文のHTML（`gh api`の`body_html`）で、図が`data-type="mermaid"`の描画用の要素として出力されることを確かめた。
-  - 未実施: GitHub上でMermaidが描画されることは、ブラウザで見られないため人間がPR画面で確認する（PRの「確認すること」に入れた）。
+  - GitHub上でMermaidが描画されることを、人間がPR #86の画面で確認した（2026-10-08）。
 - 関連: [TASK-022](../tasks/TASK-022-diagram-in-pr.md)、[pull-requests.md](../development/pull-requests.md#pr本文の図)
