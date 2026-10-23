@@ -67,6 +67,18 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
    apps/apiのRailsコードは`cd apps/api && bundle exec rspec` / `bundle exec rubocop` /
    `bundle exec brakeman`）。pre-push hookで検証されない領域（Railsのtest/lint/security
    scanなど）は、pushする前に自分で実行して結果を確認する。
+   - 画面の見た目に関わる変更（`apps/web/src`のComponent・CSS・Design Token・`index.html`、描画に関わる依存
+     （`tailwindcss`・`framer-motion`・`@fontsource`・`@playwright/test`など）の更新、`apps/web/public/`・
+     `apps/web/vite.config.ts`、VRT自身（`apps/web/vrt/`・`apps/web/playwright.config.ts`・`scripts/vrt.sh`））では、
+     `pnpm vrt`（Dockerが要る）を実行する。差分が意図した変化なら`pnpm vrt:update`で基準画像を更新して
+     同じコミットに入れ、意図しない変化なら実装を直す（[frontend.md](../../../docs/development/frontend.md)
+     「4. テスト」）。Dockerが使えない環境では実行できなかったことを完了報告に書き、CIの`VRT`ジョブの
+     結果で確かめる。CIの`VRT`が意図した変化で失敗し、手元で`pnpm vrt:update`を実行できないときは、「止まる条件」に
+     従い、人間に`pnpm vrt:update`を頼む（CIの`vrt-report`の画像を基準画像として取り込まない。人間の確認を経ずに
+     基準が変わるため）。手元では通り、CIの`VRT`だけが失敗する（CPUの種類の違いなど）ときは、specの`mask`を
+     足す・変える前に「止まる条件」に従う（比べる範囲を人間の判断なしに減らさないため）。`mask`を変えたPRでは、
+     変えた理由を「確認すること」に挙げる。基準画像を更新したら、PR本文の「確認すること」に、更新した画面と「意図した変化だけか」を
+     挙げる（画像は手順9のガイドで人間へ渡す）。
 6. 1-5でコミットした後に、`git diff --name-only origin/<ベースブランチ>...HEAD` で変更ファイルを数える
    （未コミットの変更を数え漏らさないよう、`git status` がcleanになってから数える）。
    [数えないファイル](../../../docs/development/pull-requests.md#大きさの上限)を除いて20を超えるなら、
@@ -292,6 +304,8 @@ PRが`docs/tasks`のタスクを扱うものなら、報告の最後に、その
 - securityの指摘を、誤検知などの理由で対応不要と判断したい（記録済みの人間の判断と同じ内容を除く）。
 - サブエージェント・codexの指摘が仕様・設計判断に関わり、人間の判断が必要。
 - 秘密情報・外部サービスの設定・課金が必要になった。
+- 意図した見た目の変化でCIの`VRT`が失敗し、Dockerが使えず基準画像を更新できない（手順1-5）。
+- 手元では通り、CIの`VRT`だけが失敗する（`mask`で比べる範囲を減らすかの判断が要る。手順1-5）。
 - 手順9で、ページに載せる引用に秘密情報らしき値が見つかった。
 - `scripts/codex-final-check.mjs`（`codex exec`）自体が実行できない（未ログイン、認証切れ、ネットワークエラーなど）。原因を
   解消できない場合はリトライを重ねず、その場で止まる。

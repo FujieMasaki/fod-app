@@ -20,7 +20,9 @@
     "test": "pnpm test:scripts && pnpm --filter @focus-on-dot/web test",
     "test:scripts": "node --test scripts/*.test.mjs",
     "test:naming": "node --test scripts/check-naming.test.mjs",
-    "test:watch": "pnpm --filter @focus-on-dot/web test:watch"
+    "test:watch": "pnpm --filter @focus-on-dot/web test:watch",
+    "vrt": "scripts/vrt.sh",
+    "vrt:update": "scripts/vrt.sh --update-snapshots"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
