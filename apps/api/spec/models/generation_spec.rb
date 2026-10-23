@@ -29,6 +29,14 @@ RSpec.describe Generation do
       expect(move.call(generation.lease_token)).to be(true)
     end
 
+    it "実行権にnilを渡したら、照合を外さずに例外にする" do
+      generation = create(:generation, state: "generating", lease_token: SecureRandom.uuid)
+
+      expect { described_class.transition(generation.id, from: "generating", to: "failed", holding: nil) }
+        .to raise_error(ArgumentError)
+      expect(generation.reload.state).to eq("generating")
+    end
+
     it "知らない状態へは移さない" do
       generation = create(:generation)
 
@@ -68,6 +76,16 @@ RSpec.describe Generation do
   end
 
   describe "DBの制約" do
+    { "state" => Generation::STATES, "failure_kind" => Generation::FAILURE_KINDS,
+      "cancel_reason" => Generation::CANCEL_REASONS }.each do |column, values|
+      it "modelの#{column}の値はすべてDBが受け入れる" do
+        generation = create(:generation)
+
+        values.each { generation.update_column(column, it) } # rubocop:disable Rails/SkipsModelValidations
+        expect(generation.reload.public_send(column)).to eq(values.last)
+      end
+    end
+
     %w[state failure_kind cancel_reason].each do |column|
       it "#{column}の値を限る" do
         generation = create(:generation)
