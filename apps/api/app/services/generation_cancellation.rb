@@ -1,0 +1,65 @@
+# 生成へ進めず後片付けへ回す受理（T3・T5・T7・T10・T13・T16・T22 → cancel_requested）。以後この処理は生成へ進まず、
+# 文字起こし全文も返さない（受理の時点から。物理削除の完了を待たない。TASK-003 Plan §27）。
+# 実行中のJobが持っていた実行権は失効させ、その実行の書き込みを止める。後片付けはGenerationCleanupJobが行う。
+#
+# 契機ごとの遷移元:
+# - canceled（処理の取り消し）・expired（期限到来）: Dotがまだ無い状態
+# - withdrawn（退会）: 上に加えて、Dotを保存済みで後片付け待ちの記録（T22）
+# - dot_purged（Dotの完全削除）: そのDotの後片付け待ちの記録だけ（T22）
+module GenerationCancellation
+  FROM = {
+    "canceled" => Generation::CANCELABLE_STATES,
+    "expired" => Generation::CANCELABLE_STATES,
+    "withdrawn" => [*Generation::CANCELABLE_STATES, Generation::SUCCEEDED_CLEANUP_PENDING],
+    "dot_purged" => [Generation::SUCCEEDED_CLEANUP_PENDING]
+  }.freeze
+
+  module_function
+
+  # cleanupの認可はretryと違い、activeも期限内も求めない（退会・期限到来の後片付けを止めないため）。
+  def request(user_id:, generation_id:, reason:, now: Time.current)
+    attrs = lambda do |generation|
+      { cancel_reason: reason, transcript_withheld_at: generation.transcript_withheld_at || now,
+        lease_token: nil, lease_expires_at: nil }
+    end
+    entry = GenerationGate.enter(user_id:, generation_id:, from: FROM.fetch(reason),
+                                 to: Generation::CANCEL_REQUESTED, attrs:)
+    GenerationCleanupJob.perform_later(generation_id)
+    entry.generation
+  end
+
+  # 利用者による処理の取り消し（`DELETE /api/v1/generations/{id}`。認可・対象・範囲はarchitecture「処理の取り消し」）。
+  # 結果はSymbol: :accepted / :not_found / :generation_completed / :account_deletion_in_progress
+  def cancel_by_user(user:, generation_id:, now: Time.current)
+    return :account_deletion_in_progress if user.deletion_requested?
+
+    dot = user.dots.find_by(generation_id:)
+    return dot.trashed_at ? :not_found : :generation_completed if dot
+
+    generation = user.generations.find_by(id: generation_id)
+    return :not_found unless generation
+
+    result = cancel_record(generation, now)
+    # 消したものが同じattemptで作り直されないよう、attemptのidと期限を残す（privacy.md §5-1）
+    ConsumedRecordingAttempt.record(generation.id, expires_at: generation.attempt_expires_at) if result == :accepted
+    result
+  end
+
+  def cancel_record(generation, now)
+    # 期限到来で後片付けに入った記録は、状態を変えずに取り消しとして扱い直す（使用済みのattemptを残すため）
+    return relabel_expired(generation) if generation.canceled?
+
+    request(user_id: generation.user_id, generation_id: generation.id, reason: "canceled", now:)
+    :accepted
+  rescue GenerationGate::Denied
+    # 成功の確定（T11）が先に勝った場合など。改めて状態を見て答える
+    generation.reload.state == Generation::SUCCEEDED_CLEANUP_PENDING ? :generation_completed : :not_found
+  end
+
+  def relabel_expired(generation)
+    relabeled = Generation.where(id: generation.id, state: Generation::CANCELED_STATES, cancel_reason: "expired")
+                          .update_all(cancel_reason: "canceled", updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
+    relabeled == 1 ? :accepted : :not_found
+  end
+  private_class_method :cancel_record, :relabel_expired
+end
