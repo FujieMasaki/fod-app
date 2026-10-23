@@ -9,8 +9,9 @@ module Api
       wrap_parameters false
       before_action :authenticate_user!
 
-      # 生成は非同期で、`202`で処理を返して終わる。attemptは本文を読む前に検証し、同じattemptの既存の処理が
-      # あれば本文を使わずに返す（GenerationUpload）。
+      # 生成は非同期で、`202`で処理を返して終わる。attemptは音声を使う前に検証し、同じattemptの既存の処理が
+      # あれば音声を検証もS3へ保存もせずに返す（GenerationUpload）。multipartはRailsがactionより前に解釈するので、
+      # 本文の大きさはApiRequestGuardがContent-Lengthで先に制限する。
       def create
         retry_after = GenerationThrottle.hit(:upload, current_user)
         return render_problem(:rate_limited, retry_after_seconds: retry_after) if retry_after
@@ -71,7 +72,8 @@ module Api
 
       def render_generation(generation_id)
         view = GenerationStatus.lookup(user: current_user, generation_id:)
-        view ? render(json: GenerationSerializer.new(view), status: :accepted) : render_problem(:not_found)
+        # 受け付けた直後に取り消し・ゴミ箱への移動が割り込んだ場合。契約のcreateDotに404は無いので、送れない録音として返す
+        view ? render(json: GenerationSerializer.new(view), status: :accepted) : render_problem(:attempt_invalid)
       end
     end
   end

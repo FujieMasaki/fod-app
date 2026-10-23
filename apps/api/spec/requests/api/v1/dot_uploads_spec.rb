@@ -110,6 +110,16 @@ RSpec.describe "Dot uploads", :perform_jobs do
       assert_response_schema_confirm(409)
     end
 
+    it "1時間の上限を超えたら429", :fixed_time do
+      limit = GenerationThrottle::LIMITERS[:upload].instance_variable_get(:@limit)
+      limit.times { GenerationThrottle.hit(:upload, user) }
+
+      upload
+
+      expect(problem_code).to eq("rate_limited")
+      assert_response_schema_confirm(429)
+    end
+
     it "音声をrequestのログに出さない" do
       log = captured_log { upload(audio: audio_file("audio/webm", "#{UploadHelpers::WEBM_HEAD}secret-voice")) }
 
