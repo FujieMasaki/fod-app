@@ -1,4 +1,4 @@
-# 生成と保存（T11・T12。TASK-003 Plan §17、§20「状態遷移: Dotの保存とcleanupを分ける」）。
+# 生成への入口（T8の後半）と、生成と保存（T11・T12。TASK-003 Plan §17、§20「状態遷移: Dotの保存とcleanupを分ける」）。
 #
 # - 自前のS3から全文を読み、Bedrockで`sentence`と`summary`を作り、検証してから保存する。
 # - 保存は、利用者の行をlockして世代番号を確かめ、Dotのinsertと`succeeded_cleanup_pending`への更新を同じ
@@ -27,6 +27,33 @@ module GenerationComposition
   rescue GenerationProviders::TooLarge
     Rails.logger.warn("generation transcript output too large: generation_id=#{generation.id}")
     :too_large
+  end
+
+  # T8の後半: 文字起こしを終えた記録を、入口（利用者の行のlock・active・世代・期限）を通して生成へ進める。
+  # 結果はSymbol: :generating / :canceled / :skipped
+  def enter(generation, token, now)
+    attrs = { transcript_ready_at: now, lease_token: nil, lease_expires_at: nil }
+    GenerationGate.enter(user_id: generation.user_id, generation_id: generation.id, from: Generation::TRANSCRIBING,
+                         to: Generation::GENERATING, attrs:) do |user, current|
+      current.lease_token == token ? GenerationGate.proceed_denial(user, current, now) : :lease_lost
+    end
+    GenerationComposeJob.perform_later(generation.id)
+    :generating
+  rescue GenerationGate::Denied => e
+    cancel_after_denial(generation, e.reason, now)
+  end
+
+  # 退会・期限を受理していれば、全文をBedrockへ送らず後片付けへ回す（T10）
+  def cancel_after_denial(generation, reason, now)
+    cancel_reason = { expired: "expired", account_deletion_in_progress: "withdrawn",
+                      generation_mismatch: "withdrawn" }[reason]
+    return :skipped unless cancel_reason
+
+    GenerationCancellation.request(user_id: generation.user_id, generation_id: generation.id,
+                                   reason: cancel_reason, now:)
+    :canceled
+  rescue GenerationGate::Denied
+    :skipped
   end
 
   # 結果はSymbol: :succeeded / :failed / :skipped
@@ -111,6 +138,6 @@ module GenerationComposition
                                          failure_kind: kind, lease_token: nil, lease_expires_at: nil, **attrs)
     :failed
   end
-  private_class_method :compose, :reject_transcript, :valid_text?, :persist, :result_saved?, :insert_dot, :succeed,
-                       :fail
+  private_class_method :cancel_after_denial, :compose, :reject_transcript, :valid_text?, :persist, :result_saved?,
+                       :insert_dot, :succeed, :fail
 end

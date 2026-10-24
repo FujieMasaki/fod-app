@@ -102,35 +102,10 @@ module GenerationTranscription
     return fail(generation, token, GenerationComposition::UNREADABLE_KINDS.fetch(text)) unless text.is_a?(String)
     return fail(generation, token, "empty_recording", transcript_ready_at: now) if empty?(text)
 
-    proceed(generation, token, now)
+    GenerationComposition.enter(generation, token, now)
   end
 
   def empty?(text) = text.gsub(/[[:space:][:punct:]]/, "").empty?
-
-  def proceed(generation, token, now)
-    attrs = { transcript_ready_at: now, lease_token: nil, lease_expires_at: nil }
-    GenerationGate.enter(user_id: generation.user_id, generation_id: generation.id, from: Generation::TRANSCRIBING,
-                         to: Generation::GENERATING, attrs:) do |user, current|
-      current.lease_token == token ? GenerationGate.proceed_denial(user, current, now) : :lease_lost
-    end
-    GenerationComposeJob.perform_later(generation.id)
-    :generating
-  rescue GenerationGate::Denied => e
-    cancel_after_denial(generation, e.reason, now)
-  end
-
-  # 退会・期限を受理していれば、全文をBedrockへ送らず後片付けへ回す（T10）
-  def cancel_after_denial(generation, reason, now)
-    cancel_reason = { expired: "expired", account_deletion_in_progress: "withdrawn",
-                      generation_mismatch: "withdrawn" }[reason]
-    return :skipped unless cancel_reason
-
-    GenerationCancellation.request(user_id: generation.user_id, generation_id: generation.id,
-                                   reason: cancel_reason, now:)
-    :canceled
-  rescue GenerationGate::Denied
-    :skipped
-  end
 
   # T9
   def fail(generation, token, kind, **attrs)
@@ -138,6 +113,5 @@ module GenerationTranscription
                                          failure_kind: kind, lease_token: nil, lease_expires_at: nil, **attrs)
     :failed
   end
-  private_class_method :react, :give_up?, :claim, :begin_job, :holding?, :empty?, :wait, :finish, :proceed,
-                       :cancel_after_denial, :fail
+  private_class_method :react, :give_up?, :claim, :begin_job, :holding?, :empty?, :wait, :finish, :fail
 end
