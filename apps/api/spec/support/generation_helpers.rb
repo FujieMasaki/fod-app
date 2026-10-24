@@ -14,3 +14,16 @@ module GenerationHelpers
 end
 
 RSpec.configure { it.include GenerationHelpers }
+
+# 送られる音声（先頭のbyteだけ本物の形式に合わせる）
+module UploadHelpers
+  WEBM_HEAD = "\x1A\x45\xDF\xA3".b
+  MP4_HEAD = "\x00\x00\x00\x18ftypM4A ".b
+
+  def uploaded_audio(content_type: "audio/webm", body: nil, duration_seconds: 120, size: nil)
+    body ||= (content_type == "audio/mp4" ? MP4_HEAD : WEBM_HEAD) + ("\x00".b * 64)
+    UploadedAudio.new(io: StringIO.new(body), content_type:, size: size || body.bytesize, duration_seconds:)
+  end
+end
+
+RSpec.configure { it.include UploadHelpers }
