@@ -1213,8 +1213,9 @@ components:
     RateLimited:
       description: |
         `rate_limited`: 試行回数の制限。認証まわりはloginの失敗がIPごとに1時間50回、メール
-        （登録・確認の再送・password再設定）の送信がIPごとに1時間20回。録音・送信・再試行
-        （外部の文字起こし・生成の費用がかかる操作）の具体値と採否はTASK-009で決める
+        （登録・確認の再送・password再設定）の送信がIPごとに1時間20回。録音attemptの発行・音声の
+        送信・再試行（外部の文字起こし・生成の費用がかかる操作）は、利用者ごとに1時間でそれぞれ60回・
+        60回・30回
       content:
         application/problem+json:
           schema:

@@ -2,8 +2,8 @@
 
 ## 1. Status
 
-実施中（2026-10-24）。コード（状態機械・API・Job・AWSのadapter）はproviderを差し替えたtestで閉じる。
-実サービスでの確認（AWSの資源・認証・model idの受け入れ）は人間の作業が要るので、§5「人間の作業が要るもの」で止める。
+実施中（2026-10-24）。コード（状態機械・API・Job・AWSのadapter）はproviderを差し替えたtestで閉じた。
+実サービスでの確認（AWSの資源・認証・model idの受け入れ）は人間の作業が要るので、§5「人間の作業が要るもの」で止めている。
 
 ## 2. Goal
 
@@ -83,6 +83,16 @@
 - 具体的なmodel idと最終的なpromptの文面（H3。promptは実データを見て詰める。TASK-003 Plan §17）。
 - watchdogとpollingの間隔の実値は、下記§7の初期値で入れ、実測（H4）で見直す。
 
+### 実装の中で決めたこと（人間の確認を求める）
+
+設計の大枠はTASK-003・TASK-005で決まっている。その範囲で、次をこのタスクで決めた。PRの「確認すること」に挙げる。
+
+- **回数の制限**（契約のRateLimitedが「採否と具体値はTASK-009で決める」としていた）: 採る。利用者ごとに1時間で、
+  録音attemptの発行60回・送信60回・再試行30回。日々の記録として十分に多く、自動化された大量の送信だけを止める値にした。
+- **Transcribeの完了待ち**: threadを占有せず、15秒ごとに自分をもう一度enqueueする（§8）。
+- **`users`の列**: 退会の受理時刻（`deletion_requested_at`）と世代番号（`generation`）をここで足した（§12）。
+- **送信でS3に置けなかったとき**: `202`で`failed`（`upload_incomplete`）を返し、同じattemptで送り直させる。
+
 ## 6. References and Documents to Update
 
 - 参照: [TASK-003 Plan](2026-09-29-task-003-generation-design.md) §17・§19・§20・§24・§26・§27、
@@ -91,9 +101,11 @@
   「生成の実行方式」「データ所在地と費用」、[privacy.md](../privacy.md) §5、[dot-history.md](../dot-history.md) §2、
   [backend.md](../development/backend.md)、[contracts/README.md](../../contracts/README.md)、
   [code-review/backend](../code-review/backend/README.md)
-- 更新: `docs/architecture.md`（実装済みへの反映・Job基盤）、`docs/privacy.md` §5-1（実装に合わせた記述。
+- 更新: `docs/architecture.md`（実装済みへの反映・Job基盤）、`docs/privacy.md` §5-1（実装に合わせた記述と、Jobの記録の行。
   外部provider行は実サービスの確認後）、`docs/development/backend.md`（Job基盤とstorageが未実装という記述）、
-  `docs/tasks/TASK-009-backend-audio-generation.md`
+  `docs/code-review/backend/security.md`・`docs/code-review/frontend/security.md`（実装状況とmultipart・Jobの引数の観点）、
+  `contracts/openapi.yaml`（回数の制限の値と、送信の説明の処理の順）、`docs/tasks/TASK-013-backend-data-deletion.md`
+  （退会と完全削除の入口の申し送り）、`docs/tasks/TASK-009-backend-audio-generation.md`
 
 ## 7. Proposed Approach
 
@@ -104,7 +116,8 @@
   AWSアカウント内で一意）。列: `user_id`・`started_at`・`duration_seconds`・`audio_content_type`・`accepted_at`・
   `retry_expires_at`・`state`・`user_generation`・`upload_attempt`・`transcription_attempt`・`audio_key`・
   `transcript_key`・`transcription_job_name`・`lease_token`・`lease_expires_at`・`last_progress_at`・`failure_kind`・
-  `cancel_reason`・`transcript_withheld_at`。`state`と`failure_kind`はcheck制約で値を限る。
+  `cancel_reason`・`transcript_ready_at`・`transcript_withheld_at`。`state`・`failure_kind`・`cancel_reason`・
+  `duration_seconds`はcheck制約で値を限る。
   `user_id`の外部キーは`on_delete: :restrict`（cleanupの情報を持つ記録を、利用者の行の削除で黙って消さない）。
 - `consumed_recording_attempts`（`id`と`expires_at`だけ）。privacy.md §5-1の行のとおり。
 - Solid Queueのtableは**同じDB**に置く（TASK-003 Plan §20「Solid QueueがRDSを使うため、Jobと記録の整合を同じDBで
@@ -134,7 +147,7 @@
 | T11 generating→succeeded_cleanup_pending / T12 →failed / T13 →cancel_requested | 生成Job（Dotのinsertと同一transaction）／同左 |
 | T14 failed→transcribing / T15 →generating / T16 →cancel_requested | 再試行（全文が残っていれば生成から）／同左 |
 | T17 succeeded_cleanup_pending→自分 / T18 →削除 / T22 →cancel_requested | cleanup Job（失敗時は新しいleaseで再実行）／Dotの完全削除・退会 |
-| T19 cancel_requested→cleanup_pending | cancelを受理した入口が続けて行う |
+| T19 cancel_requested→cleanup_pending | 後片付けのJob（取り消す前に動いていた実行の期限が切れてから。§16） |
 | T20 cleanup_pending→自分 / T21 →削除 | cleanup Job（非終端のjobは終端まで待つ） |
 
 - Transcribeの完了待ちはworkerのthreadを占有しない。完了待ちJobが`GetTranscriptionJob`を1回呼び、非終端なら
@@ -144,13 +157,14 @@
   `cleanup_pending`では非終端のjobを待ってから全部を消す。消すときは現在有効なkeyではなくprefixを列挙して消す。
 - watchdog（定期Job）: 更新の止まった`uploading`を`HeadObject`で判定、enqueueの無い`accepted`の再enqueue、
   `transcribing`の再確認、leaseの切れたcleanupの再実行、期限を過ぎた記録のcancel。
-- 初期値: watchdogは1分ごと、`uploading`は最終進捗から5分でstale、leaseは15分、完了待ちの間隔は30秒、
-  pollingの`poll_after_seconds`は5秒。実測（H4）で見直す。
+- 初期値（当初の案。実装での値は§16）: watchdogは1分ごと、`uploading`は最終進捗から5分でstale、leaseは15分、
+  完了待ちの間隔は30秒、pollingの`poll_after_seconds`は5秒。実測（H4）で見直す。
 
 ### 7-4. API
 
 - 契約どおりの5つのendpoint。認可は常に`current_user`へscopeし、IDを知っていることを権限にしない。
-- `POST /api/v1/dots`: multipartを解釈する前に`X-Recording-Attempt`を検証し、既存の記録があれば本文を読まずに返す。
+- `POST /api/v1/dots`: 音声を使う前に`X-Recording-Attempt`を検証し、既存の記録があれば音声を検証もS3へ保存もせずに返す
+  （当初は「multipartを解釈する前に」と書いたが、Railsの前処理が解釈するので省けない。§16）。
   `ApiRequestGuard`の一覧にこのendpointだけを足す。
 - pollingは先に`dots`を見る。全文は、記録が残り、`transcript_withheld_at`が無く、期限内のときだけ返す。
 
@@ -160,8 +174,10 @@
   SDKのloggerを付けない。Bedrockは`Converse`で呼び、出力をschemaで検証する（`sentence` 200字・`summary` 2000字。
   `dots`のcheck制約と同じ）。
 - 認証はSDKの既定の探索（開発はIAM Identity Center、本番はECS task role）。長期キーを読まない。
-- 外部へ最初に送る前に、呼び出し元のアカウントを`sts get-caller-identity`で確かめるrake task（`generation:verify_caller`）を置く。
-  比べる値はgitに入れないローカルの環境変数（`FOD_APP_ACCOUNT_ID`）から読み、リポジトリに記録しない。
+- 外部へ最初に送る前に、呼び出し元のアカウントを`sts get-caller-identity`で確かめる（当初はrake task
+  `generation:verify_caller`の案だった。実装では、clientを作る前に毎回の実行時に確かめる`GenerationProviders::CallerAccountGuard`と、
+  人間が最初に表示して確かめるだけのrake task `generation:caller_identity`に分けた。§16）。比べる値はgitに入れないローカルの
+  環境変数（`FOD_APP_ACCOUNT_ID`）から読み、リポジトリに記録しない。
 
 ## 8. Why This Approach
 
@@ -203,9 +219,10 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 | --- | --- | --- | --- | --- |
 | 1 | `feat/task-009-1-generation-model` | Plan・データと状態機械の核 | このPlan、migration 3つ（users・generations・consumed attempts）、`Generation`・`ConsumedRecordingAttempt`・`User`の変更、`GenerationNaming`、model spec、factory | 12 |
 | 2 | `feat/task-009-2-job-and-aws` | Job基盤とAWSのadapter | Gemfile、Solid Queueのmigrationと設定、`config/generation.yml`（model id・prompt）、S3・Transcribe・Bedrockのadapterとspec、呼び出し元の確認 | 20 |
-| 3 | `feat/task-009-3-cleanup` | 入口の手続き・取り消し・cleanup・ACK・期限・退会/完全削除の入口（T3・T5・T7・T10・T13・T16〜T22） | `GenerationGate`、取り消し・cleanup・ACK・期限のserviceとJob、定期実行の設定、偽物のprovider、遷移テストと5契機のspec | 18 |
-| 4 | `feat/task-009-4-pipeline` | 受理から保存まで（T1・T2・T4・T6・T8・T9・T11・T12・T14・T15）とwatchdog | attempt token、upload・文字起こし開始/完了待ち・生成と保存・再試行・watchdogのserviceとJob、遷移テスト | 18 |
-| 5 | `feat/task-009-5-api` | endpointと文書 | routes・controller・serializer・`ApiRequestGuard`・request spec、呼び出し元を表示するtask、architecture・privacy・backend、タスクファイル | 18 |
+| 3 | `feat/task-009-3-cleanup` | 入口の手続き・取り消し・cleanup・ACK・期限・退会/完全削除の入口（T3・T5・T7・T10・T13・T16〜T22） | `GenerationGate`、取り消し・cleanup・ACK・期限のserviceとJob、定期実行の設定、偽物のprovider、遷移テストと5契機のspec | 19 |
+| 4 | `feat/task-009-4-pipeline` | 受理から保存まで（T1・T2・T4・T6・T8・T9・T11・T12・T14・T15）とwatchdog | attempt token、upload・文字起こし開始/完了待ち・生成と保存・再試行・watchdogのserviceとJob、遷移テスト | 20 |
+| 5 | `feat/task-009-5-api` | endpoint | routes・controller・serializer・`ApiRequestGuard`・回数の制限・request spec・通しのspec | 16 |
+| 6 | `feat/task-009-6-docs` | 文書と完了の記録 | 契約の回数の記述、呼び出し元を表示するtask、architecture・privacy・backend、TASK-013への申し送り、このPlanとタスクファイル | 8 |
 
 取り消し・cleanupを受理から保存までより先に置くのは、受理の側（uploadの世代のずれ、Transcribeの終端後の確認）が
 取り消しの入口を呼ぶためである。取り消しの遷移は、testでは記録を各状態で作って確かめられる。
@@ -214,8 +231,8 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 
 - **solid_queue**: TASK-003で採用済みのJob基盤。Rails 8の標準。同じDBに置く。
 - **aws-sdk-s3 / aws-sdk-transcribeservice / aws-sdk-bedrockruntime**: S3の一時object、Transcribeのバッチ、
-  BedrockのConverse。HTTPを自前で署名する代替は、SigV4の実装を持つことになり採らない。`aws-sdk-sts`は
-  `verify_caller`だけで使う（`aws-sdk-core`に含まれる）。
+  BedrockのConverse。HTTPを自前で署名する代替は、SigV4の実装を持つことになり採らない。STSは
+  呼び出し元の確認だけで使う（`aws-sdk-core`に含まれる）。
 - **ActiveSupport::MessageEncryptor**: attempt tokenの暗号化と署名（契約が「暗号化・署名」と定める）。
   鍵は`secret_key_base`から用途別に導く。
 
@@ -264,7 +281,100 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 
 ## 16. Completion Record
 
-- 状態: 実施中
-- 実装差異: 未記入
-- 検証結果: 未記入
-- 関連: 未記入
+- 状態: 実施中（2026-10-24）。コードとtestは6つのPRで終えた。実サービスでの確認（§5のH1〜H4）が残るので、タスクは
+  In progressのまま。
+- 実装差異:
+  - PRを5つの予定から6つに分けた。文書と完了の記録を足すとAPIのPRが20を超えるため。取り消し・cleanupを受理から保存までの
+    前に置いた（受理の側が取り消しの入口を呼ぶため）。
+  - 2番目のPRで、定期実行の設定と呼び出し元を表示するtaskを後ろのPRへ移すコミットを足した（20ファイルに収めるため。
+    履歴は書き換えていない）。
+  - `POST /api/v1/dots`は、attemptを本文の解釈より前に検証して既存の処理を返すが、Railsのrequestのログ（Parameters）が
+    actionの前にmultipartを解釈する。本文はPumaが受け取り終えているので、契約の「本文の再送信そのものは防げない」の範囲で、
+    既存の処理の場合に音声を使わない・S3へ置かないことは守っている。
+  - pollingは、Dotの無いまま`succeeded_cleanup_pending`に残る記録（Dotの完全削除の受理の前後）を404にした。
+  - 契約の`POST /api/v1/dots`の説明を「multipartを解釈する前に」から「音声を使う前に」へ直した。解釈は省けないので、
+    `ApiRequestGuard`が本文の大きさをContent-Length（33MB）で解析の前に制限し、長さの無い本文を受け付けない（レビューの指摘。
+    制限しないと未ログインでも任意の大きさの本文を解析させられた）。
+  - 初期値: watchdogは「最終進捗から2分、かつ実行権が切れてから2分」、完了待ちの間隔は15秒、後片付けの実行権は5分
+    （§7-3の当初の案は5分・30秒）。実行権の期限切れを条件に足したので、生きている実行を二重に拾わない範囲で短くした。
+  - T19は入口ではなく後片付けのJobが行う。取り消しは実行中の実行権のtokenだけを失効させ、期限は残す。後片付けはその期限が
+    切れてから始める（実行中のJobが外部へ送り終える前に記録を消すと、外部に残ったものを記録から辿れなくなる。レビューの指摘）。
+  - 呼び出し元の確認は、実行時のguard（毎回clientを作る前）と表示だけのrake taskに分けた。設定（bucket・model id・
+    アカウントID）が1つでも欠けていればどのclientも作らない（model idが未確定の間に音声だけを送らない）。
+  - **認証メールのJobはSolid Queueに載せず、memoryのadapter（async）のままにした**。引数にメールアドレスと
+    確認・再設定・解除のtokenを持ち、Solid Queueでは`solid_queue_jobs.arguments`に平文で残るため（レビューでsecurityのHighと
+    指摘された）。
+  - BedrockのclientはSDKの自動の再送をしない（`retry_limit: 0`、読み取りのtimeoutは120秒）。同じ生成を二重に消費しないため。
+  - 後片付けは、命名規則から導いた対象に記録のkey・job名を足して消し、失敗は処理IDと例外の種類だけをwarnのログに残す。
+- 検証結果:
+  - `cd apps/api && bundle exec rspec`: 6番目のPRの時点の結果は下の「機械のレビュー後」に書く。
+  - `bundle exec rubocop`: no offenses。`bundle exec brakeman -q`: No warnings。`bundle exec bundler-audit check`:
+    crassの指摘（GHSA-pq4g-8rxf-4g29。mainにもある）を1.0.8へ上げて解消した。
+  - 遷移テスト: `spec/services/generation_transitions/`にT1〜T22（T1・T2・T3・T4は`generation_upload_spec.rb`、
+    T3は`cancellation_spec.rb`にも）。§24の遷移でない性質は`spec/requests/api/v1/generations_spec.rb`（polling・認可）、
+    `generation_upload_spec.rb`（冪等性・並行送信）、`cleanup_triggers_spec.rb`（5契機）、`cleanup_spec.rb`（個別の失敗と
+    T17/T22の競合の両方の順）。
+  - 未実施（人間の作業が要る。§5）: 実サービスでの録音内容の反映、webm/mp4の実ファイル、`DeleteTranscriptionJob`の範囲、
+    PUTの実際の挙動、model idごとの確認（推論の宛先・保持・人によるレビュー・cache）、`none`のもとでのCSAM、
+    Transcribeのendpointの記録、呼び出し元の初回確認、Pumaとの同居の実測。
+- 関連: メインのPR #101。
+
+## 17. 未決定事項（止まった理由）
+
+コードを書き終え、§5のH1〜H4に当たったので止める。どれも人間の作業か判断が要り、推測で進めない。
+
+| # | 判断・作業 | 選択肢 | 確認済みの事実 |
+| --- | --- | --- | --- |
+| H1 | S3 bucketとIAMを誰がどう作るか | A: 人間がconsoleで作り、設定（非公開・暗号化・versioning無効・lifecycle・prefixごとの権限）をこのPlanへ記録する ／ B: IaC（Terraform等）をリポジトリに足す（新しいtoolの判断が要る） | アプリ用アカウントに資源は無い。コードはbucket名を`FOD_GENERATION_BUCKET`から読む。IAMには`s3:ListBucket`（prefixを限る）が要る（無いと無いobjectが404でなく403になり、prefixの削除もできない）。作った後に、存在しない・非終端のjobを`DeleteTranscriptionJob`で消したときの実際の例外と、SDKのtimeoutの値を確かめる |
+| H2 | 開発マシンの認証と呼び出し元の初回確認 | 人間がIAM Identity Centerでログインし、`bin/rails generation:caller_identity`の結果がアプリ用か確かめ、`FOD_APP_ACCOUNT_ID`をgitに入れない設定へ置く | このマシンに既定の認証情報は無い（2026-10-23）。値が無い間、S3・Transcribe・Bedrockのclientを作らない（呼び出し元の確認でもSTSを呼ぶ前に止まる） |
+| H3 | Bedrockのmodel idと受け入れ | 国内に収まる経路（Geo: JPのinference profile等）から、`none`で呼べ、期限付きの例外に頼らないmodelを選び、モデルカードで推論の宛先を確かめる。CSAMの検知による保存・レビューが`none`で止まるかを確かめ、確かめられなければ受け入れを判断する | `config/generation.yml`の`bedrock_model_id`は空で、空の間はBedrockへ送らない |
+| H4 | Pumaとの同居の実測 | ECSが無いので、TASK-015など実環境を作るタスクで測るか、ローカルで代わりに測るか | worker 1プロセス3 thread、DBの接続数は既定5 |
+
+### 機械のレビューで止まった点（2026-10-24）
+
+`pr-review-cycle`の止まる条件（1回のサブエージェントの段で3回レビューしてもLGTMにならない）に、2番目のPR（#103）で当たった。
+各PRの状態と、残っている指摘は次のとおり。securityの指摘を対応不要と判断したものは無い（Highの指摘は直した）。
+
+| PR | サブエージェント | Codex | 状態 |
+| --- | --- | --- | --- |
+| #102（1/6） | 2回目でLGTM | LGTM（`51151e2`） | LGTM。以後の後ろのPRの修正は、このPRの中身を変えていない（取り込みだけ） |
+| #103（2/6） | 3回ともLGTMにならない | 未実行 | 止まった。下の3件が残る |
+| #104（3/6） | 3回ともLGTMにならない | 未実行 | 3回目はMedium 1件（取り消し待ち・期限の切れた後片付け待ちの記録を、定期の拾い直しが拾うことのtestが無い。コードの不具合は見つかっていない） |
+| #105（4/6） | 1回目の指摘を直した。2回目は未実行 | 未実行 | |
+| #106（5/6） | 1回目の指摘を直した。2回目は未実行 | 未実行 | |
+| #107（6/6） | 1回目の指摘を直した（このコミット）。2回目は未実行 | 未実行 | |
+
+#103の3回目に残った指摘（どれもMedium）:
+
+1. BedrockのSDKの自動の再送を止める`retry_limit: 0`は、SDKの再送の方式が`legacy`のときだけ効く。`standard`・`adaptive`では
+   `max_attempts`（既定3）が使われ、環境変数や将来のSDKの既定の変更で再送され得る。修正案: `retry_mode: "legacy"`を明示するか
+   `max_attempts: 1`も渡し、specで実際の値を確かめる。
+2. Solid Queueの終わったJob・失敗したJobの保持。本番は3番目のPRの定期実行で終わったJobを1時間ごとに消すが、失敗したJobの
+   `solid_queue_failed_executions.error`には例外のmessageとbacktraceが残り、消す対象にならない。生成のJobは外部・DBの例外を
+   包んでいるが、包んでいない例外のmessageに個人データが入る経路が無いかの確認と、保持の方針（privacy.md）が要る。
+3. 認証メールのJobを`:async`に残したことで、deployや再起動で未送信のメールが消えること（以前と同じ挙動）を、判断として
+   architectureに書き、代替案（Jobの引数を利用者のidだけにし、tokenをJobの中で作り直す）と比べてもらう必要がある。
+
+判断してほしいこと:
+
+- Q1: 上の1〜3を直して、#103のサブエージェントのレビューを続けてよいか（推奨: 続ける。1は設定の追加、2は保持の方針の記述、
+  3はarchitectureの記述で、設計を変えない）。
+- Q2: 認証メールのJobの扱い。A: `:async`のまま（以前と同じ。deployで未送信が消え得る） ／ B: 引数を利用者のidだけにして
+  tokenをJobの中で作り直し、Solid Queueに載せる（Deviseの流れを変える）。推奨: A（このタスクの範囲を広げず、以前と同じ挙動を保つ）。
+
+人間の判断（2026-10-24）: Q1は続ける。Q2は回答が無く、推奨のA（`:async`のまま）を採った。#103の3件は次のとおり直した。
+
+1. Bedrockのclientを`retry_mode: "standard"`・`max_attempts: 1`にした。環境変数`AWS_RETRY_MODE`・`AWS_MAX_ATTEMPTS`を
+   変えても同じ値になることをspecで確かめる（`a865ca7`）。
+2. `ApplicationJob`が失敗した例外をclassの名前だけの`ApplicationJob::Failed`に包み直し、ログとSolid Queueにmessageを
+   残さない（`7642dc8`）。保持の方針はprivacy.md「Jobの記録」（失敗したJobは人間が消すまで残る）。
+3. architecture「実装（TASK-009）」に、`:async`で送る前のメールがdeployで失われることと、採らなかった代替案を書いた。
+
+#103はその後のサブエージェントのレビューで、包まれないSDKの例外（`2dc7bb0`・`4fd0065`）と、YAMLで
+アカウントIDが整数になる問題（`7719cea`）を直した。3回目に要確認のMedium（生成の出力の上限）が残ったので止まり、
+人間が判断した（2026-10-24）。
+
+- Q1（出力の上限）: A。`bedrock_max_tokens`を4096にし、H3で最長の出力のtoken数を測って見直す（`9c44bdc`）。
+- Q2（任意の指摘）: A。今回は直さず、理由と扱う先を#103の本文に書いた（`AuthMailDeliveryJob`の失敗のmessage、
+  mailerを足したときの既定の配送のJob、長期キーの強制、`expected_bucket_owner`と`s3:ListBucket`（H1）、
+  `solid_queue`の版の指定、認証メールのJobのspec）。

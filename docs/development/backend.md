@@ -36,7 +36,11 @@
 - 認証はTASK-006で実装した（[architecture](../architecture.md)「認証詳細」）。保護するendpointは
   `before_action :authenticate_user!`を使い、所有者は`current_user`だけから決める。失敗は
   `render_problem`でRFC 9457のProblemを返す（`app/controllers/concerns/`）。公開基盤は未構築。
-  background job基盤と音声storageの具体設定は未実装であり、文書上の例だけで採用済みにしない。
+  Job基盤はSolid Queue（処理の記録と同じDB。2026-10-24にTASK-009で導入）。音声のS3 bucketは未構築で、
+  開発で実サービスへ送るときは`FOD_GENERATION_BUCKET`・`FOD_APP_ACCOUNT_ID`（・必要なら
+  `FOD_TRANSCRIBE_DATA_ACCESS_ROLE_ARN`）をgitに入れない環境の設定で渡し、IAM Identity Centerでアプリ用アカウントに
+  入る。最初に送る前に`bin/rails generation:caller_identity`で呼び出し元を確かめる。testは
+  `GenerationProviders.use`で偽物に差し替え、外部へ送らない。
 
 ### 例外
 
