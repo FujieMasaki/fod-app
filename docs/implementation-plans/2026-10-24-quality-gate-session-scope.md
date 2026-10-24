@@ -89,7 +89,7 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 
 - 変更: `scripts/claude-quality-gate.mjs`（セッションidの記録と判定）
 - 変更: `scripts/claude-quality-gate.test.mjs`（別セッション・所有セッション・ブランチ移動・id無し・期限切れ・
-  壊れた`ownedAt`・検査中の`--reset`（idあり・なし）・`--reset`・`--pause`のtest）
+  壊れた`ownedAt`・検査中の`--reset`（idあり・なし・持ち主なし）・持ち主の上書きの報告・`--reset`・`--pause`のtest）
 - 変更: `.claude/skills/run-task/SKILL.md`
 - 変更: `.claude/skills/pr-review-cycle/SKILL.md`
 - 変更: `docs/development/pull-requests.md`
@@ -124,8 +124,12 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
   外れたことは画面のメッセージで分かり、CIとpre-pushは効く。
 - `CLAUDE_CODE_SESSION_ID`を偽の値にして`--reset`すれば、そのセッションは自分をゲートから外せる。従来も
   `--pause`で外せたため新しい穴ではなく、外れたことは止まるたびに画面に出るので、防がない。
-- 期限の24時間は`OWNER_TTL_MS`のほか、README・`run-task`・`pr-review-cycle`・`pull-requests.md`に書いている。
+- 期限の24時間は`OWNER_TTL_MS`（とそのコメント）のほか、READMEのhookの表・`run-task`の冒頭・`pull-requests.md`の
+  2か所（「マージ」の3と「人間がレビューする時機」の4）に書いている。
   期限を変えるときは「24時間」で検索して、すべて直す。
+- `--reset`は、24時間以内の別の持ち主も上書きする（人間の指摘に対応するセッションが引き継ぐため）。元の持ち主は
+  ゲートから外れるが、そのことは`--reset`の出力（`replaced owner …`）に出す。同じworktreeで2つのセッションが
+  タスクのブランチを使うことは対象外（§5）なので、上書きは防がない。
 - `--pause`は持ち主を確かめない。持ち主でないセッションが`--pause`すると、持ち主の状態にも停止の印が付く。
   `--pause`は`/run-task`が止まるときにだけ使う手順で、別のセッションが実行する場面はないため、防がない。
 - `/clear`や再開（`--resume`・`--continue`）でセッションidが変わる場合、`--reset`するまで差し戻されない
@@ -136,7 +140,7 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 
 ### Automated
 
-- `node --test scripts/claude-quality-gate.test.mjs`: 23件成功（追加11件）。
+- `node --test scripts/claude-quality-gate.test.mjs`: 25件成功（追加13件）。
 
 ### Manual
 
