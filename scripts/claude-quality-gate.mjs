@@ -52,7 +52,7 @@ export function initialState(branch, sessionId) {
 }
 
 // deps: branch(), changedPaths(), run(check), worktreeStatus(), pullRequest(),
-// readState(), writeState(state). Kept injectable so the decisions are testable.
+// readState(), writeState(state), removeState(). Kept injectable so the decisions are testable.
 export function evaluateStop(deps, sessionId) {
   const branch = deps.branch();
   if (!taskBranchPattern.test(branch ?? "")) return allow();
@@ -133,6 +133,19 @@ export function evaluateStop(deps, sessionId) {
   return finish(allow());
 }
 
+// Without a session id the state is removed, so every session is held to the gate as before.
+export function resetState(deps, sessionId) {
+  if (sessionId) deps.writeState(initialState(deps.branch(), sessionId));
+  else deps.removeState();
+}
+
+export function pauseState(deps, sessionId, reason) {
+  const branch = deps.branch();
+  const saved = deps.readState();
+  const state = saved?.branch === branch ? saved : initialState(branch, saved?.sessionId);
+  deps.writeState({ ...state, sessionId: sessionId ?? state.sessionId, paused: reason });
+}
+
 function sh(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, encoding: "utf8", timeout: COMMAND_TIMEOUT_MS });
   const output = `${result.stdout ?? ""}${result.stderr ?? ""}${result.error ? String(result.error) : ""}`;
@@ -182,6 +195,7 @@ export function gitDeps(cwd) {
       }
     },
     writeState: (state) => writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`),
+    removeState: () => rmSync(stateFile, { force: true }),
   };
 }
 
@@ -198,21 +212,17 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
 
   if (flag === "--pause" || flag === "--reset") {
     // Called by Claude from the task worktree: pause for a human decision, or
-    // clear the runner state when /run-task starts or resumes. Claude Code passes
+    // reset the runner state when /run-task starts or resumes. Claude Code passes
     // the session id to Bash, which is the same id the Stop hook receives.
     const deps = gitDeps(process.cwd());
     const sessionId = process.env.CLAUDE_CODE_SESSION_ID;
     if (flag === "--reset") {
-      if (sessionId) deps.writeState(initialState(deps.branch(), sessionId));
-      else rmSync(deps.stateFile, { force: true });
-      console.log("/run-task state cleared");
+      resetState(deps, sessionId);
+      console.log(`/run-task state reset for session ${sessionId ?? "(unknown)"}`);
     } else {
       const reason = rest.join(" ").trim();
       if (!reason) throw new Error('Usage: --pause "<reason>"');
-      const branch = deps.branch();
-      const saved = deps.readState();
-      const state = saved?.branch === branch ? saved : initialState(branch, saved?.sessionId);
-      deps.writeState({ ...state, sessionId: sessionId ?? state.sessionId, paused: reason });
+      pauseState(deps, sessionId, reason);
       console.log(`/run-task paused: ${reason}`);
     }
   } else {

@@ -5,6 +5,8 @@ import {
   checksFor,
   evaluateStop,
   initialState,
+  pauseState,
+  resetState,
   MAX_BLOCKS,
   MAX_CONSECUTIVE_FAILURES,
   taskBranchPattern,
@@ -25,6 +27,9 @@ function fakeDeps(overrides = {}) {
     readState: () => state,
     writeState: (next) => {
       state = structuredClone(next);
+    },
+    removeState: () => {
+      state = null;
     },
     ...overrides,
   };
@@ -188,4 +193,27 @@ test("keeps the owner when the task moves to another branch", () => {
 test("without a recorded owner, every session is held to the gate as before", () => {
   const { deps } = fakeDeps({ worktreeStatus: () => ({ dirty: true, unpushed: true }) });
   assert.match(evaluateStop(deps, "any").reason, /uncommitted/);
+});
+
+test("--reset records the session as the owner, or clears the state without an id", () => {
+  const stale = { ...initialState("feat/task-008-dot-history", "old"), blocks: 12, gaveUp: true };
+  const withId = fakeDeps({ state: stale });
+  resetState(withId.deps, "run-task");
+  assert.deepEqual(withId.state(), initialState("feat/task-008-dot-history", "run-task"));
+
+  const withoutId = fakeDeps({ state: stale });
+  resetState(withoutId.deps, undefined);
+  assert.equal(withoutId.state(), null);
+});
+
+test("--pause keeps the counts and records the pausing session", () => {
+  const { deps, state } = fakeDeps({ state: { ...initialState("feat/task-008-dot-history", "run-task"), blocks: 2 } });
+  pauseState(deps, "run-task", "仕様の確認");
+  assert.equal(state().paused, "仕様の確認");
+  assert.equal(state().blocks, 2);
+  assert.equal(state().sessionId, "run-task");
+
+  // Without an id, the recorded owner stays.
+  pauseState(deps, undefined, "再確認");
+  assert.equal(state().sessionId, "run-task");
 });
