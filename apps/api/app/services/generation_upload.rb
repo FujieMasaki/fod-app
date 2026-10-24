@@ -69,14 +69,28 @@ class GenerationUpload
     lease_token = SecureRandom.uuid
     ActiveRecord::Base.transaction do
       user = User.lock.find(@user.id)
-      return problem(:account_deletion_in_progress) if user.deletion_requested?
+      denied = creation_denial(user, attempt)
+      return denied if denied
 
       Generation.transaction(requires_new: true) { Generation.create!(new_record(attempt, audio, user, lease_token)) }
     end
     lease_token
   rescue ActiveRecord::RecordNotUnique
-    # 同じattemptの並行送信。2件目の記録もJobも作らず、既存の処理を返す
-    @user.generations.exists?(attempt.id) ? existing(attempt.id) : problem(:attempt_invalid)
+    concurrent_outcome(attempt)
+  end
+
+  # 利用者の行をlockした後に見直す。lockの外で読んだ後に取り消し・後片付けが終わっていても、消したものを
+  # 作り直さない（取り消しも同じ行をlockして、使用済みの記録を書く）
+  def creation_denial(user, attempt)
+    return problem(:account_deletion_in_progress) if user.deletion_requested?
+
+    problem(:attempt_invalid) if ConsumedRecordingAttempt.consumed?(attempt.id, @now)
+  end
+
+  # 同じattemptの並行送信。2件目の記録もJobも作らず、既存の処理の状態で答える（取り消し済みなら作り直さない）
+  def concurrent_outcome(attempt)
+    outcome = @user.generations.find_by(id: attempt.id)&.then { known_generation_outcome(it) }
+    outcome == :reupload ? existing(attempt.id) : outcome || problem(:attempt_invalid)
   end
 
   def new_record(attempt, audio, user, lease_token)
