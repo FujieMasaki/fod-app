@@ -37,6 +37,9 @@ module GenerationProviders
   # 外部へ送る準備ができていない（設定の不足・呼び出し元のアカウントが違う）。何も送っていない
   class NotReady < Error; end
 
+  # 外部から読むものが上限より大きい。読まなかった（待っても小さくならない）
+  class TooLarge < Error; end
+
   # 音声・テキストをAWSへ送る前に、呼び出し元がアプリ用のメンバーアカウントであることを確かめる
   # （TASK-009の完了条件。管理アカウントや組織の外のアカウントにはopt-outやSCPが効かないため）。
   # 比べる値（`FOD_APP_ACCOUNT_ID`）はgitに入れない環境の設定から読み、リポジトリに記録しない。
