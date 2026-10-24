@@ -25,7 +25,8 @@
 - `evaluateStop(deps)`: `<type>/task-*`ブランチなら、検査・未コミット・未push・PRの有無で差し戻す。
 - `--reset`: 状態ファイルを消す。`--pause`: 今のブランチの状態に停止の印を付ける。
 - Stop hookの入力（stdin）には`session_id`がある。BashにはClaude Codeが`CLAUDE_CODE_SESSION_ID`を渡し、
-  同じ値になる（2026-10-24にtranscriptのファイル名と一致することを確認）。
+  同じ値になる（2026-10-24にtranscriptのファイル名と一致することを確認。定期実行と同じ`claude -p`でも、
+  Bashの値・Stop hookの`session_id`・`--output-format json`の`session_id`が一致することを確認）。
 
 ## 5. Scope and Non-goals
 
@@ -38,6 +39,7 @@
 - 参照: [自律実行の仕組み](2026-09-26-autonomous-task-runner.md) Step 3・Step 6（当時の記録として更新しない）
 - 更新: `.claude/skills/run-task/SKILL.md`（品質ゲートの対象が`--reset`したセッションであること、
   人間の指摘への対応の前にも`--reset`すること）
+- 更新: `README.md`（hookの表のStopの対象）
 - 更新: `docs/development/pull-requests.md`「人間がレビューする時機」の4（指摘への対応の前に`--reset`する。
   この手順の正本）
 - 更新: `.claude/skills/pr-review-cycle/SKILL.md`（`/run-task`の外から始めるときと、人間の指摘への対応の前に
@@ -87,7 +89,7 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 
 - 変更: `scripts/claude-quality-gate.mjs`（セッションidの記録と判定）
 - 変更: `scripts/claude-quality-gate.test.mjs`（別セッション・所有セッション・ブランチ移動・id無し・期限切れ・
-  壊れた`ownedAt`・検査中の`--reset`・`--reset`・`--pause`のtest）
+  壊れた`ownedAt`・検査中の`--reset`（idあり・なし）・`--reset`・`--pause`のtest）
 - 変更: `.claude/skills/run-task/SKILL.md`
 - 変更: `.claude/skills/pr-review-cycle/SKILL.md`
 - 変更: `docs/development/pull-requests.md`
@@ -113,13 +115,17 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 
 - Claude Codeが`CLAUDE_CODE_SESSION_ID`を渡さなくなった場合は、従来の挙動（全セッションを差し戻す）に戻る。
   逆に、値はあるがStop hookの`session_id`と一致しなくなった場合（仕様の変更など）は、`/run-task`自身が別の
-  セッションと判定され、24時間ゲートから外れる。一致は2026-10-24に1回確かめただけである。定期実行では
+  セッションと判定され、24時間ゲートから外れる。一致は2026-10-24に対話の起動と`claude -p`で確かめた（§4）。定期実行では
   `systemMessage`を見る人がいないため、PRなしで止まっても気付きにくい（pre-pushとCIの検査は効く）。
 - 持ち主が記録されてから24時間は、同じworktreeで`--reset`せずにタスクブランチで作業するセッション
   （人間が`pr-review-cycle`を回すセッションを含む）に品質ゲートがかからない。`/run-task`の開始・再開、
   `/run-task`の外から始める`pr-review-cycle`、人間の指摘への対応（正本は`pull-requests.md`の「人間がレビューする
   時機」の4）では`--reset`する手順にした（PR #109のレビューで足した）。手順を飛ばしたときは穴が残るが、
   外れたことは画面のメッセージで分かり、CIとpre-pushは効く。
+- `CLAUDE_CODE_SESSION_ID`を偽の値にして`--reset`すれば、そのセッションは自分をゲートから外せる。従来も
+  `--pause`で外せたため新しい穴ではなく、外れたことは止まるたびに画面に出るので、防がない。
+- 期限の24時間は`OWNER_TTL_MS`のほか、README・`run-task`・`pr-review-cycle`・`pull-requests.md`に書いている。
+  期限を変えるときは「24時間」で検索して、すべて直す。
 - `--pause`は持ち主を確かめない。持ち主でないセッションが`--pause`すると、持ち主の状態にも停止の印が付く。
   `--pause`は`/run-task`が止まるときにだけ使う手順で、別のセッションが実行する場面はないため、防がない。
 - `/clear`や再開（`--resume`・`--continue`）でセッションidが変わる場合、`--reset`するまで差し戻されない
@@ -130,12 +136,14 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 
 ### Automated
 
-- `node --test scripts/claude-quality-gate.test.mjs`: 22件成功（追加10件）。
+- `node --test scripts/claude-quality-gate.test.mjs`: 23件成功（追加11件）。
 
 ### Manual
 
 - 一時的な`feat/task-999-*`ブランチで`--reset`を実行し、状態に自分のセッションidが入ることを確認。
 - 同じブランチで`{"session_id":"someone-else"}`をStop hookに渡し、exit 0で`blocks`が0のままであることを確認。
+- 一時的なrepositoryで、Stop hookの入力を保存する設定を置いて`claude -p`を実行し、Bashの
+  `CLAUDE_CODE_SESSION_ID`とStop hookの`session_id`が同じ値であることを確認（2026-10-24）。
 
 ## 15. Definition of Done
 
