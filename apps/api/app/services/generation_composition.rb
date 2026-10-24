@@ -6,6 +6,11 @@
 # - 失敗は種類を分けて`failed`にする（外部AI・生成結果の検証・保存）。全文が残っていれば再試行は生成から行う。
 # - 全文・promptの入出力をログや例外のmessageに入れない。
 module GenerationComposition
+  # Bedrockへ送る全文の上限（文字数）。録音は30分まで（日本語で話すと約12,000字）なので、それより十分に長いものは
+  # 申告より長い音声とみなして送らない（外部AIの費用に上限をつける。Transcribeの費用はrate limitで抑える）。
+  # 初期値で、実測（H4）で見直す
+  TRANSCRIPT_MAX_LENGTH = 20_000
+
   module_function
 
   # 結果はSymbol: :succeeded / :failed / :skipped
@@ -20,8 +25,8 @@ module GenerationComposition
 
   def compose(generation, token, now)
     text = TranscriptionGateway.text_from(GenerationProviders.storage.read(generation.transcript_key).to_s)
-    # 全文が読めなければ、次の再試行は文字起こしから行う
-    return fail(generation, token, "transcription_failed", transcript_ready_at: nil) if text.blank?
+    unusable = reject_transcript(generation, token, text)
+    return unusable if unusable
 
     output = GenerationProviders.composer.compose(transcript: text, date: Dot.date_for(generation.started_at),
                                                   duration_seconds: generation.duration_seconds)
@@ -73,11 +78,22 @@ module GenerationComposition
                                          holding: token, failure_kind: nil, lease_token: nil, lease_expires_at: now)
   end
 
+  # 全文が読めなければ、次の再試行は文字起こしから行う。上限より長ければ、契約の失敗の種類を増やさないよう
+  # 生成できない入力として扱う（契約ではprocessing_failed。再試行しても送らない）。どちらでもなければnil
+  def reject_transcript(generation, token, text)
+    return fail(generation, token, "transcription_failed", transcript_ready_at: nil) if text.blank?
+    return unless text.length > TRANSCRIPT_MAX_LENGTH
+
+    Rails.logger.warn("generation transcript too long: generation_id=#{generation.id} length=#{text.length}")
+    fail(generation, token, "invalid_output")
+  end
+
   # T12
   def fail(generation, token, kind, **attrs)
     Generation.transition(generation.id, from: Generation::GENERATING, to: Generation::FAILED, holding: token,
                                          failure_kind: kind, lease_token: nil, lease_expires_at: nil, **attrs)
     :failed
   end
-  private_class_method :compose, :valid_text?, :persist, :result_saved?, :insert_dot, :succeed, :fail
+  private_class_method :compose, :reject_transcript, :valid_text?, :persist, :result_saved?, :insert_dot, :succeed,
+                       :fail
 end
