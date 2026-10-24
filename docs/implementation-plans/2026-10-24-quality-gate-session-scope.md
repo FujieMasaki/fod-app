@@ -38,6 +38,10 @@
 - 参照: [自律実行の仕組み](2026-09-26-autonomous-task-runner.md) Step 3・Step 6（当時の記録として更新しない）
 - 更新: `.claude/skills/run-task/SKILL.md`（品質ゲートの対象が`--reset`したセッションであること、
   人間の指摘への対応の前にも`--reset`すること）
+- 更新: `docs/development/pull-requests.md`「人間がレビューする時機」の4（指摘への対応の前に`--reset`する。
+  この手順の正本）
+- 更新: `.claude/skills/pr-review-cycle/SKILL.md`（`/run-task`の外から始めるときと、人間の指摘への対応の前に
+  `--reset`する）
 
 ## 7. Proposed Approach
 
@@ -47,7 +51,9 @@
    記録したidを出力する（transcriptで追えるように）。`--pause`は持ち主を変えない（変えるのは`--reset`だけ）。
    どちらもtestできるよう`resetState`・`pauseState`として切り出す。
 3. `evaluateStop(deps, sessionId, now)`は、状態に記録されたidと入力の`session_id`が両方あって異なり、
-   持ち主になってから24時間（`OWNER_TTL_MS`）以内なら、検査も状態の更新もせずに終了を許す。
+   持ち主になってから24時間（`OWNER_TTL_MS`）以内なら、検査も状態の更新もせずに終了を許す。そのとき、
+   持ち主のidと時刻を画面に出す（`--reset`を忘れて外れたセッションが気付けるように）。`ownedAt`が読めない、
+   または未来の時刻なら、期限切れとして扱う（壊れた記録で24時間より長く外れ続けないように）。
 4. ブランチが変わって状態を初期化するときも、記録したidを引き継ぐ（PRを分けたタスクはブランチを移るため）。
 5. idが記録されていない状態（`--reset`前や、idのない環境）、入力に`session_id`がない場合、持ち主が24時間を
    過ぎた場合は、従来どおりどのセッションも差し戻す。
@@ -56,7 +62,8 @@
 
 - `--reset`は`/run-task`の開始と再開で必ず実行するため、「誰のゲートか」を宣言する場所として自然。
 - 判定はhookの入力とBashの環境変数だけで行え、追加のhookや設定が要らない。
-- idがないときは従来どおり差し戻すため、判定できない場合に品質ゲートが緩むことはない。
+- idがないときは従来どおり差し戻すため、idが分からないことで品質ゲートが緩むことはない（idが両方あって
+  異なる場合は、次のとおり外れる）。
 - 記録がある間（24時間）は、記録と異なるセッションを品質ゲートの対象から外す。これは意図した挙動で、
   `/run-task`以外のセッションも含む。持ち主が終わった後に残った記録で、後から始めたセッションがいつまでも
   外れ続けないよう、期限を設ける。`/run-task`は1日のうちに終わる前提で、定期実行も毎朝1回起動する。
@@ -77,8 +84,10 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 
 - 変更: `scripts/claude-quality-gate.mjs`（セッションidの記録と判定）
 - 変更: `scripts/claude-quality-gate.test.mjs`（別セッション・所有セッション・ブランチ移動・id無し・期限切れ・
-  `--reset`・`--pause`のtest）
+  壊れた`ownedAt`・`--reset`・`--pause`のtest）
 - 変更: `.claude/skills/run-task/SKILL.md`
+- 変更: `.claude/skills/pr-review-cycle/SKILL.md`
+- 変更: `docs/development/pull-requests.md`
 - 変更: `README.md`（hookの表のStopの対象）
 - 新規: 本Plan
 
@@ -98,8 +107,12 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 
 - Claude Codeが`CLAUDE_CODE_SESSION_ID`を渡さなくなった場合は、従来の挙動（全セッションを差し戻す）に戻る。
 - 持ち主が記録されてから24時間は、同じworktreeで`--reset`せずにタスクブランチで作業するセッション
-  （人間が`pr-review-cycle`を回すセッションを含む）に品質ゲートがかからない。`/run-task`の開始・再開・人間の
-  指摘への対応では`--reset`するため（指摘への対応はPR #109のレビューで足した）、その流れには影響しない。
+  （人間が`pr-review-cycle`を回すセッションを含む）に品質ゲートがかからない。`/run-task`の開始・再開、
+  `/run-task`の外から始める`pr-review-cycle`、人間の指摘への対応（正本は`pull-requests.md`の「人間がレビューする
+  時機」の4）では`--reset`する手順にした（PR #109のレビューで足した）。手順を飛ばしたときは穴が残るが、
+  外れたことは画面のメッセージで分かり、CIとpre-pushは効く。
+- `--pause`は持ち主を確かめない。持ち主でないセッションが`--pause`すると、持ち主の状態にも停止の印が付く。
+  `--pause`は`/run-task`が止まるときにだけ使う手順で、別のセッションが実行する場面はないため、防がない。
 - `/clear`や再開（`--resume`・`--continue`）でセッションidが変わる場合、`--reset`するまで差し戻されない
   （idが変わるかは未確認）。止まった後の再開で`--reset`する手順は、skillの「止まるときは」「修正上限に
   達したとき」に既にある。
@@ -108,7 +121,7 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 
 ### Automated
 
-- `node --test scripts/claude-quality-gate.test.mjs`: 20件成功（追加8件）。
+- `node --test scripts/claude-quality-gate.test.mjs`: 21件成功（追加9件）。
 
 ### Manual
 
