@@ -62,11 +62,16 @@ module GenerationCancellation
     end
     :accepted
   rescue GenerationGate::Denied => e
-    return :account_deletion_in_progress if e.reason == :account_deletion_in_progress
-    # 退会の受理が先にこの記録を後片付けへ回していると、認可より先に状態の確認で拒否される
-    return :account_deletion_in_progress if User.find_by(id: generation.user_id)&.deletion_requested?
+    withdrawing?(generation, e) ? :account_deletion_in_progress : answer_lost_race(generation)
+  end
 
-    # 成功の確定（T11）や期限の到来が先に勝った場合。改めて状態を見て答える
+  # 退会の受理が先にこの記録を後片付けへ回していると、認可より先に状態の確認で拒否される
+  def withdrawing?(generation, denial)
+    denial.reason == :account_deletion_in_progress || User.find_by(id: generation.user_id)&.deletion_requested?
+  end
+
+  # 成功の確定（T11）や期限の到来が先に勝った場合。改めて状態を見て答える
+  def answer_lost_race(generation)
     current = Generation.find_by(id: generation.id)
     return :not_found unless current
     return :generation_completed if current.state == Generation::SUCCEEDED_CLEANUP_PENDING
@@ -81,5 +86,5 @@ module GenerationCancellation
                           .update_all(cancel_reason: "canceled", updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
     relabeled == 1 ? :accepted : :not_found
   end
-  private_class_method :cancel_record, :request_by_user, :relabel_expired
+  private_class_method :cancel_record, :request_by_user, :withdrawing?, :answer_lost_race, :relabel_expired
 end
