@@ -261,6 +261,25 @@ test("a --reset without an id during the checks is not undone", () => {
   assert.equal(state(), null);
 });
 
+test("a --reset during the checks of an ownerless state is not undone", () => {
+  const { deps, state } = fakeDeps({
+    state: { ...initialState("feat/task-008-dot-history"), blocks: 5 },
+    worktreeStatus: () => ({ dirty: true, unpushed: true }),
+  });
+  deps.run = () => {
+    resetState(deps, undefined);
+    return { ok: true, output: "" };
+  };
+  assert.match(evaluateStop(deps, "run-task", soon).reason, /uncommitted/);
+  assert.equal(state(), null);
+});
+
+test("--reset reports an owner it replaced within the day", () => {
+  const { deps } = fakeDeps({ state: initialState("feat/task-008-dot-history", "run-task", ownedAt) });
+  assert.deepEqual(resetState(deps, "review", soon), { sessionId: "run-task", ownedAt });
+  assert.equal(resetState(deps, "review", soon), null);
+});
+
 test("--reset records the session as the owner, or clears the state without an id", () => {
   const stale = { ...initialState("feat/task-008-dot-history", "old", ownedAt), blocks: 12, gaveUp: true };
   const withId = fakeDeps({ state: stale });

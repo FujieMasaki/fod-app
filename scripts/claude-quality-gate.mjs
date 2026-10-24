@@ -83,7 +83,8 @@ export function evaluateStop(deps, sessionId, now = Date.now()) {
     // The checks can take minutes. If --reset ran meanwhile, its state wins: writing
     // ours back would erase the new owner, and a new owner elsewhere lets this session go.
     const current = deps.readState();
-    if ((current?.sessionId ?? null) !== owner.sessionId || (current?.ownedAt ?? null) !== owner.ownedAt) {
+    const replaced = saved !== null && current === null;
+    if (replaced || (current?.sessionId ?? null) !== owner.sessionId || (current?.ownedAt ?? null) !== owner.ownedAt) {
       if (current?.sessionId && sessionId && current.sessionId !== sessionId) {
         return allow(`Quality gate skipped: owned by session ${current.sessionId} since ${current.ownedAt}`);
       }
@@ -159,9 +160,14 @@ export function evaluateStop(deps, sessionId, now = Date.now()) {
 }
 
 // Without a session id the state is removed, so every session is held to the gate as before.
+// Returns the owner it replaced while that owner was still within its day, so the
+// session that took over can say so.
 export function resetState(deps, sessionId, now = Date.now()) {
+  const saved = deps.readState();
+  const replaced = ownedByAnother(saved, sessionId ?? "(unknown)", now) ? saved : null;
   if (sessionId) deps.writeState(initialState(deps.branch(), sessionId, new Date(now).toISOString()));
   else deps.removeState();
+  return replaced && { sessionId: replaced.sessionId, ownedAt: replaced.ownedAt };
 }
 
 // Pausing never changes the owner; only --reset does.
@@ -243,8 +249,9 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     const deps = gitDeps(process.cwd());
     const sessionId = process.env.CLAUDE_CODE_SESSION_ID;
     if (flag === "--reset") {
-      resetState(deps, sessionId);
+      const replaced = resetState(deps, sessionId);
       console.log(`/run-task state reset for session ${sessionId ?? "(unknown)"}`);
+      if (replaced) console.log(`replaced owner ${replaced.sessionId} (since ${replaced.ownedAt})`);
     } else {
       const reason = rest.join(" ").trim();
       if (!reason) throw new Error('Usage: --pause "<reason>"');
