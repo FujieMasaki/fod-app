@@ -199,6 +199,16 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
       end
     end
 
+    it "全文が上限より長ければ（申告より長い音声）、Bedrockへ送らずに失敗にする" do
+      generation = generating
+      complete_transcription(generation, "あ" * (GenerationComposition::TRANSCRIPT_MAX_LENGTH + 1))
+
+      GenerationComposition.perform(generation.id)
+
+      expect(generation.reload).to have_attributes(state: "failed", failure_kind: "invalid_output")
+      expect(composer.calls).to be_empty
+    end
+
     it "保存の失敗。未保存なのに保存済みと返さない" do
       generation = generating
       allow(Dot).to receive(:new).and_raise(ActiveRecord::StatementInvalid)
