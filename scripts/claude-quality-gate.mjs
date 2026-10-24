@@ -45,15 +45,23 @@ function tail(output) {
 const allow = (message) => ({ block: false, message });
 const block = (reason) => ({ block: true, reason });
 
+// The state belongs to the session that ran --reset, so another session sharing
+// the worktree is not held to that task's commits or its continuation count.
+export function initialState(branch, sessionId) {
+  return { branch, consecutiveFailures: 0, blocks: 0, gaveUp: false, paused: null, sessionId: sessionId ?? null };
+}
+
 // deps: branch(), changedPaths(), run(check), worktreeStatus(), pullRequest(),
 // readState(), writeState(state). Kept injectable so the decisions are testable.
-export function evaluateStop(deps) {
+export function evaluateStop(deps, sessionId) {
   const branch = deps.branch();
   if (!taskBranchPattern.test(branch ?? "")) return allow();
 
   const saved = deps.readState();
-  const state =
-    saved?.branch === branch ? saved : { branch, consecutiveFailures: 0, blocks: 0, gaveUp: false, paused: null };
+  // Leave the state untouched so the owning session's counts stay its own.
+  if (saved?.sessionId && sessionId && saved.sessionId !== sessionId) return allow();
+  // Switching branches restarts the counts but keeps the owner.
+  const state = saved?.branch === branch ? saved : initialState(branch, saved?.sessionId);
 
   const finish = (decision) => {
     if (decision.block) state.blocks += 1;
@@ -190,23 +198,26 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
 
   if (flag === "--pause" || flag === "--reset") {
     // Called by Claude from the task worktree: pause for a human decision, or
-    // clear the runner state when /run-task starts or resumes.
+    // clear the runner state when /run-task starts or resumes. Claude Code passes
+    // the session id to Bash, which is the same id the Stop hook receives.
     const deps = gitDeps(process.cwd());
+    const sessionId = process.env.CLAUDE_CODE_SESSION_ID;
     if (flag === "--reset") {
-      rmSync(deps.stateFile, { force: true });
+      if (sessionId) deps.writeState(initialState(deps.branch(), sessionId));
+      else rmSync(deps.stateFile, { force: true });
       console.log("/run-task state cleared");
     } else {
       const reason = rest.join(" ").trim();
       if (!reason) throw new Error('Usage: --pause "<reason>"');
       const branch = deps.branch();
       const saved = deps.readState();
-      const state = saved?.branch === branch ? saved : { branch, consecutiveFailures: 0, blocks: 0, gaveUp: false };
-      deps.writeState({ ...state, paused: reason });
+      const state = saved?.branch === branch ? saved : initialState(branch, saved?.sessionId);
+      deps.writeState({ ...state, sessionId: sessionId ?? state.sessionId, paused: reason });
       console.log(`/run-task paused: ${reason}`);
     }
   } else {
     const input = readStdin();
-    const decision = evaluateStop(gitDeps(input.cwd ?? process.cwd()));
+    const decision = evaluateStop(gitDeps(input.cwd ?? process.cwd()), input.session_id);
     if (decision.block) {
       process.stderr.write(`${decision.reason}\n`);
       process.exitCode = 2;

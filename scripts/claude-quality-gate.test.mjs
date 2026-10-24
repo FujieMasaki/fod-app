@@ -4,6 +4,7 @@ import {
   branchTypes,
   checksFor,
   evaluateStop,
+  initialState,
   MAX_BLOCKS,
   MAX_CONSECUTIVE_FAILURES,
   taskBranchPattern,
@@ -149,4 +150,42 @@ test("state from another branch is ignored", () => {
   assert.equal(evaluateStop(deps).block, true);
   assert.equal(state().branch, "feat/task-008-dot-history");
   assert.equal(state().consecutiveFailures, 1);
+});
+
+test("another session sharing the worktree is let go without touching the state", () => {
+  const owned = { ...initialState("feat/task-008-dot-history", "run-task"), blocks: 3 };
+  const { deps, runs, state } = fakeDeps({
+    state: owned,
+    worktreeStatus: () => ({ dirty: true, unpushed: true }),
+  });
+  assert.deepEqual(evaluateStop(deps, "other"), { block: false, message: undefined });
+  assert.deepEqual(runs, []);
+  // The owner's continuation count is not used up by someone else's stops.
+  assert.equal(state().blocks, 3);
+});
+
+test("the session that ran --reset is still held to the gate", () => {
+  const { deps, state } = fakeDeps({
+    state: initialState("feat/task-008-dot-history", "run-task"),
+    worktreeStatus: () => ({ dirty: true, unpushed: true }),
+  });
+  assert.match(evaluateStop(deps, "run-task").reason, /uncommitted/);
+  assert.equal(state().blocks, 1);
+});
+
+test("keeps the owner when the task moves to another branch", () => {
+  const { deps, state } = fakeDeps({
+    state: { ...initialState("fix/task-006-identity", "run-task"), blocks: 5 },
+    worktreeStatus: () => ({ dirty: true, unpushed: true }),
+  });
+  assert.equal(evaluateStop(deps, "other").block, false);
+  assert.equal(evaluateStop(deps, "run-task").block, true);
+  assert.equal(state().branch, "feat/task-008-dot-history");
+  assert.equal(state().sessionId, "run-task");
+  assert.equal(state().blocks, 1);
+});
+
+test("without a recorded owner, every session is held to the gate as before", () => {
+  const { deps } = fakeDeps({ worktreeStatus: () => ({ dirty: true, unpushed: true }) });
+  assert.match(evaluateStop(deps, "any").reason, /uncommitted/);
 });
