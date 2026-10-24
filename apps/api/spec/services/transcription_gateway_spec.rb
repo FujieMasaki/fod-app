@@ -81,6 +81,22 @@ RSpec.describe TranscriptionGateway do
     expect { gateway.delete("id-1") }.to raise_error(GenerationProviders::Error)
   end
 
+  it "BadRequestの後の一覧が失敗しても外部の例外を包み、BadRequestをcauseに残さない" do
+    client.stub_responses(:get_transcription_job, "BadRequestException")
+    listed = { transcription_job_summaries: [{ transcription_job_name: "id-1" }] }
+    client.stub_responses(:list_transcription_jobs, ["LimitExceededException", listed])
+
+    expect { gateway.status("id-1") }.to raise_error(GenerationProviders::Error) { expect(it.cause).to be_nil }
+    expect { gateway.status("id-1") }.to raise_error(GenerationProviders::Error) { expect(it.cause).to be_nil }
+  end
+
+  it "削除がBadRequestで非終端と分かったときも、BadRequestをcauseに残さない" do
+    client.stub_responses(:delete_transcription_job, "BadRequestException")
+    client.stub_responses(:get_transcription_job, transcription_job: { transcription_job_status: "IN_PROGRESS" })
+
+    expect { gateway.delete("id-1") }.to raise_error(TranscriptionGateway::NotTerminal) { expect(it.cause).to be_nil }
+  end
+
   it "書き出された結果から全文を取り出す。形が違えばnil" do
     json = { results: { transcripts: [{ transcript: "今日は散歩した" }] } }.to_json
 
