@@ -54,6 +54,29 @@ RSpec.describe GenerationCancellation do
     expect(generation.reload.state).to eq("succeeded_cleanup_pending")
   end
 
+  it "Dotを探した後に、保存から後片付けまで終えて記録が消えていても、完了を返す" do
+    generation = create(:generation, user:, state: "generating")
+    allow(user.generations).to receive(:find_by).and_wrap_original do |original, **args|
+      create(:dot, user:, generation_id: generation.id)
+      generation.destroy!
+      original.call(**args)
+    end
+    allow(user).to receive(:generations).and_return(user.generations)
+
+    expect(cancel(generation.id)).to eq(:generation_completed)
+  end
+
+  it "取り消しが競合に負けた後に記録が消えていても、保存済みのDotがあれば完了を返す" do
+    generation = create(:generation, user:, state: "generating")
+    allow(GenerationGate).to receive(:enter).and_wrap_original do |original, **args, &block|
+      create(:dot, user:, generation_id: generation.id)
+      generation.destroy!
+      original.call(**args, &block)
+    end
+
+    expect(cancel(generation.id)).to eq(:generation_completed)
+  end
+
   it "退会の受理と並んだときは、利用者の行をlockした後に確かめて受け付けない" do
     generation = create(:generation, user:, state: "failed")
     allow(GenerationGate).to receive(:enter).and_wrap_original do |original, **args, &block|
