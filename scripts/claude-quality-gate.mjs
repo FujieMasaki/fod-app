@@ -11,6 +11,9 @@ import { classifyPaths } from "./ci-changes.mjs";
 
 export const MAX_CONSECUTIVE_FAILURES = 5;
 export const MAX_BLOCKS = 40;
+// A /run-task runs within a day. After that the recorded owner is treated as
+// gone, so a leftover state does not keep every later session out of the gate.
+export const OWNER_TTL_MS = 24 * 60 * 60 * 1000;
 const OUTPUT_TAIL_LINES = 60;
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -45,17 +48,48 @@ function tail(output) {
 const allow = (message) => ({ block: false, message });
 const block = (reason) => ({ block: true, reason });
 
+// The state belongs to the session that ran --reset, so another session sharing
+// the worktree is not held to that task's commits or its continuation count.
+export function initialState(branch, sessionId, ownedAt) {
+  const owner = sessionId ? { sessionId, ownedAt: ownedAt ?? null } : { sessionId: null, ownedAt: null };
+  return { branch, consecutiveFailures: 0, blocks: 0, gaveUp: false, paused: null, ...owner };
+}
+
+// An unreadable or future ownedAt counts as expired, so a broken record never
+// keeps other sessions out of the gate for longer than a day.
+function ownedByAnother(saved, sessionId, now) {
+  if (!saved?.sessionId || !sessionId || saved.sessionId === sessionId) return false;
+  const ownedAt = Date.parse(saved.ownedAt);
+  return Number.isFinite(ownedAt) && ownedAt <= now && now - ownedAt < OWNER_TTL_MS;
+}
+
 // deps: branch(), changedPaths(), run(check), worktreeStatus(), pullRequest(),
-// readState(), writeState(state). Kept injectable so the decisions are testable.
-export function evaluateStop(deps) {
+// readState(), writeState(state), removeState(). Kept injectable so the decisions are testable.
+export function evaluateStop(deps, sessionId, now = Date.now()) {
   const branch = deps.branch();
   if (!taskBranchPattern.test(branch ?? "")) return allow();
 
   const saved = deps.readState();
-  const state =
-    saved?.branch === branch ? saved : { branch, consecutiveFailures: 0, blocks: 0, gaveUp: false, paused: null };
+  // Leave the state untouched so the owning session's counts stay its own. Without
+  // either id, or once the owner has expired, every session is held to the gate.
+  if (ownedByAnother(saved, sessionId, now)) {
+    return allow(`Quality gate skipped: owned by session ${saved.sessionId} since ${saved.ownedAt}`);
+  }
+  // Switching branches restarts the counts but keeps the owner.
+  const state = saved?.branch === branch ? saved : initialState(branch, saved?.sessionId, saved?.ownedAt);
 
+  const owner = { sessionId: saved?.sessionId ?? null, ownedAt: saved?.ownedAt ?? null };
   const finish = (decision) => {
+    // The checks can take minutes. If --reset ran meanwhile, its state wins: writing
+    // ours back would erase the new owner, and a new owner elsewhere lets this session go.
+    const current = deps.readState();
+    const replaced = saved !== null && current === null;
+    if (replaced || (current?.sessionId ?? null) !== owner.sessionId || (current?.ownedAt ?? null) !== owner.ownedAt) {
+      if (current?.sessionId && sessionId && current.sessionId !== sessionId) {
+        return allow(`Quality gate skipped: owned by session ${current.sessionId} since ${current.ownedAt}`);
+      }
+      return decision;
+    }
     if (decision.block) state.blocks += 1;
     deps.writeState(state);
     return decision;
@@ -125,6 +159,25 @@ export function evaluateStop(deps) {
   return finish(allow());
 }
 
+// Without a session id the state is removed, so every session is held to the gate as before.
+// Returns the owner it replaced while that owner was still within its day, so the
+// session that took over can say so.
+export function resetState(deps, sessionId, now = Date.now()) {
+  const saved = deps.readState();
+  const replaced = ownedByAnother(saved, sessionId ?? "(unknown)", now) ? saved : null;
+  if (sessionId) deps.writeState(initialState(deps.branch(), sessionId, new Date(now).toISOString()));
+  else deps.removeState();
+  return replaced && { sessionId: replaced.sessionId, ownedAt: replaced.ownedAt };
+}
+
+// Pausing never changes the owner; only --reset does.
+export function pauseState(deps, reason) {
+  const branch = deps.branch();
+  const saved = deps.readState();
+  const state = saved?.branch === branch ? saved : initialState(branch, saved?.sessionId, saved?.ownedAt);
+  deps.writeState({ ...state, paused: reason });
+}
+
 function sh(command, args, cwd) {
   const result = spawnSync(command, args, { cwd, encoding: "utf8", timeout: COMMAND_TIMEOUT_MS });
   const output = `${result.stdout ?? ""}${result.stderr ?? ""}${result.error ? String(result.error) : ""}`;
@@ -174,6 +227,7 @@ export function gitDeps(cwd) {
       }
     },
     writeState: (state) => writeFileSync(stateFile, `${JSON.stringify(state, null, 2)}\n`),
+    removeState: () => rmSync(stateFile, { force: true }),
   };
 }
 
@@ -190,23 +244,23 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
 
   if (flag === "--pause" || flag === "--reset") {
     // Called by Claude from the task worktree: pause for a human decision, or
-    // clear the runner state when /run-task starts or resumes.
+    // reset the runner state when /run-task starts or resumes. Claude Code passes
+    // the session id to Bash, which is the same id the Stop hook receives.
     const deps = gitDeps(process.cwd());
+    const sessionId = process.env.CLAUDE_CODE_SESSION_ID;
     if (flag === "--reset") {
-      rmSync(deps.stateFile, { force: true });
-      console.log("/run-task state cleared");
+      const replaced = resetState(deps, sessionId);
+      console.log(`/run-task state reset for session ${sessionId ?? "(unknown)"}`);
+      if (replaced) console.log(`replaced owner ${replaced.sessionId} (since ${replaced.ownedAt})`);
     } else {
       const reason = rest.join(" ").trim();
       if (!reason) throw new Error('Usage: --pause "<reason>"');
-      const branch = deps.branch();
-      const saved = deps.readState();
-      const state = saved?.branch === branch ? saved : { branch, consecutiveFailures: 0, blocks: 0, gaveUp: false };
-      deps.writeState({ ...state, paused: reason });
+      pauseState(deps, reason);
       console.log(`/run-task paused: ${reason}`);
     }
   } else {
     const input = readStdin();
-    const decision = evaluateStop(gitDeps(input.cwd ?? process.cwd()));
+    const decision = evaluateStop(gitDeps(input.cwd ?? process.cwd()), input.session_id);
     if (decision.block) {
       process.stderr.write(`${decision.reason}\n`);
       process.exitCode = 2;

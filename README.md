@@ -169,7 +169,7 @@ Production BuildはローカルでのPushを遅くしないため、CI側で実�
 
 | Hook | 対象 | 内容 |
 | --- | --- | --- |
-| Stop | `<type>/task-*` ブランチ | CI相当の検査（変更範囲はCIと同じ判定。サブのPRのブランチではCIがPRのbaseとの差分、hookが`origin/main`との差分を見るため、hookの方が広い）、コミット・push・PRの有無を確かめ、満たすまで作業に差し戻す |
+| Stop | `<type>/task-*` ブランチ。`--reset`したセッションの記録があれば、その後24時間はそのセッションだけ | CI相当の検査（変更範囲はCIと同じ判定。サブのPRのブランチではCIがPRのbaseとの差分、hookが`origin/main`との差分を見るため、hookの方が広い）、コミット・push・PRの有無を確かめ、満たすまで作業に差し戻す |
 | PreToolUse | すべて | `--no-verify`、force push、mainへのpush、送信先を明示しないpush、`gh pr merge`、帰属トレーラーを拒否する |
 | PostToolUse | `<type>/task-*` ブランチ | 編集したファイルだけESLint / RuboCopを実行し、結果をClaudeに返す |
 
