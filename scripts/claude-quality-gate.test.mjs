@@ -9,6 +9,7 @@ import {
   resetState,
   MAX_BLOCKS,
   MAX_CONSECUTIVE_FAILURES,
+  OWNER_TTL_MS,
   taskBranchPattern,
 } from "./claude-quality-gate.mjs";
 
@@ -157,13 +158,16 @@ test("state from another branch is ignored", () => {
   assert.equal(state().consecutiveFailures, 1);
 });
 
+const ownedAt = "2026-10-24T00:00:00.000Z";
+const soon = Date.parse(ownedAt) + 60 * 1000;
+
 test("another session sharing the worktree is let go without touching the state", () => {
-  const owned = { ...initialState("feat/task-008-dot-history", "run-task"), blocks: 3 };
+  const owned = { ...initialState("feat/task-008-dot-history", "run-task", ownedAt), blocks: 3 };
   const { deps, runs, state } = fakeDeps({
     state: owned,
     worktreeStatus: () => ({ dirty: true, unpushed: true }),
   });
-  assert.deepEqual(evaluateStop(deps, "other"), { block: false, message: undefined });
+  assert.deepEqual(evaluateStop(deps, "other", soon), { block: false, message: undefined });
   assert.deepEqual(runs, []);
   // The owner's continuation count is not used up by someone else's stops.
   assert.equal(state().blocks, 3);
@@ -171,20 +175,20 @@ test("another session sharing the worktree is let go without touching the state"
 
 test("the session that ran --reset is still held to the gate", () => {
   const { deps, state } = fakeDeps({
-    state: initialState("feat/task-008-dot-history", "run-task"),
+    state: initialState("feat/task-008-dot-history", "run-task", ownedAt),
     worktreeStatus: () => ({ dirty: true, unpushed: true }),
   });
-  assert.match(evaluateStop(deps, "run-task").reason, /uncommitted/);
+  assert.match(evaluateStop(deps, "run-task", soon).reason, /uncommitted/);
   assert.equal(state().blocks, 1);
 });
 
 test("keeps the owner when the task moves to another branch", () => {
   const { deps, state } = fakeDeps({
-    state: { ...initialState("fix/task-006-identity", "run-task"), blocks: 5 },
+    state: { ...initialState("fix/task-006-identity", "run-task", ownedAt), blocks: 5 },
     worktreeStatus: () => ({ dirty: true, unpushed: true }),
   });
-  assert.equal(evaluateStop(deps, "other").block, false);
-  assert.equal(evaluateStop(deps, "run-task").block, true);
+  assert.equal(evaluateStop(deps, "other", soon).block, false);
+  assert.equal(evaluateStop(deps, "run-task", soon).block, true);
   assert.equal(state().branch, "feat/task-008-dot-history");
   assert.equal(state().sessionId, "run-task");
   assert.equal(state().blocks, 1);
@@ -195,25 +199,40 @@ test("without a recorded owner, every session is held to the gate as before", ()
   assert.match(evaluateStop(deps, "any").reason, /uncommitted/);
 });
 
+test("an owner recorded but no session id in the hook input still blocks", () => {
+  const { deps } = fakeDeps({
+    state: initialState("feat/task-008-dot-history", "run-task", ownedAt),
+    worktreeStatus: () => ({ dirty: true, unpushed: true }),
+  });
+  assert.match(evaluateStop(deps, undefined, soon).reason, /uncommitted/);
+});
+
+test("an expired owner no longer lets other sessions go", () => {
+  const { deps } = fakeDeps({
+    state: initialState("feat/task-008-dot-history", "run-task", ownedAt),
+    worktreeStatus: () => ({ dirty: true, unpushed: true }),
+  });
+  assert.match(evaluateStop(deps, "other", Date.parse(ownedAt) + OWNER_TTL_MS).reason, /uncommitted/);
+});
+
 test("--reset records the session as the owner, or clears the state without an id", () => {
-  const stale = { ...initialState("feat/task-008-dot-history", "old"), blocks: 12, gaveUp: true };
+  const stale = { ...initialState("feat/task-008-dot-history", "old", ownedAt), blocks: 12, gaveUp: true };
   const withId = fakeDeps({ state: stale });
-  resetState(withId.deps, "run-task");
-  assert.deepEqual(withId.state(), initialState("feat/task-008-dot-history", "run-task"));
+  resetState(withId.deps, "run-task", Date.parse(ownedAt));
+  assert.deepEqual(withId.state(), initialState("feat/task-008-dot-history", "run-task", ownedAt));
 
   const withoutId = fakeDeps({ state: stale });
   resetState(withoutId.deps, undefined);
   assert.equal(withoutId.state(), null);
 });
 
-test("--pause keeps the counts and records the pausing session", () => {
-  const { deps, state } = fakeDeps({ state: { ...initialState("feat/task-008-dot-history", "run-task"), blocks: 2 } });
-  pauseState(deps, "run-task", "仕様の確認");
+test("--pause keeps the counts and the owner", () => {
+  const { deps, state } = fakeDeps({
+    state: { ...initialState("feat/task-008-dot-history", "run-task", ownedAt), blocks: 2 },
+  });
+  pauseState(deps, "仕様の確認");
   assert.equal(state().paused, "仕様の確認");
   assert.equal(state().blocks, 2);
   assert.equal(state().sessionId, "run-task");
-
-  // Without an id, the recorded owner stays.
-  pauseState(deps, undefined, "再確認");
-  assert.equal(state().sessionId, "run-task");
+  assert.equal(state().ownedAt, ownedAt);
 });

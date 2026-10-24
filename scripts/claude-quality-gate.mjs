@@ -11,6 +11,9 @@ import { classifyPaths } from "./ci-changes.mjs";
 
 export const MAX_CONSECUTIVE_FAILURES = 5;
 export const MAX_BLOCKS = 40;
+// A /run-task runs within a day. After that the recorded owner is treated as
+// gone, so a leftover state does not keep every later session out of the gate.
+export const OWNER_TTL_MS = 24 * 60 * 60 * 1000;
 const OUTPUT_TAIL_LINES = 60;
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -47,21 +50,28 @@ const block = (reason) => ({ block: true, reason });
 
 // The state belongs to the session that ran --reset, so another session sharing
 // the worktree is not held to that task's commits or its continuation count.
-export function initialState(branch, sessionId) {
-  return { branch, consecutiveFailures: 0, blocks: 0, gaveUp: false, paused: null, sessionId: sessionId ?? null };
+export function initialState(branch, sessionId, ownedAt) {
+  const owner = sessionId ? { sessionId, ownedAt: ownedAt ?? null } : { sessionId: null, ownedAt: null };
+  return { branch, consecutiveFailures: 0, blocks: 0, gaveUp: false, paused: null, ...owner };
+}
+
+function ownedByAnother(saved, sessionId, now) {
+  if (!saved?.sessionId || !sessionId || saved.sessionId === sessionId) return false;
+  return now - Date.parse(saved.ownedAt) < OWNER_TTL_MS;
 }
 
 // deps: branch(), changedPaths(), run(check), worktreeStatus(), pullRequest(),
 // readState(), writeState(state), removeState(). Kept injectable so the decisions are testable.
-export function evaluateStop(deps, sessionId) {
+export function evaluateStop(deps, sessionId, now = Date.now()) {
   const branch = deps.branch();
   if (!taskBranchPattern.test(branch ?? "")) return allow();
 
   const saved = deps.readState();
-  // Leave the state untouched so the owning session's counts stay its own.
-  if (saved?.sessionId && sessionId && saved.sessionId !== sessionId) return allow();
+  // Leave the state untouched so the owning session's counts stay its own. Without
+  // either id, or once the owner has expired, every session is held to the gate.
+  if (ownedByAnother(saved, sessionId, now)) return allow();
   // Switching branches restarts the counts but keeps the owner.
-  const state = saved?.branch === branch ? saved : initialState(branch, saved?.sessionId);
+  const state = saved?.branch === branch ? saved : initialState(branch, saved?.sessionId, saved?.ownedAt);
 
   const finish = (decision) => {
     if (decision.block) state.blocks += 1;
@@ -134,16 +144,17 @@ export function evaluateStop(deps, sessionId) {
 }
 
 // Without a session id the state is removed, so every session is held to the gate as before.
-export function resetState(deps, sessionId) {
-  if (sessionId) deps.writeState(initialState(deps.branch(), sessionId));
+export function resetState(deps, sessionId, now = Date.now()) {
+  if (sessionId) deps.writeState(initialState(deps.branch(), sessionId, new Date(now).toISOString()));
   else deps.removeState();
 }
 
-export function pauseState(deps, sessionId, reason) {
+// Pausing never changes the owner; only --reset does.
+export function pauseState(deps, reason) {
   const branch = deps.branch();
   const saved = deps.readState();
-  const state = saved?.branch === branch ? saved : initialState(branch, saved?.sessionId);
-  deps.writeState({ ...state, sessionId: sessionId ?? state.sessionId, paused: reason });
+  const state = saved?.branch === branch ? saved : initialState(branch, saved?.sessionId, saved?.ownedAt);
+  deps.writeState({ ...state, paused: reason });
 }
 
 function sh(command, args, cwd) {
@@ -222,7 +233,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     } else {
       const reason = rest.join(" ").trim();
       if (!reason) throw new Error('Usage: --pause "<reason>"');
-      pauseState(deps, sessionId, reason);
+      pauseState(deps, reason);
       console.log(`/run-task paused: ${reason}`);
     }
   } else {
