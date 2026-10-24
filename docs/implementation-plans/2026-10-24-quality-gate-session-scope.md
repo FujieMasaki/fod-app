@@ -44,6 +44,7 @@
   この手順の正本）
 - 更新: `.claude/skills/pr-review-cycle/SKILL.md`（`/run-task`の外から始めるときと、人間の指摘への対応の前に
   `--reset`する）
+- 更新: `docs/code-review/frontend/README.md`（自動化の行。レビューで見つかった問題の再発防止）
 
 ## 7. Proposed Approach
 
@@ -126,7 +127,7 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
   外れたことは画面のメッセージで分かり、CIとpre-pushは効く。
 - `CLAUDE_CODE_SESSION_ID`を偽の値にして`--reset`すれば、そのセッションは自分をゲートから外せる。従来も
   `--pause`で外せたため新しい穴ではなく、外れたことは止まるたびに画面に出るので、防がない。
-- 期限の24時間は`OWNER_TTL_MS`（とそのコメント）のほか、READMEのhookの表・`run-task`の冒頭・`pull-requests.md`の
+- 期限の24時間は`OWNER_TTL_MS`（とそのコメント）のほか、READMEのhookの表・`run-task`と`pr-review-cycle`の冒頭・`pull-requests.md`の
   2か所（「マージ」の3と「人間がレビューする時機」の4）に書いている。
   期限を変えるときは「24時間」で検索して、すべて直す。
 - `--reset`は、24時間以内の別の持ち主も上書きする（人間の指摘に対応するセッションが引き継ぐため）。元の持ち主は
