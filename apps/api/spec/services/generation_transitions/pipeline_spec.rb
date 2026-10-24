@@ -104,6 +104,17 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
       expect(GenerationTranscriptionCheckJob).to have_been_enqueued.with(generation.id)
     end
 
+    it "文字起こしの開始が一時的に失敗しても失敗にせず、次の確認で同じ名前のjobを始め直す" do
+      generation = create(:generation, user:, state: "accepted").tap { seed_resources(it) }
+      transcriber.fail_next(:start)
+
+      expect(GenerationTranscription.start(generation.id)).to eq(:waiting)
+      expect(generation.reload.state).to eq("transcribing")
+      next_check = GenerationTranscription::CHECK_INTERVAL.from_now + 1.second
+      expect(GenerationTranscription.check(generation.id, now: next_check)).to eq(:started)
+      expect(transcriber.jobs.keys).to eq(["#{generation.id}-1"])
+    end
+
     it "設定の不足・呼び出し元の違いは待っても直らないので、すぐ失敗にする" do
       generation = transcribing
       allow(transcriber).to receive(:status).and_raise(GenerationProviders::NotReady, "not ready")

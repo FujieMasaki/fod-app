@@ -20,13 +20,15 @@ module GenerationTranscription
       transcription_job_name: GenerationNaming.job_name(generation.id, attempt), transcript_ready_at: nil }
   end
 
-  # 結果はSymbol: :started / :failed / :skipped
+  # 結果はSymbol: :started / :waiting（開始が一時的に失敗した） / :failed / :canceled / :skipped
   def start(generation_id, now: Time.current)
     generation = Generation.find_by(id: generation_id)
     token = generation && claim(generation, now)
     return :skipped unless token
 
     begin_job(generation.reload, token, now)
+  rescue GenerationProviders::Error => e
+    recover(generation, token, e, now)
   end
 
   # 結果はSymbol: :waiting / :generating / :failed / :canceled / :skipped
@@ -45,14 +47,16 @@ module GenerationTranscription
     when :completed then finish(generation, token, now)
     end
   rescue GenerationProviders::Error => e
-    Rails.logger.warn("generation transcription check failed: generation_id=#{generation.id} error=#{e.class.name}")
-    give_up?(generation, e, now) ? fail(generation, token, "transcription_failed") : wait(generation, token, now)
+    recover(generation, token, e, now)
   end
 
-  # 設定の不足・呼び出し元の違い（NotReady）は待っても直らないので、すぐ失敗にする。それ以外は一時的な失敗として
-  # 待ち直すが、文字起こしを始めてからGIVE_UP_AFTERを過ぎたら失敗にする（期限の24時間まで「処理中」に見せない）
-  def give_up?(generation, error, now)
-    error.is_a?(GenerationProviders::NotReady) || generation.last_progress_at <= now - GIVE_UP_AFTER
+  # 文字起こしの開始・完了待ちで外部が失敗したとき。設定の不足・呼び出し元の違い（NotReady）は待っても直らないので、
+  # すぐ失敗にする。それ以外は一時的な失敗として待ち直す（開始のresponseを失っていれば、次の確認で同じ名前のjobに
+  # 合流する）が、文字起こしを始めてからGIVE_UP_AFTERを過ぎたら失敗にする（期限の24時間まで「処理中」に見せない）
+  def recover(generation, token, error, now)
+    Rails.logger.warn("generation transcription failed: generation_id=#{generation.id} error=#{error.class.name}")
+    give_up = error.is_a?(GenerationProviders::NotReady) || generation.last_progress_at <= now - GIVE_UP_AFTER
+    give_up ? fail(generation, token, "transcription_failed") : wait(generation, token, now)
   end
 
   # accepted → transcribing（T6）で試行番号を進める。再試行（T14）で既にtranscribingなら実行権だけ取る
@@ -78,8 +82,6 @@ module GenerationTranscription
                                           content_type: generation.audio_content_type,
                                           output_key: generation.transcript_key)
     wait(generation, token, now) == :waiting ? :started : :canceled
-  rescue GenerationProviders::Error
-    fail(generation, token, "transcription_failed")
   end
 
   def holding?(generation, token)
@@ -113,5 +115,5 @@ module GenerationTranscription
                                          failure_kind: kind, lease_token: nil, lease_expires_at: nil, **attrs)
     :failed
   end
-  private_class_method :react, :give_up?, :claim, :begin_job, :holding?, :empty?, :wait, :finish, :fail
+  private_class_method :react, :recover, :claim, :begin_job, :holding?, :empty?, :wait, :finish, :fail
 end
