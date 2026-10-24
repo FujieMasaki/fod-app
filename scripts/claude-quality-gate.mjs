@@ -78,7 +78,17 @@ export function evaluateStop(deps, sessionId, now = Date.now()) {
   // Switching branches restarts the counts but keeps the owner.
   const state = saved?.branch === branch ? saved : initialState(branch, saved?.sessionId, saved?.ownedAt);
 
+  const owner = { sessionId: saved?.sessionId ?? null, ownedAt: saved?.ownedAt ?? null };
   const finish = (decision) => {
+    // The checks can take minutes. If --reset ran meanwhile, its state wins: writing
+    // ours back would erase the new owner, and a new owner elsewhere lets this session go.
+    const current = deps.readState();
+    if ((current?.sessionId ?? null) !== owner.sessionId || (current?.ownedAt ?? null) !== owner.ownedAt) {
+      if (current?.sessionId && sessionId && current.sessionId !== sessionId) {
+        return allow(`Quality gate skipped: owned by session ${current.sessionId} since ${current.ownedAt}`);
+      }
+      return decision;
+    }
     if (decision.block) state.blocks += 1;
     deps.writeState(state);
     return decision;

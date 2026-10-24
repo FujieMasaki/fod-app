@@ -235,6 +235,19 @@ test("an unreadable or future ownedAt counts as expired", () => {
   }
 });
 
+test("a --reset during the checks keeps its owner and lets the earlier stop go", () => {
+  const { deps, state } = fakeDeps({ worktreeStatus: () => ({ dirty: true, unpushed: true }) });
+  deps.run = () => {
+    resetState(deps, "run-task", Date.parse(ownedAt));
+    return { ok: true, output: "" };
+  };
+  const decision = evaluateStop(deps, "other", soon);
+  assert.equal(decision.block, false);
+  assert.match(decision.message, /owned by session run-task/);
+  assert.equal(state().sessionId, "run-task");
+  assert.equal(state().blocks, 0);
+});
+
 test("--reset records the session as the owner, or clears the state without an id", () => {
   const stale = { ...initialState("feat/task-008-dot-history", "old", ownedAt), blocks: 12, gaveUp: true };
   const withId = fakeDeps({ state: stale });
