@@ -99,9 +99,12 @@ module GenerationTranscription
   end
 
   # T8: 全文を読み、空でなければ入口を通して生成へ進む。空（無音・極端に短い）なら録り直しを案内する（T9）
+  # 結果が上限より大きければ全文を残したものとして失敗にし、再試行を生成から始める（生成の前にも同じ上限で送らずに
+  # 失敗するので、Transcribeをやり直さない）
   def finish(generation, token, now)
     text = GenerationComposition.read_transcript(generation)
-    return fail(generation, token, GenerationComposition::UNREADABLE_KINDS.fetch(text)) unless text.is_a?(String)
+    return fail(generation, token, "invalid_output", transcript_ready_at: now) if text == :too_large
+    return fail(generation, token, "transcription_failed") if text.nil?
     return fail(generation, token, "empty_recording", transcript_ready_at: now) if empty?(text)
 
     GenerationComposition.enter(generation, token, now)

@@ -13,9 +13,6 @@ module GenerationComposition
   # Transcribeが書き出した結果（JSON）を読む上限（byte）。外部が書いたものをそのままメモリへ載せない。結果には全文に
   # 加えて単語ごとの時刻と確からしさが入るので、全文の上限より大きくする。初期値で、実測（H4）で見直す
   TRANSCRIPT_MAX_BYTES = 2.megabytes
-  # 文字起こしの完了時に全文を読めなかったとき（`read_transcript`がnil・:too_large）の失敗の種類。上限より大きい結果は、
-  # 全文が上限より長いときと同じにする
-  UNREADABLE_KINDS = { nil => "transcription_failed", too_large: "invalid_output" }.freeze
 
   module_function
 
