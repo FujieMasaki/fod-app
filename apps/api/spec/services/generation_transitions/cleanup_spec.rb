@@ -91,7 +91,7 @@ RSpec.describe "処理の記録の遷移: 後片付け" do # rubocop:disable RSp
     end
 
     it "記録が持つkey・job名が命名規則と違っても、それも消す" do
-      legacy_key = "transcripts/#{SecureRandom.uuid}/legacy.json"
+      legacy_key = "legacy/#{generation.id}/legacy.json"
       generation.update_columns(transcript_key: legacy_key, transcription_job_name: "legacy-job") # rubocop:disable Rails/SkipsModelValidations
       storage.objects[legacy_key] = { body: "{}" }
       transcriber.jobs["legacy-job"] = { status: :completed }
@@ -99,6 +99,16 @@ RSpec.describe "処理の記録の遷移: 後片付け" do # rubocop:disable RSp
       cleanup(generation)
 
       expect([storage.objects.key?(legacy_key), transcriber.jobs.key?("legacy-job")]).to eq([false, false])
+    end
+
+    it "記録が持つkeyが別の処理の下を指していても、その処理のobjectは消さない" do
+      foreign_key = "transcripts/#{SecureRandom.uuid}/1.json"
+      generation.update_columns(transcript_key: foreign_key) # rubocop:disable Rails/SkipsModelValidations
+      storage.objects[foreign_key] = { body: "{}" }
+
+      cleanup(generation)
+
+      expect(storage.objects).to have_key(foreign_key)
     end
 
     it "失敗したら、処理IDと例外の種類だけをログに残す" do

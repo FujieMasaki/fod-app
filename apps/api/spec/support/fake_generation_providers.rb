@@ -50,6 +50,9 @@ module FakeGenerationProviders
     end
 
     def delete_prefix(prefix)
+      # 本物（AudioStore#delete_prefix）と同じ形だけを受け付ける
+      raise ArgumentError, "unexpected prefix" unless prefix.match?(%r{\A[a-z]+/[0-9a-f-]{36}/\z})
+
       call!(:delete_prefix)
       @objects.delete_if { |key, _| key.start_with?(prefix) }
     end

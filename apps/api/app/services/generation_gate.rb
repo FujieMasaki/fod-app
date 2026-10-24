@@ -2,7 +2,9 @@
 # 利用者の操作でも自動の回収でも、すべてここを通す。共通なのは手続きで、認可の条件は呼ぶ側がblockで渡す。
 #
 # 1. 利用者の行を`FOR UPDATE`でlockする（退会の受理も同じ行をlockする）
-# 2. 現在の状態が遷移元として妥当であることを確かめる
+# 2. 処理の記録の行も`FOR UPDATE`でlockし、現在の状態が遷移元として妥当であることを確かめる（利用者の行をlockしない
+#    遷移（失敗の確定など）が、読んでから書くまでの間に状態を変えて、受理が空振りしないようにする。lockの順序は
+#    いつも利用者の行 → 記録の行）
 # 3. blockで認可の条件を確かめる（理由のSymbolを返したら拒否）
 # 4. 実行権を発行し、状態を条件付きで更新してcommitする
 # 5. 外部の呼び出しは、呼ぶ側がcommitのあとに行う
@@ -29,7 +31,7 @@ module GenerationGate
   def enter(user_id:, generation_id:, from:, to:, attrs: {})
     ActiveRecord::Base.transaction do
       user = User.lock.find_by(id: user_id)
-      generation = user && Generation.find_by(id: generation_id, user_id: user.id)
+      generation = user && Generation.lock.find_by(id: generation_id, user_id: user.id)
       raise Denied, :not_found unless generation
       raise Denied, :state unless Array(from).include?(generation.state)
 
