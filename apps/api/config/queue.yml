@@ -1,0 +1,21 @@
+# Solid Queueのworker（TASK-003で採用。並列数・DB poolの実値はTASK-009の実測で見直す）。
+# DBの接続数（database.ymlのmax_connections。RAILS_MAX_THREADSに連動）は、workerのthreadsに2（pollingとheartbeat）を
+# 足した数以上が要る。足りないとJobが接続を待って失敗するので、threadsは接続数から導く（既定の5なら3）。
+default: &default
+  dispatchers:
+    - polling_interval: 1
+      batch_size: 500
+  workers:
+    - queues: "*"
+      threads: <%= [ENV.fetch("RAILS_MAX_THREADS", 5).to_i - 2, 1].max %>
+      processes: <%= ENV.fetch("JOB_CONCURRENCY", 1) %>
+      polling_interval: 1
+
+development:
+  <<: *default
+
+test:
+  <<: *default
+
+production:
+  <<: *default
