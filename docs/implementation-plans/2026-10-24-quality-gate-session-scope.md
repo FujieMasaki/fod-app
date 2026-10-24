@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-完了（PR作成待ち）
+実施中（PR #109、レビュー中）
 
 ## 2. Goal
 
@@ -36,13 +36,15 @@
 ## 6. References and Documents to Update
 
 - 参照: [自律実行の仕組み](2026-09-26-autonomous-task-runner.md) Step 3・Step 6（当時の記録として更新しない）
-- 更新: `.claude/skills/run-task/SKILL.md`（品質ゲートの対象が`--reset`したセッションであること）
+- 更新: `.claude/skills/run-task/SKILL.md`（品質ゲートの対象が`--reset`したセッションであること、
+  人間の指摘への対応の前にも`--reset`すること）
 
 ## 7. Proposed Approach
 
 1. `initialState(branch, sessionId)`で状態の初期値を1か所にまとめ、`sessionId`を持たせる。
-2. `--reset`は`CLAUDE_CODE_SESSION_ID`があれば、そのidを持つ初期状態を書く（なければ従来どおり消す）。
-   `--pause`も同じidを記録する。
+2. `--reset`は`CLAUDE_CODE_SESSION_ID`があれば、そのidを持つ初期状態を書き（なければ従来どおり消す）、
+   記録したidを出力する（transcriptで追えるように）。`--pause`も同じidを記録する。どちらもtestできるよう
+   `resetState`・`pauseState`として切り出す。
 3. `evaluateStop(deps, sessionId)`は、状態に記録されたidと入力の`session_id`が両方あって異なれば、
    検査も状態の更新もせずに終了を許す。
 4. ブランチが変わって状態を初期化するときも、記録したidを引き継ぐ（PRを分けたタスクはブランチを移るため）。
@@ -86,8 +88,9 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 ## 13. Risks / Things to Watch
 
 - Claude Codeが`CLAUDE_CODE_SESSION_ID`を渡さなくなった場合は、従来の挙動（全セッションを差し戻す）に戻る。
-- 持ち主のセッションを閉じた後、同じworktreeで新しいセッションが`/run-task`なしにタスクブランチで作業すると、
-  品質ゲートがかからない。`/run-task`は開始時に`--reset`するため、自動実行には影響しない。
+- 持ち主のセッションを閉じた後、同じworktreeで新しいセッションが`--reset`せずにタスクブランチで作業すると、
+  品質ゲートがかからない。`/run-task`の開始・再開・人間の指摘への対応では`--reset`するため（指摘への対応は
+  PR #109のレビューで足した）、その流れには影響しない。
 - 止まったセッションを再開したときにセッションidが変わる場合、`--reset`するまで差し戻されない。再開時に
   `--reset`を実行する手順は、skillの「止まるときは」「修正上限に達したとき」に既にある。
 
@@ -95,7 +98,7 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 
 ### Automated
 
-- `node --test scripts/claude-quality-gate.test.mjs`: 16件成功（追加4件）。
+- `node --test scripts/claude-quality-gate.test.mjs`: 18件成功（追加6件。`resetState`・`pauseState`を含む）。
 
 ### Manual
 
