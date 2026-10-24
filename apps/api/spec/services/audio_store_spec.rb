@@ -18,11 +18,19 @@ RSpec.describe AudioStore do
     expect(store.exists?("audio/x/1")).to be(true)
   end
 
-  it "読み出す。無ければnil" do
-    client.stub_responses(:get_object, ["NoSuchKey", { body: "text" }])
+  it "読み出す。無ければnil、空なら空文字列" do
+    client.stub_responses(:get_object, ["NoSuchKey", { body: "text" }, "InvalidRange"])
 
-    expect(store.read("transcripts/x/1.json")).to be_nil
-    expect(store.read("transcripts/x/1.json")).to eq("text")
+    expect(store.read("transcripts/x/1.json", max_bytes: 4)).to be_nil
+    expect(store.read("transcripts/x/1.json", max_bytes: 4)).to eq("text")
+    expect(store.read("transcripts/x/1.json", max_bytes: 4)).to eq("")
+  end
+
+  it "上限より1byte多い範囲だけを取り、上限を超えていれば読まずに失敗にする" do
+    client.stub_responses(:get_object, body: "texts")
+
+    expect { store.read("transcripts/x/1.json", max_bytes: 4) }.to raise_error(GenerationProviders::TooLarge)
+    expect(client.api_requests.last[:params]).to include(key: "transcripts/x/1.json", range: "bytes=0-4")
   end
 
   it "prefixの下をすべて消す（古い試行のobjectも含む）" do
