@@ -25,7 +25,8 @@ function fakeDeps(overrides = {}) {
     },
     worktreeStatus: () => ({ dirty: false, unpushed: false }),
     pullRequest: () => ({ status: "found" }),
-    readState: () => state,
+    // A fresh copy each time, like reading the file again.
+    readState: () => (state === null ? null : structuredClone(state)),
     writeState: (next) => {
       state = structuredClone(next);
     },
