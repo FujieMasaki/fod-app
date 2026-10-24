@@ -41,20 +41,27 @@
 
 ## 7. Proposed Approach
 
-1. `initialState(branch, sessionId)`で状態の初期値を1か所にまとめ、`sessionId`を持たせる。
-2. `--reset`は`CLAUDE_CODE_SESSION_ID`があれば、そのidを持つ初期状態を書き（なければ従来どおり消す）、
-   記録したidを出力する（transcriptで追えるように）。`--pause`も同じidを記録する。どちらもtestできるよう
-   `resetState`・`pauseState`として切り出す。
-3. `evaluateStop(deps, sessionId)`は、状態に記録されたidと入力の`session_id`が両方あって異なれば、
-   検査も状態の更新もせずに終了を許す。
+1. `initialState(branch, sessionId, ownedAt)`で状態の初期値を1か所にまとめ、持ち主の`sessionId`と、
+   持ち主になった時刻`ownedAt`を持たせる。
+2. `--reset`は`CLAUDE_CODE_SESSION_ID`があれば、そのidを持ち主とする初期状態を書き（なければ従来どおり消す）、
+   記録したidを出力する（transcriptで追えるように）。`--pause`は持ち主を変えない（変えるのは`--reset`だけ）。
+   どちらもtestできるよう`resetState`・`pauseState`として切り出す。
+3. `evaluateStop(deps, sessionId, now)`は、状態に記録されたidと入力の`session_id`が両方あって異なり、
+   持ち主になってから24時間（`OWNER_TTL_MS`）以内なら、検査も状態の更新もせずに終了を許す。
 4. ブランチが変わって状態を初期化するときも、記録したidを引き継ぐ（PRを分けたタスクはブランチを移るため）。
-5. idが記録されていない状態（`--reset`前や、idのない環境）は、従来どおりどのセッションも差し戻す。
+5. idが記録されていない状態（`--reset`前や、idのない環境）、入力に`session_id`がない場合、持ち主が24時間を
+   過ぎた場合は、従来どおりどのセッションも差し戻す。
 
 ## 8. Why This Approach
 
 - `--reset`は`/run-task`の開始と再開で必ず実行するため、「誰のゲートか」を宣言する場所として自然。
 - 判定はhookの入力とBashの環境変数だけで行え、追加のhookや設定が要らない。
-- idがないときに従来どおり差し戻すため、判定できない場合に品質ゲートが緩むことはない。
+- idがないときは従来どおり差し戻すため、判定できない場合に品質ゲートが緩むことはない。
+- 記録がある間（24時間）は、記録と異なるセッションを品質ゲートの対象から外す。これは意図した挙動で、
+  `/run-task`以外のセッションも含む。持ち主が終わった後に残った記録で、後から始めたセッションがいつまでも
+  外れ続けないよう、期限を設ける。`/run-task`は1日のうちに終わる前提で、定期実行も毎朝1回起動する。
+- PRができた時点で持ち主を外す案は採らない。PRを分けたタスクは、1つ目のPRを作った後に次のブランチへ移るため、
+  そこで別のセッションが再び差し戻されてしまう。
 
 ## 9. Data Flow
 
@@ -62,15 +69,17 @@
 /run-task 開始 → Bash: claude-quality-gate.mjs --reset
   → CLAUDE_CODE_SESSION_ID を状態ファイルの sessionId に記録
 Claude が止まろうとする → Stop hook（stdin の session_id）
-  → 状態の sessionId と違う → 何もせず許可（状態は変えない）
-  → 同じ / どちらかが無い → 従来の検査・差し戻し
+  → 状態の sessionId と違い、ownedAt から24時間以内 → 何もせず許可（状態は変えない）
+  → 同じ / どちらかが無い / 24時間を過ぎた → 従来の検査・差し戻し
 ```
 
 ## 10. Files to Change
 
 - 変更: `scripts/claude-quality-gate.mjs`（セッションidの記録と判定）
-- 変更: `scripts/claude-quality-gate.test.mjs`（別セッション・所有セッション・ブランチ移動・id無しのtest）
+- 変更: `scripts/claude-quality-gate.test.mjs`（別セッション・所有セッション・ブランチ移動・id無し・期限切れ・
+  `--reset`・`--pause`のtest）
 - 変更: `.claude/skills/run-task/SKILL.md`
+- 変更: `README.md`（hookの表のStopの対象）
 - 新規: 本Plan
 
 1つのPR。
@@ -88,17 +97,18 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 ## 13. Risks / Things to Watch
 
 - Claude Codeが`CLAUDE_CODE_SESSION_ID`を渡さなくなった場合は、従来の挙動（全セッションを差し戻す）に戻る。
-- 持ち主のセッションを閉じた後、同じworktreeで新しいセッションが`--reset`せずにタスクブランチで作業すると、
-  品質ゲートがかからない。`/run-task`の開始・再開・人間の指摘への対応では`--reset`するため（指摘への対応は
-  PR #109のレビューで足した）、その流れには影響しない。
-- 止まったセッションを再開したときにセッションidが変わる場合、`--reset`するまで差し戻されない。再開時に
-  `--reset`を実行する手順は、skillの「止まるときは」「修正上限に達したとき」に既にある。
+- 持ち主が記録されてから24時間は、同じworktreeで`--reset`せずにタスクブランチで作業するセッション
+  （人間が`pr-review-cycle`を回すセッションを含む）に品質ゲートがかからない。`/run-task`の開始・再開・人間の
+  指摘への対応では`--reset`するため（指摘への対応はPR #109のレビューで足した）、その流れには影響しない。
+- `/clear`や再開（`--resume`・`--continue`）でセッションidが変わる場合、`--reset`するまで差し戻されない
+  （idが変わるかは未確認）。止まった後の再開で`--reset`する手順は、skillの「止まるときは」「修正上限に
+  達したとき」に既にある。
 
 ## 14. Verification
 
 ### Automated
 
-- `node --test scripts/claude-quality-gate.test.mjs`: 18件成功（追加6件。`resetState`・`pauseState`を含む）。
+- `node --test scripts/claude-quality-gate.test.mjs`: 20件成功（追加8件）。
 
 ### Manual
 
@@ -107,5 +117,5 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 
 ## 15. Definition of Done
 
-- 別のセッションが差し戻されず、所有セッションは従来どおり差し戻される。
+- 持ち主の記録から24時間以内は別のセッションが差し戻されず、持ち主のセッションは従来どおり差し戻される。
 - lint / testが通る。
