@@ -94,6 +94,8 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 - 変更: `.claude/skills/pr-review-cycle/SKILL.md`
 - 変更: `docs/development/pull-requests.md`
 - 変更: `README.md`（hookの表のStopの対象）
+- 変更: `docs/code-review/frontend/README.md`（自動化の行に、別のセッションと読み直さない書き戻しの観点。
+  レビューで見つかった問題の再発防止）
 - 新規: 本Plan
 
 1つのPR。
