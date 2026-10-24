@@ -23,6 +23,14 @@ RSpec.describe GenerationGate do
     expect(User).to have_received(:lock)
   end
 
+  it "処理の記録の行もlockしてから状態を確かめる（lockしない遷移に、読んでから書くまでの間で負けないため）" do
+    queries = []
+    callback = ->(*, payload) { queries << payload[:sql] }
+    ActiveSupport::Notifications.subscribed(callback, "sql.active_record") { enter }
+
+    expect(queries).to include(match(/FROM "generations".*FOR UPDATE/m))
+  end
+
   it "他人の処理は存在しない扱いにする（処理IDを知っていることを権限にしない）" do
     expect { enter(user_id: create(:user).id) }.to raise_error(GenerationGate::Denied) { expect(it.reason).to eq(:not_found) }
   end
