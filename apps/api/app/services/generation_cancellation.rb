@@ -63,6 +63,8 @@ module GenerationCancellation
     :accepted
   rescue GenerationGate::Denied => e
     return :account_deletion_in_progress if e.reason == :account_deletion_in_progress
+    # 退会の受理が先にこの記録を後片付けへ回していると、認可より先に状態の確認で拒否される
+    return :account_deletion_in_progress if User.find_by(id: generation.user_id)&.deletion_requested?
 
     # 成功の確定（T11）や期限の到来が先に勝った場合。改めて状態を見て答える
     current = Generation.find_by(id: generation.id)

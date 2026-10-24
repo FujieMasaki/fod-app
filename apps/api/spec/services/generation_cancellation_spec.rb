@@ -65,6 +65,21 @@ RSpec.describe GenerationCancellation do
     expect(generation.reload.state).to eq("failed")
   end
 
+  it "退会の受理が先にこの処理を後片付けへ回していても、取り消しではなく退会中として答える" do
+    generation = create(:generation, user:, state: "failed")
+    interleaved = false
+    allow(GenerationGate).to receive(:enter).and_wrap_original do |original, **args, &block|
+      unless interleaved
+        interleaved = true
+        GenerationWithdrawal.accept(user)
+      end
+      original.call(**args, &block)
+    end
+
+    expect(cancel(generation.id)).to eq(:account_deletion_in_progress)
+    expect(generation.reload).to have_attributes(state: "cancel_requested", cancel_reason: "withdrawn")
+  end
+
   it "退会の受理後は受け付けない" do
     user.update!(deletion_requested_at: Time.current)
 
