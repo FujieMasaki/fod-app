@@ -47,6 +47,18 @@ RSpec.describe TranscriptionGateway do
     expect(Array.new(5) { gateway.status("id-1") }).to eq(%i[in_progress in_progress completed failed missing])
   end
 
+  it "照会がBadRequestなら一覧で確かめ、同じ名前のjobが無ければ:missing、あれば失敗にする" do
+    client.stub_responses(:get_transcription_job, "BadRequestException")
+    client.stub_responses(:list_transcription_jobs, [
+                            { transcription_job_summaries: [{ transcription_job_name: "id-10" }] },
+                            { transcription_job_summaries: [{ transcription_job_name: "id-1" }] }
+                          ])
+
+    expect(gateway.status("id-1")).to eq(:missing)
+    expect { gateway.status("id-1") }.to raise_error(GenerationProviders::Error)
+    expect(params).to eq(job_name_contains: "id-1")
+  end
+
   it "jobを消す。既に無ければ成功" do
     client.stub_responses(:delete_transcription_job, [{}, "NotFoundException"])
 
@@ -57,10 +69,13 @@ RSpec.describe TranscriptionGateway do
   it "BadRequestは状態を見直し、存在しなければ成功、非終端ならNotTerminal、終端なら失敗にする" do
     client.stub_responses(:delete_transcription_job, "BadRequestException")
     client.stub_responses(:get_transcription_job, [
-                            "NotFoundException", { transcription_job: { transcription_job_status: "IN_PROGRESS" } },
+                            "NotFoundException", "BadRequestException",
+                            { transcription_job: { transcription_job_status: "IN_PROGRESS" } },
                             { transcription_job: { transcription_job_status: "COMPLETED" } }
                           ])
+    client.stub_responses(:list_transcription_jobs, transcription_job_summaries: [])
 
+    expect { gateway.delete("id-1") }.not_to raise_error
     expect { gateway.delete("id-1") }.not_to raise_error
     expect { gateway.delete("id-1") }.to raise_error(TranscriptionGateway::NotTerminal)
     expect { gateway.delete("id-1") }.to raise_error(GenerationProviders::Error)

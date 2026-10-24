@@ -23,11 +23,15 @@ class TranscriptionGateway
   end
 
   # :in_progress / :completed / :failed / :missing
+  # 存在しないjobの照会には`NotFoundException`ではなく`BadRequestException`が返り得る。messageでは判定せず、
+  # 一覧に同じ名前のjobがあるかで分ける（存在しないjobを失敗と扱い続けると、後片付けが終わらなくなる）
   def status(job_name)
     job = @client.get_transcription_job(transcription_job_name: job_name).transcription_job
     STATUSES.fetch(job.transcription_job_status) { raise GenerationProviders::Error, "unknown transcription status" }
   rescue Aws::TranscribeService::Errors::NotFoundException
     :missing
+  rescue Aws::TranscribeService::Errors::BadRequestException
+    listed?(job_name) ? raise(GenerationProviders::Error, "transcription job could not be read") : :missing
   rescue *GenerationProviders::AWS_ERRORS => e
     GenerationProviders::Error.raise_from(e)
   end
@@ -55,6 +59,13 @@ class TranscriptionGateway
   end
 
   private
+
+  # 状態を指定しない一覧はすべての状態のjobを返す。名前の部分一致で絞り、同じ名前があるかを確かめる
+  def listed?(job_name)
+    @client.list_transcription_jobs(job_name_contains: job_name).each_page.any? do |page|
+      page.transcription_job_summaries.any? { it.transcription_job_name == job_name }
+    end
+  end
 
   def explain_refused_delete(job_name)
     case status(job_name)
