@@ -152,6 +152,16 @@ RSpec.describe GenerationUpload do
     expect(GenerationTranscribeJob).not_to have_been_enqueued
   end
 
+  it "音声を置いている間に利用者が取り消したら、置いた音声を消して、もう使えないattemptとして答える" do
+    storage.before_next(:put) { GenerationCancellation.cancel_by_user(user:, generation_id: attempt.id) }
+
+    result, = upload
+
+    expect(result.problem).to eq(:attempt_invalid)
+    expect(storage.objects).to be_empty
+    expect(GenerationTranscribeJob).not_to have_been_enqueued
+  end
+
   it "T3: 記録が消えた後に音声が置かれても、手元のprefixで消す" do
     storage.before_next(:put) do
       GenerationWithdrawal.accept(user)

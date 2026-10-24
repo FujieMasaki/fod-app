@@ -69,6 +69,14 @@ RSpec.describe GenerationWatchdog do
     expect(GenerationTranscriptionCheckJob).not_to have_been_enqueued.with(waiting.id)
   end
 
+  it "実行権が切れていても、最終進捗が新しい処理は拾わない（進んでいる処理を二重に動かさない）" do
+    fresh = create(:generation, state: "accepted", last_progress_at: 30.seconds.ago, lease_expires_at: nil)
+
+    described_class.sweep
+
+    expect(GenerationTranscribeJob).not_to have_been_enqueued.with(fresh.id)
+  end
+
   it "拾い直した完了待ちも、生きているjobに合流して新しいjobを作らない" do
     generation = stale("transcribing")
     transcriber.jobs[generation.transcription_job_name] =
