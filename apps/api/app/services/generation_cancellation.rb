@@ -36,11 +36,12 @@ module GenerationCancellation
   def cancel_by_user(user:, generation_id:, now: Time.current)
     return :account_deletion_in_progress if user.deletion_requested?
 
-    dot = user.dots.find_by(generation_id:)
-    return dot.trashed_at ? :not_found : :generation_completed if dot
+    saved = dot_outcome(user.id, generation_id)
+    return saved if saved
 
     generation = user.generations.find_by(id: generation_id)
-    return :not_found unless generation
+    # Dotを探した後に、保存から後片付けまで終えて記録が消えた場合もある。もう一度Dotを見て答える
+    return dot_outcome(user.id, generation_id) || :not_found unless generation
 
     cancel_record(generation, now)
   end
@@ -62,14 +63,29 @@ module GenerationCancellation
     end
     :accepted
   rescue GenerationGate::Denied => e
-    return :account_deletion_in_progress if e.reason == :account_deletion_in_progress
+    withdrawing?(generation, e) ? :account_deletion_in_progress : answer_lost_race(generation)
+  end
 
-    # 成功の確定（T11）や期限の到来が先に勝った場合。改めて状態を見て答える
+  # 退会の受理が先にこの記録を後片付けへ回していると、認可より先に状態の確認で拒否される
+  def withdrawing?(generation, denial)
+    denial.reason == :account_deletion_in_progress || User.find_by(id: generation.user_id)&.deletion_requested?
+  end
+
+  # 成功の確定（T11）や期限の到来が先に勝った場合。改めて状態を見て答える
+  def answer_lost_race(generation)
     current = Generation.find_by(id: generation.id)
+    saved = dot_outcome(generation.user_id, generation.id) unless current&.canceled?
+    return saved if saved
     return :not_found unless current
     return :generation_completed if current.state == Generation::SUCCEEDED_CLEANUP_PENDING
 
     current.canceled? ? relabel_expired(current) : :not_found
+  end
+
+  # 本人のDotが保存済みなら完了、ゴミ箱の中なら示さない（404）。Dotが無ければnil
+  def dot_outcome(user_id, generation_id)
+    dot = Dot.find_by(user_id:, generation_id:)
+    dot && (dot.trashed_at ? :not_found : :generation_completed)
   end
 
   # 期限到来で後片付けに入った記録は、状態を変えずに取り消しとして扱い直す（以後の照会を`expired`ではなく、
@@ -79,5 +95,6 @@ module GenerationCancellation
                           .update_all(cancel_reason: "canceled", updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
     relabeled == 1 ? :accepted : :not_found
   end
-  private_class_method :cancel_record, :request_by_user, :relabel_expired
+  private_class_method :cancel_record, :request_by_user, :withdrawing?, :answer_lost_race, :dot_outcome,
+                       :relabel_expired
 end

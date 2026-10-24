@@ -54,6 +54,29 @@ RSpec.describe GenerationCancellation do
     expect(generation.reload.state).to eq("succeeded_cleanup_pending")
   end
 
+  it "Dotを探した後に、保存から後片付けまで終えて記録が消えていても、完了を返す" do
+    generation = create(:generation, user:, state: "generating")
+    allow(user.generations).to receive(:find_by).and_wrap_original do |original, **args|
+      create(:dot, user:, generation_id: generation.id)
+      generation.destroy!
+      original.call(**args)
+    end
+    allow(user).to receive(:generations).and_return(user.generations)
+
+    expect(cancel(generation.id)).to eq(:generation_completed)
+  end
+
+  it "取り消しが競合に負けた後に記録が消えていても、保存済みのDotがあれば完了を返す" do
+    generation = create(:generation, user:, state: "generating")
+    allow(GenerationGate).to receive(:enter).and_wrap_original do |original, **args, &block|
+      create(:dot, user:, generation_id: generation.id)
+      generation.destroy!
+      original.call(**args, &block)
+    end
+
+    expect(cancel(generation.id)).to eq(:generation_completed)
+  end
+
   it "退会の受理と並んだときは、利用者の行をlockした後に確かめて受け付けない" do
     generation = create(:generation, user:, state: "failed")
     allow(GenerationGate).to receive(:enter).and_wrap_original do |original, **args, &block|
@@ -63,6 +86,21 @@ RSpec.describe GenerationCancellation do
 
     expect(cancel(generation.id)).to eq(:account_deletion_in_progress)
     expect(generation.reload.state).to eq("failed")
+  end
+
+  it "退会の受理が先にこの処理を後片付けへ回していても、取り消しではなく退会中として答える" do
+    generation = create(:generation, user:, state: "failed")
+    interleaved = false
+    allow(GenerationGate).to receive(:enter).and_wrap_original do |original, **args, &block|
+      unless interleaved
+        interleaved = true
+        GenerationWithdrawal.accept(user)
+      end
+      original.call(**args, &block)
+    end
+
+    expect(cancel(generation.id)).to eq(:account_deletion_in_progress)
+    expect(generation.reload).to have_attributes(state: "cancel_requested", cancel_reason: "withdrawn")
   end
 
   it "退会の受理後は受け付けない" do
