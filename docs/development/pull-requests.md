@@ -261,7 +261,8 @@ PR本文は公開される。図には次を載せない。
    `--jq '.[] | select(.user.login != "<所有者>") | {user: .user.login, url: .html_url}'`）。
    AIは所有者のtokenで動くため、AI自身はPRコメントを書かない（記録はPR本文・Plan・会話に残す）。所有者の名前の
    コメントがAIの残したものと取り違えられないようにするため。
-4. AIは対応を始める前に`scripts/claude-hook.sh claude-quality-gate.mjs --reset`を実行する（新しいセッションで
+4. AIは対応を始める前に、対象のPRのブランチのworktreeに入ってから（状態はworktreeごとにあり、定期実行のタスクは
+   `.claude/worktrees/task-NNN`で動くため）`scripts/claude-hook.sh claude-quality-gate.mjs --reset`を実行する（新しいセッションで
    対応するとき、`<type>/task-*`ブランチの品質ゲートをそのセッションにかけるため。実行しないと、別のセッションが
    `--reset`してから24時間以内なら、ゲートはそのセッションのものとして扱われ、差し戻されない）。指摘を該当するサブのPRで直し、後ろのPRへ取り込み、
    直したPRを機械のレビューにかけ直してから、ガイドを更新して再び渡す。

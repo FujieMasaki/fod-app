@@ -17,9 +17,9 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
 作業（修正・検証・push・PR作成・レビュー）は、**そのPRのブランチへ`git switch`してから**行う
 （pre-push、`gh pr create`、diff、Codexの最終チェックは、どれも今いるブランチを基準にするため）。
 
-`<type>/task-*`ブランチで、`/run-task`の外から（人間に直接）依頼されて始めるときは、最初に
-`scripts/claude-hook.sh claude-quality-gate.mjs --reset`を実行する。Stop hookの品質ゲートは`--reset`した
-セッションにだけかかるため（[`run-task`](../run-task/SKILL.md)の冒頭）。`/run-task`の中から使うときは
+`<type>/task-*`ブランチで、`/run-task`の外から（人間に直接）依頼されて始めるときは、最初にそのブランチの
+worktreeで`scripts/claude-hook.sh claude-quality-gate.mjs --reset`を実行する。別のセッションが`--reset`した
+記録があると、その後24時間はStop hookの品質ゲートがそのセッションにだけかかるため（[`run-task`](../run-task/SKILL.md)の冒頭）。`/run-task`の中から使うときは
 実行しない（開始時に実行済みで、ここで実行すると差し戻しの回数が初めに戻るため）。
 
 この skill の「手順N」は`### N`の節を指す。手順1の中の小項目は「1-5」のように書いて区別する。
