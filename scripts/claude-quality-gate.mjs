@@ -55,9 +55,12 @@ export function initialState(branch, sessionId, ownedAt) {
   return { branch, consecutiveFailures: 0, blocks: 0, gaveUp: false, paused: null, ...owner };
 }
 
+// An unreadable or future ownedAt counts as expired, so a broken record never
+// keeps other sessions out of the gate for longer than a day.
 function ownedByAnother(saved, sessionId, now) {
   if (!saved?.sessionId || !sessionId || saved.sessionId === sessionId) return false;
-  return now - Date.parse(saved.ownedAt) < OWNER_TTL_MS;
+  const ownedAt = Date.parse(saved.ownedAt);
+  return Number.isFinite(ownedAt) && ownedAt <= now && now - ownedAt < OWNER_TTL_MS;
 }
 
 // deps: branch(), changedPaths(), run(check), worktreeStatus(), pullRequest(),
@@ -69,7 +72,9 @@ export function evaluateStop(deps, sessionId, now = Date.now()) {
   const saved = deps.readState();
   // Leave the state untouched so the owning session's counts stay its own. Without
   // either id, or once the owner has expired, every session is held to the gate.
-  if (ownedByAnother(saved, sessionId, now)) return allow();
+  if (ownedByAnother(saved, sessionId, now)) {
+    return allow(`Quality gate skipped: owned by session ${saved.sessionId} since ${saved.ownedAt}`);
+  }
   // Switching branches restarts the counts but keeps the owner.
   const state = saved?.branch === branch ? saved : initialState(branch, saved?.sessionId, saved?.ownedAt);
 

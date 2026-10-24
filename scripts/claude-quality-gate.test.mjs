@@ -167,7 +167,10 @@ test("another session sharing the worktree is let go without touching the state"
     state: owned,
     worktreeStatus: () => ({ dirty: true, unpushed: true }),
   });
-  assert.deepEqual(evaluateStop(deps, "other", soon), { block: false, message: undefined });
+  const decision = evaluateStop(deps, "other", soon);
+  assert.equal(decision.block, false);
+  // Say why the gate was skipped, so a session left out by mistake can notice it.
+  assert.match(decision.message, /owned by session run-task/);
   assert.deepEqual(runs, []);
   // The owner's continuation count is not used up by someone else's stops.
   assert.equal(state().blocks, 3);
@@ -213,6 +216,16 @@ test("an expired owner no longer lets other sessions go", () => {
     worktreeStatus: () => ({ dirty: true, unpushed: true }),
   });
   assert.match(evaluateStop(deps, "other", Date.parse(ownedAt) + OWNER_TTL_MS).reason, /uncommitted/);
+});
+
+test("an unreadable or future ownedAt counts as expired", () => {
+  for (const broken of [null, "not a date", "2026-10-25T00:00:00.000Z"]) {
+    const { deps } = fakeDeps({
+      state: { ...initialState("feat/task-008-dot-history", "run-task"), ownedAt: broken },
+      worktreeStatus: () => ({ dirty: true, unpushed: true }),
+    });
+    assert.match(evaluateStop(deps, "other", soon).reason, /uncommitted/, String(broken));
+  }
 });
 
 test("--reset records the session as the owner, or clears the state without an id", () => {
