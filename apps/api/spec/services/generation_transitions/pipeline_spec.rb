@@ -82,6 +82,47 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
     end
   end
 
+  describe "完了待ちで外部が失敗したとき" do
+    it "一時的な失敗なら、記録を変えずに次の確認を積み直す" do
+      generation = transcribing
+      transcriber.fail_next(:status)
+
+      expect(GenerationTranscription.check(generation.id)).to eq(:waiting)
+      expect(generation.reload.state).to eq("transcribing")
+      expect(GenerationTranscriptionCheckJob).to have_been_enqueued.with(generation.id)
+    end
+
+    it "設定の不足・呼び出し元の違いは待っても直らないので、すぐ失敗にする" do
+      generation = transcribing
+      allow(transcriber).to receive(:status).and_raise(GenerationProviders::NotReady, "not ready")
+
+      GenerationTranscription.check(generation.id)
+
+      expect(generation.reload).to have_attributes(state: "failed", failure_kind: "transcription_failed")
+    end
+
+    it "文字起こしを始めてから上限の時間を過ぎても失敗が続けば、失敗にする" do
+      generation = transcribing(last_progress_at: (GenerationTranscription::GIVE_UP_AFTER + 1.minute).ago)
+      transcriber.fail_next(:status)
+
+      GenerationTranscription.check(generation.id)
+
+      expect(generation.reload).to have_attributes(state: "failed", failure_kind: "transcription_failed")
+      expect(GenerationTranscriptionCheckJob).not_to have_been_enqueued
+    end
+
+    it "終端した結果がTranscribeの形でなければ、文字起こしの失敗にする" do
+      generation = transcribing
+      complete_transcription(generation)
+      storage.objects[generation.transcript_key] = { body: "not json" }
+
+      GenerationTranscription.check(generation.id)
+
+      expect(generation.reload).to have_attributes(state: "failed", failure_kind: "transcription_failed")
+      expect(GenerationComposeJob).not_to have_been_enqueued
+    end
+  end
+
   describe "T11: generating → succeeded_cleanup_pending" do
     it "Dotの保存と記録の更新を同じtransactionで行い、音声の後片付けをenqueueする" do
       generation = generating
@@ -158,6 +199,16 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
       end
     end
 
+    it "全文が上限より長ければ（申告より長い音声）、Bedrockへ送らずに失敗にする" do
+      generation = generating
+      complete_transcription(generation, "あ" * (GenerationComposition::TRANSCRIPT_MAX_LENGTH + 1))
+
+      GenerationComposition.perform(generation.id)
+
+      expect(generation.reload).to have_attributes(state: "failed", failure_kind: "invalid_output")
+      expect(composer.calls).to be_empty
+    end
+
     it "保存の失敗。未保存なのに保存済みと返さない" do
       generation = generating
       allow(Dot).to receive(:new).and_raise(ActiveRecord::StatementInvalid)
@@ -167,6 +218,17 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
       expect(generation.reload).to have_attributes(state: "failed", failure_kind: "persist_failed")
       expect(Dot.where(generation_id: generation.id)).to be_empty
     end
+  end
+
+  it "生成の前に全文が読めなければ、全文の印を外して失敗にする（次の再試行を文字起こしから行う）" do
+    generation = generating
+    storage.objects.delete(generation.transcript_key)
+
+    GenerationComposition.perform(generation.id)
+
+    expect(generation.reload).to have_attributes(state: "failed", failure_kind: "transcription_failed",
+                                                 transcript_ready_at: nil)
+    expect(composer.calls).to be_empty
   end
 
   describe "再試行" do

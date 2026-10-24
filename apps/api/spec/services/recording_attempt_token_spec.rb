@@ -14,6 +14,13 @@ RSpec.describe RecordingAttemptToken do
     end
   end
 
+  it "マイクロ秒より細かい時刻で発行しても、返すattemptはtokenから読んだものと同じ" do
+    attempt, token = described_class.issue(user, now: Time.zone.parse("2026-10-24 10:00:00.123456789 UTC"))
+
+    expect(described_class.verify(token, user)).to eq(attempt)
+    expect(attempt.started_at).to eq(Time.zone.parse("2026-10-24 10:00:00.123456 UTC"))
+  end
+
   it "発行するidはUUID v4で、毎回違う" do
     ids = Array.new(20) { described_class.issue(user).first.id }
 

@@ -6,8 +6,13 @@
 # - accepted: 文字起こしの開始をenqueueし直す
 # - transcribing: 完了待ちをenqueueし直す（AWS側の状態を`GetTranscriptionJob`で見る）
 # - generating: 生成をenqueueし直す（外部AIの消費は繰り返される。TASK-003 Plan §13）
+# - transcribing・generatingで最終進捗からGIVE_UP_AFTERを過ぎたものは、拾い直さずに再試行できる失敗にする
+#   （想定外の例外で落ち続ける処理を、期限の24時間まで外部へ送り直し続けない）
 module GenerationWatchdog
   STALE_AFTER = 2.minutes
+  GIVE_UP_AFTER = GenerationTranscription::GIVE_UP_AFTER
+  GIVE_UP_KINDS = { Generation::TRANSCRIBING => "transcription_failed",
+                    Generation::GENERATING => "generation_failed" }.freeze
 
   module_function
 
@@ -15,8 +20,24 @@ module GenerationWatchdog
     stale = stale(now)
     stale.where(state: Generation::UPLOADING).find_each { inspect_upload(it, now) }
     stale.where(state: Generation::ACCEPTED).pluck(:id).each { GenerationTranscribeJob.perform_later(it) }
-    stale.where(state: Generation::TRANSCRIBING).pluck(:id).each { GenerationTranscriptionCheckJob.perform_later(it) }
-    stale.where(state: Generation::GENERATING).pluck(:id).each { GenerationComposeJob.perform_later(it) }
+    stale.where(state: GIVE_UP_KINDS.keys, last_progress_at: ...(now - GIVE_UP_AFTER)).find_each { give_up(it, now) }
+    resume_external(stale.where(last_progress_at: (now - GIVE_UP_AFTER)..))
+  end
+
+  def resume_external(resumable)
+    resumable.where(state: Generation::TRANSCRIBING).pluck(:id).each { GenerationTranscriptionCheckJob.perform_later(it) }
+    resumable.where(state: Generation::GENERATING).pluck(:id).each { GenerationComposeJob.perform_later(it) }
+  end
+
+  def give_up(generation, now)
+    token = Generation.acquire_lease(generation.id, state: generation.state, duration: GenerationGate::LEASE_DURATION,
+                                                    now:)
+    return unless token
+
+    Rails.logger.warn("generation abandoned: generation_id=#{generation.id} state=#{generation.state}")
+    Generation.transition(generation.id, from: generation.state, to: Generation::FAILED, holding: token,
+                                         failure_kind: GIVE_UP_KINDS.fetch(generation.state),
+                                         lease_token: nil, lease_expires_at: nil)
   end
 
   def stale(now)
@@ -38,5 +59,5 @@ module GenerationWatchdog
   rescue GenerationProviders::Error
     Generation.release_lease(generation.id, token)
   end
-  private_class_method :stale, :inspect_upload
+  private_class_method :stale, :resume_external, :give_up, :inspect_upload
 end

@@ -14,7 +14,8 @@ class RecordingAttemptToken
 
   class << self
     def issue(user, now: Time.current)
-      started_at = now.utc
+      # tokenに入れる精度（マイクロ秒）にそろえ、返すAttemptをverifyの結果と同じにする
+      started_at = now.utc.floor(6)
       attempt = Attempt.new(id: SecureRandom.uuid, user_id: user.id, started_at:,
                             expires_at: started_at + Generation::ATTEMPT_LIFETIME)
       [attempt, encryptor.encrypt_and_sign(payload(attempt), purpose: PURPOSE)]

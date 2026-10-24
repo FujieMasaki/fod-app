@@ -117,6 +117,31 @@ RSpec.describe GenerationUpload do
     end
   end
 
+  describe "本文を読んでいる間に、同じattemptの処理が取り消された" do
+    it "取り消しと後片付けが終わって記録が消えていても、使用済みのattemptとして作り直さない" do
+      read_audio = lambda do
+        ConsumedRecordingAttempt.record(attempt.id, expires_at: attempt.expires_at)
+        uploaded_audio
+      end
+
+      result = described_class.call(user:, token:, read_audio:)
+
+      expect(result.problem).to eq(:attempt_invalid)
+      expect(Generation.exists?(attempt.id)).to be(false)
+    end
+
+    it "先に届いた側の記録が取り消し済みなら、既存の処理として返さない" do
+      read_audio = lambda do
+        create(:generation, id: attempt.id, user:, state: "cancel_requested", cancel_reason: "canceled")
+        uploaded_audio
+      end
+
+      result = described_class.call(user:, token:, read_audio:)
+
+      expect(result.problem).to eq(:attempt_invalid)
+    end
+  end
+
   it "別の利用者のattempt・改ざんしたattemptは、本文を読まずに不正として拒否する" do
     result, reads = upload(as: create(:user))
     expect([result.problem, reads]).to eq([:attempt_invalid, 0])
@@ -149,6 +174,16 @@ RSpec.describe GenerationUpload do
     expect(result.problem).to eq(:account_deletion_in_progress)
     expect(storage.objects).to be_empty
     expect(generation).to have_attributes(state: "cancel_requested", cancel_reason: "withdrawn")
+    expect(GenerationTranscribeJob).not_to have_been_enqueued
+  end
+
+  it "音声を置いている間に利用者が取り消したら、置いた音声を消して、もう使えないattemptとして答える" do
+    storage.before_next(:put) { GenerationCancellation.cancel_by_user(user:, generation_id: attempt.id) }
+
+    result, = upload
+
+    expect(result.problem).to eq(:attempt_invalid)
+    expect(storage.objects).to be_empty
     expect(GenerationTranscribeJob).not_to have_been_enqueued
   end
 

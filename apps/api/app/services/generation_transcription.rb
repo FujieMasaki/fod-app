@@ -7,6 +7,9 @@
 # - 終端したら、Bedrockへ送る前に入口（利用者の行のlock・active・世代・期限）をもう一度通す。
 module GenerationTranscription
   CHECK_INTERVAL = 15.seconds
+  # 完了待ちで外部の失敗が続いたときに、待つのをやめて失敗にするまでの時間（文字起こしを始めてから。30分の音声でも
+  # Transcribeはこの時間内に終わる見込み。初期値で、実測（H4）で見直す）
+  GIVE_UP_AFTER = 1.hour
 
   module_function
 
@@ -41,8 +44,15 @@ module GenerationTranscription
     when :failed then fail(generation, token, "transcription_failed")
     when :completed then finish(generation, token, now)
     end
-  rescue GenerationProviders::Error
-    wait(generation, token, now)
+  rescue GenerationProviders::Error => e
+    Rails.logger.warn("generation transcription check failed: generation_id=#{generation.id} error=#{e.class.name}")
+    give_up?(generation, e, now) ? fail(generation, token, "transcription_failed") : wait(generation, token, now)
+  end
+
+  # 設定の不足・呼び出し元の違い（NotReady）は待っても直らないので、すぐ失敗にする。それ以外は一時的な失敗として
+  # 待ち直すが、文字起こしを始めてからGIVE_UP_AFTERを過ぎたら失敗にする（期限の24時間まで「処理中」に見せない）
+  def give_up?(generation, error, now)
+    error.is_a?(GenerationProviders::NotReady) || generation.last_progress_at <= now - GIVE_UP_AFTER
   end
 
   # accepted → transcribing（T6）で試行番号を進める。再試行（T14）で既にtranscribingなら実行権だけ取る
@@ -128,6 +138,6 @@ module GenerationTranscription
                                          failure_kind: kind, lease_token: nil, lease_expires_at: nil, **attrs)
     :failed
   end
-  private_class_method :react, :claim, :begin_job, :holding?, :empty?, :wait, :finish, :proceed,
+  private_class_method :react, :give_up?, :claim, :begin_job, :holding?, :empty?, :wait, :finish, :proceed,
                        :cancel_after_denial, :fail
 end
