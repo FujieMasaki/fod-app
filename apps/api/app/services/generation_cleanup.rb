@@ -99,17 +99,27 @@ module GenerationCleanup
   # 消す対象は、命名規則から導いたものに、記録が持つkey・job名を足して決める（規則を変えても、過去の記録が
   # 指すものを取り残さない。TASK-003 Plan §20「処理の記録に持つ項目」）
   def delete_audio(generation)
-    prefixes(GenerationNaming.audio_prefix(generation.id), generation.audio_key)
+    prefixes(generation, GenerationNaming.audio_prefix(generation.id), generation.audio_key)
       .each { GenerationProviders.storage.delete_prefix(it) }
   end
 
   def delete_transcript(generation)
-    prefixes(GenerationNaming.transcript_prefix(generation.id), generation.transcript_key)
+    prefixes(generation, GenerationNaming.transcript_prefix(generation.id), generation.transcript_key)
       .each { GenerationProviders.storage.delete_prefix(it) }
     job_names(generation).each { GenerationProviders.transcriber.delete(it) }
   end
 
-  def prefixes(derived, key) = [derived, key && "#{File.dirname(key)}/"].compact.uniq
+  # 記録のkeyから足すのは、この処理IDの下のディレクトリ（`<種類>/<処理ID>/`）だけ。記録の値が壊れていても、別の処理の
+  # objectを消さない（TASK-003 Plan §20「そのDotを作った処理の分だけ」）。外れたkeyは消さずにログへ残す
+  def prefixes(generation, derived, key)
+    return [derived] unless key
+
+    owned = "#{File.dirname(key)}/"
+    return [derived, owned].uniq if owned.match?(%r{\A[a-z]+/#{Regexp.escape(generation.id)}/\z})
+
+    Rails.logger.warn("generation cleanup skipped a foreign key: generation_id=#{generation.id}")
+    [derived]
+  end
 
   # これまでの文字起こしの試行のjobすべて（再試行で番号が進んでも、古いjobを取り残さない）と、記録が持つjob名
   def job_names(generation)
