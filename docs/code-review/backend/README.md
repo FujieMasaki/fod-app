@@ -76,10 +76,13 @@ Mediumがなければ`LGTM`と明記する。
     raiseした例外には、rescueした例外が暗黙に`cause`として付く（`cause: nil`を明示しない限り）。
 - Jobの引数と例外のmessageに、[security.md](./security.md) §3が通常ログ・error tracking・例外messageへ
   出さないとするものを入れていないか。残る先と期間は、成否・retry・discardと設定（`log_arguments`、
-  Solid Queueの`preserve_finished_jobs`・`clear_finished_jobs_after`）で変わるので、使っているgemの版で確かめる。
+  Solid Queueの`preserve_finished_jobs`・`clear_finished_jobs_after`、終わったJobを消す定期のtaskの有無）で変わるので、
+  使っているgemの版で確かめる。
   たとえば次のとおり。
   - 引数は、`log_arguments`を`false`にしても`solid_queue_jobs.arguments`に残る。ActiveJobの`retry_on`は
-    retryのたびに同じ引数で新しい行を作り、元の行は終わったJobとして片付けまで残る（`discard_on`も同じ）。
+    retryのたびに同じ引数で新しい行を作り、元の行は終わったJobとして残る（`discard_on`で捨てたJobの行も同じ）。
+  - 終わったJobの行は、`preserve_finished_jobs`が真（既定）なら、`clear_finished_in_batches`を呼ぶ定期のtask
+    （`config/recurring.yml`）が消すまで残る。`clear_finished_jobs_after`は消す対象の期間で、taskがなければ期限なく残る。
   - 失敗したJobの行は、Solid Queueの失敗の記録（`FailedExecution`）を手でretry・discardするまで期限なく残る。
   - 例外のmessageは、ActiveJobのログ（retryの途中の失敗は、最後に成功したJobでも残る）・
     `solid_queue_failed_executions.error`・error tracking（`cause`を含む）に残る。
@@ -93,7 +96,8 @@ Mediumがなければ`LGTM`と明記する。
   コメントとして消える。YAMLが読んだ後に変換しても元の値には戻らないので、型はERBの中で決めてから埋め込む。
   - 文字列は`.to_json`で引用符とescapeを付ける。未設定の値は`null`（nil）になるので、`ENV.fetch`で必須に
     するか既定値を決める。
-  - 数値は`.to_i`する。`.to_i`は空・不正な値を0にするので、下限を付けるか`Integer(value, 10)`で落とす。
+  - 数値は`.to_i`する。`.to_i`は空・数字で始まらない値を0にし、途中が不正な値は先頭の数字だけを読むので、
+    下限を付けるか`Integer(value, 10)`で落とす。
   - 境目の値（先頭が0・空）でtestしているかも確かめる。
 - 値が連動する設定（workerのthreadsとDBの接続数など）を片方だけ変えていないか。連動する値は、片方を変えると
   落ちるtestがあるか。
