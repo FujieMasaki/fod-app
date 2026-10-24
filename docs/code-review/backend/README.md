@@ -60,25 +60,37 @@ Mediumがなければ`LGTM`と明記する。
 | Model / migration | validationとDB制約、UUID foreign key、data migration、rollback、既存dataへの影響 |
 | AI / storage / 外部API | 送信内容の最小化、timeout、failure、再試行、冪等性、ログ・削除。SDKの例外を包む対象と再送の設定（下の補足） |
 | Job | enqueueのtransaction境界、重複実行、retry、dead letter相当の観測方法。引数と失敗の例外が何に残るか（下の補足） |
-| 設定（`config/*.yml`・ERB） | 埋め込んだ環境変数の型・構造、連動する設定値（下の補足） |
+| 状態遷移・後片付け | 条件付きの更新が負けたときの答え方、記録の値から決める削除の範囲（下の補足） |
+| 設定（`config/*.yml`・ERB・`config/puma.rb`・環境変数の既定値） | 埋め込んだ環境変数の型・構造、連動する設定値（下の補足） |
 | WebとAPIの同時変更 | request / response schema、互換性、同一PRでの更新（分けた場合は、契約のPRに生成した型・Zodが入っているか、expand・migrate・contractの段階を同じ統合ブランチにまとめていないか）、デプロイ時差 |
 | auth / CORS / CSRF | 採用した認証方式、Cookieかtokenか、配信origin、ブラウザからの利用経路 |
 
-補足（処理系の挙動で見落としやすいもの）:
+補足（処理系の挙動や競合で見落としやすいもの）:
 
 - SDKの例外を包むときは、包む対象のclassをSDKの例外の階層で確かめる。共通の親（`ServiceError`など）を
-  継承しない例外や、clientを作る途中・認証情報を取り直す途中の例外が漏れやすい。SDKの再送の設定は、その設定が
-  効く条件（再送のmode）と、明示しなかった値を決める環境変数・共有の設定ファイル（`~/.aws/config`のprofile）も
-  確かめる。
+  継承しない例外（通信の失敗の`Seahorse::Client::NetworkingError`など）や、clientを作る途中・認証情報を
+  取り直す途中の例外が漏れやすい。SDKの再送の設定は、その設定が効く条件（再送のmode）と、明示しなかった値を
+  決める環境変数・共有の設定ファイル（`~/.aws/config`のprofile）も確かめる。
 - Jobの引数と例外のmessageに、[security.md](./security.md) §3が通常ログ・error tracking・例外messageへ
-  出さないとするものを入れていないか。残る先と期間は、成否・retry・`discard_on`と設定（`log_arguments`、
+  出さないとするものを入れていないか。残る先と期間は、成否・retry・discardと設定（`log_arguments`、
   Solid Queueの`preserve_finished_jobs`・`clear_finished_jobs_after`）で変わるので、使っているgemの版で確かめる。
-  たとえば引数は、`log_arguments`を`false`にしても`solid_queue_jobs.arguments`に残り、失敗したJobではretryか
-  discardするまで期限なく残る。例外のmessageは、ActiveJobのログ（retryの途中の失敗は、最後に成功したJobでも
-  残る）・`solid_queue_failed_executions.error`・error tracking（`cause`を含む）に残る。
+  たとえば次のとおり。
+  - 引数は、`log_arguments`を`false`にしても`solid_queue_jobs.arguments`に残る。ActiveJobの`retry_on`は
+    retryのたびに同じ引数で新しい行を作り、元の行は終わったJobとして片付けまで残る（`discard_on`も同じ）。
+  - 失敗したJobの行は、Solid Queueの失敗の記録（`FailedExecution`）を手でretry・discardするまで期限なく残る。
+  - 例外のmessageは、ActiveJobのログ（retryの途中の失敗は、最後に成功したJobでも残る）・
+    `solid_queue_failed_executions.error`・error tracking（`cause`を含む）に残る。
+- 条件付きの更新（状態・実行権を条件にしたUPDATE・DELETE）が0行だったときに、読んだ時点の値で答えていないか。
+  負けた相手（取り消し・退会・完了・後片付け）によって正しい答えが変わるので、最新の状態を読み直してから答え、
+  競合の順序を作るspecがあるか。lockしない遷移と並ぶ読み取りは、lockするか読み直す。
+- 記録の値（key・job名など）から削除の範囲を決めるときは、その範囲がその記録自身の識別子の下に収まるかを
+  確かめる。値が壊れていても、別の記録の資源を消さないようにする。
 - 引用符のない値はYAMLが型と構造を推測する。値の中身しだいで整数・8進数（先頭が0で0〜7だけ）・真偽値
-  （`yes`・`off`など）・`nil`（空の値）になるか、文字列のまま残る。` #`より後はコメントとして消える（例であって
-  全部ではない）。YAMLが読んだ後に変換しても元の値には戻らないので、型はERBの中で決めてから埋め込む（文字列は
-  `.to_json`で引用符とescapeを付け、数値は`.to_i`する。`.to_i`は空・不正な値を0にするので、下限を付けるか`Integer(value, 10)`で落とす）。境目の値（先頭が0・空）でtestしているかも確かめる。
+  （`yes`・`off`など）・`nil`（空の値）になるか、文字列のまま残る（例であって全部ではない）。` #`より後は
+  コメントとして消える。YAMLが読んだ後に変換しても元の値には戻らないので、型はERBの中で決めてから埋め込む。
+  - 文字列は`.to_json`で引用符とescapeを付ける。未設定の値は`null`（nil）になるので、`ENV.fetch`で必須に
+    するか既定値を決める。
+  - 数値は`.to_i`する。`.to_i`は空・不正な値を0にするので、下限を付けるか`Integer(value, 10)`で落とす。
+  - 境目の値（先頭が0・空）でtestしているかも確かめる。
 - 値が連動する設定（workerのthreadsとDBの接続数など）を片方だけ変えていないか。連動する値は、片方を変えると
   落ちるtestがあるか。
