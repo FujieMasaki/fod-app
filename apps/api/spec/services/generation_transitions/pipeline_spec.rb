@@ -80,6 +80,18 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
       expect(generation.reload).to have_attributes(state: "failed", failure_kind: "empty_recording")
       expect(composer.calls).to be_empty
     end
+
+    it "書き出された結果が上限より大きければ、読まずに全文が長すぎるときと同じ失敗にする" do
+      generation = transcribing
+      complete_transcription(generation)
+      stub_const("GenerationComposition::TRANSCRIPT_MAX_BYTES", 10)
+
+      GenerationTranscription.check(generation.id)
+
+      expect(generation.reload).to have_attributes(state: "failed", failure_kind: "invalid_output")
+      expect(generation.contract_failure_kind).to eq("processing_failed")
+      expect(composer.calls).to be_empty
+    end
   end
 
   describe "完了待ちで外部が失敗したとき" do
@@ -202,6 +214,16 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
     it "全文が上限より長ければ（申告より長い音声）、Bedrockへ送らずに失敗にする" do
       generation = generating
       complete_transcription(generation, "あ" * (GenerationComposition::TRANSCRIPT_MAX_LENGTH + 1))
+
+      GenerationComposition.perform(generation.id)
+
+      expect(generation.reload).to have_attributes(state: "failed", failure_kind: "invalid_output")
+      expect(composer.calls).to be_empty
+    end
+
+    it "生成の前に読む結果が上限より大きくても、Bedrockへ送らずに同じ失敗にする" do
+      generation = generating
+      stub_const("GenerationComposition::TRANSCRIPT_MAX_BYTES", 10)
 
       GenerationComposition.perform(generation.id)
 

@@ -10,8 +10,24 @@ module GenerationComposition
   # 申告より長い音声とみなして送らない（外部AIの費用に上限をつける。Transcribeの費用はrate limitで抑える）。
   # 初期値で、実測（H4）で見直す
   TRANSCRIPT_MAX_LENGTH = 20_000
+  # Transcribeが書き出した結果（JSON）を読む上限（byte）。外部が書いたものをそのままメモリへ載せない。結果には全文に
+  # 加えて単語ごとの時刻と確からしさが入るので、全文の上限より大きくする。初期値で、実測（H4）で見直す
+  TRANSCRIPT_MAX_BYTES = 2.megabytes
+  # 文字起こしの完了時に全文を読めなかったとき（`read_transcript`がnil・:too_large）の失敗の種類。上限より大きい結果は、
+  # 全文が上限より長いときと同じにする
+  UNREADABLE_KINDS = { nil => "transcription_failed", too_large: "invalid_output" }.freeze
 
   module_function
+
+  # 書き出された結果から全文を読む（文字起こしの完了時と生成の前）。無い・形が違えばnil。上限より大きければ読まずに
+  # :too_large（全文が上限より長いときと同じく、申告より長い音声とみなす）
+  def read_transcript(generation)
+    json = GenerationProviders.storage.read(generation.transcript_key, max_bytes: TRANSCRIPT_MAX_BYTES)
+    TranscriptionGateway.text_from(json.to_s)
+  rescue GenerationProviders::TooLarge
+    Rails.logger.warn("generation transcript output too large: generation_id=#{generation.id}")
+    :too_large
+  end
 
   # 結果はSymbol: :succeeded / :failed / :skipped
   def perform(generation_id, now: Time.current)
@@ -24,7 +40,7 @@ module GenerationComposition
   end
 
   def compose(generation, token, now)
-    text = TranscriptionGateway.text_from(GenerationProviders.storage.read(generation.transcript_key).to_s)
+    text = read_transcript(generation)
     unusable = reject_transcript(generation, token, text)
     return unusable if unusable
 
@@ -81,6 +97,7 @@ module GenerationComposition
   # 全文が読めなければ、次の再試行は文字起こしから行う。上限より長ければ、契約の失敗の種類を増やさないよう
   # 生成できない入力として扱う（契約ではprocessing_failed。再試行しても送らない）。どちらでもなければnil
   def reject_transcript(generation, token, text)
+    return fail(generation, token, "invalid_output") if text == :too_large
     return fail(generation, token, "transcription_failed", transcript_ready_at: nil) if text.blank?
     return unless text.length > TRANSCRIPT_MAX_LENGTH
 

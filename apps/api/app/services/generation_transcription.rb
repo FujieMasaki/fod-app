@@ -98,8 +98,8 @@ module GenerationTranscription
 
   # T8: 全文を読み、空でなければ入口を通して生成へ進む。空（無音・極端に短い）なら録り直しを案内する（T9）
   def finish(generation, token, now)
-    text = TranscriptionGateway.text_from(GenerationProviders.storage.read(generation.transcript_key).to_s)
-    return fail(generation, token, "transcription_failed") if text.nil?
+    text = GenerationComposition.read_transcript(generation)
+    return fail(generation, token, GenerationComposition::UNREADABLE_KINDS.fetch(text)) unless text.is_a?(String)
     return fail(generation, token, "empty_recording", transcript_ready_at: now) if empty?(text)
 
     proceed(generation, token, now)
