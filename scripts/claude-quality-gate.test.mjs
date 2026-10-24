@@ -163,10 +163,16 @@ const soon = Date.parse(ownedAt) + 60 * 1000;
 
 test("another session sharing the worktree is let go without touching the state", () => {
   const owned = { ...initialState("feat/task-008-dot-history", "run-task", ownedAt), blocks: 3 };
+  let writes = 0;
   const { deps, runs, state } = fakeDeps({
     state: owned,
     worktreeStatus: () => ({ dirty: true, unpushed: true }),
   });
+  const writeState = deps.writeState;
+  deps.writeState = (next) => {
+    writes += 1;
+    writeState(next);
+  };
   const decision = evaluateStop(deps, "other", soon);
   assert.equal(decision.block, false);
   // Say why the gate was skipped, so a session left out by mistake can notice it.
@@ -174,6 +180,7 @@ test("another session sharing the worktree is let go without touching the state"
   assert.deepEqual(runs, []);
   // The owner's continuation count is not used up by someone else's stops.
   assert.equal(state().blocks, 3);
+  assert.equal(writes, 0);
 });
 
 test("the session that ran --reset is still held to the gate", () => {
