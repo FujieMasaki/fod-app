@@ -86,8 +86,12 @@ module GenerationProviders
       GenerationSettings.verify_ready!
       CallerAccountGuard.verify!
       klass.new(region: GenerationSettings.region, logger: nil, http_wire_trace: false, **)
-    # clientを作り終えるまではSTS以外へ何も送っていないので、認証情報の探索の失敗（profileの誤り等。種類が多く、
-    # `AWS_ERRORS`で挙げきれない）も含めて、すべて準備ができていない失敗として扱う
+    # STSの呼び出しが通信の失敗・throttling等で失敗したときは、待てば直り得る外部の失敗として扱う（準備ができていない
+    # 失敗にすると、呼ぶ側が待たずに処理を失敗にするため）
+    rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
+      Error.raise_from(e)
+    # clientを作り終えるまではSTS以外へ何も送っていないので、それ以外（設定の不足・アカウントの違い・認証情報の探索の
+    # 失敗。profileの誤り等は種類が多く、`AWS_ERRORS`で挙げきれない）は、すべて準備ができていない失敗として扱う
     rescue StandardError => e
       raise NotReady.wrap(e), cause: nil
     end
