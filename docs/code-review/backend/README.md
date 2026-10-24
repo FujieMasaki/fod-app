@@ -70,12 +70,15 @@ Mediumがなければ`LGTM`と明記する。
   継承しない例外や、clientを作る途中・認証情報を取り直す途中の例外が漏れやすい。SDKの再送の設定は、その設定が
   効く条件（再送のmode）と、明示しなかった値を決める環境変数・共有の設定ファイル（`~/.aws/config`のprofile）も
   確かめる。
-- Jobの引数は成否に関係なく、ログ（ActiveJobの引数のログ）と`solid_queue_jobs.arguments`（終わったJobも
-  片付けまで残る）に残る。失敗したときは、さらに例外のmessageとbacktraceが`solid_queue_failed_executions.error`と
-  error tracking（`cause`を含む）に残る。
+- Jobの引数と例外のmessageに、[security.md](./security.md) §3が通常ログ・error tracking・例外messageへ
+  出さないとするものを入れていないか。残る先と期間は、成否・retry・`discard_on`と設定（`log_arguments`、
+  Solid Queueの`preserve_finished_jobs`・`clear_finished_jobs_after`）で変わるので、使っているgemの版で確かめる。
+  たとえば引数は、`log_arguments`を`false`にしても`solid_queue_jobs.arguments`に残り、失敗したJobではretryか
+  discardするまで期限なく残る。例外のmessageは、ActiveJobのログ（retryの途中の失敗は、最後に成功したJobでも
+  残る）・`solid_queue_failed_executions.error`・error tracking（`cause`を含む）に残る。
 - 引用符のない値はYAMLが型と構造を推測する。値の中身しだいで整数・8進数（先頭が0で0〜7だけ）・真偽値
   （`yes`・`off`など）・`nil`（空の値）になるか、文字列のまま残る。` #`より後はコメントとして消える（例であって
   全部ではない）。YAMLが読んだ後に変換しても元の値には戻らないので、型はERBの中で決めてから埋め込む（文字列は
-  `.to_json`で引用符とescapeを付け、数値は`.to_i`する）。境目の値（先頭が0・空）でtestしているかも確かめる。
+  `.to_json`で引用符とescapeを付け、数値は`.to_i`する。`.to_i`は空・不正な値を0にするので、下限を付けるか`Integer(value, 10)`で落とす）。境目の値（先頭が0・空）でtestしているかも確かめる。
 - 値が連動する設定（workerのthreadsとDBの接続数など）を片方だけ変えていないか。連動する値は、片方を変えると
   落ちるtestがあるか。
