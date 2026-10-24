@@ -63,9 +63,12 @@ module GenerationComposition
     compose(generation, token, now)
   end
 
+  # 実行権を取った後に全文を読む間に、取り消し・退会を受理していることがある。Bedrockへ送る直前に実行権を
+  # 確かめ直し、失っていれば送らない（architecture「退会の受理後に新しいBedrockのrequestを開始しない」）。
+  # 確かめた後から送り終えるまでに受理したものは、既に始まっているrequestとして保存の段階で止める
   def compose(generation, token, now)
     text = read_transcript(generation)
-    unusable = reject_transcript(generation, token, text)
+    unusable = holding?(generation, token) ? reject_transcript(generation, token, text) : :skipped
     return unusable if unusable
 
     output = GenerationProviders.composer.compose(transcript: text, date: Dot.date_for(generation.started_at),
@@ -74,6 +77,10 @@ module GenerationComposition
     fields ? persist(generation, token, fields, now) : fail(generation, token, "invalid_output")
   rescue GenerationProviders::Error
     fail(generation, token, "generation_failed")
+  end
+
+  def holding?(generation, token)
+    Generation.exists?(id: generation.id, state: Generation::GENERATING, lease_token: token)
   end
 
   # 生成結果の検証（TASK-003 Plan §17）。空・上限超過・壊れた文字列は保存しない
@@ -135,6 +142,6 @@ module GenerationComposition
                                          failure_kind: kind, lease_token: nil, lease_expires_at: nil, **attrs)
     :failed
   end
-  private_class_method :cancel_after_denial, :compose, :reject_transcript, :valid_text?, :persist, :result_saved?,
-                       :insert_dot, :succeed, :fail
+  private_class_method :cancel_after_denial, :compose, :holding?, :reject_transcript, :valid_text?, :persist,
+                       :result_saved?, :insert_dot, :succeed, :fail
 end

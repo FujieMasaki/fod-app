@@ -182,6 +182,15 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
                                         date: Dot.date_for(generation.started_at), duration_seconds: 120)
     end
 
+    it "全文を読む間に取り消し・退会を受理していれば、Bedrockへ送らない" do
+      generation = generating
+      storage.before_next(:read) { GenerationWithdrawal.accept(user) }
+
+      expect(GenerationComposition.perform(generation.id)).to eq(:skipped)
+      expect(composer.calls).to be_empty
+      expect(generation.reload.state).to eq("cancel_requested")
+    end
+
     it "保存の直前に退会を受理していれば、Dotを保存しない（世代番号の確認とinsertを同じtransactionで行う）" do
       generation = generating
       composer.before_next(:compose) { GenerationWithdrawal.accept(user) }
