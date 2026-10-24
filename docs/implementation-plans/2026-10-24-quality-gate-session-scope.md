@@ -88,6 +88,8 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 - Claude Codeが`CLAUDE_CODE_SESSION_ID`を渡さなくなった場合は、従来の挙動（全セッションを差し戻す）に戻る。
 - 持ち主のセッションを閉じた後、同じworktreeで新しいセッションが`/run-task`なしにタスクブランチで作業すると、
   品質ゲートがかからない。`/run-task`は開始時に`--reset`するため、自動実行には影響しない。
+- 止まったセッションを再開したときにセッションidが変わる場合、`--reset`するまで差し戻されない。再開時に
+  `--reset`を実行する手順は、skillの「止まるときは」「修正上限に達したとき」に既にある。
 
 ## 14. Verification
 
