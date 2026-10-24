@@ -54,8 +54,11 @@
    持ち主になってから24時間（`OWNER_TTL_MS`）以内なら、検査も状態の更新もせずに終了を許す。そのとき、
    持ち主のidと時刻を画面に出す（`--reset`を忘れて外れたセッションが気付けるように）。`ownedAt`が読めない、
    または未来の時刻なら、期限切れとして扱う（壊れた記録で24時間より長く外れ続けないように）。
-4. ブランチが変わって状態を初期化するときも、記録したidを引き継ぐ（PRを分けたタスクはブランチを移るため）。
-5. idが記録されていない状態（`--reset`前や、idのない環境）、入力に`session_id`がない場合、持ち主が24時間を
+4. 検査（数分かかる）の後に状態を書き戻す前に、状態を読み直す。検査の間に`--reset`で持ち主が変わっていたら
+   書き戻さない（新しい持ち主を消さないため）。新しい持ち主が別のセッションなら、終了を許す。
+   読み直しから書き込みまでの短い間の競合は残すが、そこに`--reset`が入る確率は小さいので、ロックは入れない。
+5. ブランチが変わって状態を初期化するときも、記録したidを引き継ぐ（PRを分けたタスクはブランチを移るため）。
+6. idが記録されていない状態（`--reset`前や、idのない環境）、入力に`session_id`がない場合、持ち主が24時間を
    過ぎた場合は、従来どおりどのセッションも差し戻す。
 
 ## 8. Why This Approach
@@ -84,7 +87,7 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 
 - 変更: `scripts/claude-quality-gate.mjs`（セッションidの記録と判定）
 - 変更: `scripts/claude-quality-gate.test.mjs`（別セッション・所有セッション・ブランチ移動・id無し・期限切れ・
-  壊れた`ownedAt`・`--reset`・`--pause`のtest）
+  壊れた`ownedAt`・検査中の`--reset`・`--reset`・`--pause`のtest）
 - 変更: `.claude/skills/run-task/SKILL.md`
 - 変更: `.claude/skills/pr-review-cycle/SKILL.md`
 - 変更: `docs/development/pull-requests.md`
@@ -127,7 +130,7 @@ Claude が止まろうとする → Stop hook（stdin の session_id）
 
 ### Automated
 
-- `node --test scripts/claude-quality-gate.test.mjs`: 21件成功（追加9件）。
+- `node --test scripts/claude-quality-gate.test.mjs`: 22件成功（追加10件）。
 
 ### Manual
 
