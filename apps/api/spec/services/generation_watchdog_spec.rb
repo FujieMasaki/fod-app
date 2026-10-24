@@ -61,6 +61,19 @@ RSpec.describe GenerationWatchdog do
     expect(GenerationComposeJob).to have_been_enqueued.with(generating.id)
   end
 
+  it "最終進捗から上限の時間を過ぎた文字起こし・生成は、拾い直さずに再試行できる失敗にする" do
+    old = (described_class::GIVE_UP_AFTER + 1.minute).ago
+    transcribing = stale("transcribing", last_progress_at: old)
+    generating = stale("generating", last_progress_at: old)
+
+    described_class.sweep
+
+    expect(transcribing.reload).to have_attributes(state: "failed", failure_kind: "transcription_failed")
+    expect(generating.reload).to have_attributes(state: "failed", failure_kind: "generation_failed")
+    expect(GenerationTranscriptionCheckJob).not_to have_been_enqueued
+    expect(GenerationComposeJob).not_to have_been_enqueued
+  end
+
   it "Transcribeの完了を待っている処理は、最終進捗が古くても拾わない（生きているjobを二重に開始しない）" do
     waiting = stale("transcribing", lease_expires_at: 10.seconds.from_now)
 
