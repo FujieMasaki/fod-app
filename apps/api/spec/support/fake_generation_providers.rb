@@ -44,9 +44,13 @@ module FakeGenerationProviders
       @objects.key?(key)
     end
 
-    def read(key)
+    # 本物（AudioStore#read）と同じく、上限を超えていれば読まずにTooLarge
+    def read(key, max_bytes:)
       call!(:read)
-      @objects.dig(key, :body)
+      body = @objects.dig(key, :body)
+      raise GenerationProviders::TooLarge, "object exceeds #{max_bytes} bytes" if body.to_s.bytesize > max_bytes
+
+      body
     end
 
     def delete_prefix(prefix)
