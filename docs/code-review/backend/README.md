@@ -71,6 +71,9 @@ Mediumがなければ`LGTM`と明記する。
   継承しない例外（通信の失敗の`Seahorse::Client::NetworkingError`など）や、clientを作る途中・認証情報を
   取り直す途中の例外が漏れやすい。SDKの再送の設定は、その設定が効く条件（再送のmode）と、明示しなかった値を
   決める環境変数・共有の設定ファイル（`~/.aws/config`のprofile）も確かめる。
+  - rescue節の中で外部を呼んでいないか。Rubyでは、rescue節の中で起きた例外を同じ`begin`・methodの別の
+    rescue節は捕まえないので、包むはずの例外が素通りする。rescue節の中（そこから呼んだmethodを含む）で
+    raiseした例外には、rescueした例外が暗黙に`cause`として付く（`cause: nil`を明示しない限り）。
 - Jobの引数と例外のmessageに、[security.md](./security.md) §3が通常ログ・error tracking・例外messageへ
   出さないとするものを入れていないか。残る先と期間は、成否・retry・discardと設定（`log_arguments`、
   Solid Queueの`preserve_finished_jobs`・`clear_finished_jobs_after`）で変わるので、使っているgemの版で確かめる。
