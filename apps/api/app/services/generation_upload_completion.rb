@@ -5,7 +5,7 @@ module GenerationUploadCompletion
 
   # T1: 利用者の行をlockして世代番号を確かめ、`accepted`にしてJobをenqueueする。
   # ずれていれば（退会・取り消しを受理した後に置かれた）、置いた音声を消して取り消しへ回す（T3）。
-  # 結果は :accepted / :canceled
+  # 結果は :accepted / :canceled / :superseded（実行権を失い、処理は別の実行が続けている）
   def complete(generation_id, lease_token)
     accepted = ActiveRecord::Base.transaction do
       generation = Generation.find_by(id: generation_id)
@@ -32,14 +32,24 @@ module GenerationUploadCompletion
                                          lease_token: nil, lease_expires_at: nil)
   end
 
-  # 記録が消えていても手元のprefixで音声を消す（何もしないとobjectだけが残る）。残っていれば取り消しへ回す
+  # 確定できなかったときの後始末。実行権を失っただけで処理が続いているなら（watchdogが`upload_failed`にした後の
+  # 再送や、watchdogによる確定）何も消さない。prefixごと消すと、再送・確定した音声まで消すため。置いた音声は、
+  # その処理の成功・期限切れの後片付けがprefixを列挙して消す。
+  # それ以外（記録が消えた・取り消しや成功の後片付けに入った・実行権を持ったまま世代がずれた）は手元のprefixで
+  # 消す（後片付けが先に終わっていると、objectだけが残る）。実行権を持っていれば取り消しへ回す
   def discard(generation_id, lease_token)
+    generation = Generation.find_by(id: generation_id)
+    holding = generation && holding?(generation, lease_token)
+    return :superseded if generation && !holding && !winding_down?(generation)
+
     GenerationProviders.storage.delete_prefix(GenerationNaming.audio_prefix(generation_id))
-    generation = Generation.find_by(id: generation_id, state: Generation::UPLOADING, lease_token:)
-    GenerationCancellation.request(user_id: generation.user_id, generation_id:, reason: "withdrawn") if generation
+    GenerationCancellation.request(user_id: generation.user_id, generation_id:, reason: "withdrawn") if holding
     :canceled
   rescue GenerationGate::Denied
     :canceled
   end
-  private_class_method :same_generation?, :accept, :discard
+
+  def holding?(generation, token) = generation.state == Generation::UPLOADING && generation.lease_token == token
+  def winding_down?(generation) = generation.canceled? || generation.state == Generation::SUCCEEDED_CLEANUP_PENDING
+  private_class_method :same_generation?, :accept, :discard, :holding?, :winding_down?
 end

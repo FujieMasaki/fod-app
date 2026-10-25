@@ -197,4 +197,34 @@ RSpec.describe GenerationUpload do
 
     expect(storage.objects).to be_empty
   end
+
+  describe "置いている間に実行権を失った（PUTが実行権の期限とwatchdogの猶予を超えた）" do
+    let(:late) { (GenerationUpload::LEASE_DURATION + GenerationWatchdog::STALE_AFTER + 1.second).from_now }
+
+    it "watchdogがupload_failedにした後に再送された音声を、古いPUTの後始末で消さない" do
+      storage.before_next(:put) do
+        GenerationWatchdog.sweep(now: late)
+        expect(upload.first.outcome).to eq(:created)
+      end
+
+      result, = upload
+
+      expect(result.outcome).to eq(:existing)
+      expect(generation).to have_attributes(state: "accepted", upload_attempt: 2)
+      expect(storage.keys).to include(generation.audio_key)
+    end
+
+    it "置き終わった音声をwatchdogが確定した後も、古い要求の後始末で消さない" do
+      storage.before_next(:put) do
+        storage.objects[generation.audio_key] = { body: "audio" }
+        GenerationWatchdog.sweep(now: late)
+      end
+
+      result, = upload
+
+      expect(result.outcome).to eq(:existing)
+      expect(generation.state).to eq("accepted")
+      expect(storage.keys).to include(generation.audio_key)
+    end
+  end
 end
