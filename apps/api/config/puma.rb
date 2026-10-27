@@ -34,6 +34,12 @@ port ENV.fetch("PORT", 3000)
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart
 
+# requestの本文の大きさの上限（byte）。Pumaは本文を受け取り終えてからアプリへ渡すので、ApiRequestGuardの
+# Content-Lengthの確認（33MB）は解析を防ぐだけで、受け取り（diskの一時ファイル・帯域）は防げない。ここで受け取りの
+# 途中で止める（長さを偽った本文・長さの無いchunkedの本文も、受け取った量で止まる）。宣言された長さが少しだけ
+# 超える本文は契約の形（413 audio_too_large）で返せるよう、guardより1MB大きくする（spec/config/puma_spec.rb）
+http_content_length_limit 34 * 1024 * 1024
+
 # Solid QueueのworkerをPumaの子プロセスとして同じコンテナで動かす（TASK-003で採用。ECSの同じタスクで並走させる）。
 # 開発でもメールや生成のJobが動くよう、既定で有効にする（Railsの既定はopt-in）。実測で詰まれば
 # `SOLID_QUEUE_IN_PUMA=false`にして`bin/jobs`を別に動かす。
