@@ -103,6 +103,19 @@ RSpec.describe GenerationUpload do
       expect(Generation.exists?(attempt.id)).to be(false)
     end
 
+    it "本文を読んでいる間に、先に届いた送信が保存と後片付けまで終えていても、記録を作り直さない" do
+      read_audio = lambda do
+        create(:dot, user:, generation_id: attempt.id)
+        uploaded_audio
+      end
+
+      result = described_class.call(user:, token:, read_audio:)
+
+      expect(result).to have_attributes(outcome: :existing, generation_id: attempt.id)
+      expect(Generation.exists?(attempt.id)).to be(false)
+      expect(storage.objects).to be_empty
+    end
+
     it "同時に届いた送信は、主キーの一意制約で1件に絞って既存を返す" do
       # 既存の処理を確かめた後（本文を読んでいる間）に、先に届いた側が記録を作る
       read_audio = lambda do

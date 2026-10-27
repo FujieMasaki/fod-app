@@ -38,14 +38,19 @@ class GenerationUpload
 
   # 同じattemptの既存の処理・消したものがあれば、その結果。再送を受け付けるなら:reupload
   def known_outcome(attempt)
-    dot = @user.dots.find_by(generation_id: attempt.id)
-    # ゴミ箱の中のDotは返さない
-    return dot.trashed_at ? problem(:attempt_invalid) : existing(attempt.id) if dot
+    saved = saved_dot_outcome(attempt)
+    return saved if saved
     # 処理の取り消し・完全削除・退会で消したものを作り直さない
     return problem(:attempt_invalid) if ConsumedRecordingAttempt.consumed?(attempt.id, @now)
 
     generation = @user.generations.find_by(id: attempt.id)
     generation && known_generation_outcome(generation)
+  end
+
+  # 保存済みのDotがあれば既存の処理として返す（ゴミ箱の中のDotは返さない）
+  def saved_dot_outcome(attempt)
+    dot = @user.dots.find_by(generation_id: attempt.id)
+    dot && (dot.trashed_at ? problem(:attempt_invalid) : existing(attempt.id))
   end
 
   def known_generation_outcome(generation)
@@ -80,11 +85,14 @@ class GenerationUpload
   end
 
   # 利用者の行をlockした後に見直す。lockの外で読んだ後に取り消し・後片付けが終わっていても、消したものを
-  # 作り直さない（取り消しも同じ行をlockして、使用済みの記録を書く）
+  # 作り直さない（取り消しも同じ行をlockして、使用済みの記録を書く）。先に届いた同じattemptの送信が保存と
+  # 後片付けまで終えて記録が消えていても、主キーでは止まらないので、保存済みのDotを見て既存の処理として返す
+  # （Dotの保存も同じ行をlockする）
   def creation_denial(user, attempt)
     return problem(:account_deletion_in_progress) if user.deletion_requested?
+    return problem(:attempt_invalid) if ConsumedRecordingAttempt.consumed?(attempt.id, @now)
 
-    problem(:attempt_invalid) if ConsumedRecordingAttempt.consumed?(attempt.id, @now)
+    saved_dot_outcome(attempt)
   end
 
   # 同じattemptの並行送信。2件目の記録もJobも作らず、既存の処理の状態で答える（取り消し済みなら作り直さない）
