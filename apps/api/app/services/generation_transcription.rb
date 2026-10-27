@@ -32,11 +32,13 @@ module GenerationTranscription
   end
 
   # 結果はSymbol: :waiting / :generating / :failed / :canceled / :skipped
+  # 実行権を取った後に記録を読み直す（読んだ後に試行が失敗し、再試行で次の試行が始まっていれば、古い試行のjobの
+  # 結果で新しい試行を失敗にしてしまうため）
   def check(generation_id, now: Time.current)
     generation = Generation.find_by(id: generation_id, state: Generation::TRANSCRIBING)
     token = generation && Generation.acquire_lease(generation.id, state: Generation::TRANSCRIBING,
                                                                   duration: GenerationGate::LEASE_DURATION, now:)
-    token ? react(generation, token, now) : :skipped
+    token ? react(generation.reload, token, now) : :skipped
   end
 
   def react(generation, token, now)

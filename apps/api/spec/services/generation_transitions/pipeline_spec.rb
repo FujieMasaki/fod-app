@@ -71,6 +71,23 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
       expect(generation.contract_failure_kind).to eq("processing_failed")
     end
 
+    it "記録を読んだ後に試行が失敗して再試行が始まっていたら、古い試行のjobの結果で新しい試行を失敗にしない" do
+      generation = transcribing
+      transcriber.jobs[generation.transcription_job_name] = { status: :failed }
+      retried = false
+      allow(Generation).to receive(:acquire_lease).and_wrap_original do |original, *args, **opts|
+        unless retried
+          retried = true
+          generation.update!(**GenerationTranscription.next_attempt_attrs(generation))
+          transcriber.jobs[generation.transcription_job_name] = { status: :in_progress }
+        end
+        original.call(*args, **opts)
+      end
+
+      expect(GenerationTranscription.check(generation.id)).to eq(:waiting)
+      expect(generation.reload).to have_attributes(state: "transcribing", transcription_attempt: 2)
+    end
+
     it "文字起こしが空（無音・極端に短い）なら生成へ進まず、録り直しの失敗にする" do
       generation = transcribing
       complete_transcription(generation, " 。 ")
