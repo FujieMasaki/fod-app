@@ -51,6 +51,31 @@ RSpec.describe GenerationUpload do
     expect(generation).to have_attributes(state: "upload_failed", failure_kind: "upload_incomplete", lease_token: nil)
   end
 
+  describe "PUTが失敗に見えたとき（応答を失っただけかもしれない）" do
+    it "objectが完成していれば、送り直させずに確定へ進める" do
+      allow(storage).to receive(:put).and_wrap_original do |original, *args, **opts|
+        original.call(*args, **opts)
+        raise GenerationProviders::Error, "response lost"
+      end
+
+      result, = upload
+
+      expect(result.outcome).to eq(:created)
+      expect(generation.state).to eq("accepted")
+      expect(GenerationTranscribeJob).to have_been_enqueued.with(attempt.id)
+    end
+
+    it "実体を確かめられなければuploadingのまま残し、watchdogに任せる" do
+      storage.fail_next(:put)
+      storage.fail_next(:exists?)
+
+      result, = upload
+
+      expect(result.outcome).to eq(:existing)
+      expect(generation.state).to eq("uploading")
+    end
+  end
+
   describe "再送（T4）" do
     before do
       storage.fail_next(:put)

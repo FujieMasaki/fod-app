@@ -5,13 +5,24 @@ module GenerationUploadCompletion
 
   # 実行権を持つ試行のkeyへ置く。keyは実行権と同じ行から、実行権を持っている間だけ読む（止まっていた古い要求が、
   # watchdogの`upload_failed`と再送の後に、新しい試行のkeyへ古い音声を上書きしないため）。実行権を失っていれば
-  # 置かずに確定へ進み、確定に負けた結果で答える。置けなければ`upload_failed`にしてfalse
+  # 置かずに確定へ進み、確定に負けた結果で答える。置けなければfalse（確定へ進まない）
   def put(generation_id, lease_token, audio)
     key = Generation.where(id: generation_id, state: Generation::UPLOADING, lease_token:).pick(:audio_key)
     GenerationProviders.storage.put(key, audio.io, content_type: audio.content_type) if key
     true
   rescue GenerationProviders::Error
+    settle_failed_put(generation_id, lease_token, key)
+  end
+
+  # PUTが失敗に見えても、応答を失っただけでobjectは完成していることがある。再送を許すのは完成したobjectがまだ無い
+  # 場合だけ（TASK-003 Plan §20「冪等性」）なので、実体を見て、完成していれば確定へ進め、無ければ`upload_failed`
+  # （T2）にする。実体を見られなければ`uploading`のまま残し、実行権の期限の後にwatchdogが同じ確認をする
+  def settle_failed_put(generation_id, lease_token, key)
+    return true if GenerationProviders.storage.exists?(key)
+
     fail(generation_id, lease_token)
+    false
+  rescue GenerationProviders::Error
     false
   end
 
@@ -63,5 +74,5 @@ module GenerationUploadCompletion
 
   def holding?(generation, token) = generation.state == Generation::UPLOADING && generation.lease_token == token
   def winding_down?(generation) = generation.canceled? || generation.state == Generation::SUCCEEDED_CLEANUP_PENDING
-  private_class_method :same_generation?, :accept, :discard, :holding?, :winding_down?
+  private_class_method :settle_failed_put, :same_generation?, :accept, :discard, :holding?, :winding_down?
 end
