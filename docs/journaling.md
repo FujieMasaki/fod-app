@@ -47,7 +47,8 @@ Zodで検証したDotSessionをSession Provider（memory）へ保存
 4列目はTASK-002で採用した実サービスの方針である（2026-09-28採用、ゴミ箱と編集は2026-09-29に追加）。
 **Dotの行のうち、RDSの`dots`を正本にした保存先・本人だけの取得・`sentence`/`summary`の編集・ゴミ箱の外
 だけを返す取得は2026-10-05にTASK-008でRails APIに実装し、Webは2026-10-07にTASK-012で取得（Day・一覧・
-日の詳細）に接続した**。それ以外は未実装で、Dotを作る入口が無いため、1〜3列目の現在の実装は実装タスクまで
+日の詳細）に接続した**。Dotを作る入口はRailsの側を2026-10-27にTASK-009で実装したが、Webは接続していない。それ以外は未実装で、Webから
+Dotを作れないため、1〜3列目の現在の実装は実装タスクまで
 変わらない。
 **保持期間と削除の契機は[`privacy.md`](./privacy.md) §5を正本とする**。この表は操作と受け渡しを
 示すもので、期間が食い違った場合はprivacy.md §5が優先する。判断の経緯と比較は
@@ -72,7 +73,8 @@ keyを作らず、文字起こしの端末保持は`sessionStorage`（タブを�
 - `VITE_DOT_API_URL`未設定時の`sampleSession`は、画面遷移と表示を確認するための固定mockである。
   録音内容を生成しておらず、保存もしていない。
 - 現在のRails APIには、認証（TASK-006）と、Dotの保存先・Day・日単位の一覧・日の詳細の取得・
-  `sentence`/`summary`の編集（TASK-008）がある。Dotを作る入口（`POST /api/v1/dots`）、AI処理、
+  `sentence`/`summary`の編集（TASK-008）がある。Dotを作る入口（`POST /api/v1/dots`）と文字起こし・生成の処理は
+  2026-10-27にTASK-009でRailsに実装した（S3・IAM・Bedrockのmodel idは未設定で、実サービスでの確認は済んでいない）。
   ゴミ箱・削除の操作は実装されていない。WebはTASK-007で認証に接続し、録音・Dotの画面を
   ログインしてから開くようにした。履歴の取得APIにはTASK-012で接続し、`/day`・`/dots`でserverのDotを
   表示する。Dotを作るAPIには接続しておらず、Dot生成は認証の後も固定のmockを返す（mockの結果は`/dot`・
@@ -156,10 +158,11 @@ TASK-003で変更。正本は[architecture](./architecture.md)「データ所在
 promptの最終文面と委託先の確認は残っている。この設計採用によって§1–3の現行mock・localStorage・
 未実装の状態が変わったとは扱わない。
 
-### 生成の実行方式（2026-09-29採用、未実装）
+### 生成の実行方式（2026-09-29採用。backendは2026-10-27にTASK-009で実装、Webは未接続）
 
 [TASK-003 Plan](implementation-plans/2026-09-29-task-003-generation-design.md)で採用した。
-実装済みの挙動ではない。経路と保持の正本は[privacy.md §5](./privacy.md)、構成は
+Railsの側は[TASK-009](implementation-plans/2026-10-24-task-009-audio-generation.md)で実装したが、実サービスでの確認は
+済んでおらず、Webは接続していないので、利用者が使える挙動ではない。経路と保持の正本は[privacy.md §5](./privacy.md)、構成は
 [architecture](./architecture.md)を参照する。
 
 - 文字起こしはAmazon Transcribe（東京）、生成はAmazon BedrockのClaude。**委託先をAWSに統一する。**

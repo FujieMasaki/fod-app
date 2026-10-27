@@ -380,7 +380,7 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   （世代番号）を使う。退会のendpointはTASK-013で、受理は`GenerationWithdrawal.accept`、Dotの完全削除は
   `GenerationDotPurge.accept`を呼ぶ。
 - Solid Queueは処理の記録と**同じDB**に置き、記録の更新とenqueueを同じtransactionに入れる。workerはPumaのpluginで
-  同じプロセスに載せる（`SOLID_QUEUE_IN_PUMA=false`で外し、`bin/jobs`を別に動かせる）。
+  同じコンテナ（Pumaの子プロセス）に載せる（`SOLID_QUEUE_IN_PUMA=false`で外し、`bin/jobs`を別に動かせる）。
 - **Transcribeの完了待ちはthreadを占有しない**。Jobが`GetTranscriptionJob`を1回呼び、非終端なら15秒後に自分を
   もう一度enqueueする。待っている間は実行権の期限を次の確認まで延ばす。
 - 止まった処理は毎分の`GenerationWatchdogJob`が状態ごとに拾う（最終進捗から2分、かつ実行権が切れてから2分）。
@@ -388,7 +388,7 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   （後片付けのJobは自分を積み直さない）。間隔と実行権の長さ（受理から保存までは15分、後片付けは5分）は初期値で、実測で見直す。
   取り消し・退会・期限は実行中の実行権のtokenだけを失効させて期限は残し、後片付けはその期限が切れてから始める。
 - 録音の発行・送信・再試行は、利用者ごとに1時間でそれぞれ60回・60回・30回までにする（`GenerationThrottle`）。送信と
-  再試行は、加えて1日20回まで（UTCの0時で切り替わる）。Transcribeは音声の実際の長さで課金され、serverは申告の録音時間と
+  再試行は、加えてそれぞれ1日20回まで（UTCの0時で切り替わる）。Transcribeは音声の実際の長さで課金され、serverは申告の録音時間と
   大きさしか確かめないので、1日の回数で1アカウントの費用の最悪を抑える（2026-10-27にTASK-009で決定。前提と残るリスクは
   TASK-009 Plan §13）。
 - Bedrockへ送る全文は20,000字まで、Transcribeが書き出した結果は2MBまで読む。超えたら送らずに再試行できる失敗にする。

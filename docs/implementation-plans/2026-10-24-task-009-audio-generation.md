@@ -89,7 +89,7 @@
 
 - **回数の制限**（契約のRateLimitedが「採否と具体値はTASK-009で決める」としていた）: 採る。利用者ごとに1時間で、
   録音attemptの発行60回・送信60回・再試行30回。日々の記録として十分に多く、自動化された大量の送信だけを止める値にした。
-  加えて、送信と再試行に**1日20回**の上限を置く（人間の判断、2026-10-27。理由は§13の費用）。1日の枠はUTCの0時
+  加えて、送信と再試行にそれぞれ**1日20回**の上限を置く（人間の判断、2026-10-27。理由は§13の費用）。1日の枠はUTCの0時
   （日本時間の9時）で切り替わる。同じattemptの受け取り直しと、失敗・重複で終わる要求も数える（費用を確実に抑える側に倒す）。
 - **全文の上限**: Bedrockへ送る全文は20,000字まで（30分の録音で約12,000字）、Transcribeが書き出した結果は2MBまで読む
   （人間の判断、2026-10-24）。超えたら送らずに再試行できる失敗（契約ではprocessing_failed）にし、再試行は生成から始めて
@@ -113,7 +113,8 @@
   外部provider行は実サービスの確認後）、`docs/development/backend.md`（Job基盤とstorageが未実装という記述）、
   `docs/code-review/backend/security.md`・`docs/code-review/frontend/security.md`（実装状況とmultipart・Jobの引数の観点）、
   `contracts/openapi.yaml`（回数の制限の値と、送信の説明の処理の順）、`docs/tasks/TASK-013-backend-data-deletion.md`
-  （退会と完全削除の入口の申し送り）、`docs/tasks/TASK-009-backend-audio-generation.md`
+  （退会と完全削除の入口の申し送り）、`docs/tasks/TASK-010-frontend-recording.md`（Pumaの`413`の扱い）、
+  `docs/journaling.md` §2・§3・`docs/dot-history.md`・`docs/product.md`（Dotを作る入口のbackendが実装済みであること）、`docs/tasks/TASK-009-backend-audio-generation.md`
 
 ## 7. Proposed Approach
 
@@ -268,10 +269,10 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 - 退会: 退会の受理（TASK-013）がこのタスクの入口を通らずに`users`だけを書き換えると排他にならない。入口のserviceを
   TASK-013へ明示的に渡す。
 - **Transcribeの費用**: Transcribeは音声の実際の長さで課金され、serverは申告の録音時間（最大30分）と大きさ（32MB）しか
-  確かめない。低いbitrateのopusなら32MBで数時間分を送れ、1件でTranscribeの上限の4時間近くまで課金されうる（32MBを
-  1800秒で割ると約142kbpsで、bitrateでは見分けられない）。1時間の上限（送信60回）だけでは1アカウントの費用に上限が
+  確かめない。低いbitrateのopusなら32MBで数時間分を送れ、1件でTranscribeの上限の4時間近くまで課金されうる（32MiBを
+  1800秒で割ると約149kbpsで、bitrateでは見分けられない）。1時間の上限（送信60回）だけでは1アカウントの費用に上限が
   つかないので、1日20回の上限を足した。単価を東京の公開価格から推測すると、長さを偽った1件で約$6〜7、1アカウントの
-  1日の最悪で約$240（未確認）。上限はアカウントごとなので、多くのアカウントを使われると抑えられない。AWS Budgetsの通知と
+  1日の最悪（送信20件と、Transcribeからやり直す再試行20件）で約$240〜280（未確認）。上限はアカウントごとなので、多くのアカウントを使われると抑えられない。AWS Budgetsの通知と
   H4の実測で見直す。確実に防ぐには音声のcontainerから実際の長さを読む必要があり、公開前の別タスクに申し送る（§16）。
 - 回数の枠は固定なので、枠の境目をまたぐと短い時間に上限の2倍まで通り得る（`RateLimiter`）。送信・再試行では1日の上限が
   1時間の上限より先に効く（1時間の上限は短い時間の連打を止める値として残す）。
@@ -328,7 +329,8 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
   - **認証メールのJobはSolid Queueに載せず、memoryのadapter（async）のままにした**。引数にメールアドレスと
     確認・再設定・解除のtokenを持ち、Solid Queueでは`solid_queue_jobs.arguments`に平文で残るため（レビューでsecurityのHighと
     指摘された）。
-  - BedrockのclientはSDKの自動の再送をしない（`retry_limit: 0`、読み取りのtimeoutは120秒）。同じ生成を二重に消費しないため。
+  - BedrockのclientはSDKの自動の再送をしない（`retry_mode: "standard"`・`max_attempts: 1`。環境変数`AWS_RETRY_MODE`・
+    `AWS_MAX_ATTEMPTS`で変わらないことをspecで確かめる。読み取りのtimeoutは120秒）。同じ生成を二重に消費しないため。
   - 後片付けは、命名規則から導いた対象に記録のkey・job名を足して消し、失敗は処理IDと例外の種類だけをwarnのログに残す。
   - 回数の制限に、送信・再試行の1日20回を足した（§5・§13）。契約のRateLimitedに具体値を書いた。
   - 全文の上限（Bedrockへ送る全文は20,000字、Transcribeの結果は2MB）と、古い送信の後始末で処理が続いていれば消さないことを
@@ -349,7 +351,7 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
     Dotも残らないので`404`」としており、退会の受理後から完了までの間は食い違う（`409`は契約のresponsesにある）。説明の直しは
     退会のendpointを作るTASK-013へ申し送る。
 - 検証結果:
-  - `cd apps/api && bundle exec rspec`: 690 examples, 0 failures（6番目のPR、2026-10-27。5番目までを取り込んだ時点）。
+  - `cd apps/api && bundle exec rspec`: 690 examples, 0 failures（6番目のPRの`273f7d9`、2026-10-27。5番目の`24b7d6c`を取り込んだ版）。
   - `bundle exec rubocop`: no offenses。`bundle exec brakeman -q`: No warnings。`bundle exec bundler-audit check`:
     crassの指摘（GHSA-pq4g-8rxf-4g29）を1.0.8へ上げて解消した（mainも同じ版へ上げた。2026-10-27に取り込んだ）。
     6番目のPRの時点で`bundle exec bundler-audit check`はNo vulnerabilities found。

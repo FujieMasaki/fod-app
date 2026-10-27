@@ -17,7 +17,8 @@
 
 2026-10-08時点で、録音attemptを発行するbackendのendpointとuploadの受け口は未実装である（契約は`contracts/openapi.yaml`にある）。未実装のあいだは、録音前の案内と画面、契約に沿った通信関数までを進め、発行とuploadとの受け渡しを実際のbackendで確かめる完了条件は残してIn progressにする。存在しないendpointを前提にした仮の実装を、完了扱いにしない。
 
-2026-10-27にTASK-009が、送信（`POST /api/v1/dots`）の本文の受け取りをPumaの上限（34MB）で止めるようにした。この上限を超えた
+2026-10-27にTASK-009が、録音attemptの発行と送信のendpointをRailsに実装した（実サービスでの確認はTASK-009 Plan §5のH1〜H4で、
+まだ済んでいない）。送信（`POST /api/v1/dots`）の本文の受け取りはPumaの上限（34MB）で止める。この上限を超えた
 本文への`413`はPumaが返し、Problemの形（`application/problem+json`）にならない。`413`は本文を読まずにstatusだけで
 `audio_too_large`として扱う（[TASK-009 Plan](../implementation-plans/2026-10-24-task-009-audio-generation.md) §16）。
 
