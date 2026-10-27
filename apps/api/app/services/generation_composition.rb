@@ -60,7 +60,8 @@ module GenerationComposition
                                                                   duration: GenerationGate::LEASE_DURATION, now:)
     return :skipped unless token
 
-    compose(generation, token, now)
+    # 実行権を取った後に読み直す（読んだ後に失敗と再試行を経ていれば、古い試行の全文を送ってしまうため）
+    compose(generation.reload, token, now)
   end
 
   # 実行権を取った後に全文を読む間に、取り消し・退会を受理していることがある。Bedrockへ送る直前に実行権を

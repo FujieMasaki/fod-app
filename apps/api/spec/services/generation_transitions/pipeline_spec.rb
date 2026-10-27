@@ -190,6 +190,24 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
       expect(GenerationCleanupJob).to have_been_enqueued.with(generation.id)
     end
 
+    it "記録を読んだ後に失敗と再試行を経ていたら、新しい試行の全文を送る" do
+      generation = generating
+      retried = false
+      allow(Generation).to receive(:acquire_lease).and_wrap_original do |original, *args, **opts|
+        unless retried
+          retried = true
+          generation.update!(**GenerationTranscription.next_attempt_attrs(generation))
+          complete_transcription(generation, "夜に本を読んだ")
+          generation.update!(state: "generating", transcript_ready_at: Time.current)
+        end
+        original.call(*args, **opts)
+      end
+
+      GenerationComposition.perform(generation.id)
+
+      expect(composer.calls.sole[:transcript]).to eq("夜に本を読んだ")
+    end
+
     it "生成には全文・録音日・録音時間だけを渡す" do
       generation = generating
 

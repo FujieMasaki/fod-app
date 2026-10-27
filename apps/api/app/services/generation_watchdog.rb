@@ -33,6 +33,7 @@ module GenerationWatchdog
     token = Generation.acquire_lease(generation.id, state: generation.state, duration: GenerationGate::LEASE_DURATION,
                                                     now:)
     return unless token
+    return Generation.release_lease(generation.id, token) unless abandoned?(generation.reload, now)
 
     Rails.logger.warn("generation abandoned: generation_id=#{generation.id} state=#{generation.state}")
     Generation.transition(generation.id, from: generation.state, to: Generation::FAILED, holding: token,
@@ -46,12 +47,16 @@ module GenerationWatchdog
     Generation.where(last_progress_at: ...threshold).merge(lapsed)
   end
 
+  # 拾った後に失敗と再試行を経ていれば、始め直したばかりの処理を失敗にしない
+  def abandoned?(generation, now) = generation.last_progress_at < now - GIVE_UP_AFTER
+
   def inspect_upload(generation, now)
     token = Generation.acquire_lease(generation.id, state: Generation::UPLOADING,
                                                     duration: GenerationUpload::LEASE_DURATION, now:)
     return unless token
 
-    if GenerationProviders.storage.exists?(generation.audio_key)
+    # 拾った後に再送が始まっていれば、その試行のkeyを見る
+    if GenerationProviders.storage.exists?(generation.reload.audio_key)
       GenerationUploadCompletion.complete(generation.id, token)
     else
       GenerationUploadCompletion.fail(generation.id, token)
@@ -59,5 +64,5 @@ module GenerationWatchdog
   rescue GenerationProviders::Error
     Generation.release_lease(generation.id, token)
   end
-  private_class_method :stale, :resume_external, :give_up, :inspect_upload
+  private_class_method :stale, :resume_external, :give_up, :abandoned?, :inspect_upload
 end

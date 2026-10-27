@@ -74,6 +74,22 @@ RSpec.describe GenerationWatchdog do
     expect(GenerationComposeJob).not_to have_been_enqueued
   end
 
+  it "拾った後に失敗と再試行を経ていれば、始め直したばかりの処理を失敗にしない" do
+    generating = stale("generating", last_progress_at: (described_class::GIVE_UP_AFTER + 1.minute).ago)
+    retried = false
+    allow(Generation).to receive(:acquire_lease).and_wrap_original do |original, *args, **opts|
+      unless retried
+        retried = true
+        generating.update!(last_progress_at: Time.current)
+      end
+      original.call(*args, **opts)
+    end
+
+    described_class.sweep
+
+    expect(generating.reload).to have_attributes(state: "generating", lease_token: nil)
+  end
+
   it "Transcribeの完了を待っている処理は、最終進捗が古くても拾わない（生きているjobを二重に開始しない）" do
     waiting = stale("transcribing", lease_expires_at: 10.seconds.from_now)
 
