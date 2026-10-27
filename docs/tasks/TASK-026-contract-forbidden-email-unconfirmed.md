@@ -13,22 +13,26 @@
 
 探索的な監査（`spec`観点、2026-10-08）から起こしたタスク。報告のIDは`AUD-20261008-01`。
 
-契約（`contracts/openapi.yaml`の`components/responses/Forbidden`）は、Dotの操作（listDays・getToday・getDay・updateDot）の
-`403`に`email_unconfirmed`を挙げている。一方APIは、メール未確認の利用者をsessionの復元時にWardenが外して
+契約（`contracts/openapi.yaml`の`components/responses/Forbidden`）は、`email_unconfirmed`を`403`のcodeに挙げている。この
+`Forbidden`は、実装済みのDotの操作（listDays・getToday・getDay・updateDot）だけでなく、録音・生成・削除・ゴミ箱などの未実装の
+operationも共有している（監査が確かめたのは実装済みの4件）。一方APIは、メール未確認の利用者をsessionの復元時にWardenが外して
 `401 unauthenticated`を返し（`apps/api/app/controllers/concerns/authentication.rb`の`authenticate_user!`）、Dotの操作で
 `email_unconfirmed`を返す経路はない（`apps/api/config/initializers/devise.rb`の`allow_unconfirmed_access_for = 0.days`）。
 この差はTASK-006 Planに記録されているが、正本である契約と`contracts/README.md` §5に反映されていない。Webは契約に合わせて
 到達しない分岐を持っている（`apps/web/src/features/history/components/history-status.tsx`）。
 
-正本（契約・README）を実装に合わせ、Webの到達しない分岐とtestの扱いを揃える。login時の`email_unconfirmed`
-（passwordが一致したときだけ返す）は変えない。
+正本（契約・README）を実装に合わせ、Webの到達しない分岐とtestの扱いを揃える。共有の`Forbidden`を直し、参照するすべての
+operationに効かせる（実装済みの4件だけを別のresponseに分けると、未実装のoperationの契約に返らないcodeが残るため）。
+login時の`email_unconfirmed`（passwordが一致したときだけ返す）は変えない。
 
 ## 確認可能な完了条件
 
-- [ ] Dotの操作の`403`の説明から`email_unconfirmed`が外れている（または「login時にだけ返す」と明記されている）。`csrf_invalid`は残っている。
+- [ ] 共有の`Forbidden`の説明から`email_unconfirmed`が外れている（または「login時にだけ返す」と明記されている）。`csrf_invalid`は残っている。
+  `Forbidden`を参照するすべてのoperationが、同じ説明のまま矛盾しない。
+- [ ] 「メール未確認の利用者はDotを扱えない（`401 unauthenticated`で拒否する）」という方針が、契約か`contracts/README.md`に残っている。
 - [ ] `contracts/README.md` §5の`email_unconfirmed`の行が、返る場面（login）を示している。
 - [ ] メール未確認の利用者がDotの操作で`401 unauthenticated`になることを確かめるrequest specがある。
-- [ ] Webの`email_unconfirmed`の分岐（`history-status.tsx`）とそのtestを、残すか外すかを決めて揃えている（`contracts/README.md` §3の互換性の規則に照らして、1回のreleaseで入れられるかを確かめる）。
+- [ ] Webの`email_unconfirmed`の分岐（`history-status.tsx`）とそのtestを、残すか外すかを決めて揃え、判断と理由をPlanに記録している（`contracts/README.md` §3の互換性の規則に照らして、1回のreleaseで入れられるかを確かめる）。
 - [ ] `pnpm check`（契約のlintと型の生成の確認を含む）が通る。
 
 ## 依存するタスクID

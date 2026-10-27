@@ -307,7 +307,8 @@ Q2でBなら`scripts/task-scheduler.mjs`とそのtestが加わる。
     「結果と採否をPlanに記録」のための例外である。以後の監査の結果は、採用してタスクに起こしたものだけが公開に出る。
   - 採否（2026-10-24、人間の判断。報告にも写した）:
     - AUD-20261008-01: 採用。確信度が高く、契約が実装と食い違ったままだとWebに通らない分岐が残り続けるため。
-      [TASK-026](../tasks/TASK-026-contract-forbidden-email-unconfirmed.md)に起こした（作業区分はAPI契約、優先度は人間が決めたP1）。
+      [TASK-026](../tasks/TASK-026-contract-forbidden-email-unconfirmed.md)に起こした（優先度は人間が決めたP1。作業区分は、契約を変えるためAIが既定値としてAPI契約を提示し、人間が了承した。
+      定期実行の対象外になり、対話で進める）。
     - AUD-20261008-02: 保留。TASK-011の範囲と重なるため、TASK-011に着手するときに確かめる。
     - タスクを起こすPR（`docs/audit-tasks-20261024`）で、TASK-023の最後の完了条件にチェックを付けてDoneにした。
   - IDの形式は、R1の判断で`AUD-<YYYYMMDD>-<観点>-<連番>`から`AUD-<YYYYMMDD>-<連番>`に変えた。非公開の報告の
