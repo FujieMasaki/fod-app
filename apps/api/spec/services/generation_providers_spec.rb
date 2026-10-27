@@ -43,6 +43,21 @@ RSpec.describe GenerationProviders do
     expect { described_class.transcriber }.to raise_error(GenerationProviders::NotReady) { expect(it.cause).to be_nil }
   end
 
+  it "呼び出し元の確認でSTSが一時的に失敗したときは、準備ができていない失敗ではなく外部の失敗として返す" do
+    allow(GenerationSettings).to receive(:app_account_id).and_return("111111111111")
+    sts = Aws::STS::Client.new(stub_responses: true, region: "ap-northeast-1")
+    sts.stub_responses(:get_caller_identity, ["Throttling", Seahorse::Client::NetworkingError.new(StandardError.new)])
+    allow(Aws::STS::Client).to receive(:new).and_return(sts)
+    described_class.reset
+
+    2.times do
+      expect { described_class.storage }.to raise_error(GenerationProviders::Error) do |error|
+        expect(error).not_to be_a(GenerationProviders::NotReady)
+        expect(error.cause).to be_nil
+      end
+    end
+  end
+
   it "ServiceErrorの子でないSDKの例外（IAM Identity Centerのsessionの期限切れ等）も、外部の失敗として包む" do
     store = AudioStore.new(client: Aws::S3::Client.new(stub_responses: true, region: "ap-northeast-1"), bucket: "b")
     allow(store.instance_variable_get(:@client)).to receive(:put_object).and_raise(Aws::Errors::InvalidSSOToken)

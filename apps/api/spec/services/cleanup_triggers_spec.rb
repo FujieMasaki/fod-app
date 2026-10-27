@@ -113,6 +113,17 @@ RSpec.describe "cleanupの5つの契機" do # rubocop:disable RSpec/DescribeClas
     expect(ConsumedRecordingAttempt.consumed?(dot.generation_id)).to be(true)
   end
 
+  it "Dotの完全削除: 使用済みattemptを記録する前に利用者の行をlockする（lockの順序を退会の受理とそろえる）" do
+    dot = create(:dot, user:, started_at: 10.minutes.ago)
+    queries = []
+    callback = ->(*, payload) { queries << payload[:sql] }
+    ActiveSupport::Notifications.subscribed(callback, "sql.active_record") { GenerationDotPurge.accept(user:, dot:) }
+
+    user_lock = queries.index { it.match?(/FROM "users".*FOR UPDATE/m) }
+    attempt_insert = queries.index { it.match?(/INSERT INTO "consumed_recording_attempts"/) }
+    expect(user_lock).to be < attempt_insert
+  end
+
   it "退会: 読んだ後に別の遷移が勝った記録があっても、受理全体を巻き戻さない" do
     allow(GenerationCancellation).to receive(:request).and_call_original
     allow(GenerationCancellation).to receive(:request)

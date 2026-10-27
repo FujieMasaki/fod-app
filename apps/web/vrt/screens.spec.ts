@@ -20,6 +20,8 @@ type Screen = {
   path: string;
   api: ApiFixtures;
   ready: (page: Page) => Locator;
+  /** 画面を開いた後、readyを待つ前に行う操作 */
+  act?: (page: Page) => Promise<void>;
   /** 比べない部分。CPUの種類（手元のApple SiliconとCIのamd64）で描画が変わる要素だけに使う */
   mask?: (page: Page) => Locator[];
 };
@@ -40,11 +42,19 @@ const screens: Screen[] = [
     ready: (page) => page.getByRole("heading", { name: "ログイン" }),
   },
   {
-    // マイクの許可を待っている状態（support.tsのgetUserMediaは応答しない）。経過時間は00:00のまま。
+    name: "record-guide",
+    path: "/record",
+    api: signedIn,
+    ready: (page) => page.getByRole("heading", { name: "録音の前に" }),
+  },
+  {
+    // 録音前の説明から始めた後、マイクの許可を待っている状態（support.tsのgetUserMediaは応答しない）。
+    // 経過時間は00:00のまま。
     name: "record",
     path: "/record",
     api: signedIn,
-    ready: (page) => page.getByRole("heading", { name: "話しています…" }),
+    act: (page) => page.getByRole("button", { name: "録音を始める" }).click(),
+    ready: (page) => page.getByRole("heading", { name: "マイクを準備しています" }),
     // 波形の棒は小数の拡縮（scaleY）で描くため、端の描画がCPUの種類で1px単位に変わる（threshold 0で検出される）。
     mask: (page) => [page.locator('[role="status"] + [aria-hidden="true"]')],
   },
@@ -84,6 +94,7 @@ for (const screen of screens) {
   test(screen.name, async ({ page }) => {
     const unexpected = await preparePage(page, screen.api);
     await page.goto(screen.path);
+    await screen.act?.(page);
     await expect(screen.ready(page)).toBeVisible();
     expect(await waitForFonts(page), "書体を読み込めなかった").toEqual([]);
     // 基準画像の更新（--update-snapshots）でも、撮影の前までに想定外の要求があった画面は基準にしない

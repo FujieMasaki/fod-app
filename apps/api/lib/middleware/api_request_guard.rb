@@ -14,7 +14,8 @@
 #
 # 3. JSON以外の本文を受け付けるendpointは、Railsが本文を解析する（multipartを一時ファイルへ書き出す）前に、
 #    Content-Lengthで大きさを制限する。解析は認証・CSRFの確認より前に起きるため、制限しないと未ログインでも
-#    任意の大きさの本文を解析させられる。長さの無い（chunkedの）本文は受け付けない。
+#    任意の大きさの本文を解析させられる。長さの無い（chunkedの）本文は受け付けない。ここで防げるのは解析だけで、
+#    本文の受け取りそのものは、Pumaの`http_content_length_limit`（`config/puma.rb`）が止める。
 #
 # JSONのbodyの不正なUTF-8は`config/initializers/json_request_body.rb`が解析の失敗にする。`/auth/...`
 # （Googleログインのform POST）はJSON APIではないので対象にしない。

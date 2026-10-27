@@ -48,6 +48,16 @@ RSpec.describe "Generations", perform_jobs: false do
         assert_response_schema_confirm(200)
       end
 
+      it "書き出された結果が上限より大きければ、読まずに全文なしとして返す（500にしない）" do
+        generation = succeeded_generation
+        stub_const("GenerationComposition::TRANSCRIPT_MAX_BYTES", 10)
+
+        show(generation.id)
+
+        expect(response.parsed_body).to include("status" => "succeeded", "transcript" => { "status" => "unavailable" })
+        assert_response_schema_confirm(200)
+      end
+
       it "ACKの後は、後片付けが終わる前でも全文を返さない（物理削除の完了に依存しない）" do
         generation = succeeded_generation
         delete "/api/v1/generations/#{generation.id}/transcript", headers: { "X-CSRF-Token" => csrf_token }
