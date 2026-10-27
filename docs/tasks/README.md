@@ -1,6 +1,6 @@
 # 開発タスク
 
-MVPとその後の継続開発に必要な作業を管理する。TASK-001〜TASK-017とTASK-025は、実サービスのMVP完成に必要な未実装・未決定の作業である（TASK-025は2026-10-08にTASK-003から切り出した）。仕様の正本は[product.md](../product.md)、[journaling.md](../journaling.md)、[dot-history.md](../dot-history.md)、[privacy.md](../privacy.md)。本索引は仕様や各タスクの詳細・状態を複製しない。
+MVPとその後の継続開発に必要な作業を管理する。TASK-001〜TASK-017とTASK-025・TASK-026は、実サービスのMVP完成に必要な未実装・未決定の作業である（TASK-025は2026-10-08にTASK-003から切り出した。TASK-026は2026-10-24に探索的な監査の候補から起こした）。仕様の正本は[product.md](../product.md)、[journaling.md](../journaling.md)、[dot-history.md](../dot-history.md)、[privacy.md](../privacy.md)。本索引は仕様や各タスクの詳細・状態を複製しない。
 
 ## 参照した状態
 
@@ -38,6 +38,7 @@ MVPとその後の継続開発に必要な作業を管理する。TASK-001〜TAS
 - [TASK-016: 録音から過去のDotまでのMVP受け入れ検証](TASK-016-mvp-acceptance.md)
 - [TASK-017: 要配慮個人情報の該当性と漏えい時対応の設計判断](TASK-017-breach-response-design.md)
 - [TASK-025: 委託先（AWS）への9項目の確認](TASK-025-vendor-verification.md)
+- [TASK-026: Dotの操作の`403`から、返らない`email_unconfirmed`を外す](TASK-026-contract-forbidden-email-unconfirmed.md)
 
 ### 次段階（MVP完成後）
 
@@ -65,6 +66,7 @@ MVPとその後の継続開発に必要な作業を管理する。TASK-001〜TAS
 - 各領域の実装規約・UI変更時のdesign-system・レビュー入口とsecurity指針は、着手する作業に応じてAGENTS.mdから読む。
 - 追加の不明点は推測で実装せず、関連する設計判断タスクと仕様の未決定事項へ記録する。完了済み作業を重複登録せず、新たな独立範囲が必要になった場合だけ新IDを追加する。
 - Claude Codeの`/run-task`で自動実行できるのは、作業区分が設計判断・API契約以外で、状態がTodo / In progress、またはBlockedで依存先がすべてDoneのタスクに限る。判定は`node scripts/task-status.mjs TASK-XXX`で行う。設計判断・API契約は人間と対話で進める。自動実行でも上記の状態・Doneの規則は変わらず、人間の確認が必要な完了条件が残る場合はIn progressのままPRを作る。
+- 探索的な監査（`exploratory-audit` skill）の候補は、人間が`採否`を「採用」にしたものだけをタスクに起こす。手順と、securityと個人データの保存・送信・削除に関わる候補の書き方・完了の条件は[audit.md](../code-review/audit.md) §4・§5が定める。
 - 毎朝4時に`scripts/task-scheduler.mjs`が上記の条件を満たすタスクを並列で`/run-task`する。ディレクトリ名が`task-NNN`かブランチ名に`task-NNN`を含むworktreeがあるタスク、このrepositoryのブランチからopen PRがあるタスク、mainでIn progressのタスクは着手済みとして除外する。定期実行のセッションが動いている間は、`task-status.mjs`がそのタスクを実行不可と判定し、同じタスクを手動で`/run-task`しても止まる。起動できるタスクがない日は、残っているタスクと理由を通知する。
 
 2026-09-21の命名移行で、既存16件の接頭辞を`MVP-`から`TASK-`へ変更した。番号とタスク内容は維持している。この一度の移行後は、上記の固定ID・固定パス運用を適用する。
@@ -73,7 +75,7 @@ MVPとその後の継続開発に必要な作業を管理する。TASK-001〜TAS
 
 ## 依存関係を踏まえた実施順
 
-MVPのタスク（TASK-001〜TASK-017とTASK-025）のうちTASK-001〜TASK-016は、依存条件を満たしながら番号順に進められる。ただしTASK-009とTASK-015は、番号の大きいTASK-025に依存する。TASK-001は認証の設計判断から始め、TASK-002とTASK-003は両方を検討して保持・生成条件の整合を確認する。TASK-017は依存がなく番号順の位置とは別に、TASK-002 / TASK-003と整合を取りながら公開前までに判断する。新しいタスクを追加した後も、番号だけで判断せず各ファイルの依存先を確認する。
+MVPのタスク（TASK-001〜TASK-017とTASK-025・TASK-026）のうちTASK-001〜TASK-016は、依存条件を満たしながら番号順に進められる。ただしTASK-009とTASK-015は、番号の大きいTASK-025に依存する。TASK-026は依存がなく、いつでも進められる。TASK-001は認証の設計判断から始め、TASK-002とTASK-003は両方を検討して保持・生成条件の整合を確認する。TASK-017は依存がなく番号順の位置とは別に、TASK-002 / TASK-003と整合を取りながら公開前までに判断する。新しいタスクを追加した後も、番号だけで判断せず各ファイルの依存先を確認する。
 
 以下は並行して進める場合も含めた着手の目安であり、正確な依存先は各タスクファイルを参照する。
 
