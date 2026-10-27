@@ -21,14 +21,17 @@ operationも共有している（監査が確かめたのは実装済みの4件�
 この差はTASK-006 Planに記録されているが、正本である契約と`contracts/README.md` §5に反映されていない。Webは契約に合わせて
 到達しない分岐を持っている（`apps/web/src/features/history/components/history-status.tsx`）。
 
-正本（契約・README）を実装に合わせ、Webの到達しない分岐とtestの扱いを揃える。共有の`Forbidden`を直し、参照するすべての
-operationに効かせる（実装済みの4件だけを別のresponseに分けると、未実装のoperationの契約に返らないcodeが残るため）。
+正本（契約・README）を実装に合わせ、Webの到達しない分岐とtestの扱いを揃える。`Forbidden`を参照するoperationには、CSRFを
+確かめないGET（listDays・getToday・getDay・listTrashedDots・getGeneration。`contracts/README.md` §4の「状態を変える操作は
+`X-CSRF-Token`を必須」）が含まれ、`email_unconfirmed`を外すとGETには返す`403`がなくなる。実装済みの4件だけを別のresponseに
+分けると未実装のoperationの契約に返らないcodeが残るため、直し方は参照するすべてのoperationについて決める（GETから`403`を外す、
+`Forbidden`を状態を変える操作に限る、など）。
 login時の`email_unconfirmed`（passwordが一致したときだけ返す）は変えない。
 
 ## 確認可能な完了条件
 
-- [ ] 共有の`Forbidden`の説明から`email_unconfirmed`が外れている（または「login時にだけ返す」と明記されている）。`csrf_invalid`は残っている。
-  `Forbidden`を参照するすべてのoperationが、同じ説明のまま矛盾しない。
+- [ ] `Forbidden`の説明から`email_unconfirmed`が外れ、状態を変える操作には`csrf_invalid`の`403`が残っている。
+- [ ] `Forbidden`を参照していたすべてのoperation（GETを含む）について、APIが返さない`403`が契約に残っていない。直し方と理由をPlanに記録している。
 - [ ] 「メール未確認の利用者はDotを扱えない（`401 unauthenticated`で拒否する）」という方針が、契約か`contracts/README.md`に残っている。
 - [ ] `contracts/README.md` §5の`email_unconfirmed`の行が、返る場面（login）を示している。
 - [ ] メール未確認の利用者がDotの操作で`401 unauthenticated`になることを確かめるrequest specがある。
