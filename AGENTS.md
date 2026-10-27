@@ -27,6 +27,7 @@ AIは実装の代行者ではなく、設計・実装・レビューを支援す
 | backendレビュー | [`docs/code-review/backend/README.md`](docs/code-review/backend/README.md)、[`security.md`](docs/code-review/backend/security.md)、関連仕様・backend実装規約 |
 | 仕様・設計文書のレビュー | [`docs/code-review/documentation.md`](docs/code-review/documentation.md)、関連仕様・該当するImplementation Plan |
 | 横断レビュー | 両方のレビュー入口・security観点・実装規約・関連仕様 |
+| 探索的な監査（`exploratory-audit` skill） | [`docs/code-review/audit.md`](docs/code-review/audit.md)と、同文書が観点ごとに挙げる正本 |
 
 ## 文書の役割と更新
 
@@ -41,7 +42,7 @@ AIは実装の代行者ではなく、設計・実装・レビューを支援す
 - `docs/privacy.md`: 個人データの扱いに関する横断仕様と未決定事項。
 - `docs/architecture.md`: 構成、責務、継続する設計判断と理由。
 - `docs/development/`: 実装時の境界・制約・判断基準。
-- `docs/code-review/`: 差分を検証し、根拠と重大度を報告する方法。
+- `docs/code-review/`: 差分を検証し、根拠と重大度を報告する方法と、探索的な監査の観点（`audit.md`）。
 - `docs/implementation-plans/`: 変更単位の背景、方針、判断、実装差異、検証結果。
 
 コードまたは仕様を変える変更では、関連する現行文書を同じ変更で更新する。変更のない文書を
@@ -64,7 +65,7 @@ Planには何をするかだけでなく、なぜその方法を選ぶか、対�
 - 「PR作成して」のように依頼されたら、`pr-review-cycle` skill（`.claude/skills/pr-review-cycle/SKILL.md`）の手順に従い、PR作成後もセルフレビュー → サブエージェント（`code-reviewer`）→ Codexの最終チェックをLGTMが出るまで自動で回し、再発防止の仕組み化と人間のレビュー用ガイドの作成まで行う。
 - PRは[`docs/development/pull-requests.md`](docs/development/pull-requests.md)に従い、レビュー対象のファイルが1つあたり20個までになるよう分ける（lockfile・生成物は数えない）。分けるときは統合ブランチと`main`へのメインのPRを作り、サブのPRを統合ブランチへ向けて作る。人間のレビューはタスク（依頼）ごとに、すべてのサブのPRが機械のレビューでLGTMになってから、統合ブランチへマージする前に1回行う。
 - PRのタイトルと本文は日本語で書く。コード上の識別子や技術用語は必要に応じてそのまま使う。
-- PR本文は `.github/pull_request_template.md` に従い、「概要」「取り組んだ理由」「取り組んだこと」「確認すること」をこの順で記載する。バグ対応では「取り組んだ理由」と「取り組んだこと」の間に「原因」を追加し、確認できた原因を具体的に説明する。原因が未確定なら、その旨と確認済みの事実を明記する。
+- PR本文は `.github/pull_request_template.md` に従い、「概要」「取り組んだ理由」「取り組んだこと」「確認すること」をこの順で記載する。バグ対応では「取り組んだ理由」と「取り組んだこと」の間に「原因」を追加し、確認できた原因を具体的に説明する。原因が未確定なら、その旨と確認済みの事実を明記する。秘匿する監査の候補を扱うPR（差分にslugが`audit-fix`のタスクかPlanがある）は、原因の書き方を[`docs/code-review/audit.md`](docs/code-review/audit.md) §4に従う。
 - PR本文に図を載せる条件と載せ方は、[`docs/development/pull-requests.md`](docs/development/pull-requests.md#pr本文の図)の「PR本文の図」が定める。
 - 「確認すること」には、人間による確認が必要な操作・画面・仕様上の判断を、期待結果がわかるTODOリストで記載する。自動テストの実施記録や実装作業の完了報告で代用しない。
 - テンプレートの説明コメントやプレースホルダーを完成したPR本文に残さない。
