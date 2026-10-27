@@ -24,6 +24,7 @@ TASK-002で決めた保持期間・削除主体・要求の受け付け方をBac
 - [ ] 外部AI側のデータとログも保持方針に従って扱い、制御できる範囲・制約が文書と利用者への説明に一致する。
 - [ ] journaling等の関連現行文書へ実装された保持・削除方法を反映している。
 - [ ] 退会の受理は`GenerationWithdrawal.accept`、完了の判定は`GenerationWithdrawal.settled?`、Dotの完全削除は`GenerationDotPurge.accept`を通し、入口を通らない経路で`users`の退会の列（`deletion_requested_at`・`generation`）と`generations`を書き換えないことをtestで確かめている（TASK-009が実装した退会と進行中の処理の排他を外さないため）。
+- [ ] 退会した利用者の処理IDを引数に持つ失敗したJob（Solid Queueの`solid_queue_failed_executions`と`solid_queue_jobs`）を、退会で消すか、期限を決めて消すかを決め、[privacy.md](../privacy.md) §5-1「Jobの記録」の行に書いている（TASK-009は失敗したJobを人間が消すまで残すとした）。
 
 ## 依存するタスクID
 

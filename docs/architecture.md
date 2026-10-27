@@ -408,7 +408,7 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   分岐は保険になる。Pumaが返す`413`はProblemの形にならない。解析の失敗（Railsが包まない`Rack::BadRequest`を含む）は`422`にする。
 - AWSの呼び出しは`GenerationProviders`に集め、clientを作る前に呼び出し元がアプリ用アカウント（`FOD_APP_ACCOUNT_ID`）か
   を確かめる。SDKのloggerは付けない。regionは`ap-northeast-1`に固定する。bucket・role・アカウントIDは環境変数で渡し、
-  model idとpromptは`config/generation.yml`で固定する。model idが空の間はBedrockへ送らない。
+  model idとpromptは`config/generation.yml`で固定する。bucket・model id・アカウントIDのどれかが空の間は、どのAWSのclientも作らない。
 
 ### データ所在地と費用
 

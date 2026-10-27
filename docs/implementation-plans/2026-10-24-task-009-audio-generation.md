@@ -113,7 +113,7 @@
   外部provider行は実サービスの確認後）、`docs/development/backend.md`（Job基盤とstorageが未実装という記述）、
   `docs/code-review/backend/security.md`・`docs/code-review/frontend/security.md`（実装状況とmultipart・Jobの引数の観点）、
   `contracts/openapi.yaml`（回数の制限の値と、送信の説明の処理の順）、`docs/tasks/TASK-013-backend-data-deletion.md`
-  （退会と完全削除の入口の申し送り）、`docs/tasks/TASK-010-frontend-recording.md`（Pumaの`413`の扱い）、
+  （退会と完全削除の入口の申し送り）、`docs/tasks/TASK-010-frontend-recording.md`（Pumaの`413`の扱い）、`docs/tasks/TASK-015-privacy-security-verification.md`（費用と前段の制限）、
   `docs/journaling.md` §2・§3・`docs/dot-history.md`・`docs/product.md`（Dotを作る入口のbackendが実装済みであること）、`docs/tasks/TASK-009-backend-audio-generation.md`
 
 ## 7. Proposed Approach
@@ -184,7 +184,7 @@
   `dots`のcheck制約と同じ）。
 - 認証はSDKの既定の探索（開発はIAM Identity Center、本番はECS task role）。長期キーを読まない。
 - 外部へ最初に送る前に、呼び出し元のアカウントを`sts get-caller-identity`で確かめる（当初はrake task
-  `generation:verify_caller`の案だった。実装では、clientを作る前に毎回の実行時に確かめる`GenerationProviders::CallerAccountGuard`と、
+  `generation:verify_caller`の案だった。実装では、processで最初にclientを作る前に1回確かめる`GenerationProviders::CallerAccountGuard`と、
   人間が最初に表示して確かめるだけのrake task `generation:caller_identity`に分けた。§16）。比べる値はgitに入れないローカルの
   環境変数（`FOD_APP_ACCOUNT_ID`）から読み、リポジトリに記録しない。
 
@@ -231,7 +231,7 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 | 3 | `feat/task-009-3-cleanup` | 入口の手続き・取り消し・cleanup・ACK・期限・退会/完全削除の入口（T3・T5・T7・T10・T13・T16〜T22） | `GenerationGate`、取り消し・cleanup・ACK・期限のserviceとJob、定期実行の設定、偽物のprovider、遷移テストと5契機のspec | 20 |
 | 4 | `feat/task-009-4-pipeline` | 受理から保存まで（T1・T2・T4・T6・T8・T9・T11・T12・T14・T15）とwatchdog | attempt token、upload・文字起こし開始/完了待ち・生成と保存・再試行・watchdogのserviceとJob、遷移テスト | 20 |
 | 5 | `feat/task-009-5-api` | endpoint | routes・controller・serializer・`ApiRequestGuard`・回数の制限・Pumaの本文の上限・契約・request spec・通しのspec | 20 |
-| 6 | `feat/task-009-6-docs` | 文書と完了の記録 | 呼び出し元を表示するtask、architecture・privacy・backend・review観点、TASK-010・TASK-013への申し送り、このPlanとタスクファイル | 10 |
+| 6 | `feat/task-009-6-docs` | 文書と完了の記録 | 呼び出し元を表示するtask、architecture・privacy・backend・review観点、journaling・dot-history・product、契約（413・退会の409の説明）、TASK-010・TASK-013・TASK-015への申し送り、このPlanとタスクファイル | 16 |
 
 数は最終の値。2番目はレビューの指摘への修正（外部の失敗の包み方・S3から読む上限）で23になった。指摘への修正を
 別のPRへ移すとそのPRに問題が残るので、上限の例外としてPRの概要に理由を書いた。レビューの観点の追加は関連PR（#108）に分けた。
@@ -313,7 +313,7 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
     前に置いた（受理の側が取り消しの入口を呼ぶため）。
   - 2番目のPRで、定期実行の設定と呼び出し元を表示するtaskを後ろのPRへ移すコミットを足した（20ファイルに収めるため。
     履歴は書き換えていない）。
-  - `POST /api/v1/dots`は、attemptを本文の解釈より前に検証して既存の処理を返すが、Railsのrequestのログ（Parameters）が
+  - `POST /api/v1/dots`は、attemptを音声を使う前に検証して既存の処理を返すが、Railsのrequestのログ（Parameters）が
     actionの前にmultipartを解釈する。本文はPumaが受け取り終えているので、契約の「本文の再送信そのものは防げない」の範囲で、
     既存の処理の場合に音声を使わない・S3へ置かないことは守っている。
   - pollingは、Dotの無いまま`succeeded_cleanup_pending`に残る記録（Dotの完全削除の受理の前後）を404にした。
@@ -324,7 +324,7 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
     （§7-3の当初の案は5分・30秒）。実行権の期限切れを条件に足したので、生きている実行を二重に拾わない範囲で短くした。
   - T19は入口ではなく後片付けのJobが行う。取り消しは実行中の実行権のtokenだけを失効させ、期限は残す。後片付けはその期限が
     切れてから始める（実行中のJobが外部へ送り終える前に記録を消すと、外部に残ったものを記録から辿れなくなる。レビューの指摘）。
-  - 呼び出し元の確認は、実行時のguard（毎回clientを作る前）と表示だけのrake taskに分けた。設定（bucket・model id・
+  - 呼び出し元の確認は、実行時のguard（processで最初にclientを作る前に1回）と表示だけのrake taskに分けた。設定（bucket・model id・
     アカウントID）が1つでも欠けていればどのclientも作らない（model idが未確定の間に音声だけを送らない）。
   - **認証メールのJobはSolid Queueに載せず、memoryのadapter（async）のままにした**。引数にメールアドレスと
     確認・再設定・解除のtokenを持ち、Solid Queueでは`solid_queue_jobs.arguments`に平文で残るため（レビューでsecurityのHighと
@@ -347,9 +347,9 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
     受け付けない」分岐は保険になる。
   - multipartの解析の失敗のうち、Railsが`ActionController::BadRequest`に包まないもの（長すぎるboundaryなど、
     `Rack::BadRequest`を含む例外）も、guardが`422`にする。
-  - 退会の受理後のpollingは、どのidにも`409 account_deletion_in_progress`を返す。契約のgetGenerationの説明は「完全削除と退会では
-    Dotも残らないので`404`」としており、退会の受理後から完了までの間は食い違う（`409`は契約のresponsesにある）。説明の直しは
-    退会のendpointを作るTASK-013へ申し送る。
+  - 退会の受理後のpollingは、どのidにも`409 account_deletion_in_progress`を返す（契約の共通の約束）。契約のgetGenerationの説明は
+    「完全削除と退会ではDotも残らないので`404`」としていたので、退会を`409`に直した（6番目のPR）。
+  - 本文が34MBを超えるとPumaが本文なしの`413`を返すことを、契約のcreateDotの`413`の説明に書いた（6番目のPR）。
 - 検証結果:
   - `cd apps/api && bundle exec rspec`: 690 examples, 0 failures（6番目のPRの`273f7d9`、2026-10-27。5番目の`24b7d6c`を取り込んだ版）。
   - `bundle exec rubocop`: no offenses。`bundle exec brakeman -q`: No warnings。`bundle exec bundler-audit check`:
@@ -363,11 +363,12 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
     PUTの実際の挙動、model idごとの確認（推論の宛先・保持・人によるレビュー・cache）、`none`のもとでのCSAM、
     Transcribeのendpointの記録、呼び出し元の初回確認、Pumaとの同居の実測。
 - 申し送り:
-  - **音声の実際の長さの確認**（公開前の別タスク。§13の費用）: Transcribeへ送る前に、webm/mp4のcontainerから実際の長さを
-    読み、申告を大きく超える音声を拒否する。MediaRecorderのwebmにはDurationが入らないことが多く、clusterの走査が要る。
+  - **音声の実際の長さの確認**（§13の費用）: Transcribeへ送る前に、webm/mp4のcontainerから実際の長さを読み、申告を大きく
+    超える音声を拒否する。MediaRecorderのwebmにはDurationが入らないことが多く、clusterの走査が要る。公開の前に確かめることを
+    [TASK-015](../tasks/TASK-015-privacy-security-verification.md)の完了条件に足した（実装は別のタスクを起こす）。
   - **TASK-010**: Pumaの上限を超えた本文への`413`はProblemの形でないので、`413`はstatusだけで`audio_too_large`として扱う。
-  - **TASK-013**: 退会・完全削除の入口（上記）と、退会の受理後のpollingの契約の説明（`409`）。
-  - **未ログインのmultipart**: 回数や同時の数で制限することは、ECSの前段（ALB・WAF）を作るときに検討する。
+  - **TASK-013**: 退会・完全削除の入口（上記）と、退会した利用者の処理IDを引数に持つ失敗したJobの扱い（完了条件に足した）。
+  - **未ログインのmultipart**: 回数や同時の数でALB・WAFの側で制限するかを、TASK-015の完了条件（上の長さの確認と同じ項目）に足した。
   - **実装の作法**: レビューで補足した作法（ERBでの型、`Integer(value, 10)`、実行権を取った後の読み直し）を
     `docs/development/backend.md`へ移すことは、別のタスクで扱う（関連PR #108は観点だけを足した）。
 - 関連: メインのPR #101、レビューの観点の追加は関連PR #108。
@@ -395,7 +396,7 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 | #104（3/6） | 3回ともLGTMにならない | 未実行 | 3回目はMedium 1件（取り消し待ち・期限の切れた後片付け待ちの記録を、定期の拾い直しが拾うことのtestが無い。コードの不具合は見つかっていない） |
 | #105（4/6） | 1回目の指摘を直した。2回目は未実行 | 未実行 | |
 | #106（5/6） | 1回目の指摘を直した。2回目は未実行 | 未実行 | |
-| #107（6/6） | 1回目の指摘を直した（このコミット）。2回目は未実行 | 未実行 | |
+| #107（6/6） | 1回目の指摘を直した（`745af58`）。2回目は未実行 | 未実行 | |
 
 上の表は2026-10-24時点の記録。その後の結果（2026-10-27）:
 
