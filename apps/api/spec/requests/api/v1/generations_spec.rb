@@ -188,8 +188,8 @@ RSpec.describe "Generations", perform_jobs: false do
         assert_response_schema_confirm(409)
       end
 
-      it "1時間の上限を超えたら429", :fixed_time do
-        GenerationThrottle::LIMITERS[:retry].instance_variable_get(:@limit).times { GenerationThrottle.hit(:retry, user) }
+      it "上限を超えたら429", :fixed_time do
+        GenerationThrottle::LIMITERS[:retry].map { it.instance_variable_get(:@limit) }.min.times { GenerationThrottle.hit(:retry, user) }
 
         retry_generation(create(:generation, user:, state: "failed", failure_kind: "generation_failed").id)
 

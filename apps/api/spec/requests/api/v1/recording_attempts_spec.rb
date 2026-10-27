@@ -38,7 +38,7 @@ RSpec.describe "Recording attempts" do
     end
 
     it "1時間の上限を超えたら429", :fixed_time do
-      GenerationThrottle::LIMITERS[:recording_attempt].instance_variable_get(:@limit).times { issue }
+      GenerationThrottle::LIMITERS[:recording_attempt].map { it.instance_variable_get(:@limit) }.min.times { issue }
       issue
 
       expect(problem_code).to eq("rate_limited")

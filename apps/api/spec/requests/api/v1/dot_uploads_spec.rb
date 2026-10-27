@@ -110,14 +110,26 @@ RSpec.describe "Dot uploads", :perform_jobs do
       assert_response_schema_confirm(409)
     end
 
-    it "1時間の上限を超えたら429", :fixed_time do
-      limit = GenerationThrottle::LIMITERS[:upload].instance_variable_get(:@limit)
-      limit.times { GenerationThrottle.hit(:upload, user) }
+    it "上限を超えたら429", :fixed_time do
+      GenerationThrottle::LIMITERS[:upload].map { it.instance_variable_get(:@limit) }.min.times { GenerationThrottle.hit(:upload, user) }
 
       upload
 
       expect(problem_code).to eq("rate_limited")
       assert_response_schema_confirm(429)
+    end
+
+    it "1日の上限は、1時間の枠が変わっても戻らず、1日の枠が変わるまで待たせる（Transcribeの費用の上限）" do
+      travel_to(Time.utc(2026, 10, 2, 1)) do
+        GenerationThrottle::LIMITERS[:upload].last.instance_variable_get(:@limit).times do
+          GenerationThrottle.hit(:upload, user)
+        end
+      end
+
+      travel_to(Time.utc(2026, 10, 2, 3)) { upload }
+
+      expect(problem_code).to eq("rate_limited")
+      expect(response.parsed_body["retry_after_seconds"]).to eq(21.hours.to_i)
     end
 
     it "音声をrequestのログに出さない" do

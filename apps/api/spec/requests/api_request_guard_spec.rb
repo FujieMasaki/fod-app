@@ -98,6 +98,15 @@ RSpec.describe ApiRequestGuard do
       expect(response).to have_http_status(:unprocessable_content)
     end
 
+    it "Railsが包まないmultipartの解析の失敗（長すぎるboundary）も、500にせず422にする" do
+      boundary = "b" * 71
+      post_multipart(multipart_body(boundary, [%w[duration_seconds 120]]),
+                     "CONTENT_TYPE" => "multipart/form-data; boundary=#{boundary}")
+
+      expect(response).to have_http_status(:unprocessable_content)
+      expect(field_errors).to eq([{ "field" => "request", "code" => "invalid_format" }])
+    end
+
     it "textのpartの不正なUTF-8は422にし、値をログに出さない" do
       body = multipart_body("x", [["duration_seconds", "ログに出したくない値\xFF".b]])
 
