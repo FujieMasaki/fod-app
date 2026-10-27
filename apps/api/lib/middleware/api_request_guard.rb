@@ -8,6 +8,8 @@
 # 2. paramsを解釈できないときにRailsが起こす`ActionController::BadRequest`（path・queryの不正なUTF-8など）を
 #    捕まえ、`request`の`invalid_format`にする。`rescue_from`の外で起きるため、捕まえないとProblem形式でない`400`になり、値を含む
 #    messageを`DebugExceptions`がerrorのログへ出す。そのためこのmiddlewareは`DebugExceptions`の内側に置く。
+#    Rackのmultipartの解析の失敗（`Rack::BadRequest`を含む例外。長すぎるboundaryなど）にはRailsが包まないものがあり、
+#    捕まえないと`500`になるので、同じく`request`の`invalid_format`にする。
 #
 # pathはrouterと同じ規則（`//`をまとめ、末尾の`/`を外す）で正規化してから比べる。生の`path`で比べると、
 # `//api/...`のように表記を変えたrequestが検査を通らずにrouteへ届くため。
@@ -46,7 +48,7 @@ class ApiRequestGuard
     return oversized_body(request) if NON_JSON_BODIES.key?([request.request_method, path]) && oversized_body?(request)
 
     @app.call(env)
-  rescue ActionController::BadRequest
+  rescue ActionController::BadRequest, Rack::BadRequest
     invalid_format("request")
   end
 
