@@ -214,6 +214,24 @@ RSpec.describe GenerationUpload do
       expect(storage.keys).to include(generation.audio_key)
     end
 
+    it "止まっていた古い要求が、再送された試行のkeyへ古い音声を上書きしない" do
+      interrupted = false
+      allow(GenerationUploadCompletion).to receive(:put).and_wrap_original do |original, *args|
+        unless interrupted
+          interrupted = true
+          GenerationWatchdog.sweep(now: late)
+          expect(upload(uploaded_audio(body: "#{UploadHelpers::WEBM_HEAD}new")).first.outcome).to eq(:created)
+        end
+        original.call(*args)
+      end
+
+      result, = upload(uploaded_audio(body: "#{UploadHelpers::WEBM_HEAD}old"))
+
+      expect(result.outcome).to eq(:existing)
+      expect(generation).to have_attributes(state: "accepted", upload_attempt: 2)
+      expect(storage.objects.transform_values { it[:body] }).to eq(generation.audio_key => "#{UploadHelpers::WEBM_HEAD}new")
+    end
+
     it "置き終わった音声をwatchdogが確定した後も、古い要求の後始末で消さない" do
       storage.before_next(:put) do
         storage.objects[generation.audio_key] = { body: "audio" }

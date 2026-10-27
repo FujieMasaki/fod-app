@@ -4,7 +4,7 @@
 # 2. 利用者の行をlockし、activeを確かめて`uploading`の記録を作りcommitする（record-first）。同じattemptの並行送信は
 #    主キーの一意制約で1件に絞る
 # 3. commitのあとにS3へ置く。keyは処理IDとupload試行番号からserverが決める
-# 4. 置けたあとの確定（T1・T3）と、置けなかったときの`upload_failed`（T2）はGenerationUploadCompletion
+# 4. 置くこと・置けたあとの確定（T1・T3）・置けなかったときの`upload_failed`（T2）はGenerationUploadCompletion
 #
 # 再送（T4）は、記録が`upload_failed`のとき、attemptの期限内に限って新しい実行権で受け付ける。
 class GenerationUpload
@@ -127,22 +127,13 @@ class GenerationUpload
   # （退会の後に置いた音声を消せなかったことを、送り直せる失敗に見せないため）。置いている間に実行権を失い、
   # 処理を別の実行（watchdog・再送）が続けていれば、既存の処理として返す
   def store(generation_id, audio, lease_token)
-    return existing(generation_id) unless put_audio(generation_id, audio, lease_token)
+    return existing(generation_id) unless GenerationUploadCompletion.put(generation_id, lease_token, audio)
 
     outcome = GenerationUploadCompletion.complete(generation_id, lease_token)
     return Result.new(outcome: :created, generation_id:, problem: nil) if outcome == :accepted
     return existing(generation_id) if outcome == :superseded
 
     problem(@user.reload.deletion_requested? ? :account_deletion_in_progress : :attempt_invalid)
-  end
-
-  def put_audio(generation_id, audio, lease_token)
-    key = Generation.find(generation_id).audio_key
-    GenerationProviders.storage.put(key, audio.io, content_type: audio.content_type)
-    true
-  rescue GenerationProviders::Error
-    GenerationUploadCompletion.fail(generation_id, lease_token)
-    false
   end
 
   def existing(generation_id) = Result.new(outcome: :existing, generation_id:, problem: nil)

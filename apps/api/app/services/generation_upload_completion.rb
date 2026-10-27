@@ -1,7 +1,19 @@
-# S3へ音声を置いたあとの確定と、置けなかったときの記録（TASK-003 Plan §20「退会と進行中処理の排他」の3）。
+# S3へ音声を置くことと、置いたあとの確定・置けなかったときの記録（TASK-003 Plan §20「退会と進行中処理の排他」の3）。
 # uploadのrequestと、放置された`uploading`を拾うwatchdogの両方が使う。
 module GenerationUploadCompletion
   module_function
+
+  # 実行権を持つ試行のkeyへ置く。keyは実行権と同じ行から、実行権を持っている間だけ読む（止まっていた古い要求が、
+  # watchdogの`upload_failed`と再送の後に、新しい試行のkeyへ古い音声を上書きしないため）。実行権を失っていれば
+  # 置かずに確定へ進み、確定に負けた結果で答える。置けなければ`upload_failed`にしてfalse
+  def put(generation_id, lease_token, audio)
+    key = Generation.where(id: generation_id, state: Generation::UPLOADING, lease_token:).pick(:audio_key)
+    GenerationProviders.storage.put(key, audio.io, content_type: audio.content_type) if key
+    true
+  rescue GenerationProviders::Error
+    fail(generation_id, lease_token)
+    false
+  end
 
   # T1: 利用者の行をlockして世代番号を確かめ、`accepted`にしてJobをenqueueする。
   # ずれていれば（退会・取り消しを受理した後に置かれた）、置いた音声を消して取り消しへ回す（T3）。
