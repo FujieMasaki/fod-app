@@ -78,8 +78,10 @@
     `BadRequest`が起きるため。JSON以外を受け取るendpointは同ファイルの
     `NON_JSON_BODIES`へ足し、その解析で同じ経路が開かないか確かめる（いまは`POST /api/v1/dots`のmultipartだけ。TASK-009）。
     multipartはactionより前（requestのログ・CSRFの確認）に解析されるので、本文の大きさを同じmiddlewareが
-    Content-Lengthで先に制限する。足すときは上限も決め、壊れた本文・不正なUTF-8が`500`やログへの値の出力に
-    ならないことをspecで確かめる。
+    Content-Lengthで先に制限する。足すときは上限も決め、壊れた本文・不正なUTF-8・Railsが`ActionController::BadRequest`に
+    包まないRackの解析の失敗（`Rack::BadRequest`を含む例外。長すぎるboundaryなど）が`500`やログへの値の出力に
+    ならないことをspecで確かめる。本文の受け取りそのものを止めるのはPumaの`http_content_length_limit`で、guardの上限より
+    大きくしておく（`spec/config/puma_spec.rb`）。
   - Jobの引数はSolid QueueのDBに平文で残る。token・メールアドレス・本文をJobの引数に入れない（入れるJobは
     Solid Queueに載せない。認証メールのJobは`config.x.auth_mail_queue_adapter`でmemoryのadapter）。
   - paramsを解釈できない`ActionController::BadRequest`（path・queryの不正なUTF-8など）は`rescue_from`の外で

@@ -17,6 +17,10 @@
 
 2026-10-08時点で、録音attemptを発行するbackendのendpointとuploadの受け口は未実装である（契約は`contracts/openapi.yaml`にある）。未実装のあいだは、録音前の案内と画面、契約に沿った通信関数までを進め、発行とuploadとの受け渡しを実際のbackendで確かめる完了条件は残してIn progressにする。存在しないendpointを前提にした仮の実装を、完了扱いにしない。
 
+2026-10-27にTASK-009が、送信（`POST /api/v1/dots`）の本文の受け取りをPumaの上限（34MB）で止めるようにした。この上限を超えた
+本文への`413`はPumaが返し、Problemの形（`application/problem+json`）にならない。`413`は本文を読まずにstatusだけで
+`audio_too_large`として扱う（[TASK-009 Plan](../implementation-plans/2026-10-24-task-009-audio-generation.md) §16）。
+
 ## 確認可能な完了条件
 
 - [ ] 録音開始前に音声の送信有無・送信先・保存と削除の扱いと、他人の実名や住所を必要がなければ言い換えられることを確認でき、説明と実際の処理が一致する。

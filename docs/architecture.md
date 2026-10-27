@@ -387,7 +387,12 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   `uploading`は`HeadObject`で判定する。期限の到来と、再実行が要る後片付けは毎分の`GenerationMaintenanceJob`が拾う
   （後片付けのJobは自分を積み直さない）。間隔と実行権の長さ（受理から保存までは15分、後片付けは5分）は初期値で、実測で見直す。
   取り消し・退会・期限は実行中の実行権のtokenだけを失効させて期限は残し、後片付けはその期限が切れてから始める。
-- 録音の発行・送信・再試行は、利用者ごとに1時間でそれぞれ60回・60回・30回までにする（`GenerationThrottle`）。
+- 録音の発行・送信・再試行は、利用者ごとに1時間でそれぞれ60回・60回・30回までにする（`GenerationThrottle`）。送信と
+  再試行は、加えて1日20回まで（UTCの0時で切り替わる）。Transcribeは音声の実際の長さで課金され、serverは申告の録音時間と
+  大きさしか確かめないので、1日の回数で1アカウントの費用の最悪を抑える（2026-10-27にTASK-009で決定。前提と残るリスクは
+  TASK-009 Plan §13）。
+- Bedrockへ送る全文は20,000字まで、Transcribeが書き出した結果は2MBまで読む。超えたら送らずに再試行できる失敗にする。
+  S3から読むときは、読む大きさの上限を必ず渡す（`AudioStore#read`）。
 - Job基盤をSolid Queueにしたので、Jobの引数はDB（`solid_queue_jobs.arguments`）に平文で残る。生成のJobの引数は
   処理IDだけにする。**認証メールのJob（引数にメールアドレスと確認・再設定・解除のtokenを持つ）はSolid Queueに載せず、
   memoryのadapter（async）で動かす**（`config.x.auth_mail_queue_adapter`）。これまでと同じ挙動で、**deployや再起動の
@@ -398,7 +403,9 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   終わったJobの定期の削除の対象にならない。messageには入力が入り得るので、**`ApplicationJob`が例外をclassの名前だけに
   包み直してから外へ出す**（外部の失敗を包んだ`GenerationProviders::Error`はmessageに入力を含まないので残す）。
 - `POST /api/v1/dots`のmultipartはRailsがactionより前に解析するので、`ApiRequestGuard`が本文の大きさをContent-Lengthで
-  先に制限する（33MB。長さの無い本文は受け付けない）。
+  先に制限する（33MB）。本文の受け取りそのものはPumaの`http_content_length_limit`（34MB）が止める（guardが動くのは本文を
+  受け取り終えた後のため）。Pumaはchunkedの本文も受け取り終えてから長さを付けて渡すので、guardの「長さの無い本文を受け付けない」
+  分岐は保険になる。Pumaが返す`413`はProblemの形にならない。解析の失敗（Railsが包まない`Rack::BadRequest`を含む）は`422`にする。
 - AWSの呼び出しは`GenerationProviders`に集め、clientを作る前に呼び出し元がアプリ用アカウント（`FOD_APP_ACCOUNT_ID`）か
   を確かめる。SDKのloggerは付けない。regionは`ap-northeast-1`に固定する。bucket・role・アカウントIDは環境変数で渡し、
   model idとpromptは`config/generation.yml`で固定する。model idが空の間はBedrockへ送らない。
