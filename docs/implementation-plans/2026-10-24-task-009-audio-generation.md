@@ -89,6 +89,14 @@
 
 - **回数の制限**（契約のRateLimitedが「採否と具体値はTASK-009で決める」としていた）: 採る。利用者ごとに1時間で、
   録音attemptの発行60回・送信60回・再試行30回。日々の記録として十分に多く、自動化された大量の送信だけを止める値にした。
+  加えて、送信と再試行に**1日20回**の上限を置く（人間の判断、2026-10-27。理由は§13の費用）。1日の枠はUTCの0時
+  （日本時間の9時）で切り替わる。同じattemptの受け取り直しと、失敗・重複で終わる要求も数える（費用を確実に抑える側に倒す）。
+- **全文の上限**: Bedrockへ送る全文は20,000字まで（30分の録音で約12,000字）、Transcribeが書き出した結果は2MBまで読む
+  （人間の判断、2026-10-24）。超えたら送らずに再試行できる失敗（契約ではprocessing_failed）にし、再試行は生成から始めて
+  Transcribeをやり直さない。2MBが30分の日本語の音声の結果に足りるかはH4で実測する。
+- **古い送信の後始末**: 音声のPUTが実行権の期限とwatchdogの猶予（17分）を超えて確定に負けたとき、処理を別の実行
+  （watchdogの確定・`upload_failed`の後の再送）が続けていれば何も消さずに既存の処理として返す（prefixごと消すと、再送・
+  確定した音声まで消すため。人間の判断、2026-10-25）。記録が無い・取り消しや成功の後片付けに入ったときだけprefixで消す。
 - **Transcribeの完了待ち**: threadを占有せず、15秒ごとに自分をもう一度enqueueする（§8）。
 - **`users`の列**: 退会の受理時刻（`deletion_requested_at`）と世代番号（`generation`）をここで足した（§12）。
 - **送信でS3に置けなかったとき**: `202`で`failed`（`upload_incomplete`）を返し、同じattemptで送り直させる。
@@ -217,12 +225,15 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 
 | 順番 | ブランチ | 内容 | 主なファイル | 数 |
 | --- | --- | --- | --- | --- |
-| 1 | `feat/task-009-1-generation-model` | Plan・データと状態機械の核 | このPlan、migration 3つ（users・generations・consumed attempts）、`Generation`・`ConsumedRecordingAttempt`・`User`の変更、`GenerationNaming`、model spec、factory | 12 |
-| 2 | `feat/task-009-2-job-and-aws` | Job基盤とAWSのadapter | Gemfile、Solid Queueのmigrationと設定、`config/generation.yml`（model id・prompt）、S3・Transcribe・Bedrockのadapterとspec、呼び出し元の確認 | 20 |
-| 3 | `feat/task-009-3-cleanup` | 入口の手続き・取り消し・cleanup・ACK・期限・退会/完全削除の入口（T3・T5・T7・T10・T13・T16〜T22） | `GenerationGate`、取り消し・cleanup・ACK・期限のserviceとJob、定期実行の設定、偽物のprovider、遷移テストと5契機のspec | 19 |
+| 1 | `feat/task-009-1-generation-model` | Plan・データと状態機械の核 | このPlan、migration 3つ（users・generations・consumed attempts）、`Generation`・`ConsumedRecordingAttempt`・`User`の変更、`GenerationNaming`、model spec、factory | 14 |
+| 2 | `feat/task-009-2-job-and-aws` | Job基盤とAWSのadapter | Gemfile、Solid Queueのmigrationと設定、`config/generation.yml`（model id・prompt）、S3・Transcribe・Bedrockのadapterとspec、呼び出し元の確認 | 23 |
+| 3 | `feat/task-009-3-cleanup` | 入口の手続き・取り消し・cleanup・ACK・期限・退会/完全削除の入口（T3・T5・T7・T10・T13・T16〜T22） | `GenerationGate`、取り消し・cleanup・ACK・期限のserviceとJob、定期実行の設定、偽物のprovider、遷移テストと5契機のspec | 20 |
 | 4 | `feat/task-009-4-pipeline` | 受理から保存まで（T1・T2・T4・T6・T8・T9・T11・T12・T14・T15）とwatchdog | attempt token、upload・文字起こし開始/完了待ち・生成と保存・再試行・watchdogのserviceとJob、遷移テスト | 20 |
-| 5 | `feat/task-009-5-api` | endpoint | routes・controller・serializer・`ApiRequestGuard`・回数の制限・request spec・通しのspec | 16 |
-| 6 | `feat/task-009-6-docs` | 文書と完了の記録 | 契約の回数の記述、呼び出し元を表示するtask、architecture・privacy・backend、TASK-013への申し送り、このPlanとタスクファイル | 8 |
+| 5 | `feat/task-009-5-api` | endpoint | routes・controller・serializer・`ApiRequestGuard`・回数の制限・Pumaの本文の上限・契約・request spec・通しのspec | 20 |
+| 6 | `feat/task-009-6-docs` | 文書と完了の記録 | 呼び出し元を表示するtask、architecture・privacy・backend・review観点、TASK-010・TASK-013への申し送り、このPlanとタスクファイル | 10 |
+
+数は最終の値。2番目はレビューの指摘への修正（外部の失敗の包み方・S3から読む上限）で23になった。指摘への修正を
+別のPRへ移すとそのPRに問題が残るので、上限の例外としてPRの概要に理由を書いた。レビューの観点の追加は関連PR（#108）に分けた。
 
 取り消し・cleanupを受理から保存までより先に置くのは、受理の側（uploadの世代のずれ、Transcribeの終端後の確認）が
 取り消しの入口を呼ぶためである。取り消しの遷移は、testでは記録を各状態で作って確かめられる。
@@ -256,6 +267,19 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
   `filter_parameters`に`audio`・`text`・`transcript`を足す。
 - 退会: 退会の受理（TASK-013）がこのタスクの入口を通らずに`users`だけを書き換えると排他にならない。入口のserviceを
   TASK-013へ明示的に渡す。
+- **Transcribeの費用**: Transcribeは音声の実際の長さで課金され、serverは申告の録音時間（最大30分）と大きさ（32MB）しか
+  確かめない。低いbitrateのopusなら32MBで数時間分を送れ、1件でTranscribeの上限の4時間近くまで課金されうる（32MBを
+  1800秒で割ると約142kbpsで、bitrateでは見分けられない）。1時間の上限（送信60回）だけでは1アカウントの費用に上限が
+  つかないので、1日20回の上限を足した。単価を東京の公開価格から推測すると、長さを偽った1件で約$6〜7、1アカウントの
+  1日の最悪で約$240（未確認）。上限はアカウントごとなので、多くのアカウントを使われると抑えられない。AWS Budgetsの通知と
+  H4の実測で見直す。確実に防ぐには音声のcontainerから実際の長さを読む必要があり、公開前の別タスクに申し送る（§16）。
+- 回数の枠は固定なので、枠の境目をまたぐと短い時間に上限の2倍まで通り得る（`RateLimiter`）。送信・再試行では1日の上限が
+  1時間の上限より先に効く（1時間の上限は短い時間の連打を止める値として残す）。
+- watchdogは、最終進捗から1時間を過ぎた生成を拾い直さず失敗にする。文字起こしは時間によらずAWS側の状態を見る
+  （終わったTranscribeの結果を捨てて有料でやり直させない）。Transcribeの待ち行列が長く詰まると、24時間の期限まで
+  15秒ごとの照会が続く。
+- Pumaの上限（34MB）を超えた本文への`413`はPumaが返し、Problemの形にならない（正しい画面からは起きにくい。TASK-010へ申し送る）。
+- pollingには回数の制限が無く、成功してからACKまでは照会のたびにS3から全文（2MBまで）を読む。本人の処理だけで、費用は小さい。
 
 ## 14. Verification
 
@@ -306,10 +330,29 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
     指摘された）。
   - BedrockのclientはSDKの自動の再送をしない（`retry_limit: 0`、読み取りのtimeoutは120秒）。同じ生成を二重に消費しないため。
   - 後片付けは、命名規則から導いた対象に記録のkey・job名を足して消し、失敗は処理IDと例外の種類だけをwarnのログに残す。
+  - 回数の制限に、送信・再試行の1日20回を足した（§5・§13）。契約のRateLimitedに具体値を書いた。
+  - 全文の上限（Bedrockへ送る全文は20,000字、Transcribeの結果は2MB）と、古い送信の後始末で処理が続いていれば消さないことを
+    足した（§5。人間の判断）。S3から読むときは`AudioStore#read(key, max_bytes:)`で上限を必ず渡し、上限より1byte多い範囲だけを読む。
+  - 送信でPUTが失敗に見えても、応答を失っただけかもしれないので実体を見る。完成していれば確定へ進め、無ければ`upload_failed`、
+    見られなければ`uploading`のまま残してwatchdogに任せる（TASK-003 Plan §20「完成したobjectがまだ無い場合だけ再uploadを許す」）。
+    置くkeyは実行権を持っている間だけ記録から読み、止まっていた古い要求が新しい試行のkeyへ上書きしない。
+  - 実行権を取ったJob（完了待ち・生成・watchdog）は、取った後に記録を読み直してから外部を呼ぶ（取る前に読んだ値では、その間に
+    始まった次の試行を古い試行の結果で失敗にしうる。レビューの指摘）。
+  - watchdogは、文字起こしを時間で打ち切らない（§13）。完了待ちが外部の失敗を受け続けたときは、文字起こしを始めて1時間で失敗にする。
+  - 本文の受け取りそのものは、Pumaの`http_content_length_limit`（34MB。guardの33MBより1MB大きい）で止める（guardが動くのは
+    Pumaが本文を受け取り終えた後なので、guardだけでは解析しか防げない）。Puma（8.0.2）はchunkedの本文も受け取り終えると
+    デコード後の長さを`CONTENT_LENGTH`に入れて渡すので、Puma配下ではchunkedも33MBの判定を受け、guardの「長さの無い本文を
+    受け付けない」分岐は保険になる。
+  - multipartの解析の失敗のうち、Railsが`ActionController::BadRequest`に包まないもの（長すぎるboundaryなど、
+    `Rack::BadRequest`を含む例外）も、guardが`422`にする。
+  - 退会の受理後のpollingは、どのidにも`409 account_deletion_in_progress`を返す。契約のgetGenerationの説明は「完全削除と退会では
+    Dotも残らないので`404`」としており、退会の受理後から完了までの間は食い違う（`409`は契約のresponsesにある）。説明の直しは
+    退会のendpointを作るTASK-013へ申し送る。
 - 検証結果:
-  - `cd apps/api && bundle exec rspec`: 6番目のPRの時点の結果は下の「機械のレビュー後」に書く。
+  - `cd apps/api && bundle exec rspec`: 690 examples, 0 failures（6番目のPR、2026-10-27。5番目までを取り込んだ時点）。
   - `bundle exec rubocop`: no offenses。`bundle exec brakeman -q`: No warnings。`bundle exec bundler-audit check`:
-    crassの指摘（GHSA-pq4g-8rxf-4g29。mainにもある）を1.0.8へ上げて解消した。
+    crassの指摘（GHSA-pq4g-8rxf-4g29）を1.0.8へ上げて解消した（mainも同じ版へ上げた。2026-10-27に取り込んだ）。
+    6番目のPRの時点で`bundle exec bundler-audit check`はNo vulnerabilities found。
   - 遷移テスト: `spec/services/generation_transitions/`にT1〜T22（T1・T2・T3・T4は`generation_upload_spec.rb`、
     T3は`cancellation_spec.rb`にも）。§24の遷移でない性質は`spec/requests/api/v1/generations_spec.rb`（polling・認可）、
     `generation_upload_spec.rb`（冪等性・並行送信）、`cleanup_triggers_spec.rb`（5契機）、`cleanup_spec.rb`（個別の失敗と
@@ -317,7 +360,15 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
   - 未実施（人間の作業が要る。§5）: 実サービスでの録音内容の反映、webm/mp4の実ファイル、`DeleteTranscriptionJob`の範囲、
     PUTの実際の挙動、model idごとの確認（推論の宛先・保持・人によるレビュー・cache）、`none`のもとでのCSAM、
     Transcribeのendpointの記録、呼び出し元の初回確認、Pumaとの同居の実測。
-- 関連: メインのPR #101。
+- 申し送り:
+  - **音声の実際の長さの確認**（公開前の別タスク。§13の費用）: Transcribeへ送る前に、webm/mp4のcontainerから実際の長さを
+    読み、申告を大きく超える音声を拒否する。MediaRecorderのwebmにはDurationが入らないことが多く、clusterの走査が要る。
+  - **TASK-010**: Pumaの上限を超えた本文への`413`はProblemの形でないので、`413`はstatusだけで`audio_too_large`として扱う。
+  - **TASK-013**: 退会・完全削除の入口（上記）と、退会の受理後のpollingの契約の説明（`409`）。
+  - **未ログインのmultipart**: 回数や同時の数で制限することは、ECSの前段（ALB・WAF）を作るときに検討する。
+  - **実装の作法**: レビューで補足した作法（ERBでの型、`Integer(value, 10)`、実行権を取った後の読み直し）を
+    `docs/development/backend.md`へ移すことは、別のタスクで扱う（関連PR #108は観点だけを足した）。
+- 関連: メインのPR #101、レビューの観点の追加は関連PR #108。
 
 ## 17. 未決定事項（止まった理由）
 
@@ -343,6 +394,28 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 | #105（4/6） | 1回目の指摘を直した。2回目は未実行 | 未実行 | |
 | #106（5/6） | 1回目の指摘を直した。2回目は未実行 | 未実行 | |
 | #107（6/6） | 1回目の指摘を直した（このコミット）。2回目は未実行 | 未実行 | |
+
+上の表は2026-10-24時点の記録。その後の結果（2026-10-27）:
+
+| PR | LGTMのコミット | 経緯 |
+| --- | --- | --- |
+| #102（1/6） | `51151e2` | 上のとおり |
+| #103（2/6） | `bbc0924` | 下の人間の判断の後、サブエージェントの2つの段階とCodex 2回でLGTM |
+| #104（3/6） | `0258a04` | `0314d9c`でLGTM。`0258a04`は#103を取り込んだだけ |
+| #105（4/6） | `ef4a6e3` | サブエージェントの6つの段階、Codexは上限の5回目でLGTM。途中の判断は下のQ4・Q5 |
+| #106（5/6） | `24b7d6c` | サブエージェントの2つの段階、Codex 2回。1回止まった（下のQ6） |
+| #108（関連） | `251bd00` | #103〜#105のレビューで続いた型を、backendのレビュー観点に足した |
+
+統合ブランチには2026-10-27に`main`（`6ecce8c`）を取り込み、各PRへ`git merge`で送った（コンフリクトは無い）。
+
+人間の判断（2026-10-25〜27）:
+
+- Q4（2026-10-25。#105のサブエージェントの段階が3回でLGTMにならなかった）: 古い送信の後始末で、処理が続いていれば
+  prefixごと消さない（§5）。A（直して新しい段階を回す）を採った。
+- Q5（2026-10-27。#105のCodexが2回続けて20分で打ち切られた）: A。打ち切りの前に出た指摘を直してレビューを回し直し、
+  その指摘をCodexの1回目として数えた。
+- Q6（2026-10-27。#106で、回数の上限ではTranscribeの費用に上限がつかないというsecurityのMedium）: 回答が無く、推奨の
+  A+B（1日の上限は送信20回・再試行20回。残る前提は§13に書き、実際の長さの確認は別タスクへ）を採った。
 
 #103の3回目に残った指摘（どれもMedium）:
 
