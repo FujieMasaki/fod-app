@@ -75,7 +75,8 @@ Mediumがなければ`LGTM`と明記する。
     rescue節は捕まえないので、包むはずの例外が素通りする。rescue節の中（そこから呼んだmethodを含む）で
     raiseした例外には、rescueした例外が暗黙に`cause`として付く（`cause: nil`を明示しない限り）。
 - Jobの引数と例外のmessageに、[security.md](./security.md) §3が通常ログ・error tracking・例外messageへ
-  出さないとするものを入れていないか。残る先と期間は、成否・retry・discardと設定（`log_arguments`、
+  出さないとするもの、§2の秘密情報（token・credential）、[privacy.md](../../privacy.md)の個人データ（メール
+  アドレスなど）を入れていないか。引数は記録のIDにして、Jobの中で読み直す形を既定にする。残る先と期間は、成否・retry・discardと設定（`log_arguments`、
   Solid Queueの`preserve_finished_jobs`・`clear_finished_jobs_after`、終わったJobを消す定期のtaskの有無）で変わるので、
   使っているgemの版で確かめる。
   たとえば次のとおり。
