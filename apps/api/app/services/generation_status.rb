@@ -40,8 +40,10 @@ module GenerationStatus
     [Generation::FAILED, Generation::UPLOAD_FAILED].include?(generation.state) ? :failed : :processing
   end
 
+  # 生成の前と同じ上限で読む（成功した処理の結果は上限の内にある）。上限を超えていれば読まずに全文なしとして返す
   def read_transcript(generation)
-    TranscriptionGateway.text_from(GenerationProviders.storage.read(generation.transcript_key).to_s)
+    text = GenerationComposition.read_transcript(generation)
+    text unless text == :too_large
   end
 
   # 契約の`stage`
