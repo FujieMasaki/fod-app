@@ -7,8 +7,8 @@
 # - 終端したら、Bedrockへ送る前に入口（利用者の行のlock・active・世代・期限）をもう一度通す。
 module GenerationTranscription
   CHECK_INTERVAL = 15.seconds
-  # 完了待ちで外部の失敗が続いたときに、待つのをやめて失敗にするまでの時間（文字起こしを始めてから。30分の音声でも
-  # Transcribeはこの時間内に終わる見込み。初期値で、実測（H4）で見直す）
+  # 文字起こしを始めてからこの時間を過ぎた後に開始・完了待ちで外部が失敗したら、待つのをやめて失敗にする
+  # （30分の音声でもTranscribeはこの時間内に終わる見込み。初期値で、実測（H4）で見直す）
   GIVE_UP_AFTER = 1.hour
 
   module_function
@@ -54,7 +54,8 @@ module GenerationTranscription
 
   # 文字起こしの開始・完了待ちで外部が失敗したとき。設定の不足・呼び出し元の違い（NotReady）は待っても直らないので、
   # すぐ失敗にする。それ以外は一時的な失敗として待ち直す（開始のresponseを失っていれば、次の確認で同じ名前のjobに
-  # 合流する）が、文字起こしを始めてからGIVE_UP_AFTERを過ぎたら失敗にする（期限の24時間まで「処理中」に見せない）
+  # 合流する）が、文字起こしを始めてからGIVE_UP_AFTERを過ぎた後の失敗なら、1回でも失敗にする（期限の24時間まで
+  # 「処理中」に見せない）
   def recover(generation, token, error, now)
     Rails.logger.warn("generation transcription failed: generation_id=#{generation.id} error=#{error.class.name}")
     give_up = error.is_a?(GenerationProviders::NotReady) || generation.last_progress_at <= now - GIVE_UP_AFTER

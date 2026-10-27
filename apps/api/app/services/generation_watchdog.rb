@@ -4,15 +4,15 @@
 # - uploading: Jobがまだ無いのでSolid Queueは知らない。`HeadObject`で実体を見て、完成していれば確定（T1）、
 #   無ければ`upload_failed`（T2）にする
 # - accepted: 文字起こしの開始をenqueueし直す
-# - transcribing: 完了待ちをenqueueし直す（AWS側の状態を`GetTranscriptionJob`で見る）
-# - generating: 生成をenqueueし直す（外部AIの消費は繰り返される。TASK-003 Plan §13）
-# - transcribing・generatingで最終進捗からGIVE_UP_AFTERを過ぎたものは、拾い直さずに再試行できる失敗にする
-#   （想定外の例外で落ち続ける処理を、期限の24時間まで外部へ送り直し続けない）
+# - transcribing: 完了待ちをenqueueし直す（AWS側の状態を`GetTranscriptionJob`で見る）。最終進捗が古くても
+#   watchdogは失敗にしない（Transcribeが終わっていれば結果を捨てて、有料でやり直させるため）。打ち切りは、完了待ちが
+#   外部の失敗を受けたときにGenerationTranscriptionが判断する
+# - generating: 生成をenqueueし直す（外部AIの消費は繰り返される。TASK-003 Plan §13）。最終進捗からGIVE_UP_AFTERを
+#   過ぎたものは、拾い直さずに再試行できる失敗にする（想定外の例外で落ち続ける処理を、期限の24時間まで外部AIへ
+#   送り直し続けない。全文は残るので、再試行は生成から始まる）
 module GenerationWatchdog
   STALE_AFTER = 2.minutes
   GIVE_UP_AFTER = GenerationTranscription::GIVE_UP_AFTER
-  GIVE_UP_KINDS = { Generation::TRANSCRIBING => "transcription_failed",
-                    Generation::GENERATING => "generation_failed" }.freeze
 
   module_function
 
@@ -20,24 +20,25 @@ module GenerationWatchdog
     stale = stale(now)
     stale.where(state: Generation::UPLOADING).find_each { inspect_upload(it, now) }
     stale.where(state: Generation::ACCEPTED).pluck(:id).each { GenerationTranscribeJob.perform_later(it) }
-    stale.where(state: GIVE_UP_KINDS.keys, last_progress_at: ...(now - GIVE_UP_AFTER)).find_each { give_up(it, now) }
-    resume_external(stale.where(last_progress_at: (now - GIVE_UP_AFTER)..))
+    stale.where(state: Generation::TRANSCRIBING).pluck(:id).each { GenerationTranscriptionCheckJob.perform_later(it) }
+    sweep_generating(stale.where(state: Generation::GENERATING), now)
   end
 
-  def resume_external(resumable)
-    resumable.where(state: Generation::TRANSCRIBING).pluck(:id).each { GenerationTranscriptionCheckJob.perform_later(it) }
-    resumable.where(state: Generation::GENERATING).pluck(:id).each { GenerationComposeJob.perform_later(it) }
+  def sweep_generating(generating, now)
+    threshold = now - GIVE_UP_AFTER
+    generating.where(last_progress_at: ...threshold).find_each { give_up(it, now) }
+    generating.where(last_progress_at: threshold..).pluck(:id).each { GenerationComposeJob.perform_later(it) }
   end
 
   def give_up(generation, now)
-    token = Generation.acquire_lease(generation.id, state: generation.state, duration: GenerationGate::LEASE_DURATION,
-                                                    now:)
+    token = Generation.acquire_lease(generation.id, state: Generation::GENERATING,
+                                                    duration: GenerationGate::LEASE_DURATION, now:)
     return unless token
     return Generation.release_lease(generation.id, token) unless abandoned?(generation.reload, now)
 
-    Rails.logger.warn("generation abandoned: generation_id=#{generation.id} state=#{generation.state}")
-    Generation.transition(generation.id, from: generation.state, to: Generation::FAILED, holding: token,
-                                         failure_kind: GIVE_UP_KINDS.fetch(generation.state),
+    Rails.logger.warn("generation abandoned: generation_id=#{generation.id} state=#{Generation::GENERATING}")
+    Generation.transition(generation.id, from: Generation::GENERATING, to: Generation::FAILED, holding: token,
+                                         failure_kind: "generation_failed",
                                          lease_token: nil, lease_expires_at: nil)
   end
 
@@ -64,5 +65,5 @@ module GenerationWatchdog
   rescue GenerationProviders::Error
     Generation.release_lease(generation.id, token)
   end
-  private_class_method :stale, :resume_external, :give_up, :abandoned?, :inspect_upload
+  private_class_method :stale, :sweep_generating, :give_up, :abandoned?, :inspect_upload
 end
