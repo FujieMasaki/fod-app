@@ -87,9 +87,11 @@ class GenerationUpload
   # 利用者の行をlockした後に見直す。lockの外で読んだ後に取り消し・後片付けが終わっていても、消したものを
   # 作り直さない（取り消しも同じ行をlockして、使用済みの記録を書く）。先に届いた同じattemptの送信が保存と
   # 後片付けまで終えて記録が消えていても、主キーでは止まらないので、保存済みのDotを見て既存の処理として返す
-  # （Dotの保存も同じ行をlockする）
+  # （Dotの保存も同じ行をlockする）。期限は今の時刻で見直す（本文を読む間に期限が来て、使用済みの記録が期限切れの
+  # 掃除で消えていると、上の確認を通ってしまうため）
   def creation_denial(user, attempt)
     return problem(:account_deletion_in_progress) if user.deletion_requested?
+    return problem(:attempt_expired) if attempt.expired?(Time.current)
     return problem(:attempt_invalid) if ConsumedRecordingAttempt.consumed?(attempt.id, @now)
 
     saved_dot_outcome(attempt)

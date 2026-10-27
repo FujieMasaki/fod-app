@@ -141,6 +141,18 @@ RSpec.describe GenerationUpload do
       expect(storage.objects).to be_empty
     end
 
+    it "本文を読む間にattemptの期限が来ていれば、使用済みの記録が消えていても作らない" do
+      read_audio = lambda do
+        travel_to(attempt.expires_at + 1.second)
+        uploaded_audio
+      end
+
+      result = described_class.call(user:, token:, read_audio:)
+
+      expect(result.problem).to eq(:attempt_expired)
+      expect(Generation.exists?(attempt.id)).to be(false)
+    end
+
     it "同時に届いた送信は、主キーの一意制約で1件に絞って既存を返す" do
       # 既存の処理を確かめた後（本文を読んでいる間）に、先に届いた側が記録を作る
       read_audio = lambda do
