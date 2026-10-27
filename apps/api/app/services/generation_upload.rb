@@ -113,11 +113,12 @@ class GenerationUpload
     }
   end
 
-  # T4: upload_failed → uploading。新しい実行権を取った要求だけが、新しい試行番号のkeyへ置ける
+  # T4: upload_failed → uploading。新しい実行権を取った要求だけが、新しい試行番号のkeyへ置ける。
+  # attemptの期限は、新規作成と同じく本文を読んだ後の今の時刻で見直す
   def reopen(attempt, audio)
     entry = GenerationGate.enter(user_id: @user.id, generation_id: attempt.id, from: Generation::UPLOAD_FAILED,
                                  to: Generation::UPLOADING, attrs: reopen_attrs(audio)) do |user, generation|
-      GenerationGate.proceed_denial(user, generation, @now)
+      attempt.expired?(Time.current) ? :expired : GenerationGate.proceed_denial(user, generation, @now)
     end
     entry.lease_token
   rescue GenerationGate::Denied => e

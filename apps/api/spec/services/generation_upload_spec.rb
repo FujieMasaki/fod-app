@@ -98,6 +98,18 @@ RSpec.describe GenerationUpload do
         expect(generation.state).to eq("upload_failed")
       end
     end
+
+    it "本文を読む間にattemptの期限が来ていれば、受け取り直さない" do
+      read_audio = lambda do
+        travel_to(attempt.expires_at + 1.second)
+        uploaded_audio
+      end
+
+      result = described_class.call(user:, token:, read_audio:)
+
+      expect(result.problem).to eq(:attempt_expired)
+      expect(generation).to have_attributes(state: "upload_failed", upload_attempt: 1)
+    end
   end
 
   describe "同じattemptの再送（冪等）" do
