@@ -21,11 +21,18 @@ class AudioStore
     GenerationProviders::Error.raise_from(e)
   end
 
-  # 無ければnil
-  def read(key)
-    @client.get_object(bucket: @bucket, key:).body.read
+  # 無ければnil。`max_bytes`より大きければ読まずに`TooLarge`にする（外部が書いたobjectをそのままメモリへ載せないため）。
+  # 大きさを確かめる呼び出しと読む呼び出しを分けると間にobjectが替わり得るので、上限より1byte多い範囲だけを1回で取る
+  def read(key, max_bytes:)
+    body = @client.get_object(bucket: @bucket, key:, range: "bytes=0-#{max_bytes}").body.read
+    raise GenerationProviders::TooLarge, "object exceeds #{max_bytes} bytes; not read" if body.bytesize > max_bytes
+
+    body
   rescue Aws::S3::Errors::NoSuchKey
     nil
+  # 空のobjectに範囲を指定すると、S3は範囲の誤りとして答える
+  rescue Aws::S3::Errors::InvalidRange
+    ""
   rescue *GenerationProviders::AWS_ERRORS => e
     GenerationProviders::Error.raise_from(e)
   end

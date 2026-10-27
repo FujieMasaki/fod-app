@@ -6,7 +6,17 @@ module GenerationDotPurge
   def accept(user:, dot:, now: Time.current)
     raise ArgumentError, "dot belongs to another user" unless dot.user_id == user.id
 
-    ConsumedRecordingAttempt.record(dot.generation_id, expires_at: dot.started_at + Generation::ATTEMPT_LIFETIME, now:)
+    # 使用済みattemptの記録より先に利用者の行をlockする（lockの順序はいつも利用者の行 → 他の行。呼ぶ側が外で
+    # transactionを張っても、同じattemptを記録する退会の受理とdeadlockにならないようにする）
+    ActiveRecord::Base.transaction do
+      User.lock.find(user.id)
+      expires_at = dot.started_at + Generation::ATTEMPT_LIFETIME
+      ConsumedRecordingAttempt.record(dot.generation_id, expires_at:, now:)
+      purge_record(user, dot, now)
+    end
+  end
+
+  def purge_record(user, dot, now)
     generation = user.generations.find_by(id: dot.generation_id, state: Generation::SUCCEEDED_CLEANUP_PENDING)
     return unless generation
 
@@ -14,4 +24,5 @@ module GenerationDotPurge
   rescue GenerationGate::Denied
     nil # 後片付けが先に終わり記録が消えた、または退会で取り消し済み。消すものは別の後片付けが持つ
   end
+  private_class_method :purge_record
 end

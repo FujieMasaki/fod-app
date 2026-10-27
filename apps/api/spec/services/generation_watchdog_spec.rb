@@ -61,17 +61,42 @@ RSpec.describe GenerationWatchdog do
     expect(GenerationComposeJob).to have_been_enqueued.with(generating.id)
   end
 
-  it "最終進捗から上限の時間を過ぎた文字起こし・生成は、拾い直さずに再試行できる失敗にする" do
-    old = (described_class::GIVE_UP_AFTER + 1.minute).ago
-    transcribing = stale("transcribing", last_progress_at: old)
-    generating = stale("generating", last_progress_at: old)
+  it "最終進捗から上限の時間を過ぎた生成は、拾い直さずに再試行できる失敗にする" do
+    generating = stale("generating", last_progress_at: (described_class::GIVE_UP_AFTER + 1.minute).ago)
 
     described_class.sweep
 
-    expect(transcribing.reload).to have_attributes(state: "failed", failure_kind: "transcription_failed")
     expect(generating.reload).to have_attributes(state: "failed", failure_kind: "generation_failed")
-    expect(GenerationTranscriptionCheckJob).not_to have_been_enqueued
     expect(GenerationComposeJob).not_to have_been_enqueued
+  end
+
+  it "最終進捗から上限の時間を過ぎた文字起こしも失敗にせず、AWS側の状態を見に行く（終わった結果を捨てない）" do
+    generation = stale("transcribing", last_progress_at: (described_class::GIVE_UP_AFTER + 1.minute).ago)
+    transcriber.jobs[generation.transcription_job_name] =
+      { status: :in_progress, output_key: generation.transcript_key }
+    transcriber.complete(generation.transcription_job_name, "今日は朝に近所を散歩した")
+
+    described_class.sweep
+    perform_enqueued_jobs(only: GenerationTranscriptionCheckJob)
+
+    expect(generation.reload.state).to eq("generating")
+    expect(transcriber.started).to be_empty
+  end
+
+  it "拾った後に失敗と再試行を経ていれば、始め直したばかりの処理を失敗にしない" do
+    generating = stale("generating", last_progress_at: (described_class::GIVE_UP_AFTER + 1.minute).ago)
+    retried = false
+    allow(Generation).to receive(:acquire_lease).and_wrap_original do |original, *args, **opts|
+      unless retried
+        retried = true
+        generating.update!(last_progress_at: Time.current)
+      end
+      original.call(*args, **opts)
+    end
+
+    described_class.sweep
+
+    expect(generating.reload).to have_attributes(state: "generating", lease_token: nil)
   end
 
   it "Transcribeの完了を待っている処理は、最終進捗が古くても拾わない（生きているjobを二重に開始しない）" do

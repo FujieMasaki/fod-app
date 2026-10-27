@@ -71,6 +71,23 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
       expect(generation.contract_failure_kind).to eq("processing_failed")
     end
 
+    it "記録を読んだ後に試行が失敗して再試行が始まっていたら、古い試行のjobの結果で新しい試行を失敗にしない" do
+      generation = transcribing
+      transcriber.jobs[generation.transcription_job_name] = { status: :failed }
+      retried = false
+      allow(Generation).to receive(:acquire_lease).and_wrap_original do |original, *args, **opts|
+        unless retried
+          retried = true
+          generation.update!(**GenerationTranscription.next_attempt_attrs(generation))
+          transcriber.jobs[generation.transcription_job_name] = { status: :in_progress }
+        end
+        original.call(*args, **opts)
+      end
+
+      expect(GenerationTranscription.check(generation.id)).to eq(:waiting)
+      expect(generation.reload).to have_attributes(state: "transcribing", transcription_attempt: 2)
+    end
+
     it "文字起こしが空（無音・極端に短い）なら生成へ進まず、録り直しの失敗にする" do
       generation = transcribing
       complete_transcription(generation, " 。 ")
@@ -78,6 +95,32 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
       GenerationTranscription.check(generation.id)
 
       expect(generation.reload).to have_attributes(state: "failed", failure_kind: "empty_recording")
+      expect(composer.calls).to be_empty
+    end
+
+    it "書き出された結果が上限より大きければ、読まずに全文が長すぎるときと同じ失敗にする" do
+      generation = transcribing
+      complete_transcription(generation)
+      stub_const("GenerationComposition::TRANSCRIPT_MAX_BYTES", 10)
+
+      GenerationTranscription.check(generation.id)
+
+      expect(generation.reload).to have_attributes(state: "failed", failure_kind: "invalid_output")
+      expect(generation.contract_failure_kind).to eq("processing_failed")
+      expect(composer.calls).to be_empty
+    end
+
+    it "結果が上限より大きくて失敗した後の再試行は、Transcribeをやり直さず、Bedrockへも送らない" do
+      generation = transcribing
+      complete_transcription(generation)
+      stub_const("GenerationComposition::TRANSCRIPT_MAX_BYTES", 10)
+      GenerationTranscription.check(generation.id)
+
+      GenerationRetry.call(user:, generation_id: generation.id)
+      GenerationComposition.perform(generation.id)
+
+      expect(generation.reload).to have_attributes(state: "failed", failure_kind: "invalid_output",
+                                                   transcription_attempt: 1)
       expect(composer.calls).to be_empty
     end
   end
@@ -90,6 +133,17 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
       expect(GenerationTranscription.check(generation.id)).to eq(:waiting)
       expect(generation.reload.state).to eq("transcribing")
       expect(GenerationTranscriptionCheckJob).to have_been_enqueued.with(generation.id)
+    end
+
+    it "文字起こしの開始が一時的に失敗しても失敗にせず、次の確認で同じ名前のjobを始め直す" do
+      generation = create(:generation, user:, state: "accepted").tap { seed_resources(it) }
+      transcriber.fail_next(:start)
+
+      expect(GenerationTranscription.start(generation.id)).to eq(:waiting)
+      expect(generation.reload.state).to eq("transcribing")
+      next_check = GenerationTranscription::CHECK_INTERVAL.from_now + 1.second
+      expect(GenerationTranscription.check(generation.id, now: next_check)).to eq(:started)
+      expect(transcriber.jobs.keys).to eq(["#{generation.id}-1"])
     end
 
     it "設定の不足・呼び出し元の違いは待っても直らないので、すぐ失敗にする" do
@@ -136,6 +190,24 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
       expect(GenerationCleanupJob).to have_been_enqueued.with(generation.id)
     end
 
+    it "記録を読んだ後に失敗と再試行を経ていたら、新しい試行の全文を送る" do
+      generation = generating
+      retried = false
+      allow(Generation).to receive(:acquire_lease).and_wrap_original do |original, *args, **opts|
+        unless retried
+          retried = true
+          generation.update!(**GenerationTranscription.next_attempt_attrs(generation))
+          complete_transcription(generation, "夜に本を読んだ")
+          generation.update!(state: "generating", transcript_ready_at: Time.current)
+        end
+        original.call(*args, **opts)
+      end
+
+      GenerationComposition.perform(generation.id)
+
+      expect(composer.calls.sole[:transcript]).to eq("夜に本を読んだ")
+    end
+
     it "生成には全文・録音日・録音時間だけを渡す" do
       generation = generating
 
@@ -143,6 +215,15 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
 
       expect(composer.calls.sole).to eq(transcript: "今日は朝に近所を散歩した",
                                         date: Dot.date_for(generation.started_at), duration_seconds: 120)
+    end
+
+    it "全文を読む間に取り消し・退会を受理していれば、Bedrockへ送らない" do
+      generation = generating
+      storage.before_next(:read) { GenerationWithdrawal.accept(user) }
+
+      expect(GenerationComposition.perform(generation.id)).to eq(:skipped)
+      expect(composer.calls).to be_empty
+      expect(generation.reload.state).to eq("cancel_requested")
     end
 
     it "保存の直前に退会を受理していれば、Dotを保存しない（世代番号の確認とinsertを同じtransactionで行う）" do
@@ -202,6 +283,16 @@ RSpec.describe "処理の記録の遷移: 受理から保存まで" do # rubocop
     it "全文が上限より長ければ（申告より長い音声）、Bedrockへ送らずに失敗にする" do
       generation = generating
       complete_transcription(generation, "あ" * (GenerationComposition::TRANSCRIPT_MAX_LENGTH + 1))
+
+      GenerationComposition.perform(generation.id)
+
+      expect(generation.reload).to have_attributes(state: "failed", failure_kind: "invalid_output")
+      expect(composer.calls).to be_empty
+    end
+
+    it "生成の前に読む結果が上限より大きくても、Bedrockへ送らずに同じ失敗にする" do
+      generation = generating
+      stub_const("GenerationComposition::TRANSCRIPT_MAX_BYTES", 10)
 
       GenerationComposition.perform(generation.id)
 

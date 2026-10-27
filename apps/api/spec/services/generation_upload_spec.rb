@@ -51,6 +51,31 @@ RSpec.describe GenerationUpload do
     expect(generation).to have_attributes(state: "upload_failed", failure_kind: "upload_incomplete", lease_token: nil)
   end
 
+  describe "PUTが失敗に見えたとき（応答を失っただけかもしれない）" do
+    it "objectが完成していれば、送り直させずに確定へ進める" do
+      allow(storage).to receive(:put).and_wrap_original do |original, *args, **opts|
+        original.call(*args, **opts)
+        raise GenerationProviders::Error, "response lost"
+      end
+
+      result, = upload
+
+      expect(result.outcome).to eq(:created)
+      expect(generation.state).to eq("accepted")
+      expect(GenerationTranscribeJob).to have_been_enqueued.with(attempt.id)
+    end
+
+    it "実体を確かめられなければuploadingのまま残し、watchdogに任せる" do
+      storage.fail_next(:put)
+      storage.fail_next(:exists?)
+
+      result, = upload
+
+      expect(result.outcome).to eq(:existing)
+      expect(generation.state).to eq("uploading")
+    end
+  end
+
   describe "再送（T4）" do
     before do
       storage.fail_next(:put)
@@ -72,6 +97,18 @@ RSpec.describe GenerationUpload do
         expect([result.problem, reads]).to eq([:attempt_expired, 0])
         expect(generation.state).to eq("upload_failed")
       end
+    end
+
+    it "本文を読む間にattemptの期限が来ていれば、受け取り直さない" do
+      read_audio = lambda do
+        travel_to(attempt.expires_at + 1.second)
+        uploaded_audio
+      end
+
+      result = described_class.call(user:, token:, read_audio:)
+
+      expect(result.problem).to eq(:attempt_expired)
+      expect(generation).to have_attributes(state: "upload_failed", upload_attempt: 1)
     end
   end
 
@@ -100,6 +137,31 @@ RSpec.describe GenerationUpload do
       ConsumedRecordingAttempt.record(attempt.id, expires_at: attempt.expires_at)
 
       expect(upload.first.problem).to eq(:attempt_invalid)
+      expect(Generation.exists?(attempt.id)).to be(false)
+    end
+
+    it "本文を読んでいる間に、先に届いた送信が保存と後片付けまで終えていても、記録を作り直さない" do
+      read_audio = lambda do
+        create(:dot, user:, generation_id: attempt.id)
+        uploaded_audio
+      end
+
+      result = described_class.call(user:, token:, read_audio:)
+
+      expect(result).to have_attributes(outcome: :existing, generation_id: attempt.id)
+      expect(Generation.exists?(attempt.id)).to be(false)
+      expect(storage.objects).to be_empty
+    end
+
+    it "本文を読む間にattemptの期限が来ていれば、使用済みの記録が消えていても作らない" do
+      read_audio = lambda do
+        travel_to(attempt.expires_at + 1.second)
+        uploaded_audio
+      end
+
+      result = described_class.call(user:, token:, read_audio:)
+
+      expect(result.problem).to eq(:attempt_expired)
       expect(Generation.exists?(attempt.id)).to be(false)
     end
 
@@ -196,5 +258,53 @@ RSpec.describe GenerationUpload do
     upload
 
     expect(storage.objects).to be_empty
+  end
+
+  describe "置いている間に実行権を失った（PUTが実行権の期限とwatchdogの猶予を超えた）" do
+    let(:late) { (GenerationUpload::LEASE_DURATION + GenerationWatchdog::STALE_AFTER + 1.second).from_now }
+
+    it "watchdogがupload_failedにした後に再送された音声を、古いPUTの後始末で消さない" do
+      storage.before_next(:put) do
+        GenerationWatchdog.sweep(now: late)
+        expect(upload.first.outcome).to eq(:created)
+      end
+
+      result, = upload
+
+      expect(result.outcome).to eq(:existing)
+      expect(generation).to have_attributes(state: "accepted", upload_attempt: 2)
+      expect(storage.keys).to include(generation.audio_key)
+    end
+
+    it "止まっていた古い要求が、再送された試行のkeyへ古い音声を上書きしない" do
+      interrupted = false
+      allow(GenerationUploadCompletion).to receive(:put).and_wrap_original do |original, *args|
+        unless interrupted
+          interrupted = true
+          GenerationWatchdog.sweep(now: late)
+          expect(upload(uploaded_audio(body: "#{UploadHelpers::WEBM_HEAD}new")).first.outcome).to eq(:created)
+        end
+        original.call(*args)
+      end
+
+      result, = upload(uploaded_audio(body: "#{UploadHelpers::WEBM_HEAD}old"))
+
+      expect(result.outcome).to eq(:existing)
+      expect(generation).to have_attributes(state: "accepted", upload_attempt: 2)
+      expect(storage.objects.transform_values { it[:body] }).to eq(generation.audio_key => "#{UploadHelpers::WEBM_HEAD}new")
+    end
+
+    it "置き終わった音声をwatchdogが確定した後も、古い要求の後始末で消さない" do
+      storage.before_next(:put) do
+        storage.objects[generation.audio_key] = { body: "audio" }
+        GenerationWatchdog.sweep(now: late)
+      end
+
+      result, = upload
+
+      expect(result.outcome).to eq(:existing)
+      expect(generation.state).to eq("accepted")
+      expect(storage.keys).to include(generation.audio_key)
+    end
   end
 end
