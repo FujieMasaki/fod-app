@@ -162,7 +162,8 @@ AIはどのPRもマージしない。人間は、すべてのサブのPRをレ�
    前のブランチへ入ってしまう。付け替えてもCIは走り直さないが、サブのPRを合わせた状態はメインのPRのCIで確かめる。
 3. すべてのサブのPRが入ったら、メインのPRを「Ready for review」にする。`main`が統合ブランチを作った後に
    進んでいれば、AIに`main`の取り込みを頼む。サブのPRはGitHub上でマージされ、ローカルの統合ブランチは古いままなので、
-   先にリモートへ揃えてから取り込む。
+   先にリモートへ揃えてから取り込む。AIはこれをタスクのworktreeで行う（本体のcheckoutでは統合ブランチへ移らない。
+   手順は[`pr-review-cycle`](../../.claude/skills/pr-review-cycle/SKILL.md)の冒頭）。
 
    ```bash
    git fetch origin main <統合ブランチ>

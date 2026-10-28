@@ -43,7 +43,9 @@ Claude Codeのセッションが、repositoryの本体のcheckout（`git worktre
 - 更新: `README.md`（hookの表のPreToolUse）
 - 更新: `.claude/skills/pr-review-cycle/SKILL.md`（タスクのブランチは、そのタスクのworktreeで作業する）
 - 更新: `.claude/skills/run-task/SKILL.md`（既にいるworktreeでブランチを作ってよいのは、本体のcheckoutでないとき）
-- 更新: `docs/development/pull-requests.md`「人間がレビューする時機」の4（指摘はタスクのworktreeで直す）
+- 更新: `docs/development/pull-requests.md`「人間がレビューする時機」の4（指摘はタスクのworktreeで直す）と、
+  「マージ」の3（`main`の取り込みはタスクのworktreeで行う）
+- 更新: `.claude/skills/exploratory-audit/SKILL.md`（`docs/task-NNN-audit-record`はworktreeで作る）
 
 ## 7. Proposed Approach
 
@@ -51,9 +53,10 @@ Claude Codeのセッションが、repositoryの本体のcheckout（`git worktre
    `isMainCheckout(dir)`）を渡せるようにする。渡されなければ、この判定はしない（既存の呼び出しとtestはそのまま）。
 2. コマンドを左から見て、`cd <dir>`と`git -C <dir>`で実行する場所を追う。`~`や変数など解決できない移動の後は、
    場所が分からないので判定しない。
-3. 本体のcheckoutで、`git switch`・`git checkout`の引数（`--`より前で、`-`で始まらない語）に、
-   `refs/heads/`・`refs/remotes/<remote>/`・`origin/`を除いてタスクのブランチ名（`taskBranchPattern`）に
-   当たるものがあれば拒否する。`git checkout <ref> -- <path>`はファイルの取り出しなので対象外。
+3. 本体のcheckoutで、`git switch`・`git checkout`が、`refs/heads/`・`refs/remotes/<remote>/`・`origin/`を除いて
+   タスクのブランチ名（`taskBranchPattern`）に当たるブランチへ移るなら拒否する。ブランチを作る（`-c`・`-b`・
+   `--create`など）ときは新しい名前だけで判定し、それ以外は`--`より前の`-`で始まらない語で判定する。
+   `git checkout <ref> -- <path>`はファイルの取り出しなので対象外にするが、pathのない末尾の`--`は切り替えとして扱う。
 4. 本体のcheckoutでの`gh pr checkout`は、移る先のブランチ名がコマンドから分からないため、PRを問わず拒否する。
 5. 拒否の理由には、そのタスクのworktreeを使うこと（`git worktree list`で探す、なければ
    `git worktree add .claude/worktrees/task-NNN <branch>`）を書く。
@@ -84,6 +87,7 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 - 変更: `.claude/skills/pr-review-cycle/SKILL.md`
 - 変更: `.claude/skills/run-task/SKILL.md`
 - 変更: `docs/development/pull-requests.md`
+- 変更: `.claude/skills/exploratory-audit/SKILL.md`
 - 変更: `README.md`
 - 新規: 本Plan
 
@@ -106,8 +110,9 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 - Claudeは本体のcheckoutでタスクのブランチを手早く見ることができなくなる。読むだけなら`git show <branch>:<path>`や
   `git diff`で足りる。
 - 本体のcheckoutで`gh pr checkout`は、タスクでないPRでも拒否する。
-- `cd`の追跡は単純で、subshell（`(cd x && …)`）の後も移った先のままとして扱う。拒否する側に倒れるだけで、
-  素通りにはならない場合が多いが、完全ではない（既存のguardと同じく安全網）。
+- `cd`の追跡は単純で、subshell（`(cd x && …)`）の後も移った先のままとして扱う。`pushd`・`env -C`は追跡しない。
+  どちらも実際の実行場所と違う場所で判定するため、素通りになる場合がある（既存のguardと同じく安全網）。
+- `--`のない`git checkout <タスクのブランチ> <path>`（ファイルの取り出し）も、切り替えとして拒否する。`--`を付ければ通る。
 
 ## 14. Verification
 
@@ -115,10 +120,16 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 
 - `node --test scripts/claude-guard.test.mjs`
 
+- 本体のcheckoutとlinked worktreeを一時ディレクトリに作り、`isMainCheckout`の判定を本物のgitで確かめるtestを含む。
+- 結果（2026-10-28）: `node --test scripts/claude-guard.test.mjs` 136件成功。`pnpm check`・`type-check`・`test`成功。
+
 ### Manual
 
 - 本体のcheckoutで、hookに`git switch feat/task-999-x`のpayloadを渡して拒否されること、linked worktreeでは
   許されることを確かめる。
+- 結果（2026-10-28）: `scripts/claude-hook.sh claude-guard.mjs`に、`cwd`を本体（`dev/app/focus-on-dot`）にして
+  `git switch feat/task-009-2-job-and-aws`を渡すとexit 2で拒否された。`cwd`を`.claude/worktrees/task-009`にした場合、
+  本体での`git switch -c fix/some-thing origin/main`、repositoryの外（`/tmp`）ではexit 0。
 
 ## 15. Definition of Done
 
