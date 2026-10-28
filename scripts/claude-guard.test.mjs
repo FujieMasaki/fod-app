@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { denyReason, parseCommand, tokenize } from "./claude-guard.mjs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import path from "node:path";
+import { denyReason, isMainCheckout, parseCommand, tokenize } from "./claude-guard.mjs";
 
 const task = "feat/task-008-dot-history";
 
@@ -176,6 +180,8 @@ const deniedInMainCheckout = [
   "git checkout -b docs/task-025-vendor origin/main",
   "git checkout -t origin/feat/task-009-2-job-and-aws",
   "git checkout refs/heads/fix/task-026-forbidden",
+  "git checkout feat/task-009-2-job-and-aws --",
+  "git switch -c feat/task-009-7-x feat/task-009-2-job-and-aws",
   "git status --short && git switch feat/task-009-2-job-and-aws && git pull --ff-only -q",
   "cd .claude/worktrees/task-009 && cd /repo && git switch feat/task-009-2-job-and-aws",
   "git -C /repo switch feat/task-009-2-job-and-aws",
@@ -193,7 +199,8 @@ const allowedInMainCheckout = [
   "git log feat/task-009-2-job-and-aws",
   "cd .claude/worktrees/task-009 && git switch feat/task-009-2-job-and-aws",
   "git -C .claude/worktrees/task-009 switch feat/task-009-2-job-and-aws",
-  "cd ~/dev/app/focus-on-dot && git switch feat/task-009-2-job-and-aws",
+  "git switch -c fix/foo origin/feat/task-009-2-job-and-aws",
+  "cd ~someone/repo && git switch feat/task-009-2-job-and-aws",
   "gh pr view 103",
 ];
 
@@ -222,4 +229,26 @@ test("moving into the main checkout from a worktree is still denied", () => {
   assert.ok(denyReason("cd /repo && git switch feat/task-009-3-cleanup", linkedWorktree));
   assert.ok(denyReason("git -C /repo checkout feat/task-009-3-cleanup", linkedWorktree));
   assert.ok(denyReason("git -C ../../.. switch feat/task-009-3-cleanup", linkedWorktree));
+});
+
+test("cd ~ resolves to the home directory", () => {
+  const home = { cwd: "/elsewhere", isMainCheckout: (dir) => dir === path.join(homedir(), "repo") };
+  assert.ok(denyReason("cd ~/repo && git switch feat/task-009-2-job-and-aws", home));
+});
+
+test("isMainCheckout tells the main working tree from a linked worktree", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "guard-"));
+  try {
+    const main = path.join(root, "main");
+    const git = (...args) => assert.equal(spawnSync("git", args, { encoding: "utf8" }).status, 0);
+    git("init", "-q", main);
+    git("-C", main, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "x");
+    git("-C", main, "worktree", "add", "-q", path.join(main, ".claude", "worktrees", "task-001"));
+    assert.equal(isMainCheckout(main), true);
+    assert.equal(isMainCheckout(path.join(main, ".claude")), true);
+    assert.equal(isMainCheckout(path.join(main, ".claude", "worktrees", "task-001")), false);
+    assert.equal(isMainCheckout(root), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

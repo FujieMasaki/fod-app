@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { taskBranchPattern } from "./claude-quality-gate.mjs";
@@ -268,30 +269,38 @@ export function isMainCheckout(dir) {
 }
 
 // The directory after `cd target` or `git -C target`, or undefined once it
-// cannot be known (`~`, `-`, a variable, or a relative path from nowhere).
+// cannot be known (`~user`, `-`, a variable, or a relative path from nowhere).
 function moveTo(dir, target) {
+  if (target === "~" || target?.startsWith("~/")) target = path.join(homedir(), target.slice(1));
   if (!target || /^[~-]|\$/.test(target)) return undefined;
   if (path.isAbsolute(target)) return path.resolve(target);
   return dir && path.resolve(dir, target);
 }
 
 const remotePrefix = /^(?:refs\/heads\/|refs\/remotes\/[^/]+\/|origin\/)/;
+const isTaskBranch = (name) => Boolean(name) && taskBranchPattern.test(name.replace(remotePrefix, ""));
+const createOptions = new Set(["-c", "-C", "--create", "--force-create", "-b", "-B", "--orphan"]);
 
-// `git switch` / `git checkout` naming a task branch, created or existing.
-// `git checkout <ref> -- <path>` restores files and stays on the branch.
+// `git switch` / `git checkout` moving onto a task branch, created or existing.
+// `git checkout <ref> -- <path>` restores files and stays on the branch, but a
+// trailing `--` with no path still switches.
 function switchesToTaskBranch(git) {
   const separator = git.args.indexOf("--");
-  if (git.name === "checkout" && separator !== -1) return false;
-  // `--create=<branch>` carries the name after `=`; other options name no branch.
-  const names = git.args.map((arg) => (arg.startsWith("--") ? arg.split("=")[1] : arg.startsWith("-") ? "" : arg));
-  return names.some((name) => name && taskBranchPattern.test(name.replace(remotePrefix, "")));
+  if (git.name === "checkout" && separator !== -1 && separator < git.args.length - 1) return false;
+  const args = separator === -1 ? git.args : git.args.slice(0, separator);
+  for (let index = 0; index < args.length; index += 1) {
+    // A new branch is judged by its own name; its start point may be a task branch.
+    const [option, value] = args[index].split(/=(.*)/);
+    if (createOptions.has(option)) return isTaskBranch(value ?? args[index + 1]);
+  }
+  return args.some((arg) => !arg.startsWith("-") && isTaskBranch(arg));
 }
 
 const mainCheckoutReason =
   "Do not move the main checkout onto a task branch: every session in this checkout would then be held by the " +
   "quality gate for that task. Work in the task's worktree instead (find it with `git worktree list`, or create it " +
-  "with `git worktree add .claude/worktrees/task-NNN <branch>`). To read a branch without switching, use " +
-  "`git show <branch>:<path>` or `git diff`.";
+  "with `git worktree add .claude/worktrees/task-NNN <branch>`; if the main checkout is already on that branch, " +
+  "`git switch main` first). To read a branch without switching, use `git show <branch>:<path>` or `git diff`.";
 const prCheckoutReason =
   "Do not run `gh pr checkout` in the main checkout: if the PR is a task branch, every session in this checkout " +
   "would be held by the quality gate for that task. Check the branch out in a worktree instead " +
