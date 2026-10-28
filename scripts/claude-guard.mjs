@@ -1,6 +1,8 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { taskBranchPattern } from "./claude-quality-gate.mjs";
 
 // Claude Code PreToolUse hook for Bash. A safety net next to permissions,
 // Lefthook, and the GitHub ruleset on main, not the only defence: it cannot see
@@ -246,9 +248,54 @@ function skipOptions(words, index, valueOptions = []) {
 
 function parseGit(words) {
   let index = 1;
-  while (words[index]?.startsWith("-")) index += ["-C", "-c"].includes(words[index]) ? 2 : 1;
-  return { name: words[index], args: words.slice(index + 1) };
+  const dirs = [];
+  while (words[index]?.startsWith("-")) {
+    if (words[index] === "-C") dirs.push(words[index + 1]);
+    index += ["-C", "-c"].includes(words[index]) ? 2 : 1;
+  }
+  return { name: words[index], args: words.slice(index + 1), dirs };
 }
+
+// True when dir is the repository's main working tree, not a linked worktree.
+// Outside a repository it is false, so unrelated commands are not denied.
+export function isMainCheckout(dir) {
+  const result = spawnSync("git", ["-C", dir, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], {
+    encoding: "utf8",
+  });
+  if (result.status !== 0) return false;
+  const [gitDir, commonDir] = result.stdout.trim().split("\n");
+  return Boolean(gitDir) && gitDir === commonDir;
+}
+
+// The directory after `cd target` or `git -C target`, or undefined once it
+// cannot be known (`~`, `-`, a variable, or a relative path from nowhere).
+function moveTo(dir, target) {
+  if (!target || /^[~-]|\$/.test(target)) return undefined;
+  if (path.isAbsolute(target)) return path.resolve(target);
+  return dir && path.resolve(dir, target);
+}
+
+const remotePrefix = /^(?:refs\/heads\/|refs\/remotes\/[^/]+\/|origin\/)/;
+
+// `git switch` / `git checkout` naming a task branch, created or existing.
+// `git checkout <ref> -- <path>` restores files and stays on the branch.
+function switchesToTaskBranch(git) {
+  const separator = git.args.indexOf("--");
+  if (git.name === "checkout" && separator !== -1) return false;
+  // `--create=<branch>` carries the name after `=`; other options name no branch.
+  const names = git.args.map((arg) => (arg.startsWith("--") ? arg.split("=")[1] : arg.startsWith("-") ? "" : arg));
+  return names.some((name) => name && taskBranchPattern.test(name.replace(remotePrefix, "")));
+}
+
+const mainCheckoutReason =
+  "Do not move the main checkout onto a task branch: every session in this checkout would then be held by the " +
+  "quality gate for that task. Work in the task's worktree instead (find it with `git worktree list`, or create it " +
+  "with `git worktree add .claude/worktrees/task-NNN <branch>`). To read a branch without switching, use " +
+  "`git show <branch>:<path>` or `git diff`.";
+const prCheckoutReason =
+  "Do not run `gh pr checkout` in the main checkout: if the PR is a task branch, every session in this checkout " +
+  "would be held by the quality gate for that task. Check the branch out in a worktree instead " +
+  "(`gh pr view <number> --json headRefName`, then `git worktree add .claude/worktrees/task-NNN <branch>`).";
 
 // Reads a short option cluster such as `-nm"msg"` or `-uf` from the left, as
 // git does: flags up to the first one that takes a value, whose value is the
@@ -345,7 +392,9 @@ const commandWrappers = new Set(["command", "builtin", "exec", "nohup", "time", 
 const shells = new Set(["sh", "bash", "zsh", "dash"]);
 const MAX_NESTING = 5;
 
-export function denyReason(command, depth = 0) {
+// context: { cwd, isMainCheckout(dir) } from the hook input. Without it, the
+// main-checkout check is skipped.
+export function denyReason(command, context = {}, depth = 0) {
   if (depth > MAX_NESTING) return "This command nests shells too deeply to check. Run it directly.";
   if (/co-authored-by:/i.test(command) && /\bgit\b[\s\S]*\bcommit\b/.test(command)) {
     return "Do not add Co-Authored-By or other attribution trailers to commits.";
@@ -359,6 +408,8 @@ export function denyReason(command, depth = 0) {
     );
   }
 
+  let cwd = context.cwd;
+  const inMainCheckout = (dir) => Boolean(dir && context.isMainCheckout?.(dir));
   for (const words of segments) {
     const { assignments, rest: afterAssignments } = splitAssignments(words);
     let rest = afterAssignments;
@@ -369,12 +420,16 @@ export function denyReason(command, depth = 0) {
     }
 
     const [program, ...args] = rest;
+    if (program === "cd") {
+      cwd = moveTo(cwd, args.find((arg) => !arg.startsWith("-")));
+      continue;
+    }
 
     // `sh -c '...'` and `eval ...` run their argument as a command line.
     const scriptIndex = shells.has(program) ? args.findIndex((arg) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(arg)) : -1;
     const script = scriptIndex !== -1 ? args[scriptIndex + 1] : program === "eval" ? args.join(" ") : undefined;
     if (script !== undefined) {
-      const reason = denyReason(script, depth + 1);
+      const reason = denyReason(script, { ...context, cwd }, depth + 1);
       if (reason) return reason;
       continue;
     }
@@ -382,10 +437,18 @@ export function denyReason(command, depth = 0) {
     if (program === "gh") {
       const prIndex = args.indexOf("pr");
       if (prIndex !== -1 && args[prIndex + 1] === "merge") return "Merging is done by a human. Leave the PR open.";
+      if (prIndex !== -1 && args[prIndex + 1] === "checkout" && inMainCheckout(cwd)) return prCheckoutReason;
     }
 
     if (program !== "git") continue;
     const git = parseGit(rest);
+    if (
+      ["switch", "checkout"].includes(git.name) &&
+      switchesToTaskBranch(git) &&
+      inMainCheckout(git.dirs.reduce(moveTo, cwd))
+    ) {
+      return mainCheckoutReason;
+    }
     if (git.name === "commit" && commitBypassesHooks(git.args)) {
       return "Do not bypass Lefthook (--no-verify / -n skips hooks). Fix the failing check instead.";
     }
@@ -406,7 +469,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   } catch {
     // Not a hook payload; nothing to check.
   }
-  const reason = denyReason(input.tool_input?.command ?? "");
+  const reason = denyReason(input.tool_input?.command ?? "", { cwd: input.cwd ?? process.cwd(), isMainCheckout });
   if (reason) {
     process.stderr.write(`${reason}\n`);
     process.exitCode = 2;

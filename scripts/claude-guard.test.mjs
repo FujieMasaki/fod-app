@@ -163,3 +163,63 @@ for (const command of allowed) {
     assert.equal(denyReason(command), undefined);
   });
 }
+
+// The main checkout is /repo; /repo/.claude/worktrees/task-009 is a linked worktree.
+const mainCheckout = { cwd: "/repo", isMainCheckout: (dir) => dir === "/repo" };
+const linkedWorktree = { ...mainCheckout, cwd: "/repo/.claude/worktrees/task-009" };
+
+const deniedInMainCheckout = [
+  "git switch feat/task-009-2-job-and-aws",
+  "git switch -c feat/task-009-2-job-and-aws origin/main",
+  "git switch --create=feat/task-009-2-job-and-aws",
+  "git checkout feat/task-009-2-job-and-aws",
+  "git checkout -b docs/task-025-vendor origin/main",
+  "git checkout -t origin/feat/task-009-2-job-and-aws",
+  "git checkout refs/heads/fix/task-026-forbidden",
+  "git status --short && git switch feat/task-009-2-job-and-aws && git pull --ff-only -q",
+  "cd .claude/worktrees/task-009 && cd /repo && git switch feat/task-009-2-job-and-aws",
+  "git -C /repo switch feat/task-009-2-job-and-aws",
+  "sh -c 'git switch feat/task-009-2-job-and-aws'",
+  "gh pr checkout 103",
+];
+
+const allowedInMainCheckout = [
+  "git switch main",
+  "git switch -c fix/guard-main-checkout-task-branch origin/main",
+  "git checkout feat/task-009-2-job-and-aws -- docs/tasks/TASK-009.md",
+  "git checkout -- apps/api/db/schema.rb",
+  "git show feat/task-009-2-job-and-aws:docs/tasks/TASK-009.md",
+  "git worktree add .claude/worktrees/task-009 feat/task-009-2-job-and-aws",
+  "git log feat/task-009-2-job-and-aws",
+  "cd .claude/worktrees/task-009 && git switch feat/task-009-2-job-and-aws",
+  "git -C .claude/worktrees/task-009 switch feat/task-009-2-job-and-aws",
+  "cd ~/dev/app/focus-on-dot && git switch feat/task-009-2-job-and-aws",
+  "gh pr view 103",
+];
+
+for (const command of deniedInMainCheckout) {
+  test(`denies in the main checkout: ${command}`, () => {
+    assert.ok(denyReason(command, mainCheckout));
+  });
+}
+
+for (const command of allowedInMainCheckout) {
+  test(`allows in the main checkout: ${command}`, () => {
+    assert.equal(denyReason(command, mainCheckout), undefined);
+  });
+}
+
+test("switching branches is not checked without the hook's cwd", () => {
+  assert.equal(denyReason("git switch feat/task-009-2-job-and-aws"), undefined);
+});
+
+test("a linked worktree may switch between task branches", () => {
+  assert.equal(denyReason("git switch feat/task-009-3-cleanup", linkedWorktree), undefined);
+  assert.equal(denyReason("gh pr checkout 103", linkedWorktree), undefined);
+});
+
+test("moving into the main checkout from a worktree is still denied", () => {
+  assert.ok(denyReason("cd /repo && git switch feat/task-009-3-cleanup", linkedWorktree));
+  assert.ok(denyReason("git -C /repo checkout feat/task-009-3-cleanup", linkedWorktree));
+  assert.ok(denyReason("git -C ../../.. switch feat/task-009-3-cleanup", linkedWorktree));
+});
