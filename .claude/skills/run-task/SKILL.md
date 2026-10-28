@@ -74,8 +74,9 @@ git worktree list
   とブランチの先端を比べ、どのPRのレビューから続けるかを決める。
 - ない: `git worktree add .claude/worktrees/task-008 -b <type>/task-008-<slug> origin/main` で作り、
   `EnterWorktree` に `path` を渡して入る。
-- 既にこのセッションが別のworktreeにいて作業ツリーがcleanなら、そこで
-  `git switch -c <type>/task-008-<slug> origin/main` としてよい。
+- 既にこのセッションが別のworktree（`git worktree add`で作ったもの。本体のcheckoutは除く）にいて作業ツリーが
+  cleanなら、そこで`git switch -c <type>/task-008-<slug> origin/main` としてよい。本体のcheckoutでタスクの
+  ブランチへ移ると、同じcheckoutの別のセッションがそのタスクの品質ゲートで差し戻されるため、PreToolUse hookが拒否する。
 - 定期実行（`scripts/task-scheduler.mjs`）から起動された場合は、`.claude/worktrees/task-008` が
   origin/mainにdetachされた状態で、セッションは既にその中にいる。下の依存の導入とDBの準備を
   **先に**済ませてから、`git switch -c <type>/task-008-<slug>` でブランチを作る（準備で止まったときに、

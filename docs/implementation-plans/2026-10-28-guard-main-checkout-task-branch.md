@@ -42,6 +42,7 @@ Claude Codeのセッションが、repositoryの本体のcheckout（`git worktre
 - 参照: [自律実行の仕組み](2026-09-26-autonomous-task-runner.md)（当時の記録として更新しない）
 - 更新: `README.md`（hookの表のPreToolUse）
 - 更新: `.claude/skills/pr-review-cycle/SKILL.md`（タスクのブランチは、そのタスクのworktreeで作業する）
+- 更新: `.claude/skills/run-task/SKILL.md`（既にいるworktreeでブランチを作ってよいのは、本体のcheckoutでないとき）
 - 更新: `docs/development/pull-requests.md`「人間がレビューする時機」の4（指摘はタスクのworktreeで直す）
 
 ## 7. Proposed Approach
@@ -81,6 +82,7 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 - 変更: `scripts/claude-guard.mjs`（実行する場所の追跡と、本体のcheckoutでの切り替えの拒否）
 - 変更: `scripts/claude-guard.test.mjs`
 - 変更: `.claude/skills/pr-review-cycle/SKILL.md`
+- 変更: `.claude/skills/run-task/SKILL.md`
 - 変更: `docs/development/pull-requests.md`
 - 変更: `README.md`
 - 新規: 本Plan
