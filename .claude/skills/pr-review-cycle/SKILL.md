@@ -16,6 +16,10 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
 分けた場合、この skill の「PR」はサブのPRを指し、メインのPR（統合ブランチ → `main`）はレビューの対象にしない。PRごとの
 作業（修正・検証・push・PR作成・レビュー）は、**そのPRのブランチへ`git switch`してから**行う
 （pre-push、`gh pr create`、diff、Codexの最終チェックは、どれも今いるブランチを基準にするため）。
+タスクのブランチ（`<type>/task-*`）は、そのタスクのworktreeの中で切り替える。本体のcheckoutにいるなら、
+`git worktree list`でそのタスクのworktreeを探して`EnterWorktree`に`path`を渡して入り、なければ
+`git worktree add .claude/worktrees/task-NNN <ブランチ>`で作って入る（本体のcheckoutでタスクのブランチへ移ると、
+同じcheckoutの別のセッションがそのタスクの品質ゲートで差し戻されるため。PreToolUse hookも拒否する）。
 
 この skill の「手順N」は`### N`の節を指す。手順1の中の小項目は「1-5」のように書いて区別する。
 
