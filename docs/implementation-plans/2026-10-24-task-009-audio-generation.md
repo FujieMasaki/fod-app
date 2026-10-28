@@ -92,8 +92,9 @@
   加えて、送信と再試行にそれぞれ**1日20回**の上限を置く（人間の判断、2026-10-27。理由は§13の費用）。1日の枠はUTCの0時
   （日本時間の9時）で切り替わる。同じattemptの受け取り直しと、失敗・重複で終わる要求も数える（費用を確実に抑える側に倒す）。
 - **全文の上限**: Bedrockへ送る全文は20,000字まで（30分の録音で約12,000字）、Transcribeが書き出した結果は2MBまで読む
-  （人間の判断、2026-10-24）。超えたら送らずに再試行できる失敗（契約ではprocessing_failed）にし、再試行は生成から始めて
-  Transcribeをやり直さない。2MBが30分の日本語の音声の結果に足りるかはH4で実測する。
+  （人間の判断、2026-10-24）。超えたら送らずに失敗（契約ではprocessing_failed）にし、再試行は生成から始めて
+  Transcribeをやり直さない。契約上は再試行できるが、同じ全文なので再試行しても成功しない（1日の再試行の枠だけを使う。
+  正規の30分の録音は約12,000字で、主に長さを偽った音声に限られる。録り直しを案内するかはTASK-011の画面で決める）。2MBが30分の日本語の音声の結果に足りるかはH4で実測する。
 - **古い送信の後始末**: 音声のPUTが実行権の期限とwatchdogの猶予（17分）を超えて確定に負けたとき、処理を別の実行
   （watchdogの確定・`upload_failed`の後の再送）が続けていれば何も消さずに既存の処理として返す（prefixごと消すと、再送・
   確定した音声まで消すため。人間の判断、2026-10-25）。記録が無い・取り消しや成功の後片付けに入ったときだけprefixで消す。
@@ -112,9 +113,9 @@
 - 更新: `docs/architecture.md`（実装済みへの反映・Job基盤）、`docs/privacy.md` §5-1（実装に合わせた記述と、Jobの記録の行。
   外部provider行は実サービスの確認後）、`docs/development/backend.md`（Job基盤とstorageが未実装という記述）、
   `docs/code-review/backend/security.md`・`docs/code-review/frontend/security.md`（実装状況とmultipart・Jobの引数の観点）、
-  `contracts/openapi.yaml`（回数の制限の値と、送信の説明の処理の順）、`docs/tasks/TASK-013-backend-data-deletion.md`
+  `contracts/openapi.yaml`・`contracts/README.md`（回数の制限の値、送信の説明の処理の順、Pumaの`413`、退会の受理後の`409`）、`docs/tasks/TASK-013-backend-data-deletion.md`
   （退会と完全削除の入口の申し送り）、`docs/tasks/TASK-010-frontend-recording.md`（Pumaの`413`の扱い）、`docs/tasks/TASK-015-privacy-security-verification.md`（費用と前段の制限）、
-  `docs/journaling.md` §2・§3・`docs/dot-history.md`・`docs/product.md`（Dotを作る入口のbackendが実装済みであること）、`docs/tasks/TASK-009-backend-audio-generation.md`
+  `docs/journaling.md` §2・§3・§4・`docs/dot-history.md`・`docs/product.md`（Dotを作る入口のbackendが実装済みであること）、`docs/tasks/TASK-009-backend-audio-generation.md`
 
 ## 7. Proposed Approach
 
@@ -231,7 +232,7 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 | 3 | `feat/task-009-3-cleanup` | 入口の手続き・取り消し・cleanup・ACK・期限・退会/完全削除の入口（T3・T5・T7・T10・T13・T16〜T22） | `GenerationGate`、取り消し・cleanup・ACK・期限のserviceとJob、定期実行の設定、偽物のprovider、遷移テストと5契機のspec | 20 |
 | 4 | `feat/task-009-4-pipeline` | 受理から保存まで（T1・T2・T4・T6・T8・T9・T11・T12・T14・T15）とwatchdog | attempt token、upload・文字起こし開始/完了待ち・生成と保存・再試行・watchdogのserviceとJob、遷移テスト | 20 |
 | 5 | `feat/task-009-5-api` | endpoint | routes・controller・serializer・`ApiRequestGuard`・回数の制限・Pumaの本文の上限・契約・request spec・通しのspec | 20 |
-| 6 | `feat/task-009-6-docs` | 文書と完了の記録 | 呼び出し元を表示するtask、architecture・privacy・backend・review観点、journaling・dot-history・product、契約（413・退会の409の説明）、TASK-010・TASK-013・TASK-015への申し送り、このPlanとタスクファイル | 16 |
+| 6 | `feat/task-009-6-docs` | 文書と完了の記録 | 呼び出し元を表示するtask、architecture・privacy・backend・review観点、journaling・dot-history・product、契約（413・退会の409の説明）、contracts/README、TASK-010・TASK-013・TASK-015への申し送り、このPlanとタスクファイル | 16（生成した型を除く） |
 
 数は最終の値。2番目はレビューの指摘への修正（外部の失敗の包み方・S3から読む上限）で23になった。指摘への修正を
 別のPRへ移すとそのPRに問題が残るので、上限の例外としてPRの概要に理由を書いた。レビューの観点の追加は関連PR（#108）に分けた。
@@ -349,13 +350,14 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
     `Rack::BadRequest`を含む例外）も、guardが`422`にする。
   - 退会の受理後のpollingは、どのidにも`409 account_deletion_in_progress`を返す（契約の共通の約束）。契約のgetGenerationの説明は
     「完全削除と退会ではDotも残らないので`404`」としていたので、退会を`409`に直した（6番目のPR）。
-  - 本文が34MBを超えるとPumaが本文なしの`413`を返すことを、契約のcreateDotの`413`の説明に書いた（6番目のPR）。
+  - 本文が34MBを超えるとPumaがProblemでない`413`（Content-Typeの無い`Payload Too Large`）を返すことを、契約のcreateDotの`413`の
+    説明とcontracts/README.mdのcodeの表に書いた（6番目のPR）。
 - 検証結果:
   - `cd apps/api && bundle exec rspec`: 690 examples, 0 failures（6番目のPRの`273f7d9`、2026-10-27。5番目の`24b7d6c`を取り込んだ版）。
   - `bundle exec rubocop`: no offenses。`bundle exec brakeman -q`: No warnings。`bundle exec bundler-audit check`:
     crassの指摘（GHSA-pq4g-8rxf-4g29）を1.0.8へ上げて解消した（mainも同じ版へ上げた。2026-10-27に取り込んだ）。
     6番目のPRの時点で`bundle exec bundler-audit check`はNo vulnerabilities found。
-  - 遷移テスト: `spec/services/generation_transitions/`にT1〜T22（T1・T2・T3・T4は`generation_upload_spec.rb`、
+  - 遷移テスト: `spec/services/generation_transitions/`にT1〜T22（T1・T2・T3・T4は`spec/services/generation_upload_spec.rb`、
     T3は`cancellation_spec.rb`にも）。§24の遷移でない性質は`spec/requests/api/v1/generations_spec.rb`（polling・認可）、
     `generation_upload_spec.rb`（冪等性・並行送信）、`cleanup_triggers_spec.rb`（5契機）、`cleanup_spec.rb`（個別の失敗と
     T17/T22の競合の両方の順）。

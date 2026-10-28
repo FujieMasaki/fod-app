@@ -125,7 +125,7 @@ PRのレビューでは「この変更は古いWeb・古いAPIのどちらと組
 | `account_deletion_in_progress` | 409 | 退会を受理済み（login・状況の取得・退会のやり直し以外の操作） | 退会の状況画面へ |
 | `attempt_invalid` | 422 | 録音attemptが不正・別の利用者のもの、またはそのattemptのDotがゴミ箱の中にある・完全削除や退会で消した後 | この録音は送れないことを伝える。録音画面から送ろうとしていた場合だけ録り直しを案内する |
 | `attempt_expired` | 422 | 録音attemptの送信期限（発行から2時間）切れ | 録り直しを案内 |
-| `audio_too_large` | 413 | 音声が32MBを超えた | 上限を伝える |
+| `audio_too_large` | 413 | 音声が32MBを超えた | 上限を伝える。本文が34MBを超えるとserverがProblemでない`413`を返すので、`413`はstatusだけで判定する |
 | `unsupported_audio_type` | 415 | 受容しない音声形式 | 対応browserを伝える |
 | `retry_expired` | 409 | 再試行の期限（受理から24時間）切れ | 録り直しを案内 |
 | `retry_not_allowed` | 409 | いまの状態では再試行できない | 状態を取り直す |

@@ -1525,8 +1525,9 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             409: components["responses"]["AccountDeletionInProgress"];
             /**
-             * @description `audio_too_large`: 32MBを超えた。本文が34MBを超えると、受け取りの前にserver（Puma）が本文なしの
-             *     `413`を返す（Problemの形にならない）ので、clientは`413`をstatusだけで`audio_too_large`として扱う
+             * @description `audio_too_large`: 32MBを超えた。本文が34MBを超えると、server（Puma）がProblemでない`413`
+             *     （Content-Typeの無い`Payload Too Large`という文字列）を返すので、clientは`413`の本文を読まずに、
+             *     statusだけで`audio_too_large`として扱う
              */
             413: {
                 headers: {

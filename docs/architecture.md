@@ -391,7 +391,7 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   再試行は、加えてそれぞれ1日20回まで（UTCの0時で切り替わる）。Transcribeは音声の実際の長さで課金され、serverは申告の録音時間と
   大きさしか確かめないので、1日の回数で1アカウントの費用の最悪を抑える（2026-10-27にTASK-009で決定。前提と残るリスクは
   TASK-009 Plan §13）。
-- Bedrockへ送る全文は20,000字まで、Transcribeが書き出した結果は2MBまで読む。超えたら送らずに再試行できる失敗にする。
+- Bedrockへ送る全文は20,000字まで、Transcribeが書き出した結果は2MBまで読む。超えたら送らずに失敗にする（契約上は再試行できるが、同じ全文なので再試行しても成功しない。正規の30分の録音は約12,000字）。
   S3から読むときは、読む大きさの上限を必ず渡す（`AudioStore#read`）。
 - Job基盤をSolid Queueにしたので、Jobの引数はDB（`solid_queue_jobs.arguments`）に平文で残る。生成のJobの引数は
   処理IDだけにする。**認証メールのJob（引数にメールアドレスと確認・再設定・解除のtokenを持つ）はSolid Queueに載せず、
@@ -408,7 +408,7 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   分岐は保険になる。Pumaが返す`413`はProblemの形にならない。解析の失敗（Railsが包まない`Rack::BadRequest`を含む）は`422`にする。
 - AWSの呼び出しは`GenerationProviders`に集め、clientを作る前に呼び出し元がアプリ用アカウント（`FOD_APP_ACCOUNT_ID`）か
   を確かめる。SDKのloggerは付けない。regionは`ap-northeast-1`に固定する。bucket・role・アカウントIDは環境変数で渡し、
-  model idとpromptは`config/generation.yml`で固定する。bucket・model id・アカウントIDのどれかが空の間は、どのAWSのclientも作らない。
+  model idとpromptは`config/generation.yml`で固定する。bucket・model id・アカウントIDのどれかが空の間は、生成のclient（S3・Transcribe・Bedrock）を作らない。
 
 ### データ所在地と費用
 
