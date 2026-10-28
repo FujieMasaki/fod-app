@@ -135,6 +135,8 @@ main ← <type>/task-008-<slug>-integration（統合ブランチ。メインのP
 - PRごとの作業（修正・検証・push・PR作成・レビュー）は、**そのPRのブランチへ`git switch`してから**行う。
   pre-pushの検査、`gh pr create`のhead、Codexの最終チェックやレビューのdiff（`<base>...HEAD`）は、どれも
   今いるブランチを基準にするため、別のブランチにいると、そのPRを単独で確かめたことにならない。
+  タスクのブランチへは本体のcheckoutで移らず、そのタスクのworktreeの中で移る（手順は
+  [`pr-review-cycle`](../../.claude/skills/pr-review-cycle/SKILL.md)の冒頭）。
 - pushは`git push origin <ブランチ>:<ブランチ>`の形にし（初めてpushするブランチは`-u`を付け、upstreamを
   そのブランチにする。統合ブランチから作ったブランチは、gitの既定でupstreamが統合ブランチになっているため）、push前に`git rev-parse --abbrev-ref HEAD`がpush先と
   一致することを確かめる。hookのメッセージにある`HEAD:<ブランチ>`の例は、今いるブランチへpushする場合に限る。ブランチを行き来するため、`HEAD:<ブランチ>`だと

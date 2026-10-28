@@ -113,6 +113,14 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 - `cd`の追跡は単純で、subshell（`(cd x && …)`）の後も移った先のままとして扱う。`pushd`・`env -C`は追跡しない。
   どちらも実際の実行場所と違う場所で判定するため、素通りになる場合がある（既存のguardと同じく安全網）。
 - `--`のない`git checkout <タスクのブランチ> <path>`（ファイルの取り出し）も、切り替えとして拒否する。`--`を付ければ通る。
+  短いオプションをまとめた`git checkout -qb <新しいブランチ> <タスクのブランチ>`も、起点の名前で拒否する。
+- heredocの本文（commit message・PR本文）に`git switch <タスクのブランチ>`や`gh pr checkout`を書くと、既存の判定と同じく
+  コマンドとして解析されて拒否される。本文は`--body-file`・`-F <file>`で渡す（`pull-requests.md`の勧めと同じ）。
+- 判定しない切り替え（既知の穴）: `git switch -`・`git checkout -`・`@{-1}`（前のブランチへ戻る）、
+  `git rebase <upstream> <branch>`、`git stash branch`、`git branch -m`、`git --git-dir`・`--work-tree`。どれも普段の
+  手順にはなく、拒否すると行き先を調べるためにgitの起動が増えるため、安全網の範囲外とする。
+- 定期実行のセッションが作業中のworktreeへ、本体から来たセッションが入ると、同じworktreeで重なる。`pr-review-cycle`の
+  冒頭で、入る前に`run-task`の手順2の再開の確認を行う手順にした。
 - git hookの中（pre-pushがtestを実行する）では`GIT_DIR`が設定されていて、`git -C <dir>`より優先される。
   `isMainCheckout`とtestの一時repositoryの操作は、`GIT_DIR`などを外した環境でgitを実行する。外さずに実行した
   最初の版では、pre-pushの中でtestが本物のrepositoryへ書き込み、共有の設定に`core.bare=true`が入って本体の
@@ -132,9 +140,13 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 
 - 本体のcheckoutで、hookに`git switch feat/task-999-x`のpayloadを渡して拒否されること、linked worktreeでは
   許されることを確かめる。
-- 結果（2026-10-28）: `scripts/claude-hook.sh claude-guard.mjs`に、`cwd`を本体（`dev/app/focus-on-dot`）にして
-  `git switch feat/task-009-2-job-and-aws`を渡すとexit 2で拒否された。`cwd`を`.claude/worktrees/task-009`にした場合、
-  本体での`git switch -c fix/some-thing origin/main`、repositoryの外（`/tmp`）ではexit 0。
+- 結果（2026-10-28）: `scripts/claude-hook.sh claude-guard.mjs`にpayloadを渡した。
+  - `cwd`が本体（`dev/app/focus-on-dot`）、`git switch feat/task-009-2-job-and-aws`: exit 2（拒否）
+  - `cwd`が本体、`git checkout feat/task-009-2-job-and-aws --`: exit 2（拒否）
+  - `cwd`が`.claude/worktrees/task-009`、`git switch feat/task-009-2-job-and-aws`: exit 0
+  - `cwd`が本体、`git switch -c fix/some-thing origin/main`: exit 0
+  - `cwd`が本体、`git switch -c fix/x origin/feat/task-009-2-job-and-aws`: exit 0
+  - `cwd`が`/tmp`（repositoryの外）、`git switch feat/task-009-x`: exit 0
 
 ## 15. Definition of Done
 

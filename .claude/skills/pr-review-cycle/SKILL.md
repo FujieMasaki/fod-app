@@ -20,6 +20,9 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
 `git worktree list`でそのタスクのworktreeを探して`EnterWorktree`に`path`を渡して入り、なければ
 `git worktree add .claude/worktrees/task-NNN <ブランチ>`で作って入る（本体のcheckoutでタスクのブランチへ移ると、
 同じcheckoutの別のセッションがそのタスクの品質ゲートで差し戻されるため。PreToolUse hookも拒否する）。
+既にあるworktreeへ入る前には、[`run-task`](../run-task/SKILL.md)の手順2の「同じタスクのworktreeが既にある（再開）」の
+確認（定期実行のセッションが作業中でないこと、`FOD_DB_SUFFIX`）を行い、満たせなければ人間に伝えて止まる。入った後は、
+同じ手順2の依存の導入と状態の初期化（`--reset`）を行う。
 
 この skill の「手順N」は`### N`の節を指す。手順1の中の小項目は「1-5」のように書いて区別する。
 
