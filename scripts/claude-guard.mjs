@@ -297,6 +297,8 @@ function switchesToTaskBranch(git) {
   const separator = git.args.indexOf("--");
   if (git.name === "checkout" && separator !== -1 && separator < git.args.length - 1) return false;
   const args = separator === -1 ? git.args : git.args.slice(0, separator);
+  // A detached HEAD is not a task branch, so the quality gate does not hold it.
+  if (args.includes("--detach") || (git.name === "switch" && args.includes("-d"))) return false;
   for (let index = 0; index < args.length; index += 1) {
     // A new branch is judged by its own name; its start point may be a task branch.
     const [option, value] = args[index].split(/=(.*)/);
@@ -455,7 +457,8 @@ export function denyReason(command, context = {}, depth = 0) {
     if (program === "gh") {
       const prIndex = args.indexOf("pr");
       if (prIndex !== -1 && args[prIndex + 1] === "merge") return "Merging is done by a human. Leave the PR open.";
-      if (prIndex !== -1 && args[prIndex + 1] === "checkout" && inMainCheckout(cwd)) return prCheckoutReason;
+      const prCheckout = (prIndex !== -1 && args[prIndex + 1] === "checkout") || args[0] === "co";
+      if (prCheckout && inMainCheckout(cwd)) return prCheckoutReason;
     }
 
     if (program !== "git") continue;

@@ -187,6 +187,7 @@ const deniedInMainCheckout = [
   "git -C /repo switch feat/task-009-2-job-and-aws",
   "sh -c 'git switch feat/task-009-2-job-and-aws'",
   "gh pr checkout 103",
+  "gh co 103",
 ];
 
 const allowedInMainCheckout = [
@@ -202,6 +203,8 @@ const allowedInMainCheckout = [
   "git switch -c fix/foo origin/feat/task-009-2-job-and-aws",
   "cd ~someone/repo && git switch feat/task-009-2-job-and-aws",
   "gh pr view 103",
+  "git switch --detach origin/feat/task-009-2-job-and-aws",
+  "git checkout --detach feat/task-009-2-job-and-aws",
 ];
 
 for (const command of deniedInMainCheckout) {
@@ -244,7 +247,9 @@ test("isMainCheckout tells the main working tree from a linked worktree", () => 
     const main = path.join(root, "main");
     // Under a git hook (pre-push runs these tests) GIT_DIR points at this
     // repository; without clearing it, these commands would write there.
-    const git = (...args) => assert.equal(spawnSync("git", args, { encoding: "utf8", env: gitEnvFor() }).status, 0);
+    // The user's global config (signing, hooksPath) is left out too.
+    const env = { ...gitEnvFor(), GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+    const git = (...args) => assert.equal(spawnSync("git", args, { encoding: "utf8", env }).status, 0);
     git("init", "-q", main);
     git("-C", main, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "x");
     git("-C", main, "worktree", "add", "-q", path.join(main, ".claude", "worktrees", "task-001"));
