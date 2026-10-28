@@ -257,11 +257,20 @@ function parseGit(words) {
   return { name: words[index], args: words.slice(index + 1), dirs };
 }
 
+// Variables that point git at another repository than the one at `-C dir`
+// (git hooks set GIT_DIR, for example).
+const gitLocationVariables = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"];
+
+export function gitEnvFor(env = process.env) {
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !gitLocationVariables.includes(key)));
+}
+
 // True when dir is the repository's main working tree, not a linked worktree.
 // Outside a repository it is false, so unrelated commands are not denied.
 export function isMainCheckout(dir) {
   const result = spawnSync("git", ["-C", dir, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], {
     encoding: "utf8",
+    env: gitEnvFor(),
   });
   if (result.status !== 0) return false;
   const [gitDir, commonDir] = result.stdout.trim().split("\n");

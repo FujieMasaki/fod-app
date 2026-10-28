@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
-import { denyReason, isMainCheckout, parseCommand, tokenize } from "./claude-guard.mjs";
+import { denyReason, gitEnvFor, isMainCheckout, parseCommand, tokenize } from "./claude-guard.mjs";
 
 const task = "feat/task-008-dot-history";
 
@@ -237,10 +237,14 @@ test("cd ~ resolves to the home directory", () => {
 });
 
 test("isMainCheckout tells the main working tree from a linked worktree", () => {
+  const saved = process.env.GIT_DIR;
+  process.env.GIT_DIR = "/nonexistent/.git";
   const root = mkdtempSync(path.join(tmpdir(), "guard-"));
   try {
     const main = path.join(root, "main");
-    const git = (...args) => assert.equal(spawnSync("git", args, { encoding: "utf8" }).status, 0);
+    // Under a git hook (pre-push runs these tests) GIT_DIR points at this
+    // repository; without clearing it, these commands would write there.
+    const git = (...args) => assert.equal(spawnSync("git", args, { encoding: "utf8", env: gitEnvFor() }).status, 0);
     git("init", "-q", main);
     git("-C", main, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "x");
     git("-C", main, "worktree", "add", "-q", path.join(main, ".claude", "worktrees", "task-001"));
@@ -250,5 +254,7 @@ test("isMainCheckout tells the main working tree from a linked worktree", () => 
     assert.equal(isMainCheckout(root), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
+    if (saved === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = saved;
   }
 });

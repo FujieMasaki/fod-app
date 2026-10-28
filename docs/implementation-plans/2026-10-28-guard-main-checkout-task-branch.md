@@ -113,6 +113,10 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 - `cd`の追跡は単純で、subshell（`(cd x && …)`）の後も移った先のままとして扱う。`pushd`・`env -C`は追跡しない。
   どちらも実際の実行場所と違う場所で判定するため、素通りになる場合がある（既存のguardと同じく安全網）。
 - `--`のない`git checkout <タスクのブランチ> <path>`（ファイルの取り出し）も、切り替えとして拒否する。`--`を付ければ通る。
+- git hookの中（pre-pushがtestを実行する）では`GIT_DIR`が設定されていて、`git -C <dir>`より優先される。
+  `isMainCheckout`とtestの一時repositoryの操作は、`GIT_DIR`などを外した環境でgitを実行する。外さずに実行した
+  最初の版では、pre-pushの中でtestが本物のrepositoryへ書き込み、共有の設定に`core.bare=true`が入って本体の
+  checkoutが使えなくなった（2026-10-28、push前に気付いて元へ戻した）。
 
 ## 14. Verification
 
@@ -121,7 +125,8 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 - `node --test scripts/claude-guard.test.mjs`
 
 - 本体のcheckoutとlinked worktreeを一時ディレクトリに作り、`isMainCheckout`の判定を本物のgitで確かめるtestを含む。
-- 結果（2026-10-28）: `node --test scripts/claude-guard.test.mjs` 136件成功。`pnpm check`・`type-check`・`test`成功。
+- 結果（2026-10-28）: `node --test scripts/claude-guard.test.mjs` 136件成功。`GIT_DIR`を使い捨てのrepositoryへ向けて
+  同じtestを実行し、そのrepositoryが変わらないことも確かめた。`pnpm check`・`type-check`・`test`成功。
 
 ### Manual
 
