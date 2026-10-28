@@ -17,6 +17,11 @@
 
 2026-10-08時点で、録音attemptを発行するbackendのendpointとuploadの受け口は未実装である（契約は`contracts/openapi.yaml`にある）。未実装のあいだは、録音前の案内と画面、契約に沿った通信関数までを進め、発行とuploadとの受け渡しを実際のbackendで確かめる完了条件は残してIn progressにする。存在しないendpointを前提にした仮の実装を、完了扱いにしない。
 
+TASK-009が、録音attemptの発行と送信のendpointをRailsに実装した（実サービスでの確認はTASK-009 Plan §5のH1〜H4で、
+まだ済んでいない）。送信（`POST /api/v1/dots`）の本文の受け取りはPumaの上限（34MB）で止める。この上限を超えた
+本文への`413`はPumaが返し、Problemの形（`application/problem+json`）にならない。`413`は本文を読まずにstatusだけで
+`audio_too_large`として扱う（[TASK-009 Plan](../implementation-plans/2026-10-24-task-009-audio-generation.md) §16）。
+
 ## 確認可能な完了条件
 
 - [ ] 録音開始前に音声の送信有無・送信先・保存と削除の扱いと、他人の実名や住所を必要がなければ言い換えられることを確認でき、説明と実際の処理が一致する。
@@ -25,6 +30,7 @@
 - [ ] 録音成功・停止・中断を区別し、決定した音声入力とdurationを生成フローへ受け渡す。必要な形式・サイズの制限を利用者へ示す。
 - [x] 二重停止防止とstream / AudioContext解放の既存動作を維持し、音声Blob・文字起こしをbrowserへ永続化しない。
 - [x] 受け渡せる音声がない場合を明示し、関連するjournalingの現行挙動を更新している。
+- [ ] 送信（`POST /api/v1/dots`）の`413`を、本文がProblemでない場合（Pumaの上限を超えた本文）も含めて、本文を読まずにstatusだけで`audio_too_large`として扱い、testで確かめている（TASK-009からの申し送り。上記）。
 - [ ] 録音attemptの発行が成功した直後に録音を開始し、発行に失敗した場合は録音を始めずに次の操作を案内する。やり直し・離脱・別Userへの切り替えでattemptを破棄し、古いattemptを別の録音へ使わない。attempt発行から録音開始までの遅れを実機で把握し、Planの前提（遅れが日付境界をまたぐと日付がずれ得る）と矛盾しないことを確認する。遅れの値は仕様として約束しない。
 
 ## 依存するタスクID
@@ -34,7 +40,7 @@
 - TASK-005
 - TASK-007
 
-依存先の設計判断とAPI契約は確定している（4件ともDone）。録音attemptの発行とuploadのbackendは未実装のため、それに依存する完了条件は残してIn progressとする（上記）。
+依存先の設計判断とAPI契約は確定している（4件ともDone）。録音attemptの発行とuploadのbackendはTASK-009で実装したが、実サービスでの確認（TASK-009 Plan §5のH1〜H4）が済むまでは、それに依存する完了条件は残してIn progressとする（上記）。
 
 ## 根拠となる仕様書と見出し
 
