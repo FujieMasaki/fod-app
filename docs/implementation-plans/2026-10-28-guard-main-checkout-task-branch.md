@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-実施中
+完了（2026-10-29、PR #115。機械のレビューでLGTM、人間のレビュー待ち）。実装差異と検証結果は §16。
 
 ## 2. Goal
 
@@ -175,3 +175,30 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 - 本体のcheckoutでタスクのブランチへ移るコマンドと`gh pr checkout`が拒否され、worktreeの中とタスクでない
   ブランチは従来どおり通る。
 - lint / testが通る。
+
+## 16. Completion Record
+
+- **状態**: 2026-10-29 完了（`d7c0614`でサブエージェント・CodexともにLGTM、CIは全ジョブ成功）。
+- **実装差異**
+  1. **`GIT_*`を外してgitを実行する（`gitEnvFor`）を足した。** 最初の版は環境をそのまま渡したため、pre-pushの中で
+     実行したtestが`GIT_DIR`に引きずられて本物のrepositoryへ書き込み、共有の設定に`core.bare=true`が入った
+     （2026-10-28、push前に気付いて元へ戻した。§13）。
+  2. **判定をguard自身のrepositoryに限った。** 別のrepository（contentのrepositoryなど）で同じブランチ名の形を
+     拒否しないため。
+  3. **`taskBranchPattern`の読み込みを失敗に強くした。** 品質ゲートを読み込めなくても、既存の拒否は続く。
+  4. **ブランチ名の読み取りを広げた。** 作成のoptionは新しい名前で判定し（`=`の形、名前を続けた形、
+     まとめた短いoptionを含む）、`git switch`は`--`の後も判定し、`git checkout`はpathのない末尾の`--`を
+     切り替えとして扱い、`--detach`は通す。どれもレビューで見つかった抜けと誤検知による。
+  5. **手順書の更新を広げた。** §6のとおり、`pull-requests.md`の3か所・`run-task`・`exploratory-audit`にも、
+     本体のcheckoutでタスクのブランチへ移らないことを書いた。本体がタスクのブランチにいるときは、本体を
+     替えずに人間に伝えて止まる手順にした（AIが本体を`main`へ戻さない）。
+  6. **既存のworktreeへ入る前の確認を、人間の判断で絞った**（§5の決定済み）。
+- **検証結果**
+  - `node --test scripts/*.test.mjs` — 263件成功（`d7c0614`）。`pnpm check`・`type-check`・`test`成功。
+  - CI（`d7c0614`）— Build・Check・Tests・TypeScript・Rails・VRT・Docs & scripts・CI Gateすべて成功。
+  - 手動確認は§14のとおり（hookへのpayload、`claude -p`でのhookの`cwd`）。
+  - **未実施**: `gh co`がglobal optionの後にある形、`env -C`での判定、hookの入口（stdin → `cwd`）の自動testは
+    行っていない（任意の改善として残す）。
+- **関連**
+  - 閉じたPR #109（品質ゲートに持ち主のセッションを記録する案）。
+  - レビュー指針: [`docs/code-review/frontend/README.md`](../code-review/frontend/README.md)の自動化の行。
