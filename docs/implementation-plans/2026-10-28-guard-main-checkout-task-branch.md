@@ -125,6 +125,9 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
   どちらも実際の実行場所と違う場所で判定するため、素通りになる場合がある（既存のguardと同じく安全網）。
 - `--`のない`git checkout <タスクのブランチ> <path>`（ファイルの取り出し）も、切り替えとして拒否する。`--`を付ければ通る。
   短いオプションをまとめた`git checkout -qb <新しいブランチ> <タスクのブランチ>`も、起点の名前で拒否する。
+  `-t`なしの`git checkout origin/<タスクのブランチ>`・`refs/heads/<タスクのブランチ>`（detached HEADになる）と
+  `git checkout -p <タスクのブランチ>`も拒否する（読むだけなら`git show`で足りる）。
+- `cd -`の後は場所が分からないものとして判定しない（既知の穴）。
 - heredocの本文（commit message・PR本文）に`git switch <タスクのブランチ>`や`gh pr checkout`を書くと、既存の判定と同じく
   コマンドとして解析されて拒否される。本文は`--body-file`・`-F <file>`で渡す（`pull-requests.md`の勧めと同じ）。
 - `$(...)`とheredocの本文は外側のコマンドの後に解析するため、`cd`の追跡の順が実行の順と違うことがある（既知の穴）。

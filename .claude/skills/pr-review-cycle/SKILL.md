@@ -26,6 +26,8 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
   移さずに人間に伝えて止まる（本体の作業をどう移すか、本体を戻すかは人間が決める）。どちらもなければ、本体で
   `git switch main`する（pushしたコミットはworktreeで同じブランチから続けられる。本体がそのブランチにいるとworktreeを
   作れない）。本体がタスクのブランチにいなければ、本体の状態には触れずに次へ進む（本体の別の作業を妨げない）。
+  ただし、このセッションが本体の`main`などで今回のタスクのために作った変更・コミットがあれば、worktreeへ移さずに人間に
+  伝えて止まる（`origin/main`から作ったworktreeには載らないため）。
 - `git worktree list`でそのタスクのworktree（`.claude/worktrees/task-NNN`）を探す。あれば、入る前に
   `node scripts/task-status.mjs TASK-NNN`の`reasons`に「being worked on by a scheduled session」がないことを確かめる
   （ほかの理由で`runnable: false`でも止まらない）。あれば、定期実行のセッションが作業中なので人間に伝えて止まる。
@@ -70,7 +72,8 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
    ローカルの`<ベースブランチ>`ではなく、常に取得した`origin/<ベースブランチ>`を使う
    （ローカルの`<ベースブランチ>`は自分の作業や他タスクで先行・変化している場合があり、
    pullで揃えたつもりでも検出漏れが起きうるため、比較対象そのものをリモートに統一する）。
-3. `git rev-parse --abbrev-ref HEAD` で現在のブランチを確認する。ベースブランチと同じ場合:
+3. `git rev-parse --abbrev-ref HEAD` で現在のブランチを確認する。作るブランチがタスクのブランチ（`<type>/task-*`）で、
+   本体のcheckoutにいるなら、この項目ではなく冒頭の手順に従う（本体ではタスクのブランチを作れない）。ベースブランチと同じ場合:
    - `git log origin/<ベースブランチ>..HEAD --oneline` を確認する。**空でなければ**
      （誤ってbase上に直接コミットしてしまった等）、それらのコミットを取りこぼさないよう
      `git switch -c <type>/<slug>`で**現在のHEADから**新しいブランチを作る。
