@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { denyReason, gitEnvFor, isMainCheckout, parseCommand, tokenize } from "./claude-guard.mjs";
 
 const task = "feat/task-008-dot-history";
@@ -189,6 +190,8 @@ const deniedInMainCheckout = [
   "sh -c 'git switch feat/task-009-2-job-and-aws'",
   "gh pr checkout 103",
   "gh co 103",
+  "git switch -t upstream/feat/task-009-2-job-and-aws",
+  "cd && cd /repo && git switch feat/task-009-2-job-and-aws",
 ];
 
 const allowedInMainCheckout = [
@@ -235,6 +238,13 @@ test("moving into the main checkout from a worktree is still denied", () => {
   assert.ok(denyReason("git -C ../../.. switch feat/task-009-3-cleanup", linkedWorktree));
 });
 
+test("the main checkout of this repository is detected for real", () => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const linked = spawnSync("git", ["-C", root, "rev-parse", "--git-dir"], { encoding: "utf8", env: gitEnvFor() });
+  // Run from a linked worktree, this checkout is not the main one.
+  assert.equal(isMainCheckout(root), !linked.stdout.includes("/worktrees/"));
+});
+
 test("cd ~ resolves to the home directory", () => {
   const home = { cwd: "/elsewhere", isMainCheckout: (dir) => dir === path.join(homedir(), "repo") };
   assert.ok(denyReason("cd ~/repo && git switch feat/task-009-2-job-and-aws", home));
@@ -254,10 +264,17 @@ test("isMainCheckout tells the main working tree from a linked worktree", () => 
     git("init", "-q", main);
     git("-C", main, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "x");
     git("-C", main, "worktree", "add", "-q", path.join(main, ".claude", "worktrees", "task-001"));
-    assert.equal(isMainCheckout(main), true);
-    assert.equal(isMainCheckout(path.join(main, ".claude")), true);
-    assert.equal(isMainCheckout(path.join(main, ".claude", "worktrees", "task-001")), false);
-    assert.equal(isMainCheckout(root), false);
+    const repository = spawnSync("git", ["-C", main, "rev-parse", "--path-format=absolute", "--git-common-dir"], {
+      encoding: "utf8",
+      env,
+    }).stdout.trim();
+    assert.equal(isMainCheckout(main, repository), true);
+    assert.equal(isMainCheckout(path.join(main, ".claude"), repository), true);
+    assert.equal(isMainCheckout(path.join(main, ".claude", "worktrees", "task-001"), repository), false);
+    assert.equal(isMainCheckout(root, repository), false);
+    // Another repository's main checkout is not this repository's.
+    assert.equal(isMainCheckout(main, "/elsewhere/.git"), false);
+    assert.equal(isMainCheckout(main), false);
   } finally {
     rmSync(root, { recursive: true, force: true });
     if (saved === undefined) delete process.env.GIT_DIR;

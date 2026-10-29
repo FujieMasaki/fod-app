@@ -3,7 +3,16 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { taskBranchPattern } from "./claude-quality-gate.mjs";
+
+// The task branch pattern is shared with the quality gate. If that module
+// cannot be loaded (a syntax error while it is being edited), only the
+// main-checkout check is lost; the other checks still run.
+let taskBranchPattern;
+try {
+  ({ taskBranchPattern } = await import("./claude-quality-gate.mjs"));
+} catch {
+  taskBranchPattern = undefined;
+}
 
 // Claude Code PreToolUse hook for Bash. A safety net next to permissions,
 // Lefthook, and the GitHub ruleset on main, not the only defence: it cannot see
@@ -263,17 +272,31 @@ export function gitEnvFor(env = process.env) {
   return Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith("GIT_")));
 }
 
-// True when dir is the repository's main working tree, not a linked worktree.
-// Outside a repository it is false, so unrelated commands are not denied.
-export function isMainCheckout(dir) {
+// [gitDir, commonDir] of the repository at dir, or undefined outside one.
+function gitDirs(dir) {
   const result = spawnSync("git", ["-C", dir, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], {
     encoding: "utf8",
     env: gitEnvFor(),
     timeout: 5000,
   });
-  if (result.status !== 0) return false;
+  if (result.status !== 0) return undefined;
   const [gitDir, commonDir] = result.stdout.trim().split("\n");
-  return Boolean(gitDir) && gitDir === commonDir;
+  return gitDir && commonDir ? [gitDir, commonDir] : undefined;
+}
+
+let guardRepository;
+// The common git dir of the repository this script belongs to, so other
+// repositories with the same branch naming are left alone.
+function ownRepository() {
+  guardRepository ??= gitDirs(path.dirname(fileURLToPath(import.meta.url)))?.[1] ?? null;
+  return guardRepository;
+}
+
+// True when dir is the main working tree (not a linked worktree) of
+// `repository`. Outside it, false, so unrelated commands are not denied.
+export function isMainCheckout(dir, repository = ownRepository()) {
+  const dirs = gitDirs(dir);
+  return Boolean(dirs && repository) && dirs[0] === dirs[1] && dirs[1] === repository;
 }
 
 // The directory after `cd target` or `git -C target`, or undefined once it
@@ -285,8 +308,13 @@ function moveTo(dir, target) {
   return dir && path.resolve(dir, target);
 }
 
-const remotePrefix = /^(?:refs\/heads\/|refs\/remotes\/[^/]+\/|origin\/)/;
-const isTaskBranch = (name) => Boolean(name) && taskBranchPattern.test(name.replace(remotePrefix, ""));
+const refPrefix = /^(?:refs\/heads\/|refs\/remotes\/)/;
+// `feat/task-…`, or a remote-tracking name such as `upstream/feat/task-…`.
+const isTaskBranch = (name) => {
+  if (!name || !taskBranchPattern) return false;
+  const branch = name.replace(refPrefix, "");
+  return taskBranchPattern.test(branch) || taskBranchPattern.test(branch.replace(/^[^/]+\//, ""));
+};
 const createOptions = new Set(["-c", "-C", "--create", "--force-create", "-b", "-B", "--orphan"]);
 const attachedCreate = /^-[cCbB](.+)$/;
 
@@ -443,7 +471,8 @@ export function denyReason(command, context = {}, depth = 0) {
 
     const [program, ...args] = rest;
     if (program === "cd") {
-      cwd = moveTo(cwd, args.find((arg) => !arg.startsWith("-")));
+      // `cd` with no directory goes home.
+      cwd = moveTo(cwd, args.find((arg) => !arg.startsWith("-")) ?? "~");
       continue;
     }
 
