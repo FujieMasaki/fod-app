@@ -61,7 +61,7 @@ Claude Codeのセッションが、repositoryの本体のcheckout（`git worktre
    `isMainCheckout(dir)`）を渡せるようにする。渡されなければ、この判定はしない（既存の呼び出しとtestはそのまま）。
 2. コマンドを左から見て、`cd <dir>`と`git -C <dir>`で実行する場所を追う。`~`や変数など解決できない移動の後は、
    場所が分からないので判定しない。
-3. 本体のcheckoutで、`git switch`・`git checkout`が、`refs/heads/`・`refs/remotes/<remote>/`・`origin/`を除いて
+3. 本体のcheckoutで、`git switch`・`git checkout`が、`refs/heads/`・`refs/remotes/`・先頭の`<remote>/`を除いて
    タスクのブランチ名（`taskBranchPattern`）に当たるブランチへ移るなら拒否する。ブランチを作る（`-c`・`-b`・
    `--create`など）ときは新しい名前だけで判定し、それ以外は`--`より前の`-`で始まらない語で判定する。
    `git checkout <ref> -- <path>`はファイルの取り出しなので対象外にするが、pathのない末尾の`--`は切り替えとして扱う。

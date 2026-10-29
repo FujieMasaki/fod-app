@@ -21,11 +21,11 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
 上から順に行う。新しいブランチの起点は通常`origin/main`で、サブのPRは[`pull-requests.md`](../../../docs/development/pull-requests.md)の
 定める起点（統合ブランチ、または前のブランチ）にする（以下の`<起点>`）。
 
-- 先に本体の状態を確かめる。未コミットの変更があるか、未pushのコミット（本体がタスクのブランチにいれば
-  `origin/<そのブランチ>`より先、それ以外のブランチにいれば`origin/main`より先のコミット）があれば、worktreeへ移さずに
-  人間に伝えて止まる（本体の作業をどう移すか、本体を戻すかは人間が決める）。どちらもなく、本体がタスクのブランチに
-  いれば、本体で`git switch main`する（pushしたコミットはworktreeで同じブランチから続けられる。本体がそのブランチに
-  いるとworktreeを作れない）。
+- 本体がタスクのブランチにいれば、先に本体の状態を確かめる。未コミットの変更か、未pushのコミット（`origin/<そのブランチ>`
+  より先のコミット。`origin/<そのブランチ>`がなければ、ブランチのコミットはすべて未pushとみなす）があれば、worktreeへ
+  移さずに人間に伝えて止まる（本体の作業をどう移すか、本体を戻すかは人間が決める）。どちらもなければ、本体で
+  `git switch main`する（pushしたコミットはworktreeで同じブランチから続けられる。本体がそのブランチにいるとworktreeを
+  作れない）。本体がタスクのブランチにいなければ、本体の状態には触れずに次へ進む（本体の別の作業を妨げない）。
 - `git worktree list`でそのタスクのworktree（`.claude/worktrees/task-NNN`）を探す。あれば、入る前に
   `node scripts/task-status.mjs TASK-NNN`の`reasons`に「being worked on by a scheduled session」がないことを確かめる
   （ほかの理由で`runnable: false`でも止まらない）。あれば、定期実行のセッションが作業中なので人間に伝えて止まる。
