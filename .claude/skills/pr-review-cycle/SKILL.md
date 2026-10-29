@@ -22,10 +22,13 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
 - `git worktree list`でそのタスクのworktree（`.claude/worktrees/task-NNN`）を探す。あれば、入る前に
   `node scripts/task-status.mjs TASK-NNN`の`reasons`に「being worked on by a scheduled session」がないことを確かめる
   （ほかの理由で`runnable: false`でも止まらない）。あれば、定期実行のセッションが作業中なので人間に伝えて止まる。
-  確かめたら`EnterWorktree`に`path`を渡して入る。
+  確かめたら`EnterWorktree`に`path`を渡して入る。入った後、作業ツリーがcleanならそこで目的のブランチへ`git switch`する
+  （新しいブランチなら`git switch -c <ブランチ> origin/main`）。cleanでなければ人間に伝えて止まる。
 - なければ作って入る。既にあるブランチは`git worktree add .claude/worktrees/task-NNN <ブランチ>`、新しいブランチは
   `git worktree add .claude/worktrees/task-NNN -b <ブランチ> origin/main`。本体のcheckoutが既にそのブランチにいると
   作れないので、先に本体で`git switch main`する。
+- 本体のcheckoutに今回のタスクの変更（未コミットの変更、または`origin/main`より先のコミット）が残っていれば、worktreeへ
+  移さずに人間に伝えて止まる（本体の作業をどう移すか、本体を戻すかは人間が決める）。
 - `git diff --name-only origin/main...<ブランチ>`に`apps/api/db/migrate/`があるタスクでは、環境変数`FOD_DB_SUFFIX`が
   `_task_NNN`でなければ、付けてClaude Codeを起動し直してもらうよう人間に伝えて止まる（付けないと既定のDBにタスクの
   migrationが混ざる）。migrationのないタスクでは求めない。

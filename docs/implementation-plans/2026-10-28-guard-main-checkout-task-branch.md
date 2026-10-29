@@ -101,7 +101,9 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 
 ## 11. Libraries / APIs
 
-- Claude Code hookの入力`cwd`（Bashを実行する作業ディレクトリ）。
+- Claude Code hookの入力`cwd`（Bashを実行する作業ディレクトリ）。前のBashの`cd`と`EnterWorktree`を反映する
+  （§14のManualで確認）。
+- `git rev-parse --path-format=absolute`（git 2.31以上）。古いgitでは判定が常に「本体ではない」になり、素通りになる。
 - `git rev-parse --git-dir --git-common-dir`。
 
 ## 12. Alternatives Considered
@@ -122,6 +124,10 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
   短いオプションをまとめた`git checkout -qb <新しいブランチ> <タスクのブランチ>`も、起点の名前で拒否する。
 - heredocの本文（commit message・PR本文）に`git switch <タスクのブランチ>`や`gh pr checkout`を書くと、既存の判定と同じく
   コマンドとして解析されて拒否される。本文は`--body-file`・`-F <file>`で渡す（`pull-requests.md`の勧めと同じ）。
+- `$(...)`とheredocの本文は外側のコマンドの後に解析するため、`cd`の追跡の順が実行の順と違うことがある（既知の穴）。
+- guardは`taskBranchPattern`を`claude-quality-gate.mjs`からimportする（ブランチ名の判定を食い違わせないため）。
+  品質ゲートか`ci-changes.mjs`を読み込めなくなるとguard全体が失敗し、既存の拒否も効かなくなる。どちらを変えても
+  guardのtestが落ちるので、そこで気付ける。
 - 判定しない切り替え（既知の穴）: `git switch -`・`git checkout -`・`@{-1}`（前のブランチへ戻る）、
   `git rebase <upstream> <branch>`、`git stash branch`、`git branch -m`、`git --git-dir`・`--work-tree`。どれも普段の
   手順にはなく、拒否すると行き先を調べるためにgitの起動が増えるため、安全網の範囲外とする。
@@ -154,6 +160,9 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
   - `cwd`が本体、`git switch -c fix/some-thing origin/main`: exit 0
   - `cwd`が本体、`git switch -c fix/x origin/feat/task-009-2-job-and-aws`: exit 0
   - `cwd`が`/tmp`（repositoryの外）、`git switch feat/task-009-x`: exit 0
+- 結果（2026-10-29）: 一時repositoryに、PreToolUse hookの入力を記録する設定を置いて`claude -p`（2.1.286）を実行した。
+  Bashで`cd sub`した次の呼び出しでは`cwd`が`…/repo/sub`、`EnterWorktree`の後は`…/repo/.claude/worktrees/probe`になり、
+  hookの`cwd`が実際の作業ディレクトリを反映することを確かめた。
 
 ## 15. Definition of Done
 
