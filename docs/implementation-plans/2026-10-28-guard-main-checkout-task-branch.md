@@ -125,9 +125,10 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 - heredocの本文（commit message・PR本文）に`git switch <タスクのブランチ>`や`gh pr checkout`を書くと、既存の判定と同じく
   コマンドとして解析されて拒否される。本文は`--body-file`・`-F <file>`で渡す（`pull-requests.md`の勧めと同じ）。
 - `$(...)`とheredocの本文は外側のコマンドの後に解析するため、`cd`の追跡の順が実行の順と違うことがある（既知の穴）。
-- guardは`taskBranchPattern`を`claude-quality-gate.mjs`からimportする（ブランチ名の判定を食い違わせないため）。
-  品質ゲートか`ci-changes.mjs`を読み込めなくなるとguard全体が失敗し、既存の拒否も効かなくなる。どちらを変えても
-  guardのtestが落ちるので、そこで気付ける。
+- guardは`taskBranchPattern`を`claude-quality-gate.mjs`から読み込む（ブランチ名の判定を食い違わせないため）。
+  読み込みに失敗したとき（編集中の構文の誤りなど）は、本体のcheckoutの判定だけが外れ、既存の拒否は続く。
+- 判定するのは、guard自身が属するrepository（`--git-common-dir`が同じもの）の本体のcheckoutだけ。同じブランチ名の
+  形を使う別のrepositoryでは拒否しない。
 - 判定しない切り替え（既知の穴）: `git switch -`・`git checkout -`・`@{-1}`（前のブランチへ戻る）、
   `git rebase <upstream> <branch>`、`git stash branch`、`git branch -m`、`git --git-dir`・`--work-tree`。どれも普段の
   手順にはなく、拒否すると行き先を調べるためにgitの起動が増えるため、安全網の範囲外とする。

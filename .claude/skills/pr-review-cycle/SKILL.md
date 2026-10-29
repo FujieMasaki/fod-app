@@ -17,18 +17,22 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
 作業（修正・検証・push・PR作成・レビュー）は、**そのPRのブランチへ`git switch`してから**行う
 （pre-push、`gh pr create`、diff、Codexの最終チェックは、どれも今いるブランチを基準にするため）。
 タスクのブランチ（`<type>/task-*`）は、そのタスクのworktreeの中で切り替える（本体のcheckoutでタスクのブランチへ移ると、
-同じcheckoutの別のセッションがそのタスクの品質ゲートで差し戻されるため。PreToolUse hookも拒否する）。本体のcheckoutにいるなら:
+同じcheckoutの別のセッションがそのタスクの品質ゲートで差し戻されるため。PreToolUse hookも拒否する）。本体のcheckoutにいるなら、
+上から順に行う。新しいブランチの起点は通常`origin/main`で、サブのPRは[`pull-requests.md`](../../../docs/development/pull-requests.md)の
+定める起点（統合ブランチ、または前のブランチ）にする（以下の`<起点>`）。
 
+- 先に本体の状態を確かめる。未コミットの変更があるか、未pushのコミット（本体がタスクのブランチにいれば
+  `origin/<そのブランチ>`より先、それ以外のブランチにいれば`origin/main`より先のコミット）があれば、worktreeへ移さずに
+  人間に伝えて止まる（本体の作業をどう移すか、本体を戻すかは人間が決める）。どちらもなく、本体がタスクのブランチに
+  いれば、本体で`git switch main`する（pushしたコミットはworktreeで同じブランチから続けられる。本体がそのブランチに
+  いるとworktreeを作れない）。
 - `git worktree list`でそのタスクのworktree（`.claude/worktrees/task-NNN`）を探す。あれば、入る前に
   `node scripts/task-status.mjs TASK-NNN`の`reasons`に「being worked on by a scheduled session」がないことを確かめる
   （ほかの理由で`runnable: false`でも止まらない）。あれば、定期実行のセッションが作業中なので人間に伝えて止まる。
   確かめたら`EnterWorktree`に`path`を渡して入る。入った後、作業ツリーがcleanならそこで目的のブランチへ`git switch`する
-  （新しいブランチなら`git switch -c <ブランチ> origin/main`）。cleanでなければ人間に伝えて止まる。
+  （新しいブランチなら`git switch -c <ブランチ> <起点>`）。cleanでなければ人間に伝えて止まる。
 - なければ作って入る。既にあるブランチは`git worktree add .claude/worktrees/task-NNN <ブランチ>`、新しいブランチは
-  `git worktree add .claude/worktrees/task-NNN -b <ブランチ> origin/main`。本体のcheckoutが既にそのブランチにいると
-  作れないので、先に本体で`git switch main`する。
-- 本体のcheckoutに今回のタスクの変更（未コミットの変更、または`origin/main`より先のコミット）が残っていれば、worktreeへ
-  移さずに人間に伝えて止まる（本体の作業をどう移すか、本体を戻すかは人間が決める）。
+  `git worktree add .claude/worktrees/task-NNN -b <ブランチ> <起点>`。
 - `git diff --name-only origin/main...<ブランチ>`に`apps/api/db/migrate/`があるタスクでは、環境変数`FOD_DB_SUFFIX`が
   `_task_NNN`でなければ、付けてClaude Codeを起動し直してもらうよう人間に伝えて止まる（付けないと既定のDBにタスクの
   migrationが混ざる）。migrationのないタスクでは求めない。
