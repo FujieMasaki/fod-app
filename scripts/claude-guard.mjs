@@ -257,12 +257,10 @@ function parseGit(words) {
   return { name: words[index], args: words.slice(index + 1), dirs };
 }
 
-// Variables that point git at another repository than the one at `-C dir`
-// (git hooks set GIT_DIR, for example).
-const gitLocationVariables = ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE"];
-
+// The environment without GIT_* variables, which can point git at another
+// repository than the one at `-C dir` (git hooks set GIT_DIR, for example).
 export function gitEnvFor(env = process.env) {
-  return Object.fromEntries(Object.entries(env).filter(([key]) => !gitLocationVariables.includes(key)));
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith("GIT_")));
 }
 
 // True when dir is the repository's main working tree, not a linked worktree.
@@ -271,6 +269,7 @@ export function isMainCheckout(dir) {
   const result = spawnSync("git", ["-C", dir, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], {
     encoding: "utf8",
     env: gitEnvFor(),
+    timeout: 5000,
   });
   if (result.status !== 0) return false;
   const [gitDir, commonDir] = result.stdout.trim().split("\n");
@@ -289,6 +288,7 @@ function moveTo(dir, target) {
 const remotePrefix = /^(?:refs\/heads\/|refs\/remotes\/[^/]+\/|origin\/)/;
 const isTaskBranch = (name) => Boolean(name) && taskBranchPattern.test(name.replace(remotePrefix, ""));
 const createOptions = new Set(["-c", "-C", "--create", "--force-create", "-b", "-B", "--orphan"]);
+const attachedCreate = /^-[cCbB](.+)$/;
 
 // `git switch` / `git checkout` moving onto a task branch, created or existing.
 // `git checkout <ref> -- <path>` restores files and stays on the branch, but a
@@ -303,6 +303,8 @@ function switchesToTaskBranch(git) {
     // A new branch is judged by its own name; its start point may be a task branch.
     const [option, value] = args[index].split(/=(.*)/);
     if (createOptions.has(option)) return isTaskBranch(value ?? args[index + 1]);
+    const attached = args[index].match(attachedCreate)?.[1];
+    if (attached) return isTaskBranch(attached);
   }
   return args.some((arg) => !arg.startsWith("-") && isTaskBranch(arg));
 }
