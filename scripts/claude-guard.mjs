@@ -318,7 +318,7 @@ const isTaskBranch = (name) => {
   return taskBranchPattern.test(branch) || taskBranchPattern.test(branch.replace(/^[^/]+\//, ""));
 };
 const createOptions = new Set(["-c", "-C", "--create", "--force-create", "-b", "-B", "--orphan"]);
-const attachedCreate = /^-[cCbB](.+)$/;
+const createShortFlags = new Set(["c", "C", "b", "B"]);
 
 // `git switch` / `git checkout` moving onto a task branch, created or existing.
 // `git checkout <ref> -- <path>` restores files and stays on the branch, but a
@@ -335,8 +335,13 @@ function switchesToTaskBranch(git) {
     // A new branch is judged by its own name; its start point may be a task branch.
     const [option, value] = args[index].split(/=(.*)/);
     if (createOptions.has(option)) return isTaskBranch(value ?? args[index + 1]);
-    const attached = args[index].match(attachedCreate)?.[1];
-    if (attached) return isTaskBranch(attached);
+    // Short clusters such as `-qbfeat/task-…` or `-qb feat/task-…`.
+    if (isShortCluster(args[index])) {
+      const { flags, takesNext } = shortCluster(args[index], createShortFlags);
+      if (createShortFlags.has(flags.at(-1))) {
+        return isTaskBranch(takesNext ? args[index + 1] : args[index].slice(flags.length + 1));
+      }
+    }
   }
   return args.some((arg) => !arg.startsWith("-") && isTaskBranch(arg));
 }
