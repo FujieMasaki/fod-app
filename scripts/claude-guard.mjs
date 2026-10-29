@@ -324,7 +324,9 @@ const attachedCreate = /^-[cCbB](.+)$/;
 function switchesToTaskBranch(git) {
   const separator = git.args.indexOf("--");
   if (git.name === "checkout" && separator !== -1 && separator < git.args.length - 1) return false;
-  const args = separator === -1 ? git.args : git.args.slice(0, separator);
+  const beforePaths = separator === -1 ? git.args : git.args.slice(0, separator);
+  // `git switch` takes no paths, so a branch may follow its `--`.
+  const args = git.name === "switch" ? git.args.filter((arg) => arg !== "--") : beforePaths;
   // A detached HEAD is not a task branch, so the quality gate does not hold it.
   if (args.includes("--detach") || (git.name === "switch" && args.includes("-d"))) return false;
   for (let index = 0; index < args.length; index += 1) {

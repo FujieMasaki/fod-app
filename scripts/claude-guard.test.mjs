@@ -182,6 +182,7 @@ const deniedInMainCheckout = [
   "git checkout -t origin/feat/task-009-2-job-and-aws",
   "git checkout refs/heads/fix/task-026-forbidden",
   "git checkout feat/task-009-2-job-and-aws --",
+  "git switch -- feat/task-009-2-job-and-aws",
   "git switch -c feat/task-009-7-x feat/task-009-2-job-and-aws",
   "git switch -cfeat/task-009-7-x origin/main",
   "git switch -C feat/task-009-7-x origin/main",
