@@ -124,7 +124,6 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 - `cd`の追跡は単純で、subshell（`(cd x && …)`）の後も移った先のままとして扱う。`pushd`・`env -C`は追跡しない。
   どちらも実際の実行場所と違う場所で判定するため、素通りになる場合がある（既存のguardと同じく安全網）。
 - `--`のない`git checkout <タスクのブランチ> <path>`（ファイルの取り出し）も、切り替えとして拒否する。`--`を付ければ通る。
-  短いオプションをまとめた`git checkout -qb <新しいブランチ> <タスクのブランチ>`も、起点の名前で拒否する。
   `-t`なしの`git checkout origin/<タスクのブランチ>`・`refs/heads/<タスクのブランチ>`（detached HEADになる）と
   `git checkout -p <タスクのブランチ>`も拒否する（読むだけなら`git show`で足りる）。
 - `cd -`の後は場所が分からないものとして判定しない（既知の穴）。
