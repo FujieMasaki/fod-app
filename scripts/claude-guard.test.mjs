@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { denyReason, parseCommand, tokenize } from "./claude-guard.mjs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, rmSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { denyReason, gitEnvFor, isMainCheckout, parseCommand, tokenize } from "./claude-guard.mjs";
 
 const task = "feat/task-008-dot-history";
 
@@ -163,3 +168,134 @@ for (const command of allowed) {
     assert.equal(denyReason(command), undefined);
   });
 }
+
+// The main checkout is /repo; /repo/.claude/worktrees/task-009 is a linked worktree.
+const mainCheckout = { cwd: "/repo", isMainCheckout: (dir) => dir === "/repo" };
+const linkedWorktree = { ...mainCheckout, cwd: "/repo/.claude/worktrees/task-009" };
+
+const deniedInMainCheckout = [
+  "git switch feat/task-009-2-job-and-aws",
+  "git switch -c feat/task-009-2-job-and-aws origin/main",
+  "git switch --create=feat/task-009-2-job-and-aws",
+  "git checkout feat/task-009-2-job-and-aws",
+  "git checkout -b docs/task-025-vendor origin/main",
+  "git checkout -t origin/feat/task-009-2-job-and-aws",
+  "git checkout refs/heads/fix/task-026-forbidden",
+  "git checkout feat/task-009-2-job-and-aws --",
+  "git switch -- feat/task-009-2-job-and-aws",
+  // Known over-blocking: without `--` the branch is read as the target, as git may.
+  "git checkout feat/task-009-2-job-and-aws docs/tasks/TASK-009.md",
+  "git switch -c feat/task-009-7-x feat/task-009-2-job-and-aws",
+  "git switch -cfeat/task-009-7-x origin/main",
+  "git checkout -qbfeat/task-009-7-x origin/main",
+  "git switch -qcfeat/task-009-7-x origin/main",
+  "git checkout -qb feat/task-009-7-x origin/main",
+  "git switch -C feat/task-009-7-x origin/main",
+  "git checkout -B feat/task-009-7-x origin/main",
+  "git checkout --orphan feat/task-009-7-x",
+  "git switch --force-create feat/task-009-7-x",
+  "gh -R FujieMasaki/fod-app pr checkout 103",
+  "git -C .claude -C .. switch feat/task-009-2-job-and-aws",
+  "git status --short && git switch feat/task-009-2-job-and-aws && git pull --ff-only -q",
+  "cd .claude/worktrees/task-009 && cd /repo && git switch feat/task-009-2-job-and-aws",
+  "git -C /repo switch feat/task-009-2-job-and-aws",
+  "sh -c 'git switch feat/task-009-2-job-and-aws'",
+  "gh pr checkout 103",
+  "gh co 103",
+  "git switch -t upstream/feat/task-009-2-job-and-aws",
+  "cd && cd /repo && git switch feat/task-009-2-job-and-aws",
+];
+
+const allowedInMainCheckout = [
+  "git switch main",
+  "git switch -c fix/guard-main-checkout-task-branch origin/main",
+  "git checkout feat/task-009-2-job-and-aws -- docs/tasks/TASK-009.md",
+  "git checkout -- apps/api/db/schema.rb",
+  "git checkout -- feat/task-009-2-job-and-aws",
+  "git show feat/task-009-2-job-and-aws:docs/tasks/TASK-009.md",
+  "git worktree add .claude/worktrees/task-009 feat/task-009-2-job-and-aws",
+  "git log feat/task-009-2-job-and-aws",
+  "cd .claude/worktrees/task-009 && git switch feat/task-009-2-job-and-aws",
+  "git -C .claude/worktrees/task-009 switch feat/task-009-2-job-and-aws",
+  "git switch -c fix/foo origin/feat/task-009-2-job-and-aws",
+  "cd ~someone/repo && git switch feat/task-009-2-job-and-aws",
+  // `cd -` returns to an untracked place, so the check is skipped.
+  "cd .claude/worktrees/task-009 && cd - && git switch feat/task-009-2-job-and-aws",
+  "gh pr view 103",
+  "git switch --detach origin/feat/task-009-2-job-and-aws",
+  "git checkout --detach feat/task-009-2-job-and-aws",
+  "git switch -d feat/task-009-2-job-and-aws",
+  "git checkout -qb fix/x feat/task-009-2-job-and-aws",
+];
+
+for (const command of deniedInMainCheckout) {
+  test(`denies in the main checkout: ${command}`, () => {
+    assert.ok(denyReason(command, mainCheckout));
+  });
+}
+
+for (const command of allowedInMainCheckout) {
+  test(`allows in the main checkout: ${command}`, () => {
+    assert.equal(denyReason(command, mainCheckout), undefined);
+  });
+}
+
+test("switching branches is not checked without the hook's cwd", () => {
+  assert.equal(denyReason("git switch feat/task-009-2-job-and-aws"), undefined);
+});
+
+test("a linked worktree may switch between task branches", () => {
+  assert.equal(denyReason("git switch feat/task-009-3-cleanup", linkedWorktree), undefined);
+  assert.equal(denyReason("gh pr checkout 103", linkedWorktree), undefined);
+});
+
+test("moving into the main checkout from a worktree is still denied", () => {
+  assert.ok(denyReason("cd /repo && git switch feat/task-009-3-cleanup", linkedWorktree));
+  assert.ok(denyReason("git -C /repo checkout feat/task-009-3-cleanup", linkedWorktree));
+  assert.ok(denyReason("git -C ../../.. switch feat/task-009-3-cleanup", linkedWorktree));
+});
+
+test("the main checkout of this repository is detected for real", (t) => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const linked = spawnSync("git", ["-C", root, "rev-parse", "--git-dir"], { encoding: "utf8", env: gitEnvFor() });
+  if (linked.status !== 0) return t.skip("not a git checkout");
+  // Run from a linked worktree, this checkout is not the main one.
+  assert.equal(isMainCheckout(root), !linked.stdout.includes("/worktrees/"));
+});
+
+test("cd ~ resolves to the home directory", () => {
+  const home = { cwd: "/elsewhere", isMainCheckout: (dir) => dir === path.join(homedir(), "repo") };
+  assert.ok(denyReason("cd ~/repo && git switch feat/task-009-2-job-and-aws", home));
+});
+
+test("isMainCheckout tells the main working tree from a linked worktree", () => {
+  const saved = process.env.GIT_DIR;
+  process.env.GIT_DIR = "/nonexistent/.git";
+  const root = mkdtempSync(path.join(tmpdir(), "guard-"));
+  try {
+    const main = path.join(root, "main");
+    // Under a git hook (pre-push runs these tests) GIT_DIR points at this
+    // repository; without clearing it, these commands would write there.
+    // The user's global config (signing, hooksPath) is left out too.
+    const env = { ...gitEnvFor(), GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" };
+    const git = (...args) => assert.equal(spawnSync("git", args, { encoding: "utf8", env }).status, 0);
+    git("init", "-q", main);
+    git("-C", main, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "--allow-empty", "-m", "x");
+    git("-C", main, "worktree", "add", "-q", path.join(main, ".claude", "worktrees", "task-001"));
+    const repository = spawnSync("git", ["-C", main, "rev-parse", "--path-format=absolute", "--git-common-dir"], {
+      encoding: "utf8",
+      env,
+    }).stdout.trim();
+    assert.equal(isMainCheckout(main, repository), true);
+    assert.equal(isMainCheckout(path.join(main, ".claude"), repository), true);
+    assert.equal(isMainCheckout(path.join(main, ".claude", "worktrees", "task-001"), repository), false);
+    assert.equal(isMainCheckout(root, repository), false);
+    // Another repository's main checkout is not this repository's.
+    assert.equal(isMainCheckout(main, "/elsewhere/.git"), false);
+    assert.equal(isMainCheckout(main), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    if (saved === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = saved;
+  }
+});

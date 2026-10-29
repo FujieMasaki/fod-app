@@ -16,6 +16,28 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
 分けた場合、この skill の「PR」はサブのPRを指し、メインのPR（統合ブランチ → `main`）はレビューの対象にしない。PRごとの
 作業（修正・検証・push・PR作成・レビュー）は、**そのPRのブランチへ`git switch`してから**行う
 （pre-push、`gh pr create`、diff、Codexの最終チェックは、どれも今いるブランチを基準にするため）。
+タスクのブランチ（`<type>/task-*`）は、そのタスクのworktreeの中で切り替える（本体のcheckoutでタスクのブランチへ移ると、
+同じcheckoutの別のセッションがそのタスクの品質ゲートで差し戻されるため。PreToolUse hookも拒否する）。本体のcheckoutにいるなら、
+上から順に行う。新しいブランチの起点は通常`origin/main`で、サブのPRは[`pull-requests.md`](../../../docs/development/pull-requests.md)の
+定める起点（統合ブランチ、または前のブランチ）にする（以下の`<起点>`）。
+
+- 本体がタスクのブランチにいれば、本体のブランチを替えずに人間に伝えて止まる（人間が確認に使っているか、別のセッションが
+  作業しているかもしれないため。本体を戻すか、未コミット・未pushの作業をどう移すかは人間が決める）。本体がタスクの
+  ブランチにいなければ、本体の状態には触れずに次へ進む（本体の別の作業を妨げない）。
+  ただし、このセッションが本体の`main`などで今回のタスクのために作った変更・コミットがあれば、worktreeへ移さずに人間に
+  伝えて止まる（`origin/main`から作ったworktreeには載らないため）。
+- `git worktree list`でそのタスクのworktree（`.claude/worktrees/task-NNN`）を探す。あれば、入る前に
+  `node scripts/task-status.mjs TASK-NNN`の`reasons`に「being worked on by a scheduled session」がないことを確かめる
+  （ほかの理由で`runnable: false`でも止まらない）。あれば、定期実行のセッションが作業中なので人間に伝えて止まる。
+  確かめたら`EnterWorktree`に`path`を渡して入る。入った後、作業ツリーがcleanならそこで目的のブランチへ`git switch`する
+  （新しいブランチなら`git switch -c <ブランチ> <起点>`）。cleanでなければ人間に伝えて止まる。
+- なければ作って入る。既にあるブランチは`git worktree add .claude/worktrees/task-NNN <ブランチ>`、新しいブランチは
+  `git worktree add .claude/worktrees/task-NNN -b <ブランチ> <起点>`。
+- `git diff --name-only origin/main...<ブランチ>`に`apps/api/db/migrate/`があるタスクでは、環境変数`FOD_DB_SUFFIX`が
+  `_task_NNN`でなければ、付けてClaude Codeを起動し直してもらうよう人間に伝えて止まる（付けないと既定のDBにタスクの
+  migrationが混ざる）。migrationのないタスクでは求めない。
+- 入ったら、[`run-task`](../run-task/SKILL.md)の手順2の依存の導入と状態の初期化（`--reset`）を行う（DBの用意は
+  `FOD_DB_SUFFIX`があるときだけ）。
 
 この skill の「手順N」は`### N`の節を指す。手順1の中の小項目は「1-5」のように書いて区別する。
 
@@ -48,7 +70,8 @@ PRは[PRの分割と人間のレビュー](../../../docs/development/pull-reques
    ローカルの`<ベースブランチ>`ではなく、常に取得した`origin/<ベースブランチ>`を使う
    （ローカルの`<ベースブランチ>`は自分の作業や他タスクで先行・変化している場合があり、
    pullで揃えたつもりでも検出漏れが起きうるため、比較対象そのものをリモートに統一する）。
-3. `git rev-parse --abbrev-ref HEAD` で現在のブランチを確認する。ベースブランチと同じ場合:
+3. `git rev-parse --abbrev-ref HEAD` で現在のブランチを確認する。作るブランチがタスクのブランチ（`<type>/task-*`）で、
+   本体のcheckoutにいるなら、この項目ではなく冒頭の手順に従う（本体ではタスクのブランチを作れない）。ベースブランチと同じ場合:
    - `git log origin/<ベースブランチ>..HEAD --oneline` を確認する。**空でなければ**
      （誤ってbase上に直接コミットしてしまった等）、それらのコミットを取りこぼさないよう
      `git switch -c <type>/<slug>`で**現在のHEADから**新しいブランチを作る。

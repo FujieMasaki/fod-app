@@ -135,6 +135,8 @@ main ← <type>/task-008-<slug>-integration（統合ブランチ。メインのP
 - PRごとの作業（修正・検証・push・PR作成・レビュー）は、**そのPRのブランチへ`git switch`してから**行う。
   pre-pushの検査、`gh pr create`のhead、Codexの最終チェックやレビューのdiff（`<base>...HEAD`）は、どれも
   今いるブランチを基準にするため、別のブランチにいると、そのPRを単独で確かめたことにならない。
+  タスクのブランチへは本体のcheckoutで移らず、そのタスクのworktreeの中で移る（手順は
+  [`pr-review-cycle`](../../.claude/skills/pr-review-cycle/SKILL.md)の冒頭）。
 - pushは`git push origin <ブランチ>:<ブランチ>`の形にし（初めてpushするブランチは`-u`を付け、upstreamを
   そのブランチにする。統合ブランチから作ったブランチは、gitの既定でupstreamが統合ブランチになっているため）、push前に`git rev-parse --abbrev-ref HEAD`がpush先と
   一致することを確かめる。hookのメッセージにある`HEAD:<ブランチ>`の例は、今いるブランチへpushする場合に限る。ブランチを行き来するため、`HEAD:<ブランチ>`だと
@@ -162,7 +164,8 @@ AIはどのPRもマージしない。人間は、すべてのサブのPRをレ�
    前のブランチへ入ってしまう。付け替えてもCIは走り直さないが、サブのPRを合わせた状態はメインのPRのCIで確かめる。
 3. すべてのサブのPRが入ったら、メインのPRを「Ready for review」にする。`main`が統合ブランチを作った後に
    進んでいれば、AIに`main`の取り込みを頼む。サブのPRはGitHub上でマージされ、ローカルの統合ブランチは古いままなので、
-   先にリモートへ揃えてから取り込む。
+   先にリモートへ揃えてから取り込む。AIはこれをタスクのworktreeで行う（本体のcheckoutでは統合ブランチへ移らない。
+   手順は[`pr-review-cycle`](../../.claude/skills/pr-review-cycle/SKILL.md)の冒頭）。
 
    ```bash
    git fetch origin main <統合ブランチ>
@@ -262,7 +265,8 @@ PR本文は公開される。図には次を載せない。
    AIは所有者のtokenで動くため、AI自身はPRコメントを書かない（記録はPR本文・Plan・会話に残す）。所有者の名前の
    コメントがAIの残したものと取り違えられないようにするため。
 4. AIは指摘を該当するサブのPRで直し、後ろのPRへ取り込み、直したPRを機械のレビューにかけ直してから、
-   ガイドを更新して再び渡す。
+   ガイドを更新して再び渡す。直す作業は、そのタスクのworktreeで行う（本体のcheckoutでタスクのブランチへ
+   移らない。手順は[`pr-review-cycle`](../../.claude/skills/pr-review-cycle/SKILL.md)の冒頭）。
 5. 人間がすべてのサブのPRを承認したら、上の「マージ」の順に、サブのPRを統合ブランチへ、最後にメインのPRを
    `main`へマージする（`main`へマージする前に、統合ブランチの中身を「マージ」の4で確かめる）。
    統合ブランチへマージした後に直す必要が見つかったら、マージ済みのPRのブランチには足さず、統合ブランチから

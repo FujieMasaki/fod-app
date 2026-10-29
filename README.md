@@ -170,7 +170,7 @@ Production BuildはローカルでのPushを遅くしないため、CI側で実�
 | Hook | 対象 | 内容 |
 | --- | --- | --- |
 | Stop | `<type>/task-*` ブランチ | CI相当の検査（変更範囲はCIと同じ判定。サブのPRのブランチではCIがPRのbaseとの差分、hookが`origin/main`との差分を見るため、hookの方が広い）、コミット・push・PRの有無を確かめ、満たすまで作業に差し戻す |
-| PreToolUse | すべて | `--no-verify`、force push、mainへのpush、送信先を明示しないpush、`gh pr merge`、帰属トレーラーを拒否する |
+| PreToolUse | すべて | `--no-verify`、force push、mainへのpush、送信先を明示しないpush、`gh pr merge`、帰属トレーラーを拒否する。本体のcheckout（`git worktree add`で作ったものではない作業ツリー）では、`<type>/task-*` ブランチへの `git switch` / `git checkout` と `gh pr checkout` も拒否する（同じcheckoutの別のセッションが、そのタスクの品質ゲートで差し戻されないように）。タスクのブランチはそのタスクのworktreeで扱う |
 | PostToolUse | `<type>/task-*` ブランチ | 編集したファイルだけESLint / RuboCopを実行し、結果をClaudeに返す |
 
 無人で進めるため、セッションは `acceptEdits`（またはauto）のpermission modeで開始してください。`bypassPermissions` は使いません。

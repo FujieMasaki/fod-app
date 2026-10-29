@@ -1,6 +1,18 @@
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+// The task branch pattern is shared with the quality gate. If that module
+// cannot be loaded (a syntax error while it is being edited), only the
+// main-checkout check is lost; the other checks still run.
+let taskBranchPattern;
+try {
+  ({ taskBranchPattern } = await import("./claude-quality-gate.mjs"));
+} catch {
+  taskBranchPattern = undefined;
+}
 
 // Claude Code PreToolUse hook for Bash. A safety net next to permissions,
 // Lefthook, and the GitHub ruleset on main, not the only defence: it cannot see
@@ -246,9 +258,107 @@ function skipOptions(words, index, valueOptions = []) {
 
 function parseGit(words) {
   let index = 1;
-  while (words[index]?.startsWith("-")) index += ["-C", "-c"].includes(words[index]) ? 2 : 1;
-  return { name: words[index], args: words.slice(index + 1) };
+  const dirs = [];
+  while (words[index]?.startsWith("-")) {
+    if (words[index] === "-C") dirs.push(words[index + 1]);
+    index += ["-C", "-c"].includes(words[index]) ? 2 : 1;
+  }
+  return { name: words[index], args: words.slice(index + 1), dirs };
 }
+
+// The environment without GIT_* variables, which can point git at another
+// repository than the one at `-C dir` (git hooks set GIT_DIR, for example).
+export function gitEnvFor(env = process.env) {
+  return Object.fromEntries(Object.entries(env).filter(([key]) => !key.startsWith("GIT_")));
+}
+
+// [gitDir, commonDir] of the repository at dir, or undefined outside one.
+function gitDirs(dir) {
+  const result = spawnSync("git", ["-C", dir, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], {
+    encoding: "utf8",
+    env: gitEnvFor(),
+    timeout: 2000,
+  });
+  if (result.status !== 0) return undefined;
+  const [gitDir, commonDir] = result.stdout.trim().split("\n");
+  return gitDir && commonDir ? [gitDir, commonDir] : undefined;
+}
+
+let guardRepository;
+// The common git dir of the repository this script belongs to, so other
+// repositories with the same branch naming are left alone.
+function ownRepository() {
+  if (guardRepository === undefined) {
+    guardRepository = gitDirs(path.dirname(fileURLToPath(import.meta.url)))?.[1] ?? null;
+  }
+  return guardRepository;
+}
+
+// True when dir is the main working tree (not a linked worktree) of
+// `repository`. Outside it, false, so unrelated commands are not denied.
+export function isMainCheckout(dir, repository = ownRepository()) {
+  const dirs = gitDirs(dir);
+  return Boolean(dirs && repository) && dirs[0] === dirs[1] && dirs[1] === repository;
+}
+
+// The directory after `cd target` or `git -C target`, or undefined once it
+// cannot be known (`~user`, `-`, a variable, or a relative path from nowhere).
+function moveTo(dir, target) {
+  if (target === "~" || target?.startsWith("~/")) target = path.join(homedir(), target.slice(1));
+  if (!target || /^[~-]|\$/.test(target)) return undefined;
+  if (path.isAbsolute(target)) return path.resolve(target);
+  return dir && path.resolve(dir, target);
+}
+
+const refPrefix = /^(?:refs\/heads\/|refs\/remotes\/)/;
+// `feat/task-…`, or a remote-tracking name such as `upstream/feat/task-…`.
+const isTaskBranch = (name) => {
+  if (!name || !taskBranchPattern) return false;
+  const branch = name.replace(refPrefix, "");
+  return taskBranchPattern.test(branch) || taskBranchPattern.test(branch.replace(/^[^/]+\//, ""));
+};
+const createOptions = new Set(["-c", "-C", "--create", "--force-create", "-b", "-B", "--orphan"]);
+const createShortFlags = new Set(["c", "C", "b", "B"]);
+
+// `git switch` / `git checkout` moving onto a task branch, created or existing.
+// `git checkout <ref> -- <path>` restores files and stays on the branch, but a
+// trailing `--` with no path still switches.
+function switchesToTaskBranch(git) {
+  const separator = git.args.indexOf("--");
+  if (git.name === "checkout" && separator !== -1 && separator < git.args.length - 1) return false;
+  const beforePaths = separator === -1 ? git.args : git.args.slice(0, separator);
+  // `git switch` takes no paths, so a branch may follow its `--`.
+  const args = git.name === "switch" ? git.args.filter((arg) => arg !== "--") : beforePaths;
+  // A detached HEAD is not a task branch, so the quality gate does not hold it.
+  if (args.includes("--detach") || (git.name === "switch" && args.includes("-d"))) return false;
+  for (let index = 0; index < args.length; index += 1) {
+    // A new branch is judged by its own name; its start point may be a task branch.
+    const [option, value] = args[index].split(/=(.*)/);
+    if (createOptions.has(option)) return isTaskBranch(value ?? args[index + 1]);
+    // Short clusters such as `-qbfeat/task-…` or `-qb feat/task-…`.
+    if (isShortCluster(args[index])) {
+      const { flags, takesNext } = shortCluster(args[index], createShortFlags);
+      if (createShortFlags.has(flags.at(-1))) {
+        return isTaskBranch(takesNext ? args[index + 1] : args[index].slice(flags.length + 1));
+      }
+    }
+  }
+  return args.some((arg) => !arg.startsWith("-") && isTaskBranch(arg));
+}
+
+const mainCheckoutReason =
+  "Do not move the main checkout onto a task branch: every session in this checkout would then be held by the " +
+  "quality gate for that task. Work in the task's worktree instead (find it with `git worktree list`, or create it " +
+  "with `git worktree add .claude/worktrees/task-NNN <branch>`). If the main checkout is already on a task branch, " +
+  "do not switch it: stop and ask the human. Before entering the worktree, follow the start of " +
+  "`.claude/skills/pr-review-cycle/SKILL.md` " +
+  "(no scheduled session working there, `FOD_DB_SUFFIX` when the branch has migrations, dependencies and `--reset`). " +
+  "To read a branch without switching, use `git show <branch>:<path>` or `git diff`.";
+const prCheckoutReason =
+  "Do not run `gh pr checkout` in the main checkout: if the PR is a task branch, every session in this checkout " +
+  "would be held by the quality gate for that task. Check the branch out in a worktree instead " +
+  "(`gh pr view <number> --json headRefName`, then `git worktree add .claude/worktrees/task-NNN <branch>`), " +
+  "following the start of `.claude/skills/pr-review-cycle/SKILL.md`.";
 
 // Reads a short option cluster such as `-nm"msg"` or `-uf` from the left, as
 // git does: flags up to the first one that takes a value, whose value is the
@@ -345,7 +455,9 @@ const commandWrappers = new Set(["command", "builtin", "exec", "nohup", "time", 
 const shells = new Set(["sh", "bash", "zsh", "dash"]);
 const MAX_NESTING = 5;
 
-export function denyReason(command, depth = 0) {
+// context: { cwd, isMainCheckout(dir) } from the hook input. Without it, the
+// main-checkout check is skipped.
+export function denyReason(command, context = {}, depth = 0) {
   if (depth > MAX_NESTING) return "This command nests shells too deeply to check. Run it directly.";
   if (/co-authored-by:/i.test(command) && /\bgit\b[\s\S]*\bcommit\b/.test(command)) {
     return "Do not add Co-Authored-By or other attribution trailers to commits.";
@@ -359,6 +471,8 @@ export function denyReason(command, depth = 0) {
     );
   }
 
+  let cwd = context.cwd;
+  const inMainCheckout = (dir) => Boolean(dir && context.isMainCheckout?.(dir));
   for (const words of segments) {
     const { assignments, rest: afterAssignments } = splitAssignments(words);
     let rest = afterAssignments;
@@ -369,12 +483,17 @@ export function denyReason(command, depth = 0) {
     }
 
     const [program, ...args] = rest;
+    if (program === "cd") {
+      // `cd` with no directory goes home; `cd -` goes back to a place not tracked.
+      cwd = args.includes("-") ? undefined : moveTo(cwd, args.find((arg) => !arg.startsWith("-")) ?? "~");
+      continue;
+    }
 
     // `sh -c '...'` and `eval ...` run their argument as a command line.
     const scriptIndex = shells.has(program) ? args.findIndex((arg) => /^-[a-zA-Z]*c[a-zA-Z]*$/.test(arg)) : -1;
     const script = scriptIndex !== -1 ? args[scriptIndex + 1] : program === "eval" ? args.join(" ") : undefined;
     if (script !== undefined) {
-      const reason = denyReason(script, depth + 1);
+      const reason = denyReason(script, { ...context, cwd }, depth + 1);
       if (reason) return reason;
       continue;
     }
@@ -382,10 +501,19 @@ export function denyReason(command, depth = 0) {
     if (program === "gh") {
       const prIndex = args.indexOf("pr");
       if (prIndex !== -1 && args[prIndex + 1] === "merge") return "Merging is done by a human. Leave the PR open.";
+      const prCheckout = (prIndex !== -1 && args[prIndex + 1] === "checkout") || args[0] === "co";
+      if (prCheckout && inMainCheckout(cwd)) return prCheckoutReason;
     }
 
     if (program !== "git") continue;
     const git = parseGit(rest);
+    if (
+      ["switch", "checkout"].includes(git.name) &&
+      switchesToTaskBranch(git) &&
+      inMainCheckout(git.dirs.reduce(moveTo, cwd))
+    ) {
+      return mainCheckoutReason;
+    }
     if (git.name === "commit" && commitBypassesHooks(git.args)) {
       return "Do not bypass Lefthook (--no-verify / -n skips hooks). Fix the failing check instead.";
     }
@@ -406,7 +534,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   } catch {
     // Not a hook payload; nothing to check.
   }
-  const reason = denyReason(input.tool_input?.command ?? "");
+  const reason = denyReason(input.tool_input?.command ?? "", { cwd: input.cwd ?? process.cwd(), isMainCheckout });
   if (reason) {
     process.stderr.write(`${reason}\n`);
     process.exitCode = 2;
