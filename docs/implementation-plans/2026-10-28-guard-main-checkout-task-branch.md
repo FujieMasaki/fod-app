@@ -37,14 +37,20 @@ Claude Codeのセッションが、repositoryの本体のcheckout（`git worktre
   タスクでないブランチ（`fix/<slug>`など。品質ゲートの対象外）への切り替え。alias・script・変数展開を通した
   切り替え（既存のguardと同じく、見える範囲の安全網）。
 
+- 決定済み（2026-10-29、人間が判断）: 本体のcheckoutから既存のタスクのworktreeへ入る前に確かめるのは、定期実行の
+  セッションが作業中でないこと（`task-status.mjs`の`reasons`）だけにする。`runnable`全体は見ない（対話で進めるタスクや
+  Doneのタスクでも止まってしまうため）。`FOD_DB_SUFFIX`は、ブランチが`apps/api/db/migrate/`を変えるときだけ求める
+  （DBが混ざる場面だけ再起動の手間をかける）。
+
 ## 6. References and Documents to Update
 
 - 参照: [自律実行の仕組み](2026-09-26-autonomous-task-runner.md)（当時の記録として更新しない）
 - 更新: `README.md`（hookの表のPreToolUse）
 - 更新: `.claude/skills/pr-review-cycle/SKILL.md`（タスクのブランチは、そのタスクのworktreeで作業する）
 - 更新: `.claude/skills/run-task/SKILL.md`（既にいるworktreeでブランチを作ってよいのは、本体のcheckoutでないとき）
-- 更新: `docs/development/pull-requests.md`「人間がレビューする時機」の4（指摘はタスクのworktreeで直す）と、
-  「マージ」の3（`main`の取り込みはタスクのworktreeで行う）
+- 更新: `docs/development/pull-requests.md`「統合ブランチとサブのPR」（PRごとの作業でタスクのブランチへ移るのは
+  worktreeの中）、「人間がレビューする時機」の4（指摘はタスクのworktreeで直す）、「マージ」の3（`main`の取り込みは
+  タスクのworktreeで行う）
 - 更新: `.claude/skills/exploratory-audit/SKILL.md`（`docs/task-NNN-audit-record`はworktreeで作る）
 
 ## 7. Proposed Approach
@@ -120,7 +126,8 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
   `git rebase <upstream> <branch>`、`git stash branch`、`git branch -m`、`git --git-dir`・`--work-tree`。どれも普段の
   手順にはなく、拒否すると行き先を調べるためにgitの起動が増えるため、安全網の範囲外とする。
 - 定期実行のセッションが作業中のworktreeへ、本体から来たセッションが入ると、同じworktreeで重なる。`pr-review-cycle`の
-  冒頭で、入る前に`run-task`の手順2の再開の確認を行う手順にした。
+  冒頭で、入る前に定期実行のセッションの有無を確かめる手順にした（§5の決定済み）。
+- migrationのないタスクのworktreeでは、`FOD_DB_SUFFIX`なしで既定のDBを使う。本体のcheckoutで作業していた以前と同じ。
 - git hookの中（pre-pushがtestを実行する）では`GIT_DIR`が設定されていて、`git -C <dir>`より優先される。
   `isMainCheckout`とtestの一時repositoryの操作は、`GIT_DIR`などを外した環境でgitを実行する。外さずに実行した
   最初の版では、pre-pushの中でtestが本物のrepositoryへ書き込み、共有の設定に`core.bare=true`が入って本体の
