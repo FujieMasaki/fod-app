@@ -277,7 +277,7 @@ function gitDirs(dir) {
   const result = spawnSync("git", ["-C", dir, "rev-parse", "--path-format=absolute", "--git-dir", "--git-common-dir"], {
     encoding: "utf8",
     env: gitEnvFor(),
-    timeout: 5000,
+    timeout: 2000,
   });
   if (result.status !== 0) return undefined;
   const [gitDir, commonDir] = result.stdout.trim().split("\n");
@@ -341,11 +341,14 @@ const mainCheckoutReason =
   "Do not move the main checkout onto a task branch: every session in this checkout would then be held by the " +
   "quality gate for that task. Work in the task's worktree instead (find it with `git worktree list`, or create it " +
   "with `git worktree add .claude/worktrees/task-NNN <branch>`; if the main checkout is already on that branch, " +
-  "`git switch main` first). To read a branch without switching, use `git show <branch>:<path>` or `git diff`.";
+  "`git switch main` first). Before entering it, follow the start of `.claude/skills/pr-review-cycle/SKILL.md` " +
+  "(no scheduled session working there, `FOD_DB_SUFFIX` when the branch has migrations, dependencies and `--reset`). " +
+  "To read a branch without switching, use `git show <branch>:<path>` or `git diff`.";
 const prCheckoutReason =
   "Do not run `gh pr checkout` in the main checkout: if the PR is a task branch, every session in this checkout " +
   "would be held by the quality gate for that task. Check the branch out in a worktree instead " +
-  "(`gh pr view <number> --json headRefName`, then `git worktree add .claude/worktrees/task-NNN <branch>`).";
+  "(`gh pr view <number> --json headRefName`, then `git worktree add .claude/worktrees/task-NNN <branch>`), " +
+  "following the start of `.claude/skills/pr-review-cycle/SKILL.md`.";
 
 // Reads a short option cluster such as `-nm"msg"` or `-uf` from the left, as
 // git does: flags up to the first one that takes a value, whose value is the

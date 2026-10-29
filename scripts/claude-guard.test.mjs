@@ -184,6 +184,12 @@ const deniedInMainCheckout = [
   "git checkout feat/task-009-2-job-and-aws --",
   "git switch -c feat/task-009-7-x feat/task-009-2-job-and-aws",
   "git switch -cfeat/task-009-7-x origin/main",
+  "git switch -C feat/task-009-7-x origin/main",
+  "git checkout -B feat/task-009-7-x origin/main",
+  "git checkout --orphan feat/task-009-7-x",
+  "git switch --force-create feat/task-009-7-x",
+  "gh -R FujieMasaki/fod-app pr checkout 103",
+  "git -C .claude -C .. switch feat/task-009-2-job-and-aws",
   "git status --short && git switch feat/task-009-2-job-and-aws && git pull --ff-only -q",
   "cd .claude/worktrees/task-009 && cd /repo && git switch feat/task-009-2-job-and-aws",
   "git -C /repo switch feat/task-009-2-job-and-aws",
@@ -199,6 +205,7 @@ const allowedInMainCheckout = [
   "git switch -c fix/guard-main-checkout-task-branch origin/main",
   "git checkout feat/task-009-2-job-and-aws -- docs/tasks/TASK-009.md",
   "git checkout -- apps/api/db/schema.rb",
+  "git checkout -- feat/task-009-2-job-and-aws",
   "git show feat/task-009-2-job-and-aws:docs/tasks/TASK-009.md",
   "git worktree add .claude/worktrees/task-009 feat/task-009-2-job-and-aws",
   "git log feat/task-009-2-job-and-aws",
@@ -238,9 +245,10 @@ test("moving into the main checkout from a worktree is still denied", () => {
   assert.ok(denyReason("git -C ../../.. switch feat/task-009-3-cleanup", linkedWorktree));
 });
 
-test("the main checkout of this repository is detected for real", () => {
+test("the main checkout of this repository is detected for real", (t) => {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   const linked = spawnSync("git", ["-C", root, "rev-parse", "--git-dir"], { encoding: "utf8", env: gitEnvFor() });
+  if (linked.status !== 0) return t.skip("not a git checkout");
   // Run from a linked worktree, this checkout is not the main one.
   assert.equal(isMainCheckout(root), !linked.stdout.includes("/worktrees/"));
 });
