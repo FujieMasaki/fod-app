@@ -288,7 +288,9 @@ let guardRepository;
 // The common git dir of the repository this script belongs to, so other
 // repositories with the same branch naming are left alone.
 function ownRepository() {
-  guardRepository ??= gitDirs(path.dirname(fileURLToPath(import.meta.url)))?.[1] ?? null;
+  if (guardRepository === undefined) {
+    guardRepository = gitDirs(path.dirname(fileURLToPath(import.meta.url)))?.[1] ?? null;
+  }
   return guardRepository;
 }
 
@@ -342,8 +344,9 @@ function switchesToTaskBranch(git) {
 const mainCheckoutReason =
   "Do not move the main checkout onto a task branch: every session in this checkout would then be held by the " +
   "quality gate for that task. Work in the task's worktree instead (find it with `git worktree list`, or create it " +
-  "with `git worktree add .claude/worktrees/task-NNN <branch>`; if the main checkout is already on that branch, " +
-  "`git switch main` first). Before entering it, follow the start of `.claude/skills/pr-review-cycle/SKILL.md` " +
+  "with `git worktree add .claude/worktrees/task-NNN <branch>`). If the main checkout is already on a task branch, " +
+  "do not switch it: stop and ask the human. Before entering the worktree, follow the start of " +
+  "`.claude/skills/pr-review-cycle/SKILL.md` " +
   "(no scheduled session working there, `FOD_DB_SUFFIX` when the branch has migrations, dependencies and `--reset`). " +
   "To read a branch without switching, use `git show <branch>:<path>` or `git diff`.";
 const prCheckoutReason =

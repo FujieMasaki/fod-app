@@ -183,6 +183,9 @@ const deniedInMainCheckout = [
   "git checkout refs/heads/fix/task-026-forbidden",
   "git checkout feat/task-009-2-job-and-aws --",
   "git switch -- feat/task-009-2-job-and-aws",
+  // Known over-blocking: without `--` the branch is read as the target, as git may.
+  "git checkout feat/task-009-2-job-and-aws docs/tasks/TASK-009.md",
+  "git checkout -qb fix/x feat/task-009-2-job-and-aws",
   "git switch -c feat/task-009-7-x feat/task-009-2-job-and-aws",
   "git switch -cfeat/task-009-7-x origin/main",
   "git switch -C feat/task-009-7-x origin/main",
@@ -219,6 +222,7 @@ const allowedInMainCheckout = [
   "gh pr view 103",
   "git switch --detach origin/feat/task-009-2-job-and-aws",
   "git checkout --detach feat/task-009-2-job-and-aws",
+  "git switch -d feat/task-009-2-job-and-aws",
 ];
 
 for (const command of deniedInMainCheckout) {
