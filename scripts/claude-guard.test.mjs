@@ -213,6 +213,8 @@ const allowedInMainCheckout = [
   "git -C .claude/worktrees/task-009 switch feat/task-009-2-job-and-aws",
   "git switch -c fix/foo origin/feat/task-009-2-job-and-aws",
   "cd ~someone/repo && git switch feat/task-009-2-job-and-aws",
+  // `cd -` returns to an untracked place, so the check is skipped.
+  "cd .claude/worktrees/task-009 && cd - && git switch feat/task-009-2-job-and-aws",
   "gh pr view 103",
   "git switch --detach origin/feat/task-009-2-job-and-aws",
   "git checkout --detach feat/task-009-2-job-and-aws",

@@ -474,8 +474,8 @@ export function denyReason(command, context = {}, depth = 0) {
 
     const [program, ...args] = rest;
     if (program === "cd") {
-      // `cd` with no directory goes home.
-      cwd = moveTo(cwd, args.find((arg) => !arg.startsWith("-")) ?? "~");
+      // `cd` with no directory goes home; `cd -` goes back to a place not tracked.
+      cwd = args.includes("-") ? undefined : moveTo(cwd, args.find((arg) => !arg.startsWith("-")) ?? "~");
       continue;
     }
 
