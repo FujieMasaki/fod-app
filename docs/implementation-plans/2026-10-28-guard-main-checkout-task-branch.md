@@ -52,6 +52,8 @@ Claude Codeのセッションが、repositoryの本体のcheckout（`git worktre
   worktreeの中）、「人間がレビューする時機」の4（指摘はタスクのworktreeで直す）、「マージ」の3（`main`の取り込みは
   タスクのworktreeで行う）
 - 更新: `.claude/skills/exploratory-audit/SKILL.md`（`docs/task-NNN-audit-record`はworktreeで作る）
+- 更新: `docs/code-review/frontend/README.md`（自動化の行。gitを起動するscript・testがgit hookの中でも`-C`の場所だけを
+  操作するか、手順書の作業場所とhookの拒否が食い違わないか）
 
 ## 7. Proposed Approach
 
@@ -95,6 +97,7 @@ Claude が Bash を実行しようとする → PreToolUse hook（stdin の cwd 
 - 変更: `docs/development/pull-requests.md`
 - 変更: `.claude/skills/exploratory-audit/SKILL.md`
 - 変更: `README.md`
+- 変更: `docs/code-review/frontend/README.md`（自動化の行。レビューで見つかった問題の再発防止）
 - 新規: 本Plan
 
 1つのPR。
