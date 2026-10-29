@@ -63,7 +63,7 @@ Claude Codeのセッションが、repositoryの本体のcheckout（`git worktre
    場所が分からないので判定しない。
 3. 本体のcheckoutで、`git switch`・`git checkout`が、`refs/heads/`・`refs/remotes/`・先頭の`<remote>/`を除いて
    タスクのブランチ名（`taskBranchPattern`）に当たるブランチへ移るなら拒否する。ブランチを作る（`-c`・`-b`・
-   `--create`など）ときは新しい名前だけで判定し、それ以外は`--`より前の`-`で始まらない語で判定する。
+   `--create`など）ときは新しい名前だけで判定し、それ以外は`-`で始まらない語で判定する（`git checkout`は`--`より前の語だけ。`git switch`はpathを取らないので`--`の後も）。
    `git checkout <ref> -- <path>`はファイルの取り出しなので対象外にするが、pathのない末尾の`--`は切り替えとして扱う。
 4. 本体のcheckoutでの`gh pr checkout`は、移る先のブランチ名がコマンドから分からないため、PRを問わず拒否する。
 5. 拒否の理由には、そのタスクのworktreeを使うこと（`git worktree list`で探す、なければ
