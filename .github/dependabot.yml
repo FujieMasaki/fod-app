@@ -12,6 +12,8 @@ updates:
         patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
       minor-and-patch:
         patterns: ["*"]
+        # scripts/vrt.shのイメージ（pinned_version・digest）と一緒に上げる必要があるため、単独のPRにする。
+        exclude-patterns: ["@playwright/test"]
         update-types: ["minor", "patch"]
   - package-ecosystem: github-actions
     directory: /
