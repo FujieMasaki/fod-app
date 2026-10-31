@@ -146,6 +146,8 @@
   を前提にする（LinuxのDocker Engineでは、作られたファイルがrootの持ち物になる）。
 - Playwrightのコンテナのイメージは`scripts/vrt.sh`でdigestまで固定する。`@playwright/test`を上げたら、同scriptの
   `pinned_version`と`digest`を更新し、`pnpm vrt:update`で作り直した基準画像の差分が描画エンジンの違いだけか確かめる。
+  Dependabotは`@playwright/test`をグループの更新から外して単独のPRにするため（`.github/dependabot.yml`）、そのPRで
+  この更新を行う。
 - 依存はcheckoutごとのDocker volume（`fod-vrt-`で始まる名前）に入る。worktreeを消した後などに片付けるときは
   `docker volume ls -q -f name=fod-vrt-`で確かめてから`docker volume rm`する。
 - PlaywrightはVRTのためだけに使う。E2E（操作の一連の流れの検証）を入れるかは、下の「保留」で判断する。
