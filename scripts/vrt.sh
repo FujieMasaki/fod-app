@@ -13,8 +13,8 @@ cd "$root"
 # イメージはdigestで固定する（同じタグが作り直されても、手元とCIで同じ中身を使うため。TASK-020 Plan Q6）。
 # @playwright/testを上げたら、pinned_versionとdigestを
 # `docker buildx imagetools inspect mcr.microsoft.com/playwright:v<版>-noble` のDigest（multi-archのindex）に更新する。
-pinned_version="1.63.0"
-digest="sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27"
+pinned_version="1.64.1"
+digest="sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f"
 
 version="$(node -p 'require("./apps/web/package.json").devDependencies["@playwright/test"]')"
 if [[ "$version" != "$pinned_version" ]]; then
@@ -29,6 +29,9 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
+# Playwright 1.64のイメージのNodeはcorepackを同梱しないため、packageManagerの版のpnpmをnpmで直接入れる。
+pnpm_version="$(node -p 'require("./package.json").packageManager.split("@")[1].split("+")[0]')"
+
 # node_modulesはLinux用に入れ直す必要があるため、手元のものを使わずcheckoutごとのvolumeに置く
 # （worktreeを並べて実行しても混ざらないよう、pathから名前を作る）。install scriptは実行しない
 # （lefthookのpostinstallが、mountした手元の.git/hooksをコンテナの中から書き換えないようにするため）。
@@ -41,12 +44,12 @@ if [[ -t 1 ]]; then tty_flag=(-t); fi
 docker run --rm --init --ipc=host ${tty_flag[@]+"${tty_flag[@]}"} \
   -e FOD_VRT_CONTAINER=1 \
   -e CI \
-  -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+  -e FOD_PNPM_VERSION="$pnpm_version" \
   -v "$root:/work" \
   -v "fod-vrt-${key}-root-modules:/work/node_modules" \
   -v "fod-vrt-${key}-web-modules:/work/apps/web/node_modules" \
   -v "fod-vrt-pnpm-store:/pnpm-store" \
   -w /work \
   "$image" \
-  bash -c 'corepack enable && pnpm install --frozen-lockfile --ignore-scripts --store-dir /pnpm-store --reporter=silent && cd apps/web && pnpm exec playwright test "$@"' \
+  bash -c 'npm install -g --silent "pnpm@$FOD_PNPM_VERSION" && pnpm install --frozen-lockfile --ignore-scripts --store-dir /pnpm-store --reporter=silent && cd apps/web && pnpm exec playwright test "$@"' \
   vrt "$@"
