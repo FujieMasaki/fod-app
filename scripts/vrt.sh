@@ -29,6 +29,9 @@ if ! docker info >/dev/null 2>&1; then
   exit 1
 fi
 
+# Playwright 1.64のイメージのNodeはcorepackを同梱しないため、packageManagerの版のpnpmをnpmで直接入れる。
+pnpm_version="$(node -p 'require("./package.json").packageManager.split("@")[1].split("+")[0]')"
+
 # node_modulesはLinux用に入れ直す必要があるため、手元のものを使わずcheckoutごとのvolumeに置く
 # （worktreeを並べて実行しても混ざらないよう、pathから名前を作る）。install scriptは実行しない
 # （lefthookのpostinstallが、mountした手元の.git/hooksをコンテナの中から書き換えないようにするため）。
@@ -41,12 +44,12 @@ if [[ -t 1 ]]; then tty_flag=(-t); fi
 docker run --rm --init --ipc=host ${tty_flag[@]+"${tty_flag[@]}"} \
   -e FOD_VRT_CONTAINER=1 \
   -e CI \
-  -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+  -e FOD_PNPM_VERSION="$pnpm_version" \
   -v "$root:/work" \
   -v "fod-vrt-${key}-root-modules:/work/node_modules" \
   -v "fod-vrt-${key}-web-modules:/work/apps/web/node_modules" \
   -v "fod-vrt-pnpm-store:/pnpm-store" \
   -w /work \
   "$image" \
-  bash -c 'corepack enable && pnpm install --frozen-lockfile --ignore-scripts --store-dir /pnpm-store --reporter=silent && cd apps/web && pnpm exec playwright test "$@"' \
+  bash -c 'npm install -g --silent "pnpm@$FOD_PNPM_VERSION" && pnpm install --frozen-lockfile --ignore-scripts --store-dir /pnpm-store --reporter=silent && cd apps/web && pnpm exec playwright test "$@"' \
   vrt "$@"
