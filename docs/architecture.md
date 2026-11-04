@@ -76,11 +76,12 @@
 
 ### 開発支援AIの役割分担（2026-09-30〜10-02採用、実装済み）
 
-[product-visionのPlan](implementation-plans/2026-09-30-product-vision.md)（`AGENTS.md`と`CLAUDE.md`）、
+[product-visionのPlan](implementation-plans/2026-09-30-product-vision.md)（`CLAUDE.md`）、
 [三段レビューのPlan](implementation-plans/2026-10-01-three-stage-review.md)、
 [定期実行のPlan](implementation-plans/2026-10-02-scheduled-task-runner.md)で採用した。手順の正本は
 各skill（`.claude/skills/`）と[`docs/code-review/final-check.md`](code-review/final-check.md)で、ここでは
-エージェントごとの主な役割と、その理由だけを置く。
+`pr-review-cycle`・`/run-task`のworkflowでの主な役割と、その理由だけを置く（workflowの外で人間がどのエージェントで
+作業するかは決めない）。
 
 | 担当 | 役割 | 権限 |
 | --- | --- | --- |
@@ -99,10 +100,9 @@
   同じレビュアーで回せるようにするため。個人環境（`~/.claude/agents/`）のレビュアーは、このworkflowに組み込まない。
 - **Codexは読み取り専用で、許可するのは専用scriptだけにする**。最終チェックがファイルを変更しないことを
   保証するため。permissionは前方一致で判定されるので、`codex exec -s read-only *`を許すとsandboxを外す
-  flagを後ろに足せてしまう。scriptはbase branchだけを受け取り、codexの引数とモデルを自分で組み立てる。
-- **エージェントへの指示の正本は`AGENTS.md`に置く**。`CLAUDE.md`は`@AGENTS.md`を読み込むだけにし、
-  Claude CodeとCodexが同じ規約を読むようにする。ただし`CLAUDE.md`の厳密な必要性は未検証のまま置いている
-  （product-visionのPlan §8。二重管理のリスクは同§13）。
+  flagを後ろに足せてしまう（scriptの振る舞いは`pr-review-cycle`手順4）。
+- **`CLAUDE.md`は`@AGENTS.md`を読み込むだけにする**。Claude CodeとCodexが同じ`AGENTS.md`を入口にするため。
+  ただし`CLAUDE.md`の厳密な必要性は未検証のまま置いている（product-visionのPlan §8。二重管理のリスクは同§13）。
 - **タスクの定期起動はローカルのMacで行う**（launchd）。`/run-task`がローカルのPostgreSQL・rbenv・hookに
   依存するため、クラウド実行は扱わない。
 
@@ -601,8 +601,8 @@ Webの接続は2026-10-05に[TASK-007 Plan](implementation-plans/2026-10-05-task
 ## 未決定
 
 - プロダクト機能を追加する際のRails内部architectureとdirectory構成
-- 実装をClaude Codeが、最終チェックをCodexが担う割り当ての比較検討（割り当ては上記「開発支援AIの役割分担」で
-  決定済みだが、どちらを実装側にするかを比べた理由の記録がない）
+- `pr-review-cycle`・`/run-task`で、実装をClaude Codeが、最終チェックをCodexが担う割り当ての比較検討（割り当ては
+  上記「開発支援AIの役割分担」で決定済みだが、どちらを実装側にするかを比べた理由の記録がない）
 - password再設定後の既存Cookieの実機での動作（request specでは、再設定前のCookieが`401`になることを確認済み）
 - `rate_limit_counters`の定期削除の実行基盤、本番のメール配送（SES）とGoogle OAuth clientの設定
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
