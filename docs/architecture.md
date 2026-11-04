@@ -74,6 +74,35 @@
   同一PRでもWebとAPIのデプロイ時差（古いタブ、deploy中の新旧タスクの併存）があり得るため、1回のreleaseでは両方向で壊れない変更だけを入れ、それ以外は
   expand → migrate → contractの段階を踏む（[`contracts/README.md`](../contracts/README.md) §3）。
 
+### 開発支援AIの役割分担（2026-10-01採用、実装済み）
+
+[三段レビューのPlan](implementation-plans/2026-10-01-three-stage-review.md)と
+[定期実行のPlan](implementation-plans/2026-10-02-scheduled-task-runner.md)で採用した。手順の正本は
+各skill（`.claude/skills/`）と[`docs/code-review/final-check.md`](code-review/final-check.md)で、ここでは
+エージェントごとの役割と、その理由だけを置く。
+
+| 担当 | 役割 | 権限 |
+| --- | --- | --- |
+| Claude Code（メインのセッション） | Plan・実装・セルフレビュー・指摘の修正・PR作成 | `.claude/settings.json`の許可リスト・hook |
+| `code-reviewer`サブエージェント | 差分を広く見る独立したレビュー | Read・Grep・Globだけ |
+| Codex | 最終チェック | `scripts/codex-final-check.mjs`経由の読み取り専用sandbox |
+| 人間 | 仕様・設計の判断、タスクごとに1回のレビュー、マージ | — |
+
+- **レビューをClaudeとCodexに分ける**。同じ差分を独立にレビューさせたところ（PR #45）、Claudeは仕様との
+  不整合など広い論点を、Codexは入力値の検証の穴など実際に確かめられる問題を拾い、指摘が重ならなかったため。
+- **サブエージェントのLGTMが出るまでCodexへ進まない**。広いレビューで拾える問題と、Codexの指摘への修正が
+  生んだ問題を先に解消し、Codexとの往復を減らすため。
+- **各段階に他の段階の結果を渡さない**。前段の判断に引っ張られて独立性が失われるのを防ぐため。
+- **サブエージェントの定義はリポジトリに置く**（`.claude/agents/code-reviewer.md`）。別のセッション・環境でも
+  同じレビュアーで回せるようにするため。個人環境（`~/.claude/agents/`）のレビュアーは、このworkflowに組み込まない。
+- **Codexは読み取り専用で、許可するのは専用scriptだけにする**。最終チェックがファイルを変更しないことを
+  保証するため。permissionは前方一致で判定されるので、`codex exec -s read-only *`を許すとsandboxを外す
+  flagを後ろに足せてしまう。scriptはbase branchだけを受け取り、codexの引数とモデルを自分で組み立てる。
+- **エージェントへの指示の正本は`AGENTS.md`に置く**。`CLAUDE.md`は`@AGENTS.md`を読み込むだけにし、
+  Claude CodeとCodexが同じ規約を読むようにする。
+- **タスクの定期起動はローカルのMacで行う**（launchd）。`/run-task`がローカルのPostgreSQL・rbenv・hookに
+  依存するため、クラウド実行は扱わない。
+
 ### 公開MVPの配信と認証（2026-09-24 Devise採用・未実装）
 
 公開基盤はAWS東京（`ap-northeast-1`）の **ALB + ECS Fargate + RDS PostgreSQL** とする。
@@ -569,6 +598,8 @@ Webの接続は2026-10-05に[TASK-007 Plan](implementation-plans/2026-10-05-task
 ## 未決定
 
 - プロダクト機能を追加する際のRails内部architectureとdirectory構成
+- 実装をClaude Codeが、最終チェックをCodexが担う割り当ての理由（レビューを分ける理由は上記「開発支援AIの
+  役割分担」にあるが、どちらを実装側にするかの比較は記録がない）
 - password再設定後の既存Cookieの実機での動作（request specでは、再設定前のCookieが`401`になることを確認済み）
 - `rate_limit_counters`の定期削除の実行基盤、本番のメール配送（SES）とGoogle OAuth clientの設定
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
