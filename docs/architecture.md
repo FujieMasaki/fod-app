@@ -74,6 +74,38 @@
   同一PRでもWebとAPIのデプロイ時差（古いタブ、deploy中の新旧タスクの併存）があり得るため、1回のreleaseでは両方向で壊れない変更だけを入れ、それ以外は
   expand → migrate → contractの段階を踏む（[`contracts/README.md`](../contracts/README.md) §3）。
 
+### 開発支援AIの役割分担（2026-09-30〜10-02採用、実装済み）
+
+[product-visionのPlan](implementation-plans/2026-09-30-product-vision.md)（`CLAUDE.md`）、
+[三段レビューのPlan](implementation-plans/2026-10-01-three-stage-review.md)、
+[定期実行のPlan](implementation-plans/2026-10-02-scheduled-task-runner.md)で採用した。手順の正本は
+各skill（`.claude/skills/`）と[`docs/code-review/final-check.md`](code-review/final-check.md)で、ここでは
+`pr-review-cycle`・`/run-task`のworkflowでの主な役割と、その理由だけを置く（workflowの外で人間がどのエージェントで
+作業するかは決めない）。
+
+| 担当 | 役割 | 権限 |
+| --- | --- | --- |
+| Claude Code（メインのセッション） | Plan・実装・セルフレビュー・指摘の修正・PR作成 | `.claude/settings.json`の許可・拒否リストとhook（定期実行では`--permission-mode auto`。信頼境界は定期実行のPlan §13） |
+| `code-reviewer`サブエージェント | 差分を広く見る独立したレビュー | Read・Grep・Globだけ（使えない場合の代わりは`pr-review-cycle`手順3） |
+| Codex | 最終チェック | `scripts/codex-final-check.mjs`経由の読み取り専用sandbox |
+| 人間 | 仕様・設計の判断、タスクごとに1回のレビュー、マージ | — |
+
+- **レビューをClaudeとCodexに分ける**。同じ差分を独立にレビューさせたところ（PR #45）、重なった指摘は1〜2件
+  だけで、Claudeは仕様・文書との不整合など広い論点を、Codexは少数の指摘を再現して確かめた。PR #45では、
+  どちらか1つだと🟡以上を2〜3件取りこぼしたため。
+- **サブエージェントのLGTMが出るまでCodexへ進まない**。広いレビューで拾える問題と、Codexの指摘への修正が
+  生んだ問題を先に解消し、Codexとの往復を減らすため。
+- **サブエージェントとCodexに、他の段階の結果を渡さない**。前段の判断に引っ張られて独立性が失われるのを防ぐため。
+- **サブエージェントの定義はリポジトリに置く**（`.claude/agents/code-reviewer.md`）。別のセッション・環境でも
+  同じレビュアーで回せるようにするため。個人環境（`~/.claude/agents/`）のレビュアーは、このworkflowに組み込まない。
+- **Codexは読み取り専用で、許可するのは専用scriptだけにする**。最終チェックがファイルを変更しないことを
+  保証するため。permissionは前方一致で判定されるので、`codex exec -s read-only *`を許すとsandboxを外す
+  flagを後ろに足せてしまう（scriptの振る舞いは`pr-review-cycle`手順4）。
+- **`CLAUDE.md`は`@AGENTS.md`を読み込むだけにする**。Claude CodeとCodexが同じ`AGENTS.md`を入口にするため。
+  ただし`CLAUDE.md`の厳密な必要性は未検証のまま置いている（product-visionのPlan §8。二重管理のリスクは同§13）。
+- **タスクの定期起動はローカルのMacで行う**（launchd）。`/run-task`がローカルのPostgreSQL・rbenv・hookに
+  依存するため、クラウド実行は扱わない。
+
 ### 公開MVPの配信と認証（2026-09-24 Devise採用・未実装）
 
 公開基盤はAWS東京（`ap-northeast-1`）の **ALB + ECS Fargate + RDS PostgreSQL** とする。
@@ -569,6 +601,8 @@ Webの接続は2026-10-05に[TASK-007 Plan](implementation-plans/2026-10-05-task
 ## 未決定
 
 - プロダクト機能を追加する際のRails内部architectureとdirectory構成
+- `pr-review-cycle`・`/run-task`で、実装をClaude Codeが、最終チェックをCodexが担う割り当ての比較検討（割り当ては
+  上記「開発支援AIの役割分担」で決定済みだが、どちらを実装側にするかを比べた理由の記録がない）
 - password再設定後の既存Cookieの実機での動作（request specでは、再設定前のCookieが`401`になることを確認済み）
 - `rate_limit_counters`の定期削除の実行基盤、本番のメール配送（SES）とGoogle OAuth clientの設定
 - 実domain、task/DBサイズ、backup保持/復元目標、公開前の監視・費用設定の具体値
