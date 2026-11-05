@@ -26,6 +26,8 @@ updates:
     groups:
       minor-and-patch:
         patterns: ["*"]
+        # Railsの更新は既定値や非公開APIの差し替え（config/initializers/json_request_body.rb）の確認が要るため、単独のPRにする。
+        exclude-patterns: ["rails", "railties", "action*", "active*"]
         update-types: ["minor", "patch"]
   - package-ecosystem: github-actions
     directory: /
