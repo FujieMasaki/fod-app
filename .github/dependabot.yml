@@ -15,6 +15,18 @@ updates:
         # scripts/vrt.shのイメージ（pinned_version・digest）と一緒に上げる必要があるため、単独のPRにする。
         exclude-patterns: ["@playwright/test"]
         update-types: ["minor", "patch"]
+  # apps/apiのgemも更新のPRを受け取る（bundler-auditの勧告への追従を手作業だけにしないため）。
+  - package-ecosystem: bundler
+    directory: /apps/api
+    schedule:
+      interval: weekly
+      day: monday
+      timezone: Asia/Tokyo
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
