@@ -13,7 +13,8 @@ gem "tzinfo-data", platforms: %i[windows jruby]
 gem "bootsnap", require: false
 
 # json 3はJSON.parseに位置引数のHashを渡せず、ActiveSupport 8.1.3.1のJSON.decodeが失敗して
-# JSONのrequest bodyを解釈できない（TASK-006 Plan §16）。Railsが対応したら外す。
+# JSONのrequest bodyを解釈できなかった（TASK-006 Plan §16）。8.1.4.1はキーワード引数で渡すため、
+# json 3で通るか確かめてから外す。
 gem "json", "~> 2.21"
 
 # 認証（TASK-001で採用。versionはTASK-006で固定）
