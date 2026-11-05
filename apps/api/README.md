@@ -17,7 +17,7 @@ repository全体の構成と、実装済み・決定済み・未決定の区別�
 ## Requirements
 
 - Ruby 3.4.10
-- Rails 8.1.3.1
+- Rails 8.1.4.1
 - PostgreSQL 17（CIで利用するmajor version。開発環境でも17を推奨）
 
 ## Setup

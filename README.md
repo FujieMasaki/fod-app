@@ -144,7 +144,7 @@ GitHub Actionsでは、Pull Request・`main` へのPush・手動実行時に以�
 Node.js / pnpmのバージョンは `package.json` から取得し、pnpm storeをキャッシュした上で `--frozen-lockfile` を使用して依存関係をインストールしています。
 `VRT`は依存とNode.jsをPlaywrightのコンテナの中で用意するため、このバージョンの取得とcacheの対象外です。
 
-Dependabotによるnpm / pnpmおよびGitHub Actionsの依存関係更新も設定しています。
+Dependabotによるnpm / pnpm・Bundler（`apps/api`）およびGitHub Actionsの依存関係更新も設定しています。
 
 ## Local Git Hooks
 
