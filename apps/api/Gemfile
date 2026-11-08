@@ -2,7 +2,7 @@ source "https://rubygems.org"
 
 gem "rails", "8.1.4.1"
 # Use postgresql as the database for Active Record
-gem "pg", "~> 1.1"
+gem "pg", "~> 1.7"
 # Use the Puma web server [https://github.com/puma/puma]
 gem "puma", ">= 5.0"
 
@@ -19,7 +19,7 @@ gem "json", "~> 3.1"
 
 # 認証（TASK-001で採用。versionはTASK-006で固定）
 gem "devise", "5.0.4"
-gem "omniauth", "2.1.4"
+gem "omniauth", "2.3.1"
 gem "omniauth-google-oauth2", "1.2.3"
 # OmniAuthの開始POSTでRailsのCSRF tokenを検証する（CVE-2015-9284対策）
 gem "omniauth-rails_csrf_protection", "2.0.1"
