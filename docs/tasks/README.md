@@ -44,6 +44,10 @@ MVPとその後の継続開発に必要な作業を管理する。TASK-001〜TAS
 
 - [TASK-018: Dot深掘り対話の設計判断](TASK-018-dot-follow-up-dialogue-design.md)
 
+### MVP外
+
+- [TASK-027: 紹介ページ（LP）のローカルプレビュー](TASK-027-landing-page-preview.md)
+
 ### 開発基盤
 
 - [TASK-019: 機械のレビューループに数値の完了条件を加える](TASK-019-numeric-review-gate.md)
