@@ -10,9 +10,14 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_05_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_24_000003) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
+
+  create_table "consumed_recording_attempts", id: :uuid, default: nil, force: :cascade do |t|
+    t.datetime "expires_at", null: false
+    t.index ["expires_at"], name: "index_consumed_recording_attempts_on_expires_at"
+  end
 
   create_table "dots", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.datetime "created_at", null: false
@@ -30,6 +35,38 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_000001) do
     t.check_constraint "char_length(sentence) <= 200", name: "dots_sentence_length"
     t.check_constraint "char_length(summary) <= 2000", name: "dots_summary_length"
     t.check_constraint "duration_seconds >= 1 AND duration_seconds <= 1800", name: "dots_duration_seconds_range"
+  end
+
+  create_table "generations", id: :uuid, default: nil, force: :cascade do |t|
+    t.datetime "accepted_at", null: false
+    t.string "audio_content_type", null: false
+    t.string "audio_key", null: false
+    t.string "cancel_reason"
+    t.datetime "created_at", null: false
+    t.integer "duration_seconds", null: false
+    t.string "failure_kind"
+    t.datetime "last_progress_at", null: false
+    t.datetime "lease_expires_at"
+    t.uuid "lease_token"
+    t.datetime "retry_expires_at", null: false
+    t.datetime "started_at", null: false
+    t.string "state", null: false
+    t.string "transcript_key"
+    t.datetime "transcript_ready_at"
+    t.datetime "transcript_withheld_at"
+    t.integer "transcription_attempt", default: 0, null: false
+    t.string "transcription_job_name"
+    t.datetime "updated_at", null: false
+    t.integer "upload_attempt", default: 1, null: false
+    t.integer "user_generation", null: false
+    t.uuid "user_id", null: false
+    t.index ["retry_expires_at"], name: "index_generations_on_retry_expires_at"
+    t.index ["state", "last_progress_at"], name: "index_generations_on_state_and_last_progress_at"
+    t.index ["user_id"], name: "index_generations_on_user_id"
+    t.check_constraint "cancel_reason IS NULL OR (cancel_reason::text = ANY (ARRAY['canceled'::character varying, 'expired'::character varying, 'withdrawn'::character varying, 'dot_purged'::character varying]::text[]))", name: "generations_cancel_reason"
+    t.check_constraint "duration_seconds >= 1 AND duration_seconds <= 1800", name: "generations_duration_seconds_range"
+    t.check_constraint "failure_kind IS NULL OR (failure_kind::text = ANY (ARRAY['upload_incomplete'::character varying, 'transcription_failed'::character varying, 'empty_recording'::character varying, 'generation_failed'::character varying, 'invalid_output'::character varying, 'persist_failed'::character varying]::text[]))", name: "generations_failure_kind"
+    t.check_constraint "state::text = ANY (ARRAY['uploading'::character varying, 'upload_failed'::character varying, 'accepted'::character varying, 'transcribing'::character varying, 'generating'::character varying, 'failed'::character varying, 'succeeded_cleanup_pending'::character varying, 'cancel_requested'::character varying, 'cleanup_pending'::character varying]::text[])", name: "generations_state"
   end
 
   create_table "rate_limit_counters", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -59,9 +96,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_000001) do
     t.string "confirmation_token"
     t.datetime "confirmed_at"
     t.datetime "created_at", null: false
+    t.datetime "deletion_requested_at"
     t.string "email", null: false
     t.string "encrypted_password"
     t.integer "failed_attempts", default: 0, null: false
+    t.integer "generation", default: 0, null: false
     t.datetime "locked_at"
     t.datetime "reset_password_sent_at"
     t.string "reset_password_token"
@@ -74,5 +113,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_05_000001) do
   end
 
   add_foreign_key "dots", "users", on_delete: :cascade
+  add_foreign_key "generations", "users", on_delete: :restrict
   add_foreign_key "user_identities", "users", on_delete: :cascade
 end
