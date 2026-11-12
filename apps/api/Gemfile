@@ -23,6 +23,14 @@ gem "omniauth-google-oauth2", "1.2.3"
 # OmniAuthの開始POSTでRailsのCSRF tokenを検証する（CVE-2015-9284対策）
 gem "omniauth-rails_csrf_protection", "2.0.1"
 
+# Job基盤（TASK-003で採用）。RDSの同じDBをqueueに使い、当面はPumaの子プロセスとして同じコンテナで動かす
+gem "solid_queue", "~> 1.2"
+
+# 音声の一時object・文字起こし・生成（TASK-003で採用。リージョンはap-northeast-1に固定する）
+gem "aws-sdk-bedrockruntime", "~> 1.0"
+gem "aws-sdk-s3", "~> 1.0"
+gem "aws-sdk-transcribeservice", "~> 1.0"
+
 group :development, :test do
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[mri windows], require: "debug/prelude"
