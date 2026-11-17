@@ -10,6 +10,12 @@ class User < ApplicationRecord
   # 利用者の行を消すとDBのFK（on_delete: cascade）でDotも消える。Railsのcallbackでは消さない
   # （退会は音声・文字起こしの後片付けを先に行う手順が要るため、TASK-013のServiceで扱う）。
   has_many :dots, dependent: nil
+  # 処理の記録。後片付けの情報を持つので、利用者の行の削除はDBのFK（on_delete: restrict）で止まる。
+  has_many :generations, dependent: nil
+
+  # 退会を受理したか。受理以降は新しい保存・再試行・結果の確定をしない（TASK-003 Plan §20）。
+  # 確かめるときは利用者の行を`lock`で取り直す。読んだだけの値で判断すると、退会の受理と競合する。
+  def deletion_requested? = deletion_requested_at.present?
 
   validates :email, presence: true, length: { maximum: 254 },
                     format: { with: Devise.email_regexp, allow_blank: true },
