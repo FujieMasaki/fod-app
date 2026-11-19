@@ -13,8 +13,8 @@ cd "$root"
 # イメージはdigestで固定する（同じタグが作り直されても、手元とCIで同じ中身を使うため。TASK-020 Plan Q6）。
 # @playwright/testを上げたら、pinned_versionとdigestを
 # `docker buildx imagetools inspect mcr.microsoft.com/playwright:v<版>-noble` のDigest（multi-archのindex）に更新する。
-pinned_version="1.64.1"
-digest="sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f"
+pinned_version="1.65.1"
+digest="sha256:1507cbfc550a63a6b7396791ca4f00df17beb56342d2447b3f106c306f525579"
 
 version="$(node -p 'require("./apps/web/package.json").devDependencies["@playwright/test"]')"
 if [[ "$version" != "$pinned_version" ]]; then
