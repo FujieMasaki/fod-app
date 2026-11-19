@@ -19,7 +19,7 @@ gem "json", "~> 3.1"
 
 # 認証（TASK-001で採用。versionはTASK-006で固定）
 gem "devise", "5.0.4"
-gem "omniauth", "2.3.1"
+gem "omniauth", "2.4.1"
 gem "omniauth-google-oauth2", "1.2.3"
 # OmniAuthの開始POSTでRailsのCSRF tokenを検証する（CVE-2015-9284対策）
 gem "omniauth-rails_csrf_protection", "2.0.1"
