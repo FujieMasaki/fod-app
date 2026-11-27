@@ -353,6 +353,13 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
   - 本文が34MBを超えるとPumaがProblemでない`413`（Content-Typeの無い`Payload Too Large`）を返すことを、契約のcreateDotの`413`の
     説明とcontracts/README.mdのcodeの表に書いた（6番目のPR）。
 - 検証結果:
+  - Solid Queueのworkerの起動の失敗（2026-11-28、2番目のPR）: `config/queue.yml`は、`RAILS_MAX_THREADS`が整数でないか
+    3未満なら`ArgumentError`で起動を止める（threadsを最低1へ切り上げると、workerの接続数（threads + 2）が
+    `max_connections`を超えるため。レビューの指摘）。`RAILS_MAX_THREADS=2 bin/rails server`で実際に起動すると、Puma
+    （8.0.2）は待ち受けを始めた後、forkしたsupervisorが`queue.yml`の読み込みで`ArgumentError`を出して終わり、
+    solid_queueのpuma plugin（1.7.0）がそれを検知して（2秒ごとの監視）「Detected Solid Queue has gone away, stopping
+    Puma...」を出し、Pumaごと止まった（起動から約6秒、終了コードは0）。待ち受けを始めてから止まるまでの数秒はrequestを
+    受け付ける。未設定（既定の5）では、Pumaとsupervisor・dispatcher・worker（`pool_size: 3`）が起動し続け、`/up`が200を返した。
   - `cd apps/api && bundle exec rspec`: 690 examples, 0 failures（6番目のPRの`273f7d9`、2026-10-27。5番目の`24b7d6c`を取り込んだ版）。
   - `bundle exec rubocop`: no offenses。`bundle exec brakeman -q`: No warnings。`bundle exec bundler-audit check`:
     crassの指摘（GHSA-pq4g-8rxf-4g29）を1.0.8へ上げて解消した（mainも同じ版へ上げた。2026-10-27に取り込んだ）。
