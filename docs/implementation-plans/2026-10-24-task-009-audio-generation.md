@@ -266,5 +266,12 @@ Web: DELETE /generations/{id}/transcript → transcript_withheld_at → cleanup
 
 - 状態: 実施中
 - 実装差異: 未記入
-- 検証結果: 未記入
+- 検証結果:
+  - Solid Queueのworkerの起動の失敗（2026-11-28、2番目のPR）: `config/queue.yml`は、`RAILS_MAX_THREADS`が整数でないか
+    3未満なら`ArgumentError`で起動を止める（threadsを最低1へ切り上げると、workerの接続数（threads + 2）が
+    `max_connections`を超えるため。レビューの指摘）。`RAILS_MAX_THREADS=2 bin/rails server`で実際に起動すると、Puma
+    （8.0.2）は待ち受けを始めた後、forkしたsupervisorが`queue.yml`の読み込みで`ArgumentError`を出して終わり、
+    solid_queueのpuma plugin（1.7.0）がそれを検知して（2秒ごとの監視）「Detected Solid Queue has gone away, stopping
+    Puma...」を出し、Pumaごと止まった（起動から約6秒、終了コードは0）。待ち受けを始めてから止まるまでの数秒はrequestを
+    受け付ける。未設定（既定の5）では、Pumaとsupervisor・dispatcher・worker（`pool_size: 3`）が起動し続け、`/up`が200を返した。
 - 関連: 未記入
