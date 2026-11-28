@@ -31,8 +31,9 @@
 - `apps/api/` はRuby on RailsのAPI backendである。現在実装済みなのはRails基盤、
   PostgreSQL接続、RSpec、品質・security検査、CIに加え、認証（TASK-006。下記「認証詳細」）と、
   Dotの保存先（`dots`）・Day・日単位の一覧・日の詳細の取得・`sentence`/`summary`の編集のAPI
-  （TASK-008。`app/controllers/api/v1/days_controller.rb`・`dots_controller.rb`）である。Webは
-  Day・日単位の一覧・日の詳細の取得に接続した（下記`features/history`）。編集のAPIにはまだ接続していない。
+  （TASK-008。`app/controllers/api/v1/days_controller.rb`・`dots_controller.rb`）、音声からのDot生成
+  （TASK-009。下記「生成の実行方式」の「実装（TASK-009）」）である。Webは
+  Day・日単位の一覧・日の詳細の取得に接続した（下記`features/history`）。編集と生成のAPIにはまだ接続していない。
 - `features/history`（2026-10-07にTASK-012で実装）が、serverに保存したDotをDay（`/day`）・一覧（`/dots`）・
   日の詳細（`/dots/$date`）で表示する。取得は`useAuth().request`から行い、TanStack Queryのcache
   （`["history", ...]`）にだけ置く。Session Providerには置かず、認証の終了・利用者の切り替わりでAuth Providerが
@@ -51,8 +52,8 @@
 - FrontendとBackendは同じrepositoryで管理する。
 - アプリケーション機能としてのAI処理はBackend側に置く。
 - 開発支援AIに関する指示・文書・workflowはroot、`docs/`、`.github/` 側で管理する。
-- 音声、AI処理、Dotを作る入口（TASK-009）、ゴミ箱・削除の操作（TASK-013）は将来の変更で実装する
-  （User・認証はTASK-006、Dotの保存先と取得・編集はTASK-008で実装した）。
+- ゴミ箱・削除の操作と退会（TASK-013）は将来の変更で実装する（User・認証はTASK-006、Dotの保存先と
+  取得・編集はTASK-008、音声からDotを作る入口はTASK-009で実装した。実サービスでの確認は残っている）。
 - **API契約の正本は手書きのOpenAPI（[`contracts/openapi.yaml`](../contracts/openapi.yaml)）とする**
   （2026-10-01にTASK-005で採用）。契約を実装より先に人が決め、WebとAPIがそれに合わせる。
   コードから契約を生成する方式（バックエンドを正にする）は採らない。
@@ -139,10 +140,11 @@ callbackのcode・確認/再設定tokenを通常ログへ出さない。ALB acce
 ALB metricsと機密を除いたRailsログを使う。保持・削除と復元時の整合は次の
 「音声・文字起こしの経路と保持」で採用した。
 
-### 音声・文字起こしの経路と保持（2026-09-28採用、未実装）
+### 音声・文字起こしの経路と保持（2026-09-28採用、2026-10-24にTASK-009で実装。S3のbucketは未構築）
 
-[TASK-002 Plan](implementation-plans/2026-09-28-task-002-data-lifecycle.md)で採用した。実装済みの
-構成ではない。比較は同Plan §18–§21、データごとの保持・削除は同§17。
+[TASK-002 Plan](implementation-plans/2026-09-28-task-002-data-lifecycle.md)で採用し、2026-10-24にTASK-009で実装した
+（S3のbucketは未構築で、実サービスでの確認は未了。下記「生成の実行方式」の「実装（TASK-009）」）。比較は同Plan §18–§21、
+データごとの保持・削除は同§17。
 
 ```text
 Browser（音声は memory のみ。storage へ書かない）
@@ -173,7 +175,7 @@ Browser（音声は memory のみ。storage へ書かない）
   replication・backup・object lockも、有効なら別の場所や別の期間で残り得るため同様に確認する。
 - **server側に処理ID・所有者・object key・受理時刻・再試行期限・状態の記録を持つ**。別requestでの
   再試行、別containerで動くJob、退会時の削除は初回requestの外で所有者を判断するため、この記録で
-  認可する。**推測困難なkeyを所有権の代わりにしない**。記録の置き場と項目はTASK-003/005で確定する。
+  認可する。**推測困難なkeyを所有権の代わりにしない**。記録は`generations`（項目はTASK-003 Plan §20。下記「実装（TASK-009）」）。
   この記録自体も個人データとして保持・削除の対象にする。**処理の記録は、音声・文字起こし結果・
   Transcribeのjobの後片付けが終わった時点で削除する**（2026-09-29にTASK-003で確定。Dotの保存
   時点ではない。後片付けに必要な情報を持っているのがこの記録だけのため）。冪等性keyは`dots`の
@@ -190,7 +192,7 @@ Browser（音声は memory のみ。storage へ書かない）
 - **退会は、進行中の処理と競合しない条件を満たすまで完了としない**。退会より前に認証を通過した
   uploadが削除処理のあとに完了する経路と、S3を読み出し済みのJobが結果を書き込む経路があるため、
   数えて消すだけでは足りない。退会の受理以降は新規の保存・再試行・結果の確定を止め、あとから
-  現れた残存を回収してから完了を表示する。状態遷移と排他方式はTASK-003/005で決める。
+  現れた残存を回収してから完了を表示する。状態遷移と排他方式は下記「生成の実行方式」（TASK-003で決め、TASK-009で実装した）。
 - RDSとS3にまたがるため削除は単一transactionで完結しない。**先にS3を消し、成功してからRDSの行と
   記録を消す**。S3の削除に失敗したら削除要求全体を失敗として扱い、削除済みと表示せず再実行する。
 - S3を使うのは再試行のためだけではない。最長30分の音声は同期HTTPで処理しきれず非同期になるため、
@@ -240,10 +242,10 @@ Browser（音声は memory のみ。storage へ書かない）
   「未決定」のとおり公開前に確定する。S3の実費は成功時に即削除する運用では月1円未満の見込みで、
   Pricing Calculatorで再確認する。
 
-### 生成の実行方式（2026-09-29採用、未実装）
+### 生成の実行方式（2026-09-29採用、2026-10-24にTASK-009で実装。実サービスでの確認は未了）
 
-[TASK-003 Plan](implementation-plans/2026-09-29-task-003-generation-design.md)で採用した。
-実装済みの構成ではない。比較は同Plan §18–§21、採用内容は同§25。
+[TASK-003 Plan](implementation-plans/2026-09-29-task-003-generation-design.md)で採用し、2026-10-24にTASK-009で実装した
+（実サービスでの確認は未了。下記「実装（TASK-009）」）。比較は同Plan §18–§21、採用内容は同§25。
 
 ```text
 POST /api/v1/dots（同期）
@@ -324,7 +326,7 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
   **「最終進捗時刻からN分」だけで再実行しない**（Transcribeの完了待ちは正常でも分単位で止まる
   ため、生きているjobを二重に開始してしまう）。worker消失はSolid Queueの回収結果を拾い、
   Transcribe待ちは`GetTranscriptionJob`でAWS側の状態を見て、Job個体の停止はlease tokenで
-  排他する。具体値はTASK-009で決める。`RAILS_MAX_THREADS`はSolid Queueの実行並列数そのもの
+  排他する。初期値は下記「実装（TASK-009）」。`RAILS_MAX_THREADS`はSolid Queueの実行並列数そのもの
   ではないため、concurrency・DB pool・CPU/memoryは別に実測する。
 - **処理IDと冪等性keyと録音attemptの識別子を同一にし、`dots`の列へ`(user_id, 処理ID)`のunique制約で持つ。**
   **serverが録音開始操作に対して発行する**（2026-09-29にTASK-004の`started_at`採用へ合わせて変更。
@@ -366,6 +368,47 @@ DELETE /api/v1/generations/:処理ID/transcript（client が全文を保存し�
 - **model idとpromptは設定で固定する**。固定しないと、ある日から生成結果の調子が変わる。
 - Bedrockのrequest / responseと文字起こしテキストは発話内容そのものなので、SDKのdebug logや
   error trackingへ出さない（上記「ログへ出さない」と同じ対象）。
+
+#### 実装（TASK-009）
+
+[TASK-009 Plan](implementation-plans/2026-10-24-task-009-audio-generation.md)で実装した。providerを差し替えたtestで
+状態遷移（T1〜T22）を確かめた。**S3のbucket・IAM・Bedrockのmodel idは未設定で、実サービスでの確認は済んでいない。**
+
+- 処理の記録は`generations`（主キーは録音attemptのid）。状態の変更は`Generation.transition`の条件付きUPDATEだけで行い、
+  再試行・再upload・cleanup・取り消し・Transcribeの終端後の確認は`GenerationGate`（利用者の行のlock → 遷移元 →
+  認可 → 実行権の発行）を通す。退会との排他に`users.deletion_requested_at`（NULLがactive）と`users.generation`
+  （世代番号）を使う。退会のendpointはTASK-013で、受理は`GenerationWithdrawal.accept`、Dotの完全削除は
+  `GenerationDotPurge.accept`を呼ぶ。
+- Solid Queueは処理の記録と**同じDB**に置き、記録の更新とenqueueを同じtransactionに入れる。workerはPumaのpluginで
+  同じコンテナ（Pumaの子プロセス）に載せる（`SOLID_QUEUE_IN_PUMA=false`で外し、`bin/jobs`を別に動かせる）。
+- **Transcribeの完了待ちはthreadを占有しない**。Jobが`GetTranscriptionJob`を1回呼び、非終端なら15秒後に自分を
+  もう一度enqueueする。待っている間は実行権の期限を次の確認まで延ばす。
+- 止まった処理は毎分の`GenerationWatchdogJob`が状態ごとに拾う（最終進捗から2分、かつ実行権が切れてから2分）。
+  `uploading`は`HeadObject`で判定する。期限の到来と、再実行が要る後片付けは毎分の`GenerationMaintenanceJob`が拾う
+  （後片付けのJobは自分を積み直さない）。間隔と実行権の長さ（受理から保存までは15分、後片付けは5分）は初期値で、実測で見直す。
+  取り消し・退会・期限は実行中の実行権のtokenだけを失効させて期限は残し、後片付けはその期限が切れてから始める。
+- 録音の発行・送信・再試行は、利用者ごとに1時間でそれぞれ60回・60回・30回までにする（`GenerationThrottle`）。送信と
+  再試行は、加えてそれぞれ1日20回まで（UTCの0時で切り替わる）。Transcribeは音声の実際の長さで課金され、serverは申告の録音時間と
+  大きさしか確かめないので、1日の回数で1アカウントの費用の最悪を抑える（2026-10-27にTASK-009で決定。前提と残るリスクは
+  TASK-009 Plan §13）。
+- Bedrockへ送る全文は20,000字まで、Transcribeが書き出した結果は2MBまで読む。超えたら送らずに失敗にする（契約上は再試行できるが、同じ全文なので再試行しても成功しない。正規の30分の録音は約12,000字）。
+  S3から読むときは、読む大きさの上限を必ず渡す（`AudioStore#read`）。
+- Job基盤をSolid Queueにしたので、Jobの引数はDB（`solid_queue_jobs.arguments`）に平文で残る。生成のJobの引数は
+  処理IDだけにする。**認証メールのJob（引数にメールアドレスと確認・再設定・解除のtokenを持つ）はSolid Queueに載せず、
+  memoryのadapter（async）で動かす**（`config.x.auth_mail_queue_adapter`）。これまでと同じ挙動で、**deployや再起動の
+  ときに送る前のメールは失われる**（利用者は再送の操作でやり直せる）。代わりに、引数を利用者のidだけにしてtokenを
+  Jobの中で作り直せばSolid Queueに載せられるが、Deviseがtokenを作ってメールを送る流れを変えることになり、このタスクの
+  範囲を超えるので採らなかった（2026-10-24にTASK-009で決定）。
+- 失敗したJobは、例外のclass・message・backtraceがログとSolid Queue（`solid_queue_failed_executions`）に残り、
+  終わったJobの定期の削除の対象にならない。messageには入力が入り得るので、**`ApplicationJob`が例外をclassの名前だけに
+  包み直してから外へ出す**（外部の失敗を包んだ`GenerationProviders::Error`はmessageに入力を含まないので残す）。
+- `POST /api/v1/dots`のmultipartはRailsがactionより前に解析するので、`ApiRequestGuard`が本文の大きさをContent-Lengthで
+  先に制限する（33MB）。本文の受け取りそのものはPumaの`http_content_length_limit`（34MB）が止める（guardが動くのは本文を
+  受け取り終えた後のため）。Pumaはchunkedの本文も受け取り終えてから長さを付けて渡すので、guardの「長さの無い本文を受け付けない」
+  分岐は保険になる。Pumaが返す`413`はProblemの形にならない。解析の失敗（Railsが包まない`Rack::BadRequest`を含む）は`422`にする。
+- AWSの呼び出しは`GenerationProviders`に集め、clientを作る前に呼び出し元がアプリ用アカウント（`FOD_APP_ACCOUNT_ID`）か
+  を確かめる。SDKのloggerは付けない。regionは`ap-northeast-1`に固定する。bucket・role・アカウントIDは環境変数で渡し、
+  model idとpromptは`config/generation.yml`で固定する。bucket・model id・アカウントIDのどれかが空の間は、生成のclient（S3・Transcribe・Bedrock）を作らない。
 
 ### データ所在地と費用
 
@@ -537,7 +580,7 @@ Webの接続は2026-10-05に[TASK-007 Plan](implementation-plans/2026-10-05-task
   Devise 5.0.4を導入し、確認期限（標準は無期限）を24時間に設定した。
   メールのリンクはSPAの画面を指し、tokenはURLのfragment（`#token=`）に載せてserverへ送らせない。
   メールはjob（`deliver_later`）で送り、確認の再送・再設定は利用者の検索からjobで行う（応答時間から
-  登録の有無を分からなくするため）。jobは当面Rails既定の`:async`で、TASK-009でSolid Queueへ移る。
+  登録の有無を分からなくするため）。jobはSolid Queueに載せず、Railsの`:async`で実行する（引数にtokenを持つため。上記「生成の実行方式」の「実装（TASK-009）」）。
   ログをdebugにするとActionMailerがメール本文（token）を出すため、productionでdebugにしない。
 - passwordは8〜128文字で文字種は問わない。bcryptは先頭72 byteだけで照合するため、SHA-256にかけてから
   bcryptへ渡し、全文を照合に使う。不一致が10回続いたらアカウントをロックし（Lockable）、

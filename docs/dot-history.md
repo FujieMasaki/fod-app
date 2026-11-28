@@ -36,7 +36,7 @@ endpointとschemaの具体は[`contracts/openapi.yaml`](../contracts/openapi.yam
 serverの保存先・日付の算出・日単位の集約・cursorによる続きの取得・ゴミ箱の除外は、2026-10-05に
 [TASK-008](implementation-plans/2026-10-05-task-008-dot-history.md)でRails APIに実装し、Day・一覧・詳細の
 画面は2026-10-07に[TASK-012](implementation-plans/2026-10-07-task-012-day-history.md)でWebに実装した。
-Dotを作る入口（TASK-009・TASK-011）は未実装で、利用者が録音からこの体験までを通して使えるわけではない。
+Dotを作る入口は、Railsの側をTASK-009で実装したが（実サービスでの確認は未了）、Web（TASK-010・TASK-011）は接続しておらず、利用者が録音からこの体験までを通して使えるわけではない。
 
 - **保存単位**: 録音1回ごとにDotを1件保存する。同日の再録音は追記であり、過去のDotを上書き・
   統合しない。表示上の「1日=1つのDot」は一覧の見せ方であり、保存件数ではない。

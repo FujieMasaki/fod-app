@@ -330,7 +330,8 @@ export interface paths {
          *
          *     文字起こし全文は、受領通知（ACK）の受理後、保持期間の経過後、そのDotの完全削除の受理後、
          *     退会の受理後は返さない。ACK後と期間経過後はDotが残るので`succeeded`と
-         *     `transcript.status=unavailable`を返す。完全削除と退会ではDotも残らないので`404`になる。
+         *     `transcript.status=unavailable`を返す。完全削除ではDotも残らないので`404`になる。退会の受理後は
+         *     どの処理も`409 account_deletion_in_progress`になる（共通の約束）。
          *     ゴミ箱の中のDotの処理も`404`。
          */
         get: operations["getGeneration"];
@@ -1523,7 +1524,11 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["AccountDeletionInProgress"];
-            /** @description `audio_too_large`: 32MBを超えた */
+            /**
+             * @description `audio_too_large`: 32MBを超えた。本文が34MBを超えると、server（Puma）がProblemでない`413`
+             *     （Content-Typeの無い`Payload Too Large`という文字列）を返すので、clientは`413`の本文を読まずに、
+             *     statusだけで`audio_too_large`として扱う
+             */
             413: {
                 headers: {
                     [name: string]: unknown;
