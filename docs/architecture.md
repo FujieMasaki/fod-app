@@ -47,6 +47,12 @@
 ## 決定済み
 
 - Frontendは `apps/web/` に配置する。
+- **FrontendはVite + React + TypeScriptのSPAとする**。
+  - 録音（MediaDevices / MediaRecorder）、録音状態、画面遷移など、体験の中心がブラウザ側の処理にある。
+    主な画面はログイン後で、serverでの描画やSEOを必要としない。
+  - API・認証・AI処理・保存はRailsが担うため、Frontendはクライアント側の処理に絞れる。
+  - 静的なbuild成果物として配信でき、個人開発のMVPで必要以上に構成を複雑にしない。
+  - 公開ページのSEOやserverでの描画が必要になったときに再検討する。
 - Backendは `apps/api/` にRuby on Railsで配置する。
 - FrontendとBackendは同じrepositoryで管理する。
 - アプリケーション機能としてのAI処理はBackend側に置く。

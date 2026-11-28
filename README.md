@@ -64,6 +64,8 @@ Focus on Dotでは、実装だけではなく、個人プロダクトとして�
 
 ブラウザ上での音声録音や画面遷移など、クライアント側の体験がプロダクトの中心となるため、SPAをベースにしています。
 
+API・認証・AI処理はRailsが担うため、Frontendはクライアント側の処理に絞り、静的なbuild成果物として配信できるVite + React + TypeScriptのSPAにしています。理由は [`docs/architecture.md`](docs/architecture.md) の「決定済み」に記録しています。
+
 ブラウザ側の状態はSession ProviderとTanStack Queryで管理しています。ルーティングは `apps/web/src/router.tsx` で定義しています。
 
 ```text
