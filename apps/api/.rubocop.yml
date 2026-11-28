@@ -29,6 +29,10 @@ Metrics/AbcSize:
   Exclude:
     - db/migrate/**/*
 
+Metrics/ClassLength:
+  Exclude:
+    - db/migrate/**/*
+
 Style/StringLiterals:
   EnforcedStyle: double_quotes
 
