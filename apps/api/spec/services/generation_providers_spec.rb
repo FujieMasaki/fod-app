@@ -1,10 +1,12 @@
 require "rails_helper"
 
 RSpec.describe GenerationProviders do
+  let(:verified_credentials) { Aws::Credentials.new("akid", "secret") }
+
   after { described_class.reset }
 
   it "呼び出し元のアカウントを確かめてから、東京・loggerなしのclientを作る" do
-    allow(described_class::CallerAccountGuard).to receive(:verify!)
+    allow(described_class::CallerAccountGuard).to receive(:verify!).and_return(verified_credentials)
     allow(GenerationSettings).to receive(:app_account_id).and_return("111111111111")
     described_class.reset
 
@@ -14,8 +16,19 @@ RSpec.describe GenerationProviders do
     expect(client.config).to have_attributes(region: "ap-northeast-1", logger: nil, http_wire_trace: false)
   end
 
+  it "S3・Transcribe・Bedrockのclientは、呼び出し元を確かめた認証情報で送る（clientごとに探索させない）" do
+    allow(described_class::CallerAccountGuard).to receive(:verify!).and_return(verified_credentials)
+    allow(GenerationSettings).to receive(:app_account_id).and_return("111111111111")
+    described_class.reset
+
+    clients = [described_class.storage, described_class.transcriber, described_class.composer]
+              .map { it.instance_variable_get(:@client) }
+
+    expect(clients.map { it.config.credentials }).to all(be(verified_credentials))
+  end
+
   it "BedrockのclientはSDKに自動で再送させない（同じ生成を二重に消費しない）。環境変数で再送の方式や回数を変えても同じ" do
-    allow(described_class::CallerAccountGuard).to receive(:verify!)
+    allow(described_class::CallerAccountGuard).to receive(:verify!).and_return(verified_credentials)
     allow(GenerationSettings).to receive(:app_account_id).and_return("111111111111")
     allow(ENV).to receive(:[]).and_call_original
     allow(ENV).to receive(:[]).with("AWS_RETRY_MODE").and_return("adaptive")
@@ -67,7 +80,7 @@ RSpec.describe GenerationProviders do
   end
 
   it "clientを作る途中の失敗（認証情報の探索の誤り等）は、準備ができていない失敗として返す" do
-    allow(described_class::CallerAccountGuard).to receive(:verify!)
+    allow(described_class::CallerAccountGuard).to receive(:verify!).and_return(verified_credentials)
     allow(GenerationSettings).to receive(:app_account_id).and_return("111111111111")
     allow(Aws::S3::Client).to receive(:new).and_raise(Aws::Errors::NoSourceProfileError)
     described_class.reset
@@ -76,7 +89,7 @@ RSpec.describe GenerationProviders do
   end
 
   it "model idが未設定の間は、S3・Transcribeのclientも作らない（音声だけを外部へ送らない）" do
-    allow(described_class::CallerAccountGuard).to receive(:verify!)
+    allow(described_class::CallerAccountGuard).to receive(:verify!).and_return(verified_credentials)
     allow(GenerationSettings).to receive(:bedrock_model_id).and_raise(GenerationSettings::NotConfigured)
     allow(Aws::S3::Client).to receive(:new)
     described_class.reset
@@ -101,6 +114,13 @@ RSpec.describe GenerationProviders do
       2.times { described_class.verify!(sts:) }
 
       expect(sts.api_requests.size).to eq(1)
+    end
+
+    it "確かめたSTSのclientの認証情報を返す（同じ認証情報で外部へ送るため）" do
+      allow(GenerationSettings).to receive(:app_account_id).and_return("111111111111")
+      caller_account("111111111111")
+
+      expect(described_class.verify!(sts:)).to be(sts.config.credentials)
     end
 
     it "環境変数のアカウントID（数字だけ）を文字列として読み、STSの値と一致させる" do
