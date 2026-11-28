@@ -1,8 +1,9 @@
 # 生成で使う外部（S3・Transcribe・Bedrock）の入口（TASK-009 Plan §7-5）。testでは`use`で偽物へ差し替える。
 #
-# - 認証はSDKの既定の探索に任せる（開発はIAM Identity Center、本番はECS task role）。長期キーを読まない。
+# - 認証はSDKの既定の探索に任せる（開発はIAM Identity Center、本番はECS task role）。長期キーを読まない。探索は
+#   呼び出し元の確認（STS）で1回だけ行い、その認証情報を各clientに渡す。
 # - SDKのloggerを付けない。requestとresponseに音声・文字起こし・生成の入出力が入るため（architecture「ログへ出さない」）。
-# - 最初に外部へ送る前に、呼び出し元がアプリ用アカウントかを確かめる（下のCallerAccountGuard）。
+# - 最初に外部へ送る前に、呼び出し元がアプリ用アカウントかを確かめ、確かめた認証情報だけで送る（下のCallerAccountGuard）。
 # - 設定（bucket・model id・アカウントID）が1つでも欠けていれば、どのclientも作らない。model idが未確定の間に
 #   音声だけをS3やTranscribeへ送らないため。
 module GenerationProviders
@@ -43,24 +44,26 @@ module GenerationProviders
   # 音声・テキストをAWSへ送る前に、呼び出し元がアプリ用のメンバーアカウントであることを確かめる
   # （TASK-009の完了条件。管理アカウントや組織の外のアカウントにはopt-outやSCPが効かないため）。
   # 比べる値（`FOD_APP_ACCOUNT_ID`）はgitに入れない環境の設定から読み、リポジトリに記録しない。
+  # 確かめた認証情報を返し、S3・Transcribe・Bedrockのclientにも同じものを渡す（clientごとに認証情報を探させると、
+  # 確認の後に`~/.aws`の設定が変わったときに、確かめていない別のアカウントで送り得るため）。
   module CallerAccountGuard
     class Mismatch < StandardError; end
 
-    @verified = false
+    @credentials = nil
 
     class << self
       def verify!(sts: nil)
-        return if @verified
+        return @credentials if @credentials
 
         expected = GenerationSettings.app_account_id
         sts ||= Aws::STS::Client.new(region: GenerationSettings.region, logger: nil)
         actual = sts.get_caller_identity.account
         raise Mismatch, "AWS caller is not the app account; nothing was sent" unless actual == expected
 
-        @verified = true
+        @credentials = sts.config.credentials
       end
 
-      def reset = (@verified = false)
+      def reset = (@credentials = nil)
     end
   end
 
@@ -84,8 +87,8 @@ module GenerationProviders
 
     def aws_client(klass, **)
       GenerationSettings.verify_ready!
-      CallerAccountGuard.verify!
-      klass.new(region: GenerationSettings.region, logger: nil, http_wire_trace: false, **)
+      credentials = CallerAccountGuard.verify!
+      klass.new(region: GenerationSettings.region, credentials:, logger: nil, http_wire_trace: false, **)
     # STSの呼び出しが通信の失敗・throttling等で失敗したときは、待てば直り得る外部の失敗として扱う（準備ができていない
     # 失敗にすると、呼ぶ側が待たずに処理を失敗にするため）
     rescue Aws::Errors::ServiceError, Seahorse::Client::NetworkingError => e
