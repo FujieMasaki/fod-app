@@ -21,6 +21,14 @@ Rails.application.routes.draw do
 
       # Dotの編集（契約のdot tag）。ゴミ箱・完全削除はTASK-013で足す。
       patch "dots/:dot_id", to: "dots#update", as: :dot
+
+      # 録音attempt・音声の送信・生成の状態・取り消し・再試行・文字起こし全文の受領通知（契約のgeneration tag）
+      post "recording_attempts", to: "recording_attempts#create"
+      post "dots", to: "dots#create"
+      get "generations/:generation_id", to: "generations#show", as: :generation
+      delete "generations/:generation_id", to: "generations#destroy"
+      post "generations/:generation_id/retry", to: "generations#retry"
+      delete "generations/:generation_id/transcript", to: "generations#acknowledge_transcript"
     end
   end
 
