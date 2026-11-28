@@ -62,7 +62,7 @@ Focus on Dotでは、実装だけではなく、個人プロダクトとして�
 
 クライアント側の体験を中心にした、Vite + React + TanStack Router構成のアプリケーションです。
 
-ブラウザ上での音声録音や画面遷移など、クライアント側の体験がプロダクトの中心で、API・認証・AI処理はRailsが担うため、静的なbuild成果物として配信できるSPAをベースにしています。理由は [`docs/architecture.md`](docs/architecture.md) の「決定済み」に記録しています。
+ブラウザ上での音声録音や画面遷移など、クライアント側の体験がプロダクトの中心となるため、SPAをベースにしています。理由は [`docs/architecture.md`](docs/architecture.md) の「決定済み」に記録しています。
 
 ブラウザ側の状態はSession ProviderとTanStack Queryで管理しています。ルーティングは `apps/web/src/router.tsx` で定義しています。
 
